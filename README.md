@@ -61,10 +61,10 @@ United Kingdom Atomic Energy Authority (UKAEA)
 
 ## Contributors
 
-- **Dr. Sunil Anandatheertha** — UK Atomic Energy Authority (UKAEA)  
-- **Dr. Vikram Phalke** — UK Atomic Energy Authority (UKAEA)  
-- **Dr. Chris Hardie** — University of Oxford  
-- **Dr. Eralp Demir** — UK Atomic Energy Authority (UKAEA)
+- **Dr. Sunil Anandatheertha** — UK Atomic Energy Authority (UKAEA), United Kingdom
+- **Dr. Vikram Phalke** — UK Atomic Energy Authority (UKAEA), United Kingdom
+- **Dr. Chris Hardie** — UK Atomic Energy Authority (UKAEA), United Kingdom
+- **Dr. Eralp Demir** — University of Oxford, United Kingdom
 
 ---
 
