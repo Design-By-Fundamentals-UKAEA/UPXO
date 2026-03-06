@@ -51,14 +51,6 @@ Large ensembles of statistically representative microstructures can be generated
 
 ---
 
-## Author
-
-**Dr. Sunil Anandatheertha**  
-Materials Engineer  
-United Kingdom Atomic Energy Authority (UKAEA)
-
----
-
 ## Contributors
 
 - **Dr. Sunil Anandatheertha** — UK Atomic Energy Authority (UKAEA), United Kingdom
