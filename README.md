@@ -12,13 +12,13 @@ UPXO is organised as a modular environment supporting the full workflow of synth
 
 Core capabilities include:
 
-- **Generation** — creation of grain structures using approaches such as Monte Carlo methods and Voronoi tessellations  
-- **Characterisation and Analysis** — extraction of morphology, texture, and structural descriptors  
-- **Manipulation Tools** — controlled introduction, removal, or modification of microstructural features  
-- **Representativeness Assessment** — statistical evaluation of generated microstructures  
-- **FE Meshing** — preparation of conformal and non-conformal meshes for simulation  
-- **Data Interface** — import, export, and management of grain structure data  
-- **Visualisation** — tools for inspecting 2D and 3D microstructures  
+- **Generation** — creation of grain structures using Monte Carlo simulations and Voronoi tessellation
+- **Characterisation and Analysis** — extraction of morphology, texture, and topological descriptors
+- **Manipulation Tools** — controlled introduction, removal, or modification of microstructural features
+- **Representativeness Assessment** — statistical evaluation of generated microstructures
+- **FE Meshing** — preparation of grain boundary geometry conformal and non-conformal meshes for simulation
+- **Data Interface** — import, export, and management of grain structure data
+- **Visualisation** — tools for plotting 2D and 3D microstructures
 - **Structure-Specific Utilities** — specialised tools tailored to different microstructure classes
 
 ---
@@ -30,7 +30,6 @@ UPXO can produce a broad range of synthetic grain structures, including:
 - Elongated and directionally structured grains  
 - Hierarchical microstructures such as lath-based morphologies  
 - Multi-scale grain arrangements  
-- Large three-dimensional polycrystals suitable for simulation studies
 
 ---
 
