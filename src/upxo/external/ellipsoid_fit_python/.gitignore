@@ -1,0 +1,15 @@
+## Compiled
+*.o
+*.so
+__pycache__/
+*.py[cod]
+
+## Dropbox generated
+*~
+
+## text datafiles
+*.txt
+## except example input
+!mag_out.txt
+
+.idea/
