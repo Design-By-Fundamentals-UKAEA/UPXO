@@ -1,0 +1,15 @@
+Channel Text File
+Prj\t__UPXO_Grain_Structure__
+Author\t__USERNAME__
+JobMode\tGrid
+XCells\t{}
+YCells\t{}
+XStep\t1.0
+YStep\t1.0
+AcqE1\t0
+AcqE2\t0
+AcqE3\t0
+Euler angles refer to Sample Coordinate system (CS0)!	Mag	0.0000	Coverage	0	Device	0	KV	0.0000	TiltAngle	0.0000	TiltAxis	0	DetectorOrientationE1	0.0000	DetectorOrientationE2	0.0000	DetectorOrientationE3	0.0000	WorkingDistance	0.0000	InsertionDistance	0.0000
+Phases\t1
+3.614;3.614;3.614	90.000;90.000;90.000	Copper	11	0			Created from UPXO
+Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS
