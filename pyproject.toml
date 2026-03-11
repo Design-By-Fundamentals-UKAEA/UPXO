@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "upxo"
-version = "10.0"
-description = "A package for grain structure generation, analysis, and export to FE simulation software"
-readme = "readme.md"
-requires-python = ">=3.6"
-license = { text = "MIT" }
+version = "1.0"
+description = "An open-source Python package for generation, analysis, assessment, visualisation, meshing, and export of representative polycrystalline grain structures."
+readme = "README.md"
+requires-python = "==3.13"
+license = "GPL-3.0-only"
 authors = [
     { name = "Dr. Sunil Anandatheertha", email = "vaasu.anandatheertha@ukaea.uk" }
 ]
@@ -16,21 +16,13 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Physics",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10"
+    "Programming Language :: Python :: 3.13"
 ]
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/SunilAnandatheertha/upxo_private/"
-Download = "https://github.com/SunilAnandatheertha/upxo_private/"
-"Source Code" = "https://github.com/SunilAnandatheertha/upxo_private/tree/upxo.v.1.26.1/src"
-Documentation = "https://github.com/SunilAnandatheertha/upxo_private/tree/upxo.v.1.26.1/docs"
+Repository = "https://github.com/Design-By-Fundamentals-UKAEA/UPXO"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
