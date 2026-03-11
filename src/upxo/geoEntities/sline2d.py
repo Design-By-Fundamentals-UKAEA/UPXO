@@ -4,7 +4,7 @@
 Applications
 ------------
 * Non-conformal geometry to conformal geometry conversion
-* Heirarchical grain structure feature generation
+* Hierarchical grain structure feature generation
 * General geometry use
 
 Classes
@@ -62,6 +62,25 @@ class Sline2d_leanest():
     """
     Lean 2D straight line class.
 
+    This is the minimal, lightweight representation of a 2D straight line
+    in UPXO. It stores only endpoint coordinates `(x0, y0)` and `(x1, y1)`
+    and provides essential geometric utilities such as:
+    * line length
+    * gradient
+    * endpoint/index access
+    * point containment checks relative to the finite segment
+
+    Compared to :class:`Sline2d`, this class is intentionally compact and is
+    suitable for high-volume geometry operations where only core line behavior
+    is required.
+
+    Attributes
+    ----------
+    x0, y0 : float
+        Coordinates of start point.
+    x1, y1 : float
+        Coordinates of end point.
+
     Import
     ------
     from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
@@ -84,6 +103,16 @@ class Sline2d_leanest():
     __slots__ = ('x0', 'y0', 'x1', 'y1')
 
     def __init__(self, x0=0, y0=0, x1=1, y1=0):
+        """
+        Initialize a lean 2D line from two endpoint coordinates.
+
+        Parameters
+        ----------
+        x0, y0 : float, optional
+            Coordinates of the start point. Defaults to `(0, 0)`.
+        x1, y1 : float, optional
+            Coordinates of the end point. Defaults to `(1, 0)`.
+        """
         self.x0, self.y0 = x0, y0
         self.x1, self.y1 = x1, y1
 
@@ -92,11 +121,39 @@ class Sline2d_leanest():
         return f'UPXO-sl2d-lean ({round(self.x0, 6)},{round(self.y0, 6)})-({round(self.x1, 6)},{round(self.y1, 6)})'
 
     def __iter__(self):
-        """Make self an iterable over its two points."""
+        """
+        Make self iterable over endpoint coordinate pairs.
+
+        Returns
+        -------
+        generator
+            Generator yielding two tuples:
+            1. `(x0, y0)`
+            2. `(x1, y1)`
+        """
         return (i for i in ((self.x0, self.y0), (self.x1, self.y1)))
 
     def __getitem__(self, index):
-        """Make self indexable. 0: 1st point, 1: 2nd point, other: Error."""
+        """
+        Make self indexable by endpoint position.
+
+        Parameters
+        ----------
+        index : int
+            Endpoint index.
+            * `0` -> start point `(x0, y0)`
+            * `1` -> end point `(x1, y1)`
+
+        Returns
+        -------
+        tuple
+            Endpoint coordinates corresponding to index.
+
+        Raises
+        ------
+        IndexError
+            If index is outside valid bounds.
+        """
         return ((self.x0, self.y0), (self.x1, self.y1))[index]
 
     @classmethod
@@ -108,6 +165,11 @@ class Sline2d_leanest():
         ----------
         start: Starting point coordinate [x0, y0]
         end: Ending point coordinate [x1, y1]
+
+        Returns
+        -------
+        Sline2d_leanest
+            Lean line connecting `start` and `end`.
 
         Example
         -------
@@ -121,6 +183,11 @@ class Sline2d_leanest():
         """
         Return length of self.
 
+        Returns
+        -------
+        float
+            Euclidean distance between `(x0, y0)` and `(x1, y1)`.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
@@ -132,7 +199,7 @@ class Sline2d_leanest():
     @property
     def gradient(self):
         """
-        Return the gradienyt of the self line.
+        Return the gradient of the self line.
 
         Parameters
         ----------
@@ -174,13 +241,18 @@ class Sline2d_leanest():
         ----------
         obj : coord, UPXO point2d object
             Represents a point in space. The default is None.
-        tdist : TYPE, optional
-            Tolerance distance. The default is 0.0.
+
+        Notes
+        -----
+        Point containment is exact (no tolerance). The method evaluates:
+        * perpendicular distance of point from the line,
+        * distances from point to line endpoints,
+        and then classifies the position.
 
         Returns
         -------
         intersection : [bool, bool, bool]
-            Provides the relative position of point with resepect to self edge.
+            Provides the relative position of point with respect to self edge.
 
             1. Contains the point. It coincides with one of the edge points.
                The truth values in 'intersection' are [True, False, True]
@@ -290,6 +362,16 @@ class Sline2d():
     """
     Sline2d: 2D Straight line object.
 
+    Rich 2D line entity used across UPXO geometry, meshing and analysis
+    workflows. In addition to endpoint coordinates, this class maintains UPXO
+    point objects (`pnta`, `pntb`) and provides construction helpers,
+    geometric properties, containment checks, splitting, translation and
+    neighborhood utilities.
+
+    Use this class when mutable point objects, feature extraction or advanced
+    geometric operations are needed. For lightweight coordinate-only behavior,
+    use :class:`Sline2d_leanest`.
+
     Points are:
         1. start (i.e. i): x0 & y0
         2. end (i.e. j): x1 & y1
@@ -327,6 +409,19 @@ class Sline2d():
     __slots__ = ('x0', 'y0', 'x1', 'y1', 'f', 'pnta', 'pntb')
 
     def __init__(self, x0=0, y0=0, x1=1, y1=0, pnta=None, pntb=None):
+        """
+        Initialize a 2D line from coordinates or UPXO points.
+
+        Parameters
+        ----------
+        x0, y0 : float, optional
+            Start point coordinates when `pnta` and `pntb` are not provided.
+        x1, y1 : float, optional
+            End point coordinates when `pnta` and `pntb` are not provided.
+        pnta, pntb : Point2d, optional
+            Start and end UPXO point objects. If both are provided, they take
+            precedence over coordinate inputs.
+        """
         if pnta is None and pntb is None:
             self.x0, self.y0, self.x1, self.y1 = x0, y0, x1, y1
             self.pnta, self.pntb = Point2d(x0, y0), Point2d(x1, y1)
@@ -407,6 +502,11 @@ class Sline2d():
         start: Starting point coordinate [x0, y0]
         end: Ending point coordinate [x1, y1]
 
+        Returns
+        -------
+        Sline2d
+            Line connecting `start` and `end`.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -424,6 +524,11 @@ class Sline2d():
         start: Starting point
         end: Ending point
 
+        Returns
+        -------
+        Sline2d
+            Line created from two UPXO point objects.
+
         Example
         -------
         from upxo.geoEntities.point2d import Point2d as p2d
@@ -440,12 +545,12 @@ class Sline2d():
         Parameters
         ----------
         gradient: Slope of the 2D line
-        intercept: Y-intercept opf the straight line
-        length: Lenght of the straight line
+        intercept: Y-intercept of the straight line
+        length: Length of the straight line
 
         Return
         ------
-        Instant of Sline2d
+        Instance of Sline2d
 
         Example
         -------
@@ -474,13 +579,13 @@ class Sline2d():
         Parameters
         ----------
         gradient: Slope of the 2D line
-        intercept: Y-intercept opf the straight line
-        length: Lenght of the straight line
+        intercept: Y-intercept of the straight line
+        length: Length of the straight line
         centre: Proposed x- and y-location of line midpoint: (cx, cy)
 
         Return
         ------
-        Instant of Sline2d
+        Instance of Sline2d
 
         Example
         -------
@@ -508,15 +613,30 @@ class Sline2d():
         """
         A line can be represented using parametric equations.
         line = [[x1 + t * (x2 - x1), y1 + t * (y2 - y1)] for t in range(n)]
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
     @classmethod
     def by_general_form(cls, A, B, C):
         """
-        Instnatiate a line represented in the general form (Ax+By+C=0).
+        Instantiate a line represented in the general form (Ax+By+C=0).
 
         line = [A, B, C]
+
+        Parameters
+        ----------
+        A, B, C : float
+            Coefficients of the line equation `Ax + By + C = 0`.
+
+        Returns
+        -------
+        Sline2d
+            Constructed line consistent with the supplied general-form
+            coefficients.
 
         Examples
         --------
@@ -537,6 +657,18 @@ class Sline2d():
         A line can be represented using a point on the line and a dir. vector.
 
         line = [[x, y], [dx, dy]]
+
+        Parameters
+        ----------
+        start_point : iterable
+            Starting coordinate pair `[x, y]`.
+        dxdy : iterable
+            Direction increments `[dx, dy]`.
+
+        Returns
+        -------
+        Sline2d
+            Line from `start_point` to `start_point + dxdy`.
 
         Examples
         --------
@@ -569,11 +701,16 @@ class Sline2d():
         sl2d.by_LFGL(location=[0, 0], factor=0.0, gradient=math.inf, length=1)
 
         Author: Dr. Sunil Anandatheertha
+
+        Returns
+        -------
+        Sline2d
+            Line generated by location-factor-gradient-length specification.
         """
         if not _skip_val_:
             # Validations
             if not type(factor) in dth.dt.NUMBERS or factor < 0.0 or factor > 1.0:
-                raise ValueError('Invalid factror specfication.')
+                raise ValueError('Invalid factor specification.')
         # ---------------------------------
         unit_dir = (1, gradient) / np.sqrt(1 + gradient**2)
         x0, y0 = location - length*factor*unit_dir
@@ -588,7 +725,7 @@ class Sline2d():
 
         Parameters
         ----------
-        ref: Specifies which point on the line is used to spcify the edge.
+        ref: Specifies which point on the line is used to specify the edge.
 
         loc: Specifies the ref point.
 
@@ -599,6 +736,11 @@ class Sline2d():
 
         degree: ang considered in degree if degree is True, in radians if
         otherwise.
+
+        Returns
+        -------
+        Sline2d
+            Line generated by location-factor-angle-length specification.
 
         Examples
         --------
@@ -629,7 +771,7 @@ class Sline2d():
         """
         # Validations
         if not type(factor) in dth.dt.NUMBERS or factor < 0.0 or factor > 1.0:
-            raise ValueError('Invalid factror specfication.')
+            raise ValueError('Invalid factor specification.')
         # ---------------------------------
         loc_x, loc_y = location
         # ---------------------------------
@@ -650,7 +792,7 @@ class Sline2d():
         Parameters
         ----------
         e: Edge specification. Preferred: UPXO edge2d_leanest
-        p: POint specificaiton. Preferred: UPXO point2d_leanest
+        p: Point specification. Preferred: UPXO point2d_leanest
 
         Examples
         --------
@@ -664,6 +806,10 @@ class Sline2d():
 
         from sympy import Point, Segment
         s = Segment(Point(e[0], e[1]), Point(e[2], e[3]))
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -671,7 +817,7 @@ class Sline2d():
     def by_transform(cls, refedge=None, shiftxy=[0, 1],
                      rot=+45, degree=True, rot_pnt_f=0.5):
         """
-        Calculate and make the new Sline2d by transofrming refedge.
+        Calculate and make the new Sline2d by transforming refedge.
 
         Parameters
         ----------
@@ -682,28 +828,53 @@ class Sline2d():
             using input rot_pnt_f. Positive value indicates CCW from x+ axis.
             Negative value indicated CW from x+ axis. Domain is [0, 180] and
             [-(180-eps), 0-eps], eps is very small number in python (value?).
-        degree: If True, provided rot value will vbe considered in degrees,
+        degree: If True, provided rot value will be considered in degrees,
             else, in radians.
         rot_pnt_f: Valid domain [0.0, 1.0]. This is a factor of length. For
             example, if rot_pnt_f = 0.25, then the point about which the edge
             shall be rotated by rot angle will be located at 25% length away
             from start (i.e, (x0, y0)) point of the refedge.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
     @property
     def mid_coord(self):
-        """Return the mid point."""
+        """
+        Return midpoint coordinates of the line.
+
+        Returns
+        -------
+        list
+            Midpoint as `[xmid, ymid]`.
+        """
         return [(self.x0+self.x1)/2, (self.y0+self.y1)/2]
 
     @property
     def mid_point(self):
-        """Return the mid point."""
+        """
+        Return midpoint as a UPXO point object.
+
+        Returns
+        -------
+        Point2d
+            Midpoint represented as `Point2d`.
+        """
         return Point2d(*self.mid_coord)
 
     @property
     def gradient(self):
         """
+        Return the slope of the line.
+
+        Returns
+        -------
+        float
+            Gradient of the line. Returns `math.inf` for vertical lines.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -761,6 +932,11 @@ class Sline2d():
         """
         Return the y-intercept of the line.
 
+        Returns
+        -------
+        float
+            Y-intercept if finite; `math.inf` for vertical lines.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -780,6 +956,11 @@ class Sline2d():
         """
         Return the ccw + angle in radians.
 
+        Returns
+        -------
+        float
+            Angle from positive x-axis to line direction in radians.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -795,6 +976,11 @@ class Sline2d():
     def angd(self):
         """
         Return the ccw + angle in degrees.
+
+        Returns
+        -------
+        float
+            Angle from positive x-axis to line direction in degrees.
 
         Example
         -------
@@ -812,6 +998,11 @@ class Sline2d():
         """
         Calculate and return self length.
 
+        Returns
+        -------
+        float
+            Euclidean distance between line endpoints.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -827,6 +1018,11 @@ class Sline2d():
     def vert(self):
         """
         Return True if the line is vertical.
+
+        Returns
+        -------
+        bool
+            `True` when `|x0 - x1| <= Sline2d.ε`.
         """
         return abs((self.x0 - self.x1)) <= Sline2d.ε
 
@@ -834,6 +1030,11 @@ class Sline2d():
     def horz(self):
         """
         Return True if the line is horizontal.
+
+        Returns
+        -------
+        bool
+            `True` when `|y0 - y1| <= Sline2d.ε`.
         """
         return abs((self.y0 - self.y1)) <= Sline2d.ε
 
@@ -841,6 +1042,11 @@ class Sline2d():
     def lean(self):
         """
         Return lean representation of self.
+
+        Returns
+        -------
+        Sline2d_leanest
+            Coordinate-only lean representation.
         """
         return Sline2d_leanest(self.x0, self.y0, self.x1, self.y1)
 
@@ -848,6 +1054,11 @@ class Sline2d():
     def points(self):
         """
         Return point – A, mid-point and point – B
+
+        Returns
+        -------
+        list
+            `[pnta, mid_point, pntb]` as UPXO point objects.
         """
         return [self.pnta, self.mid_point, self.pntb]
 
@@ -855,6 +1066,11 @@ class Sline2d():
     def coords(self):
         """
         Return coordinate array.
+
+        Returns
+        -------
+        list
+            Coordinates `[x0, y0, x1, y1]`.
 
         Example
         -------
@@ -869,6 +1085,11 @@ class Sline2d():
         """
         Return coordinate array.
 
+        Returns
+        -------
+        list
+            Endpoint coordinates `[[x0, y0], [x1, y1]]`.
+
         Example
         -------
         from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -879,18 +1100,23 @@ class Sline2d():
 
     @property
     def coord_i(self):
-        # Return coordinates of starting point.
+        """Return coordinates of starting point as `[x0, y0]`."""
         return [self.x0, self.y0]
 
     @property
     def coord_j(self):
-        # Return coordinates of starting point.
+        """Return coordinates of ending point as `[x1, y1]`."""
         return [self.x1, self.y1]
 
     @property
     def general_form(self):
         """
         Return coefficients of the general form of the self.
+
+        Returns
+        -------
+        list
+            Coefficients `[A, B, C]` for equation `Ax + By + C = 0`.
 
         from upxo.geoEntities.sline2d import Sline2d as sl2d
         sl2d(0,0,0,1).general_form
@@ -908,6 +1134,10 @@ class Sline2d():
         """ Flip the line coordinates and points. MIDs of point objects
         do not change, but only their coordinate values change.
 
+        Returns
+        -------
+        None
+
         from upxo.geoEntities.sline2d import Sline2d as sl2d
         a = sl2d(0,0,0,1)
         a.flip()
@@ -922,13 +1152,23 @@ class Sline2d():
     def reset_coords_to_points(self):
         """When the points coordinates have been changed, either by
         changing the coordinates of the individual points or by changing the
-        points itself, then use this to update the coordinates."""
+        points itself, then use this to update the coordinates.
+
+        Returns
+        -------
+        None
+        """
         self.x0, self.y0 = self.pnta.x, self.pnta.y
         self.x1, self.y1 = self.pntb.x, self.pntb.y
 
     def reset_points_to_coords(self):
         """When the coordinates of the line end points have been updated, use
-        this to update the point objects of the line."""
+        this to update the point objects of the line.
+
+        Returns
+        -------
+        None
+        """
         self.pnta.x, self.pnta.y = self.x0, self.y0
         self.pntb.x, self.pntb.y = self.x1, self.y1
 
@@ -964,11 +1204,27 @@ class Sline2d():
         self.reset_points_to_coords()
 
     def move_i(self, point):
+        """
+        Move start point of the line to a new coordinate.
+
+        Parameters
+        ----------
+        point : iterable
+            New start-point coordinate as `(x, y)`.
+        """
         self.x0, self.y0 = point
         self.pnta.translate_to(point=p2d(self.x0, self.y0),
                                update=True, throw=False)
 
     def move_j(self, point):
+        """
+        Move end point of the line to a new coordinate.
+
+        Parameters
+        ----------
+        point : iterable
+            New end-point coordinate as `(x, y)`.
+        """
         self.x1, self.y1 = point
         self.pntb.translate_to(point=p2d(self.x1, self.y1),
                                update=True, throw=False)
@@ -1089,30 +1345,37 @@ class Sline2d():
         ----------
         obj : coord, UPXO point2d object
             Represents a point in space. The default is None.
-        tdist : TYPE, optional
-            Tolerance distance. The default is 0.0.
+        return_bools : bool, optional
+            If True, return classification as a boolean triplet.
+            If False, return classification as integer case id in [1, 4].
+
+        Notes
+        -----
+        This method performs exact geometric checks (no tolerance parameter).
+        It classifies the point with respect to the finite segment and its
+        infinite extension.
 
         Returns
         -------
         intersection : [bool, bool, bool]
-            Provides the relative position of point with resepect to self edge.
+            Provides the relative position of point with respect to self edge.
 
             1. Contains the point. It coincides with one of the edge points.
                The truth values in 'intersection' are [True, False, True].
                This is case number 1. A return_bools=False would return
-               1 if contains check operation resyults in [True, False, True].
+               1 if contains check operation results in [True, False, True].
             2. Contains the point. Point is fully inside the edge.
                The truth values in 'intersection' are [True, False, False].
                This is case number 2. A return_bools=False would return
-               2 if contains check operation resyults in [True, False, False].
+               2 if contains check operation results in [True, False, False].
             3. Point is on the extended edge.
                The truth values in 'intersection' are [False, True, False].
                This is case number 3. A return_bools=False would return
-               3 if contains check operation resyults in [False, True, False].
+               3 if contains check operation results in [False, True, False].
             4. Relative position of point unknown.
                The truth values in 'intersection' are [False, False, False].
                This is case number 4. A return_bools=False would return
-               4 if contains check operation resyults in [False, False, False].
+               4 if contains check operation results in [False, False, False].
 
         EXAMPLES
         --------
@@ -1224,6 +1487,19 @@ class Sline2d():
         return intersection
 
     def perpendicular_distance(self, point):
+        """
+        Compute perpendicular distance from a point to the infinite line.
+
+        Parameters
+        ----------
+        point : Point2d
+            Point for distance evaluation.
+
+        Returns
+        -------
+        float
+            Perpendicular distance from `point` to the line through self.
+        """
         m = self.gradient
         # Calculate the y-intercept of the line
         yintercept = self.pnta.y - m * self.pnta.x
@@ -1248,8 +1524,12 @@ class Sline2d():
         otype : str
             Specify type of the object
 
-        tdist : float, optional
-            Tolerance distance. The default is 0.0.
+        Notes
+        -----
+        Valid `otype` values used in this method are:
+        * `clist` for coordinate pair-of-pairs
+        * `up2d` for list/tuple of two UPXO points
+        * `sl2d` for `Sline2d` instance
 
         Returns
         -------
@@ -1264,6 +1544,9 @@ class Sline2d():
                     False if pnta lies outside self edge
                 bool2:
                     True only if pnta of input edge lies on extended self edge
+
+            Third tuple item is a single bool indicating whether both end
+            points of input line are contained in self.
 
 
         PRE-REQUISITE DATA
@@ -1532,6 +1815,16 @@ class Sline2d():
         return points, LINES, MULLINES
 
     def move(self, dx, dy):
+        """
+        Translate line endpoints by uniform x and y increments.
+
+        Parameters
+        ----------
+        dx : float
+            Translation along x-axis.
+        dy : float
+            Translation along y-axis.
+        """
         self.x0 += dx
         self.x1 += dx
         self.y0 += dy
@@ -1607,6 +1900,27 @@ class Sline2d():
             return normal
 
     def generate_factors_0_and_1(self, dx1, dx2, dmean, k=0.0, th_res=1e-3, max_iter=50):
+        """
+        Generate internal split factors between two boundary offsets in [0, 1].
+
+        Parameters
+        ----------
+        dx1, dx2 : float
+            Left and right boundary offsets from 0 and 1 respectively.
+        dmean : float
+            Target mean spacing for generated factors.
+        k : float, optional
+            Relative random perturbation factor in [0, 0.25].
+        th_res : float, optional
+            Convergence tolerance on final residual.
+        max_iter : int, optional
+            Maximum attempts for stochastic convergence.
+
+        Returns
+        -------
+        numpy.ndarray
+            Monotonic factors beginning at `dx1` and ending near `1-dx2`.
+        """
         if not (0 < dx1 < 1 and 0 < dx2 < 1 and dx1 + dx2 < 1):
             raise ValueError("dx1 and dx2 must be in (0, 1), and dx1 + dx2 < 1.")
         if not (0 <= k <= 0.25):
@@ -1686,7 +2000,7 @@ class Sline2d():
         """
         from upxo.geoEntities.sline2d import Sline2d as sl2d
 
-        Exanple-1. Using default values
+        Example-1. Using default values
         -------------------------------
         line = Sline2d(*np.random.randint(-10, 20, 3))
         normals = line.distribute_normal_vectors(5)
@@ -1771,11 +2085,11 @@ class Sline2d():
             if abs(d[0] - d[1]) <= _check_eps_ and self.is_normal(NORMAL):
                 pass
             else:
-                raise ValueError('Calculation un-successful. Check _check_eps_ value.')
+                raise ValueError('Calculation unsuccessful. Check _check_eps_ value.')
         # ---------------------------------------------
         if method == 'by_spacing':
-            # Define a bunch fo defaulkt values
-            '''@developer, maintaner: For internal controal only.'''
+            # Define a bunch of default values
+            '''@developer, maintainer: For internal control only.'''
             _DEF_n_ = 3
             _DEF_spac_ = 'constant'
             _DEF_fac_ = 0.5
@@ -1806,6 +2120,16 @@ class Sline2d():
         return normals
 
     def plot(self, p2d=None, sl2d=None):
+        """
+        Quick-plot self line with optional additional points and lines.
+
+        Parameters
+        ----------
+        p2d : Point2d or iterable, optional
+            Point(s) to overlay.
+        sl2d : Sline2d or iterable, optional
+            Line(s) to overlay.
+        """
         plt.plot([self.x0, self.x1], [self.y0, self.y1],
                  '-ko', markersize=12)
         if sl2d is not None:
@@ -1834,6 +2158,13 @@ class Sline2d():
             * 'i': starting point, (x0, y0)
             * 'j': starting point, (x1, y1)
             * 'mid': middle point.
+
+        Returns
+        -------
+        list or numpy.ndarray
+            Distances from the selected self reference location(s) to input
+            points. For `ref='all'`, returns three distance arrays/lists for
+            start, midpoint and end respectively.
 
         Example-1
         ---------
@@ -1868,17 +2199,23 @@ class Sline2d():
         ----------
         lines: List of lines
         method: Indicate the method of calculation. Can take following values:
-            * 'ref': Use the referece location specifiers to calculate
-            disatance. That is, use refi and refj.
+            * 'ref': Use the reference location specifiers to calculate
+            distance. That is, use refi and refj.
             * 'min': Minimum Baudhāyana distance
             * 'max': MAximum Baudhāyana distance
             * 'mean': Mean Baudhāyana distance
         refi: reference location for self i.e. i
         refj: referecne location for the other edge i.e. j
 
+        Notes
+        -----
+        Current implementation computes pairwise Euclidean distances between
+        selected reference points only. The `method` argument is currently not
+        branched into `min`/`max`/`mean` logic inside this function.
+
         Return
         ------
-        List of distances to all edges.
+        List of ndarray distances to all edges.
 
         Examples
         --------
@@ -1955,7 +2292,7 @@ class Sline2d():
              Specification 2: 'x+', 'z-'
 
         dist: Euclidean distance. If None and not a Number, then the
-            translation distrance will be the lenght of the vector. If a
+            translation distance will be the length of the vector. If a
             number, then dist will be the translation distance, in which case
             the vector will only be used to know the translation direction.
 
@@ -1974,6 +2311,10 @@ class Sline2d():
 
         Examples
         --------
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2029,6 +2370,8 @@ class Sline2d():
         Parameters
         ----------
         width: width of the rectangle.
+        vis: bool, optional
+            If True, plot a quick visualization of line and rectangle.
 
         Return
         ------
@@ -2117,11 +2460,11 @@ class Sline2d():
         ----------
         points: coordinates as [[x-coords],[y-coords]]
         width: rectangle width
-        boundary_points: If True, points on the boundry of the rectangle will
+        boundary_points: If True, points on the boundary of the rectangle will
             be considered, else not.
         vis: If True, a quick visualization will be provided. Green is for
-            self line, where smaller is startiung point i and larger is ending
-            point j. Markewr sizes indicating corners of rectangle follow
+            self line, where smaller is starting point i and larger is ending
+            point j. Marker sizes indicating corners of rectangle follow
             shapely polygon coordinate order. Black dots are points. Blue
             crosses are points which satisfy the geometric condition.
             NOTE: The above order may differ from UPXO line.rectangle.
@@ -2130,6 +2473,11 @@ class Sline2d():
         ------
         inside: Numpy arrau of bools. A True indicates position in input
             points which satisfy the geometric criteria.
+
+        Notes
+        -----
+        The rectangle is created from `self.rectangle(width)`. If
+        `boundary_points=True`, points on polygon boundaries are included.
 
         Examples
         --------
@@ -2224,7 +2572,7 @@ class Sline2d():
         specified by an another UPXO point object or an Iterable of coords.
 
         If throw is True and update is False, a new point of the new
-        coordinates shall be reyturned. If throw is True and update is True, a
+        coordinates shall be returned. If throw is True and update is True, a
         deepcopy of the self shall be returned.
 
         Parameters
@@ -2246,19 +2594,23 @@ class Sline2d():
         ------
         UPXO point object: Conditional, depending on input throw (refer to
                                                                   description).
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
     def rotate_about(self, *, axis=None, angle=0, degree=True,
                      update=False, throw=True):
         """
-        Rotate point about the specified axis by the specifi3ed angle.
+        Rotate point about the specified axis by the specified angle.
 
         New location is specified by point object. Point object could be
         specified by an another UPXO point object or an Iterable of coords.
 
         If throw is True and update is False, a new point of the new
-        coordinates shall be reyturned. If throw is True and update is True, a
+        coordinates shall be returned. If throw is True and update is True, a
         deepcopy of the self shall be returned.
 
         Parameters
@@ -2280,15 +2632,25 @@ class Sline2d():
         ------
         UPXO point object: Conditional, depending on input throw (refer to
                                                                   description).
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
     def attach_mp(self, *, mp=None, name=None):
-        """Attach a UPXO multi-poiont object and a name."""
+        """Attach a UPXO multi-point object and a name."""
         self.mp[name] = mp
 
     def attach_xtal(self, *, xtals=None):
-        """Attach a list of UPXO xtal objects."""
+        """
+        Attach a list of UPXO xtal objects.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def perp_distance(self, plist, ptype='coord_list'):
@@ -2336,21 +2698,29 @@ class Sline2d():
 
         Parameters
         ----------
-        plist: Elements of plist must contain the coordinates either in direct
+        points: Elements of points must contain the coordinates either in direct
         Iterable form  (such a list of [x, y] or a nparray np.array([x, y]))
         OR a 2D/3D UPXO point object.
-
-        plane: Specify the plane of the self point. Only used if self is a 2D
-        point object. Defaults to 'xy'.
 
         r: Cut-off perpendicular diatance.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
 
+        use_bounding_rec : bool, optional
+            If True, perform candidate filtering using rectangle containment
+            around the line with width `r` (plus optional epsilon padding).
+        epsfactor : float, optional
+            Multiplier for `Sline2d.ε` when expanding rectangle width in
+            bounding-rectangle mode.
+        vis : bool, optional
+            If True, plot the selected neighboring points.
+
         Return
         ------
-        Indices in plist. Empty list if no points are inside r.
+        list
+            Indices in `points` satisfying selection criteria.
+            Empty list if no points are inside cut-off.
 
         Example set-1
         -------------
@@ -2433,6 +2803,10 @@ class Sline2d():
         Return
         ------
         Indices in plist.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2464,6 +2838,10 @@ class Sline2d():
         Return
         ------
         Indices in mplist.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2485,12 +2863,12 @@ class Sline2d():
 
         refloc: Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
-        can have the folloqwing optrions:
+        can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
             * 'ending'. Ending point of the edge. Alternative use: end
             * 'middle'. Mid point of the edge.  Alternative use: mid
-            * 'any'. Any point of the edge.  No altewrnate.
-            * 'all'. Both start and end points of the edge.  No alterate.
+            * 'any'. Any point of the edge.  No alternate.
+            * 'all'. Both start and end points of the edge.  No alternate.
 
         r: Euclidean radius of search.
            If 0, the closest point will be looked out for.
@@ -2500,6 +2878,10 @@ class Sline2d():
         Return
         ------
         Indices in mplist.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2519,12 +2901,12 @@ class Sline2d():
 
         refloc: Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
-        can have the folloqwing optrions:
+        can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
             * 'ending'. Ending point of the edge. Alternative use: end
             * 'middle'. Mid point of the edge.  Alternative use: mid
-            * 'any'. Any point of the edge.  No altewrnate.
-            * 'all'. Both start and end points of the edge.  No alterate.
+            * 'any'. Any point of the edge.  No alternate.
+            * 'all'. Both start and end points of the edge.  No alternate.
 
         r: Euclidean radius of search.
            If 0, the closest point will be looked out for.
@@ -2534,6 +2916,10 @@ class Sline2d():
         Return
         ------
         Indices in mplist.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2556,12 +2942,12 @@ class Sline2d():
 
         refloc: Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
-        can have the folloqwing optrions:
+        can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
             * 'ending'. Ending point of the edge. Alternative use: end
             * 'middle'. Mid point of the edge.  Alternative use: mid
-            * 'any'. Any point of the edge.  No altewrnate.
-            * 'all'. Both start and end points of the edge.  No alterate.
+            * 'any'. Any point of the edge.  No alternate.
+            * 'all'. Both start and end points of the edge.  No alternate.
 
         r: Euclidean radius of search.
            If 0, the closest point will be looked out for.
@@ -2571,6 +2957,10 @@ class Sline2d():
         Return
         ------
         Indices in mplist.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -2731,7 +3121,7 @@ class Sline2d():
 
         Example-5
         ---------
-        # TODO: Relavant codes for store_as_feature and feature_replace use
+        # TODO: Relevant codes for store_as_feature and feature_replace use
         inputs is yet to be written.
         """
         # Validate user inputs
@@ -2768,15 +3158,33 @@ class Sline2d():
         return points, increments
 
     def set_gmsh_props(self, prop_dict):
-        """Set dictionary of gmsh properties."""
+        """
+        Set dictionary of gmsh properties.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def make_shapely(self):
-        """Return shapely point object. Only valid for 2D."""
+        """
+        Return shapely point object. Only valid for 2D.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def make_vtk(self):
-        """Make VTK line object."""
+        """
+        Make VTK line object.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def generate_points(self, dxmean, pert_factor=0.0):
@@ -3115,6 +3523,10 @@ class Sline2d():
         Return
         ------
         List of indices of points which satisfy the condition.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -3145,6 +3557,10 @@ class Sline2d():
         Return
         ------
         List of indices of points which satisfy the condition.
+
+        Notes
+        -----
+        To be developed.
         """
         pass
 
@@ -3156,8 +3572,26 @@ class Sline2d():
 
         Prameters
         ---------
-        f: specifies the locat5ions. Can be a numeric value or an iterable of
+        method: str
+            Split specification mode. Supported values in current
+            implementation are `factor`, `p2d` and `coord`.
+        f: specifies the locations. Can be a numeric value or an iterable of
             numerical values. All values must be in the domain (0, 1).
+        divider:
+            Divider location used by `p2d` and `coord` modes.
+        saa: bool
+            If True, modifies current object and creates complementary segment.
+        throw: bool
+            If True, returns `(self, new_line)` after split.
+        update: str
+            Which endpoint of self is retained/updated (`pnta` or `pntb`).
+        perform_containment_check: bool
+            If True, validates divider is fully on and within self.
+
+        Returns
+        -------
+        tuple
+            `(self, new_line)` when `throw=True` and split succeeds.
 
         Examples
         --------
