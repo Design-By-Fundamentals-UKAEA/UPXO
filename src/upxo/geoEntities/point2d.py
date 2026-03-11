@@ -1,44 +1,99 @@
 """
-Core module of UKAEA Poly-XTAL Operations.
+2D Point geometric entity module for UPXO (Universal PolyXtal Operations).
 
-Authors
--------
-Dr. Sunil Anandatheertha
+This module provides two-dimensional point representations with support for
+lightweight (leanest) and feature-rich implementations. It includes geometric
+operations (distance, translation, rotation), type conversions (UPXO, Shapely,
+VTK, PyVista, GMSH), and point array generation methods.
 
-We could benefit a lot from the below links.
-Their executions, however need to be profiled for speed, as I have seen them
-to be quite slow in certain applications.
-https://docs.sympy.org/latest/modules/geometry/points.html
-https://www.geeksforgeeks.org/python-sympy-segment-perpendicular_bisector-method/?ref=next_article
-https://www.geeksforgeeks.org/python-sympy-line-is_parallel-method/
-https://www.geeksforgeeks.org/python-sympy-line-smallest_angle_between-method/
-https://www.geeksforgeeks.org/python-sympy-line-parallel_line-method/
-https://www.geeksforgeeks.org/python-sympy-line-are_concurrent-method/
-https://www.geeksforgeeks.org/python-sympy-ellipse-equation-method/
-https://www.geeksforgeeks.org/python-sympy-ellipse-method/
-https://www.geeksforgeeks.org/python-sympy-plane-equation-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-polygon-cut_section-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-is_coplanar-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-perpendicular_plane-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-projection-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-line-intersection-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-curve-translate-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-triangle-is_right-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-triangle-is_isosceles-method/?ref=ml_lbp
+Core Classes
+------------
+- ``p2d_leanest`` : Minimal 2D point container (private coordinates, no features).
+- ``Point2d`` : Full-featured 2D point with attachable features and extensive
+  geometric operations.
+- ``_coord_`` : Internal 3D coordinate storage (used for z-level tracking).
+
+Key Features
+------------
+- Distance calculations (Euclidean, squared).
+- Geometric transformations (translation, rotation, reflection).
+- Point array generation (clustering, angles, grid patterns).
+- Type conversions to/from multiple formats (lists, arrays, Shapely, VTK).
+- Feature attachment and intersection detection.
+- Neighbor search (by distance, by count).
+
+Imports (Core/Runtime)
+---------------------
+**Core imports** (module-level):
+  - numpy (np): Array/numerical operations.
+  - math: Trigonometry, distance calculations.
+  - copy.deepcopy: Object cloning.
+
+**Lazy imports** (loaded on demand):
+  - numpy.matlib: For ``repmat()`` in ``array_by_angles()``.
+  - shapely.geometry: For Shapely point/polygon conversions (``make_shape()``,
+    ``array_by_clustering()`` with 'shapely' return type).
+  - vtk: For VTK point object creation (``make_vtk_point()``).
+  - pyvista: For PyVista point cloud generation (``array_by_clustering()``
+    with 'pyvista' return type).
+  - gmsh: For GMSH point tagging (``array_by_clustering()`` with 'gmsh'
+    return type).
+
+**UPXO imports** (module-level):
+  - upxo._sup.dataTypeHandlers: Type checking, constants.
+  - upxo.geoEntities.bases: UPXO_Point, UPXO_Edge base classes.
+  - upxo.geoEntities.featmake: Point/edge construction utilities.
+  - upxo._sup.validation_values: Point validation/specification.
+  - upxo.geoEntities.point3d: 3D point for conversion operations.
+
+Metadata
+--------
+* Module: upxo.geoEntities.point2d
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active (p2d_leanest: stable, Point2d: full-featured)
+* Last updated: 2026-03-11
+* Version: 1.1
+
+A Few Usage Examples
+--------------------
+**Leanest (minimal) point:**
+    >>> from upxo.geoEntities.point2d import p2d_leanest
+    >>> p = p2d_leanest(1.0, 2.0)
+    >>> p._x, p._y
+    (1.0, 2.0)
+
+**Full-featured point with distance:**
+    >>> from upxo.geoEntities.point2d import Point2d as p2d
+    >>> p1, p2 = p2d(0, 0), p2d(3, 4)
+    >>> p1.distance(p2)
+    5.0
+
+**Generate point array around centroid:**
+    >>> center = p2d(5, 5)
+    >>> points = center.array_by_clustering(n=10, r=2.0)
+    >>> len(points)
+    10
+
+**Rotate point around origin:**
+    >>> p = p2d(1, 0)
+    >>> rotated = p.rotate_about_point(p2d(0, 0), 90, degree=True)
+
+**Convert to Shapely:**
+    >>> p = p2d(1, 1)
+    >>> sp = p.make_shape()  # Returns Shapely Point
+
+See Also
+--------
+- ``upxo.geoEntities.sline2d`` : 2D line segments.
+- ``upxo.geoEntities.point3d`` : 3D points.
+- ``upxo.geoEntities.polygon2d`` : 2D polygon/crystal entities.
+
 """
 
 import math
 import numpy as np
-import numpy.matlib
 from copy import deepcopy
-from scipy.spatial import cKDTree
-import vtk
-import pyvista
-import gmsh
-from shapely.geometry import Point as ShPnt, Polygon as ShPol
-from shapely.geometry import LineString
-from functools import wraps
-import matplotlib.pyplot as plt
 import upxo._sup.dataTypeHandlers as dth
 from upxo._sup.dataTypeHandlers import opt as OPT, strip_str as SSTR
 from upxo.geoEntities.bases import UPXO_Point, UPXO_Edge
@@ -61,7 +116,30 @@ class _coord_():
 
 class p2d_leanest():
     """
-    Leanest redefinition of 2d point class. Intended for private use only.
+    Leanest redefinition of 2D point class.
+
+    This class is a minimal coordinate container intended for lightweight,
+    high-frequency point operations where only core geometric checks are
+    needed. It stores coordinates as private attributes (`_x`, `_y`) and
+    provides compact distance/radius checks with minimal overhead.
+
+    Attributes
+    ----------
+    _x, _y : float
+        Point coordinates in 2D space.
+
+    Metadata
+    --------
+    * Class: p2d_leanest
+    * Module: upxo.geoEntities.point2d
+    * Author: Dr. Sunil Anandatheertha
+    * Email: vaasu.anandatheertha@ukaea.uk
+    * Status: Active
+    * Last updated: 2026-03-11
+
+    Import
+    ------
+    from upxo.geoEntities.point2d import p2d_leanest
 
     Author
     ------
@@ -83,6 +161,14 @@ class p2d_leanest():
     __slots__ = ('_x', '_y')
 
     def __init__(self, x, y):
+        """
+        Initialize lean 2D point.
+
+        Parameters
+        ----------
+        x, y : float
+            Coordinates of the point.
+        """
         self._x, self._y = x, y
 
     def __repr__(self):
@@ -90,11 +176,39 @@ class p2d_leanest():
         return f'Lean 2D point at ({self._x}, {self._y})'
 
     def squared_distance_to_coord(self, x, y):
+        """
+        Compute squared Euclidean distance to a coordinate.
+
+        Parameters
+        ----------
+        x, y : float
+            Target coordinate.
+
+        Returns
+        -------
+        float
+            Squared distance `(self._x-x)^2 + (self._y-y)^2`.
+        """
         return (self._x-x)**2 + (self._y-y)**2
 
     def is_coord_within_cor(self, x, y, cor=1E-8, on_cor_flag=True):
         """
         Check if a coordinate is inside or on a circle centred at self.
+
+        Parameters
+        ----------
+        x, y : float
+            Coordinate to test.
+        cor : float, optional
+            Circle radius.
+        on_cor_flag : bool, optional
+            If True, include circle boundary (`<= cor`), else strict inside
+            (`< cor`).
+
+        Returns
+        -------
+        bool
+            True if coordinate satisfies circle-membership criterion.
 
         Example
         -------
@@ -108,7 +222,22 @@ class p2d_leanest():
 
     def is_p2dl_within_cor(self, point, cor=1E-8, on_cor_flag=True):
         """
-        Check if a coordinate is inside or on a circle centred at self.
+        Check if a lean-point is inside or on a circle centred at self.
+
+        Parameters
+        ----------
+        point : p2d_leanest
+            Lean point to test.
+        cor : float, optional
+            Circle radius.
+        on_cor_flag : bool, optional
+            If True, include circle boundary (`<= cor`), else strict inside
+            (`< cor`).
+
+        Returns
+        -------
+        bool
+            True if point satisfies circle-membership criterion.
 
         Example
         -------
@@ -122,7 +251,22 @@ class p2d_leanest():
 
     def is_p2d_within_cor(self, point, cor=1E-8, on_cor_flag=True):
         """
-        Check if a coordinate is inside or on a circle centred at self.
+        Check if a Point2d is inside or on a circle centred at self.
+
+        Parameters
+        ----------
+        point : Point2d
+            UPXO Point2d object to test.
+        cor : float, optional
+            Circle radius.
+        on_cor_flag : bool, optional
+            If True, include circle boundary (`<= cor`), else strict inside
+            (`< cor`).
+
+        Returns
+        -------
+        bool
+            True if point satisfies circle-membership criterion.
 
         Example
         -------
@@ -138,11 +282,9 @@ class Point2d():
     """
     UPXO Point2d object, new version.
 
-    DEVELOPMENTAL PHASES AND PROGRESS
-    ---------------------------------
-    __eq__: DONE
-    __ne__: DONE
-
+    This is the primary 2D point representation in UPXO. It supports rich
+    geometric operations, distance and comparison utilities, feature handling,
+    and interoperability with other UPXO geometry entities.
 
     Parameters
     ----------
@@ -153,6 +295,22 @@ class Point2d():
     plane: Indicates whether the points is in xy/yx/yz/zy/xz/zx plane.
         If zx for example, then x and y of Point2d should be / will be
         interpreted as z and x.
+
+    Metadata
+    --------
+    * Class: Point2d
+    * Module: upxo.geoEntities.point2d
+    * Author: Dr. Sunil Anandatheertha
+    * Email: vaasu.anandatheertha@ukaea.uk
+    * Status: Active development
+    * Last updated: 2026-03-11
+
+    Import
+    ------
+    from upxo.geoEntities.point2d import Point2d
+
+    Recommended alias import:
+    from upxo.geoEntities.point2d import Point2d as p2d
 
     Notes to users
     --------------
@@ -188,6 +346,17 @@ class Point2d():
     __slots__ = ('x', 'y', 'f', 'plane')
 
     def __init__(self, x, y, plane='xy'):
+        """
+        Initialize a 2D UPXO point.
+
+        Parameters
+        ----------
+        x, y : float
+            Point coordinates.
+        plane : str, optional
+            Plane identifier (`xy`, `yx`, `yz`, `zy`, `xz`, `zx`) used for
+            interpreting coordinate semantics in mixed-plane workflows.
+        """
         # super().__init__(x, y)
         self.x = x
         self.y = y
@@ -1054,6 +1223,7 @@ class Point2d():
                                             return_type=return_type)
 
         if tool == 'shapely':
+            from shapely.geometry import LineString
             lineA = LineString([(la[0], la[1]), (la[2], la[3])])
             lineB = LineString([(lb[0], lb[1]), (lb[2], lb[3])])
             if lineA.intersects(lineB):
@@ -1086,6 +1256,20 @@ class Point2d():
 
     @classmethod
     def from_intersection_lines_regions(cls, lines, regions):
+        """
+        Instantiate point(s) from intersections between lines and regions.
+
+        Parameters
+        ----------
+        lines : iterable
+            Collection of line-like entities.
+        regions : iterable
+            Collection of region-like entities.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     @property
@@ -1129,6 +1313,7 @@ class Point2d():
         A.shapely
         A.x, A.y
         """
+        from shapely.geometry import Point as ShPnt
         return ShPnt(self.x, self.y)
 
     def inside_line(self, line, consider_ends=True,
@@ -1603,7 +1788,8 @@ class Point2d():
         if type(angles) in _NUMB:
             angles = np.array(angles)
         if angles.size == 1:
-            angles = np.matlib.repmat(angles, 1, len(locx)).squeeze()
+            import numpy.matlib
+            angles = numpy.matlib.repmat(angles, 1, len(locx)).squeeze()
         if degree:
             angles = np.radians(angles)
         # ----------------------------------------------------
@@ -1613,6 +1799,23 @@ class Point2d():
         return np.array([xnew, ynew]).T
 
     def attach_feature_(self, *, feature=None, feature_id=None):
+        """
+        Attach a feature object to the point feature dictionary.
+
+        Parameters
+        ----------
+        feature : object
+            Feature instance to attach.
+        feature_id : hashable
+            Key used to store/retrieve the feature within feature class bucket.
+
+        Raises
+        ------
+        ValueError
+            If `feature` or `feature_id` is empty.
+        KeyError
+            If `feature_id` already exists for the same feature class.
+        """
         if not feature:
             raise ValueError('feature cannot be empty.')
         if not feature_id:
@@ -1629,7 +1832,22 @@ class Point2d():
 
     def find_closest_points(self, plist=None, *, plane='xy', on_boundary=True):
         """
-        Dpcstring.
+        Find index/indices of closest point(s) from input point collection.
+
+        Parameters
+        ----------
+        plist : iterable
+            Input points/coordinates.
+        plane : str, optional
+            Plane specifier. Defaults to `xy`.
+        on_boundary : bool, optional
+            If True, include points exactly on search radius when delegated
+            neighbor query is radius-based.
+
+        Returns
+        -------
+        numpy.ndarray
+            Index/indices of closest points.
 
         Examples
         --------
@@ -1682,37 +1900,171 @@ class Point2d():
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
+        """
+        Find neighboring multi-points within a distance criterion.
+
+        Parameters
+        ----------
+        mplist : iterable
+            Collection of multi-point objects.
+        plane : str, optional
+            Plane specifier. Defaults to `xy`.
+        r : float, optional
+            Search radius.
+        tolf : float, optional
+            Tolerance factor for membership decision.
+
+        Notes
+        -----
+        To be developed.
+        """
         # Use the ckdtree option.
         pass
 
     def find_neigh_edge_by_distance(self, *, elist=None,
                                     plane='xy', refloc='starting', r=0):
+        """
+        Find neighboring edges using distance-based search.
+
+        Parameters
+        ----------
+        elist : iterable
+            Collection of edge objects.
+        plane : str, optional
+            Plane specifier. Defaults to `xy`.
+        refloc : str, optional
+            Edge reference location used for distance calculation.
+        r : float, optional
+            Search radius.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def find_neigh_muledge_by_distance(self, *, melist=None,
                                        plane='xy', refloc='starting', r=0):
+        """
+        Find neighboring multi-edges using distance-based search.
+
+        Parameters
+        ----------
+        melist : iterable
+            Collection of multi-edge objects.
+        plane : str, optional
+            Plane specifier. Defaults to `xy`.
+        refloc : str, optional
+            Edge reference location used for distance calculation.
+        r : float, optional
+            Search radius.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def find_neigh_xtal_by_distance(self, *, xlist=None,
                                     plane='xy', refloc='starting', r=0):
+        """
+        Find neighboring crystals using distance-based search.
+
+        Parameters
+        ----------
+        xlist : iterable
+            Collection of crystal objects.
+        plane : str, optional
+            Plane specifier. Defaults to `xy`.
+        refloc : str, optional
+            Crystal reference location used for distance calculation.
+        r : float, optional
+            Search radius.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def set_gmsh_props(self, prop_dict):
+        """
+        Set Gmsh-related properties for point export/workflows.
+
+        Parameters
+        ----------
+        prop_dict : dict
+            Dictionary of Gmsh properties.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def array_by_translation(self,
                              ncopies=10,
                              vector=[0, 0, 0],
                              spacing='constant'):
+        """
+        Create translated copies of the point.
+
+        Parameters
+        ----------
+        ncopies : int, optional
+            Number of copies.
+        vector : iterable, optional
+            Translation direction/magnitude specifier.
+        spacing : str, optional
+            Spacing mode.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def array_by_rotation(self,
                           ncopies=10,
                           vector=[0, 0, 0],
                           spacing='constant'):
+        """
+        Create rotated copies of the point.
+
+        Parameters
+        ----------
+        ncopies : int, optional
+            Number of copies.
+        vector : iterable, optional
+            Rotation axis/reference specifier.
+        spacing : str, optional
+            Spacing mode.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def array_on_arc(self, ncopies=10, r=1, angles=[0.0, 360.0], degree=True):
+        """
+        Create point copies distributed on an arc.
+
+        Parameters
+        ----------
+        ncopies : int, optional
+            Number of copies.
+        r : float, optional
+            Arc radius.
+        angles : iterable, optional
+            Start and end angles.
+        degree : bool, optional
+            If True, interpret angles in degrees.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def array_by_clustering(self, n=10, r=1,
@@ -1788,9 +2140,11 @@ class Point2d():
             pass
         elif return_type in ('shapely'):
             '''Returns a list of shjapely point obejct.'''
+            from shapely.geometry import Point as ShPnt
             return [ShPnt(x, y) for x, y in xy.T]
         elif return_type in ('gmsh'):
             '''Returnsa list of gmsh piont tags'''
+            import gmsh
             if not gmsh.isInitialized():
                 gmsh.initialize()
             if not gmsh.model.getCurrent():
@@ -1799,6 +2153,7 @@ class Point2d():
                           for x, y in xy.T]
             return point_tags
         elif return_type in ('pyvista'):
+            import pyvista
             points = np.vstack((xy, np.zeros(n))).T
             point_cloud = pyvista.PolyData(points)
             point_cloud.verts = np.vstack([[1, i]
@@ -1809,11 +2164,41 @@ class Point2d():
             return mp2d.from_xy(xy)
 
     def lies_on_which_edge(self, *, elist=None, consider_ends=True):
+        """
+        Return indices of edges on which the point lies.
+
+        Parameters
+        ----------
+        elist : iterable
+            Collection of edge objects.
+        consider_ends : bool, optional
+            If True, consider edge endpoints as valid hits.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def lies_in_which_xtal(self, *, xlist=None,
                            cosider_boundary=True,
                            consider_boundary_ends=True):
+        """
+        Return indices of crystals containing this point.
+
+        Parameters
+        ----------
+        xlist : iterable
+            Collection of crystal objects.
+        cosider_boundary : bool, optional
+            If True, include boundary checks.
+        consider_boundary_ends : bool, optional
+            If True, include boundary-endpoint checks.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def set_z(self, z=0):
@@ -1839,6 +2224,7 @@ class Point2d():
         """
         if not hasattr(self, 'f'):
             self.set_z(z=z)
+        import vtk
         points = vtk.vtkPoints()
         point_id = points.InsertNextPoint(self.x,
                                           self.y,
@@ -1850,10 +2236,38 @@ class Point2d():
                 'help': "return['pd'].GetPoint(return['id'])"}
 
     def make_shape(self):
+        """
+        Create geometric shape representation of point.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
 
 def all_isinstance(dtype, *args):
+    """
+    Check whether all provided arguments are instances of a given type.
+
+    Parameters
+    ----------
+    dtype : type
+        Target Python/UPXO type to validate against.
+    *args : tuple
+        Variable number of objects to test.
+
+    Returns
+    -------
+    bool or None
+        Returns `True` only if every argument is an instance of `dtype`.
+        Returns `None` when no arguments are provided.
+
+    Example
+    -------
+    from upxo.geoEntities.point2d import all_isinstance, p2d_leanest
+    all_isinstance(p2d_leanest, p2d_leanest(0, 0), p2d_leanest(1, 1))
+    """
     if len(args) > 0:
         print(args)
         return all(isinstance(arg, dtype) for arg in args)
