@@ -1,43 +1,122 @@
 """
-Created on Sat Apr 20 20:07:35 2024
+Multi-straight line 2D geometric entity module for UPXO.
 
-3D straight line.
+This module provides multi-straight-line (polyline) representations in 2D space.
+It supports closed and open polylines with operations for node/line management,
+spatial queries, adjacent relationship detection, and geometric transformations.
+
+Core Classes
+------------
+- ``MSline2d`` : Multi-straight-line in 2D (collection of connected line segments).
+- ``ring2d`` : Ring structure in 2D (to be further developed).
+- ``mulring2d`` : Multiple rings in 2D (to be further developed).
+
+Key Features
+------------
+- Line chain construction from various input formats (node points, coordinates,
+  existing lines).
+- Node and line enumeration, spacing, and connectivity checks.
+- Adjacency and spatial relationship detection between polylines.
+- Centroid and length calculations.
+- Open/closed topology management.
+- Node coordinate access and updates.
+- Spatial tree indexing for nearest-neighbor queries.
+- Point location finding within polyline node sequences.
+- Plotting and visualization support.
 
 Applications
 ------------
-* Non-conformal geometry to conformal geometry conversion
-* Heirarchical grain structure feature generation
-* General geometry use
+- Non-conformal to conformal geometry conversion.
+- Hierarchical grain structure feature generation.
+- General geometry operations and polyline manipulation.
+- Boundary and edge representation in meshing and simulation.
 
-Classes
--------
-* MSline2d
-* ring2d
-* mulring2d
-Definitions
------------
-None
+Imports (Core/Runtime)
+---------------------
+**Core imports** (module-level):
+  - numpy (np): Array operations, coordinate manipulation.
+  - math: Geometric calculations.
+  - copy.deepcopy: Object cloning.
 
-Coordinate system
+**Lazy imports** (loaded on demand):
+  - numpy.matlib: For specialized matrix operations.
+  - scipy.spatial.cKDTree: For spatial tree indexing.
+  - matplotlib.pyplot: For plotting/visualization.
+  - vtk: For VTK-based geometry operations.
+  - shapely.geometry: For Shapely polygon/point conversions.
+
+**UPXO imports** (module-level):
+  - upxo._sup.dataTypeHandlers: Type checking, constants.
+  - upxo.geoEntities.bases: UPXO base classes.
+  - upxo.geoEntities.point2d: Point2d, p2d_leanest.
+  - upxo.geoEntities.sline2d: Sline2d (straight line in 2D).
+  - upxo._sup.validation_values: Point validation utilities.
+  - upxo._sup.data_ops: Data manipulation utilities.
+
+Coordinate System
 -----------------
-                     Y+
-                     |           Z-
-                     |         /
-                     |       /
-                     |     /
-                     |   /
-    X-               | /               X+
-    -----------------O------------------
-                    /|
-                  /  |
-                /    |
-              /      |
-            /        |
-          /          |
-        Z+           Y-
+Standard 2D Cartesian with notation (X+, Y+) = (right, up):
 
-__authors__ = ["Dr. Sunil Anandatheertha"]
-__version__ = "1.0"
+                     Y+
+                     |
+                     |
+                     |
+                     |
+    X-               |               X+
+    -----+-----+-----O-----+-----+-----
+                     |
+                     |
+                     |
+                     |
+                     Y-
+
+Metadata
+--------
+* Module: upxo.geoEntities.mulsline2d
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active (MSline2d: full-featured, ring2d/mulring2d: in development)
+* Created: 2024-04-20
+* Last updated: 2026-03-11
+* Version: 1.1
+
+Usage Examples
+--------------
+**Construct from line objects:**
+    >>> from upxo.geoEntities.mulsline2d import MSline2d
+    >>> from upxo.geoEntities.sline2d import Sline2d
+    >>> lines = [
+    ...     Sline2d(0, 0, 1, 1),
+    ...     Sline2d(1, 1, 2, 2),
+    ...     Sline2d(2, 2, 3, 1)
+    ... ]
+    >>> msl = MSline2d.from_lines(lines, close=False)
+    >>> msl.nlines, msl.nnodes
+    (3, 4)
+
+**Construct from coordinates:**
+    >>> coords = [(0, 0), (1, 1), (2, 2), (3, 1)]
+    >>> msl = MSline2d.by_coords(coords, close=True)
+    >>> msl.length
+    >>> msl.centroid
+
+**Query relationships:**
+    >>> msl1 = MSline2d.by_coords([(0, 0), (1, 1)])
+    >>> msl2 = MSline2d.by_coords([(1, 1), (2, 2)])
+    >>> msl1.do_i_precede(msl2)  # Check if msl1 comes before msl2
+    True
+
+**Find closest nodes:**
+    >>> from upxo.geoEntities.point2d import Point2d
+    >>> msl = MSline2d.by_coords([(0, 0), (2, 0), (4, 0)])
+    >>> closest = msl.find_closest_nodes(Point2d(1.5, 0.5))
+
+See Also
+--------
+- ``upxo.geoEntities.sline2d`` : Single straight-line entity.
+- ``upxo.geoEntities.point2d`` : 2D point entity.
+- ``upxo.geoEntities.polygon2d`` : 2D polygon entity.
+
 """
 
 import math
@@ -85,12 +164,33 @@ class MSline2d():
     EPS_coord_coincide = 1E-8
 
     def __init__(self, nodes=None, llist=None, closed=None):
+        """
+        Initialize a multi-straight-line 2D entity.
+
+        Parameters
+        ----------
+        nodes : list, optional
+            Points (Point2d) forming the polyline chain.
+        llist : list, optional
+            List of Sline2d (straight line 2D) objects forming the polyline.
+        closed : bool, optional
+            If True, polyline is closed; if False, polyline is open.
+        """
         self.lines = llist
         self.nodes = nodes
         self.closed = closed
         self.features = {'neigh_gids': None}
 
     def __repr__(self):
+        """
+        Return string representation of multi-straight-line object.
+
+        Returns
+        -------
+        str
+            Concise representation including number of lines, object ID, and
+            start/end node coordinates.
+        """
         return f"MSL2. nln={len(self.lines)}. ID: {id(self)}: {self.nodes[0]}, {self.nodes[-1]}"
 
     def __iter__(self):
@@ -238,6 +338,23 @@ class MSline2d():
                          'min_total_length': 8,
                          'mean_length': 1,}
                 ):
+        """
+        Generate polyline by "walking" with variable step length/angle.
+
+        Parameters
+        ----------
+        var_l : str, optional
+            Length variation type (e.g., 'constant', 'random').
+        var_ang : str, optional
+            Angle variation type (e.g., 'constant', 'random').
+        specs : dict, optional
+            Specifications dict with keys: 'n' (count), 'max_total_length',
+            'min_total_length', 'mean_length'.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     @property
@@ -247,18 +364,50 @@ class MSline2d():
 
     @property
     def centroid(self):
+        """
+        Compute and return centroid of the polyline.
+
+        Returns
+        -------
+        numpy.ndarray
+            Mean coordinate (x, y) of all nodes.
+        """
         return self.get_node_coords().mean(axis=0)
 
     @property
     def centroid_p2dl(self):
+        """
+        Return centroid as p2d_leanest point object.
+
+        Returns
+        -------
+        p2d_leanest
+            Lightweight point object at polyline centroid.
+        """
         return p2d_leanest(*self.centroid)
 
     @property
     def length(self):
+        """
+        Return total length of all lines in polyline.
+
+        Returns
+        -------
+        float
+            Sum of all individual line lengths.
+        """
         return sum([line.length for line in self.lines])
 
     @property
     def lengths(self):
+        """
+        Return individual line lengths as list.
+
+        Returns
+        -------
+        list
+            Lengths of each line in the polyline.
+        """
         return [line.length for line in self.lines]
 
     @property
@@ -268,10 +417,26 @@ class MSline2d():
 
     @property
     def coords(self):
+        """
+        Get all node coordinates as 2D array.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (n_nodes, 2) with (x, y) coordinates.
+        """
         return np.array([[p.x, p.y] for p in self.nodes])
     
     @property
     def tree(self):
+        """
+        Build spatial KD-tree index for neighbor queries.
+
+        Returns
+        -------
+        scipy.spatial.cKDTree
+            KD-tree constructed from node coordinates.
+        """
         return cKDTree(self.coords)
 
     @property
@@ -322,6 +487,14 @@ class MSline2d():
         return np.unique(nodes, axis=0)
 
     def get_node_coords(self):
+        """
+        Extract and return all node coordinates as array.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (n_nodes, 2) with (x, y) coordinates of each node.
+        """
         return np.array([[node.x, node.y] for node in self.extract_nodes()])
 
     @property
@@ -440,6 +613,23 @@ class MSline2d():
         return i_precede, flip_needed
 
     def is_adjacent(self, multisline2d):
+        """
+        Check spatial adjacency with another multiline.
+
+        Parameters
+        ----------
+        multisline2d : MSline2d
+            Another multi-straight-line object to test.
+
+        Returns
+        -------
+        tuple
+            (is_adjacent_bool, left_relation, right_relation) tuple.
+
+        Notes
+        -----
+        Checks if multiline is immediately preceded or succeeded by input.
+        """
         left = self.do_i_proceed(multisline2d)  # msl2d is to the left of self
         right = self.do_i_precede(multisline2d)  # msl2d is to the rght of self
         return any(left[0], right[0]), left, right
@@ -455,6 +645,22 @@ class MSline2d():
         return precedes
 
     def has_coord(self, coord, return_flags=False):
+        """
+        Check if coordinate exists in polyline node sequence.
+
+        Parameters
+        ----------
+        coord : array-like
+            2D coordinate (x, y) to search for.
+        return_flags : bool, optional
+            If True, return boolean flags array.
+
+        Returns
+        -------
+        bool or (bool, numpy.ndarray)
+            If return_flags=False: boolean indicating existence.
+            If return_flags=True: (existence_bool, flags_array) tuple.
+        """
         # Validations: coord must be np.array 2D coordfinate
         _coords_ = self.get_node_coords()
         flags = (_coords_[:, 0] == coord[0]) & (_coords_[:, 1] == coord[1])
@@ -464,6 +670,19 @@ class MSline2d():
             return any(flags)
 
     def find_coord_location(self, coord):
+        """
+        Find index location of coordinate in node sequence.
+
+        Parameters
+        ----------
+        coord : array-like
+            2D coordinate (x, y) to search for.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            Index array if coordinate found, None if not found.
+        """
         # Validations: coord must be np.array 2D coordfinate
         exists, flags = self.has_coord(coord, return_flags=True)
         if exists:
@@ -472,6 +691,14 @@ class MSline2d():
             return None
 
     def extract_nodes(self):
+        """
+        Extract all unique nodes from polyline lines.
+
+        Returns
+        -------
+        list
+            List of Point2d nodes (including closing node if closed).
+        """
         nodes = [line.pnta for line in self.lines]
         if self.closed:
             nodes.append(self.nodes[0])
@@ -480,6 +707,14 @@ class MSline2d():
         return nodes
 
     def update_nodes(self):
+        """
+        Update internal node list from current line definitions.
+
+        Notes
+        -----
+        Reconstructs self.nodes from line start/end points, respecting
+        open/closed topology.
+        """
         self.nodes = [line.pnta for line in self.lines]
         if self.closed:
             self.nodes.append(self.nodes[0])
@@ -696,9 +931,38 @@ class MSline2d():
                 self.update_nodes()
 
     def splice_nodes_and_lines(self, method='points', points=None, perform_checks=True):
+        """
+        Splice/interpolate nodes and lines at specified points.
+
+        Parameters
+        ----------
+        method : str, optional
+            Method for splicing. Options include 'points' (default).
+        points : list, optional
+            Points at which to splice.
+        perform_checks : bool, optional
+            Whether to perform validation checks.
+
+        Notes
+        -----
+        To be developed.
+        """
         pass
 
     def roll(self, roll_distance):
+        """
+        Roll/rotate line order within the polyline chain.
+
+        Parameters
+        ----------
+        roll_distance : int
+            Number of positions to roll lines.
+
+        Notes
+        -----
+        Updates internal node list after rolling. Useful for changing
+        polyline starting point while preserving connectivity.
+        """
         self.lines = list(np.roll(self.lines, -roll_distance))
         self.update_nodes()
 
@@ -921,6 +1185,26 @@ class MSline2d():
                 del self.lines[1]
 
     def plot(self, ax=None, connect_ends=False):
+        """
+        Plot polyline on matplotlib axes.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            Axes object to plot on. If None, creates new figure/axes.
+        connect_ends : bool, optional
+            If True, draw line connecting polyline start and end points.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            Axes object with plotted polyline.
+
+        Examples
+        --------
+        >>> msl = MSline2d.by_coords([(0, 0), (1, 1), (2, 0)])
+        >>> ax = msl.plot()
+        """
         coords = self.get_node_coords()
         if ax is None:
             fig, ax = plt.subplots()
@@ -933,6 +1217,20 @@ class MSline2d():
         return ax
 
     def check_overlaping_points(self, tolerance=1E-8):
+        """
+        Check for overlapping/duplicate nodes within tolerance.
+
+        Parameters
+        ----------
+        tolerance : float, optional
+            Maximum distance for considering points duplicates.
+            Default: 1E-8.
+
+        Returns
+        -------
+        bool
+            True if overlapping points found, False otherwise.
+        """
         coords = self.get_node_coords()
         d = cdist(coords, coords)
         if np.argwhere(d <= tolerance).shape[0] > coords.shape[0]:
@@ -941,6 +1239,19 @@ class MSline2d():
             return False
 
     def check_overlaping_lines(self):
+        """
+        Check for overlapping line segments in polyline.
+
+        Returns
+        -------
+        bool or None
+            True if overlapping lines detected, None if to be completed.
+
+        Notes
+        -----
+        To be developed. Current implementation collects midpoints and
+        gradients but does not perform overlap checks.
+        """
         midpoints = [line.mid_point for line in self.lines]
         gradients = [line.gradient for line in self.lines]
 
@@ -1002,6 +1313,45 @@ class MSline2d():
 
 class ring2d():
     """
+    Ring structure in 2D—closed polyline representation from multiple segments.
+
+    This class manages a collection of connected MSline2d (multi-straight-line)
+    segments that form a closed ring/loop structure. It handles segment ordering,
+    flipping, spatial continuity checks, and polygon conversion.
+
+    Attributes
+    ----------
+    segments : list
+        Collection of MSline2d objects forming the ring.
+    segids : list
+        Segment identifiers.
+    segflips : list
+        Boolean flags indicating if segments were flipped for continuity.
+    nsegs : int
+        Number of segments in the ring.
+    closed : bool
+        Whether ring is topologically closed.
+    conn0 : bool
+        First-order connectivity status (start-end closure).
+    conn1 : dict
+        Second-order connectivity status (inter-segment continuity).
+
+    Metadata
+    --------
+    * Class: ring2d
+    * Module: upxo.geoEntities.mulsline2d
+    * Author: Dr. Sunil Anandatheertha
+    * Status: In development
+    * Last updated: 2026-03-11
+
+    Key Features
+    ------------
+    - Multi-segment ring assembly and closure detection.
+    - Automatic segment flipping to enforce spatial continuity.
+    - Polygon conversion and geometric calculations (area, perimeter).
+    - Spatial tree indexing for neighbor queries.
+    - Coordinate extraction and validation.
+
     Import
     ------
     from upxo.geoEntities.mulsline2d import ring2d
@@ -1045,6 +1395,18 @@ class ring2d():
     EPS_coord_coincide = 1E-8
 
     def __init__(self, segments=None, segids=None, segflips=None):
+        """
+        Initialize ring2d from segment collection.
+
+        Parameters
+        ----------
+        segments : list, optional
+            List of MSline2d objects forming the ring.
+        segids : list, optional
+            Segment identifiers.
+        segflips : list, optional
+            Boolean flags indicating segment flip status.
+        """
         self.segments = segments
         self.segids = segids
         self.segflips = segflips
@@ -1071,18 +1433,59 @@ class ring2d():
         # NOw that validations have been done, we will proceed.
 
     def __repr__(self):
+        """
+        Return string representation of ring2d object.
+
+        Returns
+        -------
+        str
+            Brief representation with segment count and object ID.
+        """
         return f'UPXO ring. nseg={len(self.segments)}. MID: {id(self)}'
 
     def add_segment_unsafe(self, segment):
+        """
+        Add segment to ring without validation.
+
+        Parameters
+        ----------
+        segment : MSline2d
+            Segment to append (no continuity checks).
+        """
         self.segments.append(segment)
 
     def add_segid(self, segid):
+        """
+        Add segment identifier to tracking list.
+
+        Parameters
+        ----------
+        segid : hashable
+            Segment identifier to track.
+        """
         self.segids.append(segid)
 
     def add_segflip(self, segflip):
+        """
+        Add segment flip status flag.
+
+        Parameters
+        ----------
+        segflip : bool
+            True if segment was flipped, False otherwise.
+        """
         self.segflips.append(segflip)
 
     def check_closed(self):
+        """
+        Check if ring is topologically closed.
+
+        Returns
+        -------
+        bool
+            True if end node of last segment connects to start node of first
+            segment (within EPS_coord_coincide tolerance).
+        """
         if self.segflips[self.segids.index(max(self.segids))]:
             START = self.segments[0].nodes[0]
             END = self.segments[max(self.segids)].nodes[-1]
@@ -1102,6 +1505,14 @@ class ring2d():
         return startnode.eq_fast(endnode)'''
 
     def close(self):
+        """
+        Enforce topological closure by connecting end to start.
+
+        Notes
+        -----
+        Adds first segment's start node as last segment's end node and
+        updates internal node list.
+        """
         self.segments[-1].nodes.append(self.segments[0].nodes[0])
         self.segments[-1].update_nodes()
         self.closed = True
@@ -1141,6 +1552,19 @@ class ring2d():
                 self.conn1[(i, 0)] = c
 
     def assess_segment_point_overlaps(self, line_check=False):
+        """
+        Check all segments for duplicate/overlapping nodes.
+
+        Parameters
+        ----------
+        line_check : bool, optional
+            If True, also check for overlapping lines (not yet operational).
+
+        Returns
+        -------
+        list
+            Boolean list for each segment indicating overlap presence.
+        """
         ol_points = [seg.check_overlaping_points() for seg in self.segments]
         # ---------------------------
         line_check=False  # Currently not operational.
@@ -1148,6 +1572,14 @@ class ring2d():
             ol_lines = [seg.check_overlaping_lines() for seg in self.segments]
 
     def assess_reorder_requirement(self):
+        """
+        Check if reordering or flipping of segments is needed.
+
+        Notes
+        -----
+        To be developed. Currently evaluates closure status and potential
+        flips needed to enforce continuity.
+        """
         if self.check_closed():
             self.close()
             # NO re-ordering needed
@@ -1158,18 +1590,55 @@ class ring2d():
             pass
 
     def set_coords(self):
+        """
+        Build and cache coordinate array from all segments.
+
+        Notes
+        -----
+        Combines node coordinates of all segments, skipping duplicate
+        nodes at segment junctions.
+        """
         self.coords = self.segments[0].get_node_coords()
         for seg in self.segments[1:]:
             self.coords = np.vstack((self.coords, seg.get_node_coords()[1:]))
 
     def get_coords(self):
+        """
+        Extract and return full coordinate array from ring.
+
+        Returns
+        -------
+        numpy.ndarray
+            Coordinates of all ring nodes.
+        """
         return self.create_coords_from_segments()
 
     @property
     def centroid(self):
+        """
+        Compute centroid of the ring shape.
+
+        Returns
+        -------
+        numpy.ndarray
+            Mean (x, y) coordinate of all ring nodes.
+        """
         return np.mean(self.get_coords(), axis=0)
 
     def create_coords_from_segments(self, force_close=False):
+        """
+        Build coordinate array from all segments, respecting flips.
+
+        Parameters
+        ----------
+        force_close : bool, optional
+            If True, append first coordinate to end to ensure closure.
+
+        Returns
+        -------
+        numpy.ndarray
+            Coordinates from all segments, concatenated in order.
+        """
         # segments = gbsegs
         coords = self.segments[0].get_node_coords()
         for i, seg in enumerate(self.segments[1:], start=1):
@@ -1183,7 +1652,25 @@ class ring2d():
         return coords
 
     def force_close_coordinates(self, coord, assess_first=True):
-        """Unsafe. Not intended for user."""
+        """
+        Ensure coordinate array is closed (end connects to start).
+
+        Parameters
+        ----------
+        coord : numpy.ndarray
+            Input coordinate array.
+        assess_first : bool, optional
+            If True, check if already closed before forcing.
+
+        Returns
+        -------
+        numpy.ndarray
+            Closed coordinate array.
+
+        Notes
+        -----
+        Unsafe. Not intended for user. Uses EPS_coord_coincide tolerance.
+        """
         if assess_first:
             if abs((coord[0]-coord[-1]).sum()) > self.EPS_coord_coincide:
                 print('Coord not closed. Force closing.')
@@ -1195,34 +1682,98 @@ class ring2d():
         return coord
 
     def create_polygon_from_segments(self):
+        """
+        Convert ring to Shapely Polygon object.
+
+        Returns
+        -------
+        shapely.geometry.Polygon
+            Polygon representation of the ring.
+        """
         coords = self.create_coords_from_segments()
         return Polygon(self.create_coords_from_segments())
 
     def create_polygon_from_coords(self):
+        """
+        Create Shapely Polygon from coordinates.
+
+        Returns
+        -------
+        shapely.geometry.Polygon
+            Polygon from extracted ring coordinates.
+        """
         return Polygon(self.create_coords_from_segments())
     
     @property
     def area(self):
+        """
+        Compute area enclosed by ring polygon.
+
+        Returns
+        -------
+        float
+            Area of ring polygon.
+        """
         return self.create_polygon_from_segments().area
     
     @property
     def perimeter(self):
+        """
+        Compute perimeter (boundary length) of ring.
+
+        Returns
+        -------
+        float
+            Total perimeter of ring polygon.
+        """
         return self.create_polygon_from_segments().length
     
     @property
     def is_closed(self):
+        """
+        Check if ring is topologically closed.
+
+        Returns
+        -------
+        bool
+            True if ring forms a closed loop.
+        """
         return self.check_closed()
     
     @property
     def nsegments(self):
+        """
+        Return number of segments in ring.
+
+        Returns
+        -------
+        int
+            Count of constituent MSline2d segments.
+        """
         return self.nsegs
 
     @property
     def ncoords(self):
+        """
+        Return total number of nodes in ring.
+
+        Returns
+        -------
+        int
+            Count of unique coordinate nodes.
+        """
         return self.create_coords_from_segments().shape[0]
     
     @property
     def tree(self):
+        """
+        Build spatial KD-tree index for ring coordinates.
+
+        Returns
+        -------
+        scipy.spatial.cKDTree
+            KD-tree for neighbor/distance queries on ring nodes.
+        """
         return cKDTree(self.create_coords_from_segments())
 
     def assess_spatial_continuity(self):
@@ -1256,6 +1807,25 @@ class ring2d():
                   plot_centroid=False, centroid_text='',
                   plot_coord_order=False,
                   visualize_flip_req=False):
+        """
+        Visualize ring segments with optional annotations.
+
+        Parameters
+        ----------
+        plot_centroid : bool, optional
+            If True, plot ring centroid marker and label.
+        centroid_text : str, optional
+            Label text for centroid.
+        plot_coord_order : bool, optional
+            If True, plot coordinate connectivity with dashed line.
+        visualize_flip_req : bool, optional
+            If True, use dashed lines for flipped segments.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            Axes object with plotted segments (color-coded).
+        """
         fig, ax = plt.subplots()
         FS = 8
         for gbsegcount, gbseg in enumerate(self.segments, start=0):
@@ -1292,6 +1862,16 @@ class ring2d():
         return ax
 
     def get_coords_newdef(self):
+        """
+        Extract coordinates in new definition format.
+
+        Returns
+        -------
+        tuple
+            (segment_coords_list, combined_coords) where:
+            - segment_coords_list: List of coordinate arrays per segment
+            - combined_coords: Concatenated coordinate array from all segments
+        """
         coordinates = []
         for gbsegcount, gbseg in enumerate(self.segments, start=0):
             coords = gbseg.get_node_coords()
