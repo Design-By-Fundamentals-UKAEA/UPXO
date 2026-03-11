@@ -1,6 +1,30 @@
 """
 2D straight line.
 
+This module provides lightweight and full-featured 2D straight-line classes
+used in UPXO geometry construction, neighborhood operations, meshing support,
+and geometric characterization workflows.
+
+Imports
+-------
+from upxo.geoEntities.sline2d import Sline2d_leanest
+from upxo.geoEntities.sline2d import Sline2d
+
+Recommended alias imports:
+--------------------------
+from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+Metadata
+--------
+* Module: upxo.geoEntities.sline2d
+* Package: upxo
+* License: GPL-3.0-only
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active development
+* Last updated: 2026-03-11
+
 Applications
 ------------
 * Non-conformal geometry to conformal geometry conversion
@@ -33,26 +57,15 @@ Coordinate system
             /        |
           /          |
         Z+           Y-
-
 """
 
 import math
 import numpy as np
-import numpy.matlib
 from copy import deepcopy
-from scipy.spatial import cKDTree
-import vtk
-from shapely.geometry import Point as ShPnt, Polygon as ShPol
-from functools import wraps
-import matplotlib.pyplot as plt
 import upxo._sup.dataTypeHandlers as dth
 from upxo.geoEntities.point2d import Point2d as p2d
-from upxo.geoEntities.bases import UPXO_Point, UPXO_Edge
 from upxo.geoEntities.point2d import Point2d
 np.seterr(divide='ignore')
-from upxo._sup.validation_values import isinstance_many
-from upxo.geoEntities.mulpoint2d import MPoint2d
-from upxo._sup.validation_values import val_points_and_get_coords
 
 
 NUMBERS, ITERABLES = dth.dt.NUMBERS, dth.dt.ITERABLES
@@ -80,6 +93,15 @@ class Sline2d_leanest():
         Coordinates of start point.
     x1, y1 : float
         Coordinates of end point.
+
+    Metadata
+    --------
+    * Class: Sline2d_leanest
+    * Module: upxo.geoEntities.sline2d
+    * Author: Dr. Sunil Anandatheertha
+    * Email: vaasu.anandatheertha@ukaea.uk
+    * Status: Active
+    * Last updated: 2026-03-11
 
     Import
     ------
@@ -399,6 +421,15 @@ class Sline2d():
         * vert: True if line is vertical
         * horz: True if horizontal
         * lean: Return lean representation of self.
+
+    Metadata
+    --------
+    * Class: Sline2d
+    * Module: upxo.geoEntities.sline2d
+    * Author: Dr. Sunil Anandatheertha
+    * Email: vaasu.anandatheertha@ukaea.uk
+    * Status: Active development
+    * Last updated: 2026-03-11
 
     Import
     ------
@@ -1688,6 +1719,7 @@ class Sline2d():
                                _coord_rounding_=(True, 8),
                                _plot_=True)
         """
+        import matplotlib.pyplot as plt
         valid_spacing = ('constant', 'linear', 'quadratic', 'cubic',
                          'symbolic')
         valid_subfactors = (0.0, 1.0)
@@ -2074,6 +2106,8 @@ class Sline2d():
             normal.stretch(normal.mid_coord, 10)
         line.plot(sl2d=normals)
         """
+        from upxo._sup.validation_values import val_points_and_get_coords
+
         if method not in ('by_spacing', 'by_points', 'by_ratios'):
             return ValueError('Invalid method specified.')
         # .........
@@ -2130,6 +2164,8 @@ class Sline2d():
         sl2d : Sline2d or iterable, optional
             Line(s) to overlay.
         """
+        import matplotlib.pyplot as plt
+
         plt.plot([self.x0, self.x1], [self.y0, self.y1],
                  '-ko', markersize=12)
         if sl2d is not None:
@@ -2406,6 +2442,9 @@ class Sline2d():
         line = sl2d(1, -1, -1, 1)
         _, r = line.rectangle(1, vis=True)
         """
+        from shapely.geometry import Polygon as ShPol
+        import matplotlib.pyplot as plt
+
         # Validate user input
         # ------------------------------------------
         def splot(r):
@@ -2535,6 +2574,9 @@ class Sline2d():
         x, y = np.meshgrid(_x, _y)
         inside = line.identify_points_in_rectangle(points, 1, True, True)
         """
+        from shapely.geometry import Point as ShPnt
+        import matplotlib.pyplot as plt
+
         # ------------------------------------------
         # Validate: points, width=None, boundary_points=True, vis=False
         # ------------------------------------------
@@ -2760,6 +2802,8 @@ class Sline2d():
         line.find_neigh_point_by_perp_distance(points, 0.2, use_bounding_rec=True, epsfactor=1E7, vis=True)
         line.find_neigh_point_by_perp_distance(points, 0.2, use_bounding_rec=False, epsfactor=0, vis=True)
         """
+        import matplotlib.pyplot as plt
+
         def splot(line, x, y, xnearest, ynearest):
             plt.plot(line.x0, line.y0, 'gs', markersize=12)
             plt.plot(line.x1, line.y1, 'gs', markersize=16)
@@ -3124,6 +3168,8 @@ class Sline2d():
         # TODO: Relevant codes for store_as_feature and feature_replace use
         inputs is yet to be written.
         """
+        import matplotlib.pyplot as plt
+
         # Validate user inputs
         # ------------------------------------
         def plot(points):
