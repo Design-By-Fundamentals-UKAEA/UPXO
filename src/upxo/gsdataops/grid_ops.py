@@ -111,7 +111,7 @@ def find_feature_extended_bbox_pix(fid=None, lfi=None, make_binary=False):
         Feature ID for which to find the extended bounding box. Feature 
         ID is generally the grain ID. Default is None.
     lfi : np.ndarray
-        2D array of local feature IDs (grain IDs). Default is None.
+        2D Labelled Feature Image. Default is None.
     make_binary : bool, optional
         If True, the returned bounding box array is a binary mask. Default is False.
 
@@ -174,7 +174,7 @@ def find_extended_bbox_pix_fids(fids=None, lfi=None, make_binary=False):
         Feature ID for which to find the extended bounding box. Feature 
         ID is generally the grain ID. Default is None.
     lfi : np.ndarray
-        2D array of local feature IDs (grain IDs). Default is None.
+        2D Labelled Feature Image. Default is None.
     make_binary : bool, optional
         If True, the returned bounding box arrays are binary masks. Default is False.
 
@@ -761,7 +761,7 @@ def shuffle_feature_IDs(lfi):
     Parameters
     ----------
     lfi : np.ndarray
-        2D array of local feature IDs (grain IDs).
+        N-dimensional Labelled Feature Image.
 
     Returns
     -------
@@ -790,7 +790,7 @@ def merge_features_to_neighs(lfi, fids, neigh_fids):
     Parameters
     ----------
     lfi : np.ndarray
-        2D array of local feature IDs (grain IDs).
+        N-dimensional Labelled Feature Image.
     fids : list or array-like
         List of feature IDs to be merged.
     neigh_fids : dict
@@ -868,7 +868,7 @@ def majority_filter_2d(lfi):
     Parameters
     ----------
     lfi : np.ndarray
-        2D array of labelled feature IDs (grain IDs).
+        2D Labelled Feature Image.
 
     Returns
     -------
@@ -914,7 +914,7 @@ def majority_filter_3d_npass(lfi=None, n=2, sizes=[3, 3]):
     Parameters
     ----------
     lfi : np.ndarray
-        3D array of labelled feature IDs (grain IDs) to be smoothed. Default is None, 
+        3D Labelled Feature Image to be smoothed. Default is None, 
         which will raise an error if not provided.
     n : int
         Number of passes to apply. Default is 2.
@@ -942,7 +942,7 @@ def majority_filter_3d_1pass(lfi=None, size=3):
     Parameters
     ----------
     lfi : np.ndarray
-        3D array of labelled feature IDs (grain IDs). Default is None, which will raise 
+        3D Labelled Feature Image. Default is None, which will raise 
         an error if not provided.
     size : int, optional
         Size of the neighborhood window (must be odd). Default is 3 for a 3x3x3 window.
@@ -968,7 +968,7 @@ def _majority_filter_3d_(lfi, size=3):
     Parameters
     ----------
     lfi : np.ndarray
-        3D array of labelled feature IDs.
+        3D Labelled Feature Image.
     size : int
         Size of the neighborhood window (must be odd). Default is 3 for a 3x3x3 window.
 
@@ -1015,7 +1015,7 @@ def compute_grain_bounding_boxes(lfi, padding=1):
     Parameters:
     -----------
     lfi : ndarray
-        The 3D grain ID array.
+        3D Labelled Feature Image.
     padding : int
         Extra voxels to include around the box to ensure boundary
         gradients are captured.
@@ -1050,7 +1050,7 @@ def compute_local_grain_mask(lfi, bounding_box, grain_id):
     Parameters:
     -----------
     lfi : ndarray
-        The 3D grain ID array (can be the original or lfiex).
+        3D Labelled Feature Image (can be the original or lfiex).
     bounding_box : tuple of slices
         The (slice_x, slice_y, slice_z) identified for this grain.
     grain_id : int
@@ -1175,12 +1175,11 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
                              figsize=(8, 8), dpi=50, markersize=2):
     """
     Seeding with Rigid Guard Rails to eliminate RVE boundary irregularities.
-    Ensures straight edges at the domain limits [0, 200].
 
     Parameters
     ----------
     lfi : np.ndarray
-        2D array of local feature IDs (grain IDs).
+        2D Labelled Feature Image.
     target_spacing : float
         Desired spacing between seeds along the boundary. Default is 0.5 units.
     bulk_spacing : float
@@ -1227,25 +1226,20 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
     import numpy as np
     
     M, N = lfi.shape
-    
-    # 1. High-Resolution Interface Detection
+    # Interface Detection
     gy, gx = np.gradient(lfi)
     boundary_mask = (gx != 0) | (gy != 0)
-    
-    # 2. Equidistant Boundary Sampling
+    # Perform Equidistant Boundary Sampling
     coords_boundary = np.argwhere(boundary_mask).astype(float)
     stride = max(1, int(target_spacing / 1.0))
     seeds_boundary = coords_boundary[::stride]
-
-    # 3. Jittered Bulk Sampling (Internal Only)
+    # Jittered Bulk Sampling (Internal Only)
     dist_to_boundary = distance_transform_edt(~boundary_mask)
     # Define an internal buffer to prevent bulk seeds from pushing against RVE edges
     Y, X = np.indices((M, N))
     internal_mask = (X > margin) & (X < N-margin) & (Y > margin) & (Y < M-margin)
-    
     bulk_mask = (dist_to_boundary > target_spacing * 3) & internal_mask
     coords_bulk = np.argwhere(bulk_mask).astype(float)
-    
     seeds_bulk = []
     if len(coords_bulk) > 0:
         bulk_stride = max(1, int(bulk_spacing))
@@ -1253,28 +1247,23 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
         # Apply jitter to break inclined/aliased patterns
         jitter = (np.random.rand(*seeds_bulk.shape) - 0.5) * (bulk_stride * jitter_factor)
         seeds_bulk += jitter
-
-    # 4. RIGID GUARD RAILS (The Boundary Fix)
+    # RIGID GUARD RAILS (The Boundary Fix)
     # Place seeds exactly 1 unit outside the boundary to create flat bisectors
     guard_spacing = target_spacing 
     pad = padding
-    
     rail_coords = []
     # Horizontal rails (Top and Bottom)
     steps_x = np.arange(-pad, N + pad, guard_spacing)
     for x in steps_x:
         rail_coords.append([-pad, x])      # Bottom rail
         rail_coords.append([M + pad, x])   # Top rail
-        
     # Vertical rails (Left and Right)
     steps_y = np.arange(-pad, M + pad, guard_spacing)
     for y in steps_y:
         rail_coords.append([y, -pad])      # Left rail
         rail_coords.append([y, N + pad])   # Right rail
-    
     seeds_guard = np.array(rail_coords)
     all_seeds = np.vstack([seeds_boundary, seeds_bulk, seeds_guard])[:, [1, 0]]
-
     if plot_seeds:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
@@ -1336,10 +1325,8 @@ def generate_poisson_disk_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, 
     from upxo.statops.sampling import bridson_uniform_density as bud
     # bud(width=1, height=1, radius=0.2, k=20)
     points = bud(width=xbound[1]-xbound[0], height=ybound[1]-ybound[0], radius=radius, k=k)
-    locx = [_[0]+xstart for _ in points]
-    locy = [_[1]+ystart for _ in points]
+    locx, locy = [_[0]+xstart for _ in points], [_[1]+ystart for _ in points]
     seeds = np.array(list(zip(locx, locy)))
-
     if see_seeds:    
         from upxo.viz import gsviz        
         gsviz.see_2dPoints(seeds, figsize=plotKwargs.get('figsize', (6, 6)), 
