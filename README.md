@@ -4,6 +4,7 @@
 
 The framework enables the creation of complex **2D and 3D microstructures** suitable for finite-element simulations, microstructure characterisation, and data-driven materials research.
 
+This work has been funded by STEP, a major technology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK’s prototype fusion powerplant and a path to the commercial viability of fusion.
 ---
 
 ## Architecture
