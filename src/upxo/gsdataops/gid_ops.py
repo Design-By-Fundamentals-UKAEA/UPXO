@@ -78,15 +78,12 @@ def get_all_masks(section2d, as_coordinates=False):
     # sorted_indices will group all identical IDs together
     sorted_indices = np.argsort(flat_section)
     sorted_ids = flat_section[sorted_indices]
-    
     # Find where the IDs change
     diffs = np.diff(sorted_ids)
     boundaries = np.where(diffs != 0)[0] + 1
-    
     # Split the sorted indices into groups based on Grain ID
     split_indices = np.split(sorted_indices, boundaries)
     unique_ids = sorted_ids[np.concatenate(([0], boundaries))]
-    
     # lookup for pixel indices
     id_to_indices = dict(zip(unique_ids, split_indices))
     if as_coordinates:
@@ -134,8 +131,7 @@ def find_O1_neigh_2d(lgi, p=1.0, include_central_grain=False, throw_numba_dict=F
     if p == 1.0:
         return neigh_fids
     neigh_fids = select_neighs_with_probability(neigh_fids, p=p, 
-                                                include_central_grain=include_central_grain, 
-                                                validate_input=validate_input)
+                            include_central_grain=include_central_grain, validate_input=validate_input)
     return neigh_fids
 
 def find_O1_neigh_3d(lgi, p=1.0, include_central_grain=False, throw_numba_dict=False,
@@ -172,9 +168,8 @@ def find_O1_neigh_3d(lgi, p=1.0, include_central_grain=False, throw_numba_dict=F
     else:
         neigh_fids = {int(k): list(map(int, v)) for k, v in _find_neigh_gid_numba_3d_(lgi32).items() if int(k) != 0}
         neigh_fids = {k: v.append(k) or v for k, v in neigh_fids.items()} if include_central_grain else neigh_fids
-    neigh_fids = select_neighs_with_probability(neigh_fids, p=p, 
-                                                include_central_grain=include_central_grain, 
-                                                validate_input=validate_input)
+    neigh_fids = select_neighs_with_probability(neigh_fids, p=p, include_central_grain=include_central_grain, 
+                                validate_input=validate_input)
     return neigh_fids
 
 def find_O1_neigh_2d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_numba_dict=False,
@@ -211,9 +206,8 @@ def find_O1_neigh_2d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_n
     else:
         neigh_fids = {int(k): list(map(int, v)) for k, v in _find_neigh_selected_2d_(lgi32, fids_arr).items() if int(k) != 0}
         neigh_fids = {k: v.append(k) or v for k, v in neigh_fids.items()} if include_central_grain else neigh_fids
-    neigh_fids = select_neighs_with_probability(neigh_fids, p=p, 
-                                                include_central_grain=include_central_grain,
-                                                validate_input=validate_input)
+    neigh_fids = select_neighs_with_probability(neigh_fids, p=p, include_central_grain=include_central_grain,
+                                validate_input=validate_input)
     return neigh_fids
 
 def find_O2_neigh_3d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_numba_dict=False,
@@ -249,9 +243,8 @@ def find_O2_neigh_3d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_n
     else:
         neigh_fids = {int(k): list(map(int, v)) for k, v in _find_neigh_selected_3d_(lgi32, fids_arr).items() if int(k) != 0}
         neigh_fids = {k: v.append(k) or v for k, v in neigh_fids.items()} if include_central_grain else neigh_fids
-    neigh_fids = select_neighs_with_probability(neigh_fids, p=p,
-                                                include_central_grain=include_central_grain,
-                                                validate_input=validate_input)
+    neigh_fids = select_neighs_with_probability(neigh_fids, p=p, include_central_grain=include_central_grain,
+                                validate_input=validate_input)
     return neigh_fids
 
 def extract_neigh_gid_subset(neigh_fids={}, subset_fids=[], type_correction=True,
@@ -282,11 +275,9 @@ def extract_neigh_gid_subset(neigh_fids={}, subset_fids=[], type_correction=True
             raise ValueError("subset_fids must be an iterable.")
     if type_correction:
         # NGSS: Neigh Gid Sub-Set
-        NGSS = {int(cgid): [int(i) for i in neigh_fids[cgid]] 
-                for cgid in subset_fids if cgid in neigh_fids.keys()}
+        NGSS = {int(cgid): [int(i) for i in neigh_fids[cgid]] for cgid in subset_fids if cgid in neigh_fids.keys()}
     else:
-        NGSS = {cgid: neigh_fids[cgid] 
-                for cgid in subset_fids if cgid in neigh_fids.keys()}
+        NGSS = {cgid: neigh_fids[cgid]  for cgid in subset_fids if cgid in neigh_fids.keys()}
 
     return NGSS
 
@@ -318,8 +309,7 @@ def select_neighs_with_probability(neigh_fids, p=1.0, include_central_grain=Fals
         if not sampled_noncentral:
             sampled_noncentral = [random.choice(noncentral)]
         if include_central_grain:
-            # central always present
-            neigh_fids[gid] = [gid] + sampled_noncentral
+            neigh_fids[gid] = [gid]+sampled_noncentral  # central always present
         else:
             neigh_fids[gid] = sampled_noncentral
     return neigh_fids
@@ -445,7 +435,6 @@ def _find_neigh_gid_numba_3d_(lgi):
         final_neigh_gid[gid] = trimmed
 
     return final_neigh_gid
-
 
 @njit
 def _find_neigh_selected_2d_(lgi, selected_fids):
