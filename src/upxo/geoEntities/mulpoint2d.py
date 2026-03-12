@@ -1,3 +1,52 @@
+"""
+2D multi-point collection.
+
+This module provides a container class for managing ordered collections of
+2D points in UPXO. It supports construction from coordinate arrays, individual
+Point2d objects, rectangular grids, and intersection results, and exposes
+numerical, geometric, and spatial-query operations over the full point set.
+
+Imports
+-------
+from upxo.geoEntities.mulpoint2d import MPoint2d
+
+Recommended alias imports:
+--------------------------
+from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+
+Metadata
+--------
+* Module: upxo.geoEntities.mulpoint2d
+* Package: upxo
+* License: GPL-3.0-only
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active development
+* Last updated: 2026-03-12
+
+Applications
+------------
+* Storing and manipulating polycrystal grain-boundary vertex sets
+* Batch spatial queries (distances, centroid proximity, containment)
+* Rectangular-grid point generation for structured-domain discretization
+* Clustering-based synthetic point-cloud generation
+* Intersection-point collection from multi-line geometry operations
+
+Classes
+-------
+* MPoint2d - ordered 2D multi-point collection backed by a (N x 2) NumPy array
+
+Definitions
+-----------
+coords : np.ndarray, shape (N, 2)
+    Array of (x, y) coordinate pairs for all points in the collection.
+points : list of Point2d
+    Corresponding list of UPXO Point2d objects.
+n : int
+    Number of points in the collection (read-only property).
+centroid : np.ndarray, shape (2,)
+    Arithmetic mean of all (x, y) coordinates.
+"""
 import math
 import numpy as np
 import numpy.matlib
@@ -25,12 +74,66 @@ from upxo._sup.validation_values import val_point_and_get_coord, val_points_and_
 
 class MPoint2d():
     """
-    Standard data formats
-    ---------------------
-    coords: np.array([[0, 0],
-                      [1, 1],
-                      [2, 3],
-                      [4, 5]])
+    UPXO core class. Collection of 2D points. Offers wide spectrucm of operations.
+
+    Stores points both as a NumPy array (``coords``) for vectorised numerical
+    operations and as a list of UPXO ``Point2d`` objects (``points``) for
+    object-level access. Supports construction from raw coordinates, existing
+    ``Point2d`` instances, rectangular grids, clustering distributions, and
+    multi-line intersection results.
+
+    Parameters
+    ----------
+    coords : array-like of shape (N, 2), optional
+        Sequence of (x, y) coordinate pairs.  If provided, ``points`` must be
+        None; individual ``Point2d`` objects are created automatically.
+    points : list of Point2d, optional
+        Pre-constructed UPXO ``Point2d`` objects.  If provided, ``coords``
+        must be None; the coordinate array is derived from the points.
+
+    Attributes
+    ----------
+    coords : np.ndarray, shape (N, 2)
+        Flat array of (x, y) coordinate pairs.
+    points : list of Point2d
+        Corresponding UPXO ``Point2d`` object list.
+    EPS : float
+        Small tolerance constant (1e-8) used in geometric comparisons.
+
+    Properties
+    ----------
+    n : int
+        Number of points in the collection.
+    centroid : np.ndarray, shape (2,)
+        Arithmetic mean of all (x, y) coordinates.
+    x : np.ndarray
+        Array of x-coordinates.
+    y : np.ndarray
+        Array of y-coordinates.
+
+    Class Methods (constructors)
+    ----------------------------
+    from_coords(point_coords)
+        Construct from an (Nx2) coordinate array or list.
+    from_xy(xy)
+        Construct from a (2xN) array of x and y coordinate rows.
+    from_upxo_points2d(points)
+        Construct from a list of ``Point2d`` objects.
+    from_rect_grid(xstart, xinc, xend, ystart, yinc, yend)
+        Construct from a regular rectangular point grid.
+    from_clustering_around_centroid(centroid, n, r, distribution, dmin)
+        Generate a clustered random point cloud around a centroid.
+    from_intersection_linesA_linesB(La, Lb, ...)
+        Collect all pairwise intersection points of two line sets.
+
+    Standard data format
+    --------------------
+    coords: np.array([[0, 0], [1, 1], [2, 3], [4, 5]])
+
+    Import
+    ------
+    from upxo.geoEntities.mulpoint2d import MPoint2d
+    from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
     """
     EPS = 1E-8
     __slots__ = ('coords', 'points')
