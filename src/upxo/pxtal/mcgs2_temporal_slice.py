@@ -1,3 +1,62 @@
+"""
+Temporal-slice grain-structure operations for MCGS outputs.
+
+This module defines the core per-time-slice data model used after Monte-Carlo
+grain-growth simulation and provides utilities for grain detection,
+characterization, neighborhood analysis, species partitioning, and grain
+merging workflows.
+
+Imports
+-------
+from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure
+
+Primary Classes
+---------------
+* labeled_feature_image_2d
+* mcgs2_grain_structure
+
+Classes of Operations
+---------------------
+* Grid and state setup:
+    initialization of LFI/state containers, state-to-grain mappings, and
+    per-slice bookkeeping.
+* Feature/grain detection:
+    connected-component based detection, relabeling, and feature extraction from
+    labelled images.
+* Morphological characterization:
+    computation of grain/feature properties (area, axes, perimeter, moments,
+    compactness, aspect ratio, etc.).
+* Neighborhood analysis:
+    O(1)/higher-order neighbor extraction, fast neighbor approximations, and
+    neighbor-driven querying.
+* Boundary and topology utilities:
+    grain-boundary segment extraction, boundary/junction-point identification,
+    and graph-ready grain-pair construction.
+* Species partitioning:
+    state-combination and per-instance feature decomposition workflows.
+* Merge and threshold workflows:
+    property-threshold based merge selection, merge execution, and post-merge
+    renumbering/recount operations.
+* Property access and filtering:
+    targeted property computation, retrieval, validation, and bounds-based
+    grain-ID selection.
+
+Definitions
+-----------
+* LFI: Labelled Feature Image
+* gid/fid: Grain/Feature ID (1-based in most public APIs)
+* tslice: Monte-Carlo temporal slice
+
+Metadata
+--------
+* Module: upxo.pxtal.mcgs2_temporal_slice
+* Package: upxo
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active development
+* Last updated: 2026-03-12
+"""
+
 import os
 import math
 import numpy as np
@@ -1988,55 +2047,42 @@ class mcgs2_grain_structure():
         # 1. Prepare target list for fast lookup
         # Convert input to sorted tuples of standard ints
         target_pairs = set(tuple(sorted((int(p[0]), int(p[1])))) for p in grain_pairs)
-        
         # Use a temp dictionary with lists to aggregate data first
         # (Appending to lists is faster than stacking numpy arrays in a loop)
         temp_store = defaultdict(list)
-        
         # --- Horizontal Pass (detects vertical boundaries) ---
         left = self.lgi[:, :-1]
         right = self.lgi[:, 1:]
-        
         mask_h = left != right
         rows_h, cols_h = np.nonzero(mask_h)
-        
         id_left = left[mask_h]
         id_right = right[mask_h]
-        
         for r, c, g1, g2 in zip(rows_h, cols_h, id_left, id_right):
             # Ensure key consistency
             p1, p2 = int(g1), int(g2)
             pair = tuple(sorted((p1, p2)))
-            
             if pair in target_pairs:
                 # Append [row, col] to the list for this pair
                 # We treat r, c as floats
                 temp_store[pair].append([float(r), float(c)])
-
         # --- Vertical Pass (detects horizontal boundaries) ---
         top = self.lgi[:-1, :]
         bottom = self.lgi[1:, :]
-        
         mask_v = top != bottom
         rows_v, cols_v = np.nonzero(mask_v)
-        
         id_top = top[mask_v]
         id_bottom = bottom[mask_v]
-        
         for r, c, g1, g2 in zip(rows_v, cols_v, id_top, id_bottom):
             p1, p2 = int(g1), int(g2)
             pair = tuple(sorted((p1, p2)))
-            
             if pair in target_pairs:
                 temp_store[pair].append([float(r), float(c)])
-
         # --- Final Conversion ---
         # Convert lists of lists into Nx2 NumPy arrays
         gb_dict = {}
         for pair, coords_list in temp_store.items():
             # Convert to numpy array of shape (N, 2)
             gb_dict[pair] = np.array(coords_list, dtype=np.float64)
-
         return gb_dict
     
     def plot_boundaries_standalone(self, gb_dict):
@@ -2051,17 +2097,13 @@ class mcgs2_grain_structure():
             - Value: Nx2 NumPy array of coordinates (float64)
         """
         plt.figure(figsize=(8, 8))
-        
         for pair, coords in gb_dict.items():
             # rows (y), cols (x)
             rows = coords[:, 0]
             cols = coords[:, 1]
-            
             plt.scatter(cols, rows, s=1)
-        
-        # CRITICAL: Invert Y axis to match image coordinates (0,0 at top-left)
         plt.gca().invert_yaxis()
-        plt.axis('equal') # Ensures pixels are square, not stretched
+        plt.axis('equal')
         plt.title(f"Extracted Boundaries ({len(gb_dict)} segments)")
         plt.show()
 
@@ -2094,18 +2136,13 @@ class mcgs2_grain_structure():
             count = np.sum(unique_grains > 0)
             return 1 if count >= 3 else 0
         __footprint__ = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-        # Apply the filter to identify junctions
         if not xorimap:
             self.gbjp = generic_filter(self.lgi, __find_junctions,
-                                       footprint=__footprint__, mode='nearest',
-                                       cval=0)
+                            footprint=__footprint__, mode='nearest', cval=0)
         else:
             if IN in self.pxtal.keys():
-                self.pxtal[IN].gbjp = generic_filter(self.pxtal[IN].lgi,
-                                                     __find_junctions,
-                                                     footprint=__footprint__,
-                                                     mode='nearest',
-                                                     cval=0)
+                self.pxtal[IN].gbjp = generic_filter(self.pxtal[IN].lgi, __find_junctions,
+                                        footprint=__footprint__, mode='nearest', cval=0)
             else:
                 print(f'Invalid Instance number, IN: {IN}')
 
@@ -2923,20 +2960,12 @@ class mcgs2_grain_structure():
         for mpn in mpinds:
             mpinds_gids[mpn] = [i+1 for i in mpinds[mpn]]
         # Collate the GID related results
-        GIDs = {'intersection': intersection,
-                'union': union,
-                'presence': counts,
-                'mpmapped': mpinds_gids}
+        GIDs = {'intersection': intersection, 'union': union, 'presence': counts, 'mpmapped': mpinds_gids}
         # Collate the Values and Indices related results
-        VALIND = {'stat': mp_stats,
-                  'statmap': fx_stats,
-                  'bounds': mp_bounds,
-                  'indices': mpinds,
-                  }
-
+        VALIND = {'stat': mp_stats, 'statmap': fx_stats, 'bounds': mp_bounds, 'indices': mpinds,}
         if plot_mprop:
             fig, ax = plt.subplots(nrows=1, ncols=len(GIDs['mpmapped'].keys()),
-                                   figsize=(5, 5), dpi=120, sharey=True)
+                            figsize=(5, 5), dpi=120, sharey=True)
             for i, mpn in enumerate(GIDs['mpmapped'].keys(), start=0):
                 LGI = deepcopy(self.lgi)
                 if len(GIDs['mpmapped'][mpn]) > 0:
@@ -2985,15 +3014,10 @@ class mcgs2_grain_structure():
 
     def map_scalar_to_lgi(self, scalars_dict, default_scalar=-1,
                           plot=True, throw_axis=True, plot_centroid=True,
-                          plot_gid_number=True,
-                          title='title',
-                          centroid_kwargs={'marker': 'o',
-                                           'mfc': 'yellow',
-                                           'mec': 'black',
-                                           'ms': 2.5},
+                          plot_gid_number=True, title='title',
+                          centroid_kwargs={'marker': 'o', 'mfc': 'yellow', 'mec': 'black', 'ms': 2.5},
                           gid_text_kwargs={'fontsize': 10},
-                          title_kwargs={'fontsize': 10},
-                          label_kwargs={'fontsize': 10}):
+                          title_kwargs={'fontsize': 10}, label_kwargs={'fontsize': 10}):
         """
         Map to LGI, the gid keyed values in scalars_dict.
 
@@ -3048,8 +3072,6 @@ class mcgs2_grain_structure():
         neigh1 = def_neigh(1.38, recalculate=False, include_parent=True)
 
         sf_no = pxt.gs[tslice]
-
-
 
         from upxo.ggrowth.mcgs import mcgs
         mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
@@ -3111,17 +3133,10 @@ class mcgs2_grain_structure():
         else:
             return {'lgi': LGI, 'ax': None}
 
-    def merge_two_neigh_grains_simple(self,
-                                      method_id='1',
-                                      method_params_parent_sel=['area'],
-                                      method_params_other_sel=['area'],
-                                      method_params_merging=['area'],
-                                      parent_gid=[],
-                                      return_gids=True,
-                                      plot_gs_bf=True,
-                                      plot_gs_af=True,
-                                      plot_area_kde_diff=True,
-                                      bandwidth=1.0):
+    def merge_two_neigh_grains_simple(self, method_id='1',
+                method_params_parent_sel=['area'], method_params_other_sel=['area'],
+                method_params_merging=['area'], parent_gid=[], return_gids=True,
+                plot_gs_bf=True, plot_gs_af=True, plot_area_kde_diff=True, bandwidth=1.0):
         """
         Find two random neighbouring grains and merge them.
 
@@ -3165,20 +3180,16 @@ class mcgs2_grain_structure():
                 The bandwidth (smoothing parameter) for KDEs (default: 0.2).
             """
             plt.figure(figsize=(5,5), dpi=120)
-            kde1 = sns.kdeplot(area1, bw_adjust=bandwidth, fill=True,
-                               label='Area 1', color='blue')
-            kde2 = sns.kdeplot(area2, bw_adjust=bandwidth, fill=True,
-                               label='Area 2', color='orange')
+            kde1 = sns.kdeplot(area1, bw_adjust=bandwidth, fill=True, label='Area 1', color='blue')
+            kde2 = sns.kdeplot(area2, bw_adjust=bandwidth, fill=True, label='Area 2', color='orange')
             # Get the KDE curve data
             x1, y1 = kde1.get_lines()[0].get_data()
             x2, y2 = kde2.get_lines()[0].get_data()
-            # Interpolate if x values don't exactly match
-            # (to ensure we can subtract)
+            # Interpolate if x values don't exactly match (to ensure we can subtract)
             y2_interp = np.interp(x1, x2, y2)
             # Calculate and plot the difference
             y_diff = y1 - y2_interp
-            plt.fill_between(x1, y_diff, 0, color='green',
-                             alpha=0.5, label='Difference (Area 1 - Area 2)')
+            plt.fill_between(x1, y_diff, 0, color='green', alpha=0.5, label='Difference (Area 1 - Area 2)')
             # Label axes and add a title
             plt.xlabel('Area')
             plt.ylabel('Density')
@@ -3211,22 +3222,18 @@ class mcgs2_grain_structure():
             pass
         # -------------------------------------
         if plot_gs_bf:
-            self.plotgs(plot_centroid=True, plot_gid_number=True,
-                        plot_cbar=False,
+            self.plotgs(plot_centroid=True, plot_gid_number=True, plot_cbar=False,
                         title=f'Before merging {other_gid} into {parent_gid}.')
         # -------------------------------------
         if plot_area_kde_diff:
             # Get area before merging
             area_bf = self.prop['area'].to_numpy()
         # -------------------------------------
-        self.merge_two_neigh_grains(parent_gid, other_gid,
-                                    check_for_neigh=False,
-                                    simple_merge=True,)
+        self.merge_two_neigh_grains(parent_gid, other_gid, check_for_neigh=False,
+                            simple_merge=True,)
         # -------------------------------------
         if plot_gs_af:
-            self.plotgs(plot_centroid=True,
-                        plot_gid_number=True,
-                        plot_cbar=False,
+            self.plotgs(plot_centroid=True, plot_gid_number=True, plot_cbar=False,
                         title=f'After merging {other_gid} into {parent_gid}')
         # -------------------------------------
         if plot_area_kde_diff:
@@ -3239,8 +3246,7 @@ class mcgs2_grain_structure():
         if return_gids:
             return parent_gid, other_gid
 
-    def merge_neigh_grains(self, gid_pairs,
-                           check_for_neigh=True, simple_merge=True):
+    def merge_neigh_grains(self, gid_pairs, check_for_neigh=True, simple_merge=True):
         """
         Merge multiple pairs of neighbouring grains.
 
@@ -3263,15 +3269,13 @@ class mcgs2_grain_structure():
         for parent_gid, other_gid in gid_pairs:
             if self.check_for_neigh(parent_gid, other_gid):
                 self.merge_two_neigh_grains(parent_gid, other_gid,
-                                            check_for_neigh=check_for_neigh,
-                                            simple_merge=simple_merge)
+                            check_for_neigh=check_for_neigh, simple_merge=simple_merge)
 
     def set_twingen(self, vf=0.2, tspec='absolute', trel='minil',
                     tdis='user', t=[0.2, 0.5, 0.6, 0.7], tw=[1, 1, 1, 1],
                     tmin=0.2, tmean=0.5, tmax=1.0,
                     nmax_pg=1, placement='centroid', factor_min=0.0,
-                    factor_max=1.0,
-                    ):
+                    factor_max=1.0,):
         """
         Set twin generation parameters.
 
@@ -3482,13 +3486,9 @@ class mcgs2_grain_structure():
         else:
             self.pxtal[max(list(self.pxtal.keys()))+1] = PXTAL()
 
-    def set_pxtal(self, instance_no=1,
-                  path_filename_noext=None,
-                  map_type='ebsd',
-                  apply_kuwahara=False, kuwahara_misori=5, gb_misori=10,
-                  min_grain_size=1,
-                  print_closs=True,
-                  ):
+    def set_pxtal(self, instance_no=1, path_filename_noext=None,
+                  map_type='ebsd', apply_kuwahara=False, kuwahara_misori=5, gb_misori=10,
+                  min_grain_size=1, print_closs=True,):
         """
         Crystal Orientation Map. EBSD dataswt is one which can be loadsed.
 
@@ -3541,12 +3541,9 @@ class mcgs2_grain_structure():
         # -------------------------------------------
         self.add_pxtal()
         print(_fn_)
-        self.pxtal[IN].setup(map_type='ebsd',
-                             path_filename_noext=_fn_,
-                             apply_kuwahara=_khfflag_,
-                             kuwahara_misori=_khfmo_,)
-        self.pxtal[IN].find_grains_gb(gb_misori=gb_misori,
-                                      min_grain_size=min_grain_size,
+        self.pxtal[IN].setup(map_type='ebsd', path_filename_noext=_fn_,
+                             apply_kuwahara=_khfflag_, kuwahara_misori=_khfmo_,)
+        self.pxtal[IN].find_grains_gb(gb_misori=gb_misori, min_grain_size=min_grain_size,
                                       print_msg=True,)
         self.pxtal[IN].port_essentials(print_msg=True)
         # self.pxtal[IN].char_grain_positions_2d()
@@ -3669,11 +3666,9 @@ class mcgs2_grain_structure():
 
         # Construct the new orientation state matrix
         from scipy.interpolate import griddata
-        OSM_NG = np.round(griddata((np.concatenate(cogrid_OG[0]),
-                                    np.concatenate(cogrid_OG[1])),
+        OSM_NG = np.round(griddata((np.concatenate(cogrid_OG[0]), np.concatenate(cogrid_OG[1])),
                                    np.concatenate(ParentStateMatrix),
-                                   (np.concatenate(cogrid_NG[0]),
-                                    np.concatenate(cogrid_NG[1])),
+                                   (np.concatenate(cogrid_NG[0]), np.concatenate(cogrid_NG[1])),
                                    method=InterpMethod)
                           .reshape((xvec_NG.shape[0], yvec_NG.shape[0])))
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -3726,14 +3721,6 @@ class mcgs2_grain_structure():
             - 'corner': All grains at corners only
             - 'internal': Grains not touching any boundary
         
-        Algorithm
-        ---------
-        For each grain:
-            1. Extract all pixel locations belonging to the grain
-            2. Check if any pixels lie on domain boundaries (row=0, row=max, col=0, col=max)
-            3. Classify based on which boundaries are touched
-            4. Store classification in grain.position attribute (list format: [x_centroid, y_centroid, position_string])
-        
         Attributes Modified
         -------------------
         For each grain in self.g:
@@ -3754,6 +3741,7 @@ class mcgs2_grain_structure():
         
         Notes
         -----
+        - Legacy codes. To be updated with better implementation using defs in gid_ops module.
         - A grain can belong to multiple aggregate categories simultaneously
         - Internal grains are those with no pixels on any boundary
         - Position determination is based on pixel-level analysis, not centroids
@@ -4951,21 +4939,15 @@ class mcgs2_grain_structure():
         Example-1
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                                   range_type='rank',
-                                                   value_range=[80, 100]
-                                                   )
+                                    range_type='rank', value_range=[80, 100])
         Example-2
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='area',
-                                                   range_type='percentage',
-                                                   value_range=[80, 100]
-                                                   )
+                                    range_type='percentage', value_range=[80, 100])
         Example-3
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                                   range_type='value',
-                                                   value_range=[2, 2.5]
-                                                   )
+                                    range_type='value', value_range=[2, 2.5])
         '''
         gids, A_B_values, A_B_indices = [], [], []
         if PROP_NAME in self.prop.columns:
@@ -5281,9 +5263,7 @@ class mcgs2_grain_structure():
             plt.imshow(s, cmap=cmap_name, vmin=1)
             plt.colorbar()
         elif gclr in ('binary', 'grayscale'):
-            s, _ = self.mask_s_with_gids(gids,
-                                         masker=0,
-                                         force_masker=True)
+            s, _ = self.mask_s_with_gids(gids, masker=0, force_masker=True)
             s[s != 0] = 1
             plt.imshow(s, cmap='gray_r', vmin=0, vmax=1)
         plt.title(title)
@@ -5312,23 +5292,12 @@ class mcgs2_grain_structure():
             all_gids.append(gid)
             all_gids.extend(neighs)
             
-        self.plot_grains_gids(neighs,
-                                gclr='color',
-                                title=f"Neigh grains of gid: {gid}",
-                                cmap_name='CMRmap_r'
-                                )
+        self.plot_grains_gids(neighs, gclr='color', title=f"Neigh grains of gid: {gid}",
+                              cmap_name='CMRmap_r')
 
-    def plot_grains_prop_range(self,
-                               PROP_NAME='area',
-                               range_type='percentage',
-                               value_range=[1, 2],
-                               percentage_range=[0, 20],
-                               rank_range=[60, 90],
-                               pivot=None,
-                               gclr='color',
-                               title=None,
-                               cmap_name='CMRmap_r'
-                               ):
+    def plot_grains_prop_range(self, PROP_NAME='area', range_type='percentage',
+                value_range=[1, 2], percentage_range=[0, 20], rank_range=[60, 90],
+                pivot=None, gclr='color', title=None, cmap_name='CMRmap_r'):
         """
         Method to plot grains having properties within the domain defined by
         the range description specified by the user.
@@ -5379,20 +5348,14 @@ class mcgs2_grain_structure():
 
         """
         if range_type in ('percentage', 'value', 'rank'):
-            gid, value, _ = self.get_gid_prop_range(PROP_NAME=PROP_NAME,
-                                                    range_type=range_type,
-                                                    rank_range=rank_range
-                                                    )
+            gid, value, _ = self.get_gid_prop_range(PROP_NAME=PROP_NAME, range_type=range_type,
+                                                    rank_range=rank_range)
             _rdesc_ = {'percentage': percentage_range,
                        'value': value_range,
                        'rank': rank_range
                        }
             title = f"Grains by area. \n {range_type} bounds: {_rdesc_[range_type]}"
-            self.plot_grains_gids(gid,
-                                  gclr='color',
-                                  title=title,
-                                  cmap_name=cmap_name
-                                  )
+            self.plot_grains_gids(gid, gclr='color', title=title, cmap_name=cmap_name)
         else:
             print(f"Invalid range_type: {range_type}")
             print("range_type must be either of the follwonig:")
@@ -5411,11 +5374,8 @@ class mcgs2_grain_structure():
         -------
         None.
         """
-        gids, _, _ = self.get_gid_prop_range(PROP_NAME='area',
-                                             range_type='percentage',
-                                             percentage_range=[100-extent,
-                                                               100],
-                                             )
+        gids, _, _ = self.get_gid_prop_range(PROP_NAME='area', range_type='percentage',
+                                percentage_range=[100-extent, 100],)
         for gid in gids:
             plt.imshow(self.g[gid]['grain'].bbox_ex)
         plt.imshow
@@ -5448,21 +5408,10 @@ class mcgs2_grain_structure():
         for neighs in neighbours:
             for gid in neighs:
                 _neighbours_.append(gid)
-        self.plot_grains_gids(gids=_neighbours_,
-                              gclr=gclr,
-                              title=title+f" of \n grains: {gids}",
-                              cmap_name=cmap_name
-                              )
+        self.plot_grains_gids(gids=_neighbours_, gclr=gclr, title=title+f" of \n grains: {gids}",
+                              cmap_name=cmap_name)
         if throw:
             return neighbours
-
-    def plot_grains_with_holes(self):
-        # Use Euler number here
-        pass
-
-    def plot_skeletons(self):
-        # Use sciki-image skeletenoise command here
-        pass
 
     def plot(self, PROP_NAME=None, title='auto', cmap='CMRmap_r',
              vmin = 1, vmax = 5, ):
@@ -5636,12 +5585,7 @@ class mcgs2_grain_structure():
         else:
             return None
 
-    def plot_grains_prop_bounds_s(self,
-                                  s,
-                                  PROP_NAME=None,
-                                  prop_min=0,
-                                  prop_max='',
-                                  ):
+    def plot_grains_prop_bounds_s(self, s, PROP_NAME=None, prop_min=0, prop_max='', ):
         pass
 
     def plot_grains_at_position(self, position='corner', overlay_centroids=True,
@@ -5756,95 +5700,47 @@ class mcgs2_grain_structure():
                                              inplace=True
                                              )
                 sns.histplot(self.prop[PROP_NAME].dropna(),
-                             bins=bins,
-                             kde=False,
-                             stat=stat,
-                             color=color,
-                             edgecolor=edgecolor,
-                             line_kws=line_kws
-                             )
+                             bins=bins, kde=False, stat=stat, color=color, edgecolor=edgecolor,
+                             line_kws=line_kws)
                 if kde and bw_adjust:
                     if peaks:
                         x, y = (sns.kdeplot(data=self.prop[PROP_NAME].dropna(),
                                             bw_adjust=bw_adjust,
-                                            color=line_kws['color'],
-                                            linewidth=line_kws['lw'],
-                                            fill=False,
-                                            alpha=0.5,
-                                            ).lines[0].get_data()
-                                )
-                        peaks, peaks_properties = find_peaks(y,
-                                                             height=0,
-                                                             prominence=0.02
-                                                             )
+                                color=line_kws['color'], linewidth=line_kws['lw'],
+                                fill=False, alpha=0.5, ).lines[0].get_data() )
+                        peaks, peaks_properties = find_peaks(y, height=0, prominence=0.02)
                         plt.plot(x, y)
-                        plt.plot(x[peaks],
-                                 peaks_properties["peak_heights"],
-                                 "o",
-                                 markerfacecolor='black',
-                                 markersize=8,
-                                 markeredgewidth=1.5,
+                        plt.plot(x[peaks], peaks_properties["peak_heights"], "o",
+                                 markerfacecolor='black', markersize=8, markeredgewidth=1.5,
                                  markeredgecolor='black')
-                        plt.vlines(x=x[peaks],
-                                   ymin=y[peaks] - peaks_properties["prominences"],
-                                   ymax=y[peaks],
-                                   color="gray",
-                                   linewidth=1,
-                                   )
+                        plt.vlines(x=x[peaks], ymin=y[peaks] - peaks_properties["prominences"],
+                                   ymax=y[peaks], color="gray", linewidth=1,)
                         # Find the minima and plot it
                         minima_indices = argrelextrema(y, np.less)[0]
-                        plt.plot(x[minima_indices],
-                                 y[minima_indices],
-                                 "s",
-                                 markerfacecolor='white',
-                                 markersize=8,
-                                 markeredgewidth=1.5,
-                                 markeredgecolor='black')
+                        plt.plot(x[minima_indices], y[minima_indices], "s",
+                                 markerfacecolor='white', markersize=8,
+                                 markeredgewidth=1.5, markeredgecolor='black')
                     else:
                         sns.kdeplot(self.prop[PROP_NAME].dropna(),
-                                    bw_adjust=bw_adjust,
-                                    label='KDE',
-                                    color=line_kws['color'],
-                                    linewidth=line_kws['lw'],
-                                    fill=False,
-                                    alpha=0.5,
-                                    )
+                                    bw_adjust=bw_adjust, label='KDE', color=line_kws['color'],
+                                    linewidth=line_kws['lw'], fill=False, alpha=0.5,)
                 if kde and not bw_adjust:
                     if peaks:
                         x, y = (sns.kdeplot(data=self.prop[PROP_NAME].dropna(),
-                                            color=line_kws['color'],
-                                            linewidth=line_kws['lw'],
-                                            fill=False,
-                                            alpha=0.5,
-                                            ).lines[0].get_data()
-                                )
-                        peaks, peaks_properties = find_peaks(y,
-                                                             height=0,
-                                                             prominence=0.02
-                                                             )
+                                    color=line_kws['color'], linewidth=line_kws['lw'],
+                                    fill=False, alpha=0.5, ).lines[0].get_data())
+                        peaks, peaks_properties = find_peaks(y, height=0, prominence=0.02)
                         plt.plot(x, y)
-                        plt.plot(x[peaks],
-                                 peaks_properties["peak_heights"],
-                                 "o",
-                                 markerfacecolor='black',
-                                 markersize=8,
-                                 markeredgewidth=1.5,
+                        plt.plot(x[peaks], peaks_properties["peak_heights"], "o",
+                                 markerfacecolor='black', markersize=8, markeredgewidth=1.5,
                                  markeredgecolor='black')
-                        plt.vlines(x=x[peaks],
-                                   ymin=y[peaks] - peaks_properties["prominences"],
-                                   ymax=y[peaks],
-                                   color="gray",
-                                   linewidth=1,
-                                   )
+                        plt.vlines(x=x[peaks], ymin=y[peaks]-peaks_properties["prominences"],
+                                   ymax=y[peaks], color="gray", linewidth=1,)
                         # Find the minima and plot it
                         minima_indices = argrelextrema(y, np.less)[0]
-                        plt.plot(x[minima_indices],
-                                 y[minima_indices],
-                                 "s",
-                                 markerfacecolor='white',
-                                 markersize=8,
-                                 markeredgewidth=1.5,
-                                 markeredgecolor='black')
+                        plt.plot(x[minima_indices], y[minima_indices], "s",
+                                 markerfacecolor='white', markersize=8,
+                                 markeredgewidth=1.5, markeredgecolor='black')
                 if __stack_call__:
                     plt.title(f"Distribution of {PROP_NAME} @ tslice: {__tslice__}")
                 else:
@@ -5880,14 +5776,9 @@ class mcgs2_grain_structure():
         print(PROP_NAMES)
         for PROP_NAME in PROP_NAMES:
             if PROP_NAME in self.prop.columns:
-                self.prop[PROP_NAME].replace([-np.inf, np.inf],
-                                             np.nan,
-                                             inplace=True
-                                             )
+                self.prop[PROP_NAME].replace([-np.inf, np.inf], np.nan, inplace=True)
                 sns.kdeplot(self.prop[PROP_NAME].dropna(),
-                            bw_adjust=bw_adjust,
-                            label='KDE',
-                            color='red', attrs=['bold'])
+                            bw_adjust=bw_adjust, label='KDE', color='red', attrs=['bold'])
                 plt.title(f"{PROP_NAME} distribution")
                 plt.xlabel(f"{PROP_NAME}")
                 plt.ylabel("Density")
@@ -5950,14 +5841,12 @@ class mcgs2_grain_structure():
         from upxo.meshing.mesher_2d import mesh_mcgs2d
 
         if saa:
-            self.mesh = mesh_mcgs2d(self.uinputs['uimesh'],
-                                    self.uigrid, self.dim, self.m, self.lgi)
+            self.mesh = mesh_mcgs2d(self.uinputs['uimesh'], self.uigrid, self.dim, self.m, self.lgi)
             if throw:
                 return self.mesh
         if not saa:
             if throw:
-                return mesh_mcgs2d(self.uinputs['uimesh'],
-                                   self.uigrid, self.dim, self.m, self.lgi)
+                return mesh_mcgs2d(self.uinputs['uimesh'], self.uigrid, self.dim, self.m, self.lgi)
             else:
                 return 'Please enter valid saa and throw arguments'
 
@@ -6093,12 +5982,8 @@ class mcgs2_grain_structure():
     def aspect_ratios_stat(self):
         # Calculate statistics of the aspect ratios of the grains
         aspect_ratios = self.aspect_ratios
-        return {'min': aspect_ratios.min(),
-                'mean': aspect_ratios.mean(),
-                'max': aspect_ratios.max(),
-                'std': aspect_ratios.std(),
-                'var': aspect_ratios.var()
-                }
+        return {'min': aspect_ratios.min(), 'mean': aspect_ratios.mean(),
+                'max': aspect_ratios.max(), 'std': aspect_ratios.std(), 'var': aspect_ratios.var()}
 
     @property
     def npixels(self):
@@ -6132,8 +6017,7 @@ class mcgs2_grain_structure():
             # This means single pixel grains exist
             for _gid_npx1_ in gid_npx1:
                 gid_mna0.remove(_gid_npx1_)
-            gid_ar = np.array([len(self.g[_gid_mna0_]['grain'].loc)
-                              for _gid_mna0_ in gid_mna0])
+            gid_ar = np.array([len(self.g[_gid_mna0_]['grain'].loc) for _gid_mna0_ in gid_mna0])
         return np.array(gid_mna0, dtype=int), gid_ar
 
     @property
@@ -6145,8 +6029,7 @@ class mcgs2_grain_structure():
     def perimeters(self):
         # Calculate perimeters of the grains
         characteristic_length = math.sqrt(self.px_size)
-        return np.array([characteristic_length*grain.gbloc.shape[0]
-                         for grain in self])
+        return np.array([characteristic_length*grain.gbloc.shape[0] for grain in self])
 
     @property
     def perimeters_min(self):
@@ -6172,12 +6055,8 @@ class mcgs2_grain_structure():
     def perimeters_stat(self):
         # Calculate statistics of the perimeters of the grains
         perimeters = self.perimeters
-        return {'min': perimeters.min(),
-                'mean': perimeters.mean(),
-                'max': perimeters.max(),
-                'std': perimeters.std(),
-                'var': perimeters.var()
-                }
+        return {'min': perimeters.min(), 'mean': perimeters.mean(),
+                'max': perimeters.max(), 'std': perimeters.std(), 'var': perimeters.var()}
 
     @property
     def ratio_p_a(self):
@@ -6188,13 +6067,10 @@ class mcgs2_grain_structure():
     def AF_bgrains_igrains(self):
         # Calculate area fractions of boundary grains and internal grains
         areas = self.areas
-        A_bgr = [areas[gid-1]
-                 for gid in np.unique(self.positions['boundary'])]
-        A_igr = [areas[gid-1]
-                 for gid in np.unique(self.positions['internal'])]
+        A_bgr = [areas[gid-1] for gid in np.unique(self.positions['boundary'])]
+        A_igr = [areas[gid-1] for gid in np.unique(self.positions['internal'])]
         pxtal_area = self.pxtal_area
-        AF = (np.array(A_bgr).sum()/pxtal_area,
-              np.array(A_igr).sum()/pxtal_area)
+        AF = (np.array(A_bgr).sum()/pxtal_area, np.array(A_igr).sum()/pxtal_area)
         return AF
 
     @property
@@ -6216,10 +6092,7 @@ class mcgs2_grain_structure():
         # Plot the grain structure
         plt.imshow(self.s)
         # Plot the grain mulpoints of the grain centroids
-        plt.plot(self.mp['gc'].locx,
-                 self.mp['gc'].locy,
-                 'ko',
-                 markersize=6)
+        plt.plot(self.mp['gc'].locx, self.mp['gc'].locy, 'ko', markersize=6)
         plt.xlabel('x-axis um', fontdict={'fontsize': 12})
         plt.ylabel('y-axis um', fontdict={'fontsize': 12})
         plt.title(f"MCGS tslice:{self.m}.\nUPXO.mulpoint2d of grain centroids",
@@ -6234,21 +6107,15 @@ class mcgs2_grain_structure():
         # from polyxtal import polyxtal2d as polyxtal
         from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
         self.make_mulpoint2d_grain_centroids()
-        self.vtgs = vtpxtal(gsgen_method='vt',
-                            vt_base_tool='shapely',
-                            point_method='mulpoints',
-                            mulpoint_object=self.mp['gc'],
-                            xbound=[self.uigrid.xmin,
-                                    self.uigrid.xmax+self.uigrid.xinc],
-                            ybound=[self.uigrid.ymin,
-                                    self.uigrid.ymax+self.uigrid.yinc],
-                            vis_vtgs=visualize
-                            )
+        self.vtgs = vtpxtal(gsgen_method='vt', vt_base_tool='shapely',
+                    point_method='mulpoints', mulpoint_object=self.mp['gc'],
+                    xbound=[self.uigrid.xmin, self.uigrid.xmax+self.uigrid.xinc],
+                    ybound=[self.uigrid.ymin, self.uigrid.ymax+self.uigrid.yinc],
+                    vis_vtgs=visualize)
         if visualize:
-            self.vtgs.plot(dpi=100,
-                           default_par_faces={'clr': 'teal', 'alpha': 1.0, },
-                           default_par_lines={'width': 1.5, 'clr': 'black', },
-                           xtal_marker_vertex=True, xtal_marker_centroid=True)
+            self.vtgs.plot(dpi=100, default_par_faces={'clr': 'teal', 'alpha': 1.0, },
+                    default_par_lines={'width': 1.5, 'clr': 'black', },
+                    xtal_marker_vertex=True, xtal_marker_centroid=True)
 
     def ebsd_write_ctf(self, folder='upxo_ctf', file='ctf.ctf'):
         """
@@ -6459,15 +6326,9 @@ class mcgs2_grain_structure():
                        '.vtk3d': {},
                        }
         overwrite = True
-        PXGS.export_slices(xboundPer,
-                           yboundPer,
-                           zboundPer,
-                           mlist,
-                           sliceStepSize,
-                           sliceNormal,
-                           exportDir,
-                           fileFormats,
-                           overwrite)
+        PXGS.export_slices(xboundPer, yboundPer, zboundPer, mlist,
+                           sliceStepSize, sliceNormal, exportDir,
+                           fileFormats, overwrite)
         """
         xsz = math.floor((self.uigrid.xmax-self.uigrid.xmin)/self.uigrid.xinc)
         ysz = math.floor((self.uigrid.ymax-self.uigrid.ymin)/self.uigrid.yinc)
@@ -6480,29 +6341,18 @@ class mcgs2_grain_structure():
         phi2 = np.random.rand(Smax)*180
         textureInstanceNumber = 1
 
-    def import_ctf(self,
-                   filePath,
-                   fileName,
-                   convertUPXOgs=True):
+    def import_ctf(self, filePath, fileName, convertUPXOgs=True):
         # Use DefDAP to get the job done here
         pass
 
-    def import_crc(self,
-                   filePath,
-                   fileName,
-                   convertUPXOgs=True):
+    def import_crc(self, filePath, fileName, convertUPXOgs=True):
         # Use DefDAP to get the job done here
         pass
 
-    def clean_exp_gs(self,
-                     minGrainSize=10
-                     ):
+    def clean_exp_gs(self, minGrainSize=10):
         # Use DefDAP to get the job done here
         pass
 
-    def import_dream3d(self,
-                       filePath,
-                       fileName,
-                       convertUPXOgs=True):
+    def import_dream3d(self, filePath, fileName, convertUPXOgs=True):
         # Use DefDAP to get the job done here
         pass

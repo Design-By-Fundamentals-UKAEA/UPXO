@@ -1,3 +1,38 @@
+"""
+Grid operations for Labelled Feature Image workflows.
+
+This module provides utilities for sectioning, interpolation/resampling,
+bounding-box extraction, feature-ID transformations, neighborhood-aware
+smoothing, and synthetic LFI test-pattern generation in 2D/3D.
+
+Imports
+-------
+import upxo.gsdataops.grid_ops as gridOps
+
+Metadata
+--------
+* Module: upxo.gsdataops.grid_ops
+* Package: upxo
+* License: GPL-3.0-only
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active development
+* Last updated: 2026-03-12
+
+Applications
+------------
+* 2D/3D Labelled Feature Image section extraction
+* Grid upscaling/downscaling and anisotropic stretching
+* Per-feature extended bounding-box extraction
+* Feature-ID shuffling and merge operations
+* Majority-filter smoothing for grain-label fields
+* Seed generation and synthetic LFI benchmark creation
+
+Definitions
+-----------
+* LFI: Labelled Feature Image
+"""
+
 import numpy as np
 from numba import njit, prange
 from copy import deepcopy
@@ -36,6 +71,22 @@ def section_from_3d(db, axis=0, location=0):
         return section
 
 def build_pvgrid(data=None, origin=(0, 0, 0), spacing=(1.0, 1.0, 1.0)):
+    """Build a PyVista `ImageData` grid from a NumPy array.
+
+    Parameters
+    ----------
+    data : ndarray, optional
+        Input scalar array to assign as cell data.
+    origin : tuple, optional
+        Grid origin coordinates.
+    spacing : tuple, optional
+        Grid spacing along each axis.
+
+    Returns
+    -------
+    pyvista.ImageData
+        Configured PyVista image grid.
+    """
     import pyvista as pv
     grid = pv.ImageData()
     grid.dimensions = np.array(data.shape)+1
@@ -209,6 +260,22 @@ def find_extended_bbox_pix_fids(fids=None, lfi=None, make_binary=False):
 
 @decorators.port_doc(module_path='upxo.gsdataops.grid_ops', func_name='find_extended_bbox_pix_fids')
 def find_extended_bounding_box_all_grains(fids=None, lfi=None, make_binary=False):
+    """Return extended bounding boxes for all requested feature IDs.
+
+    Parameters
+    ----------
+    fids : int or iterable, optional
+        Feature IDs to process.
+    lfi : ndarray, optional
+        2D Labelled Feature Image.
+    make_binary : bool, optional
+        If True, output bounding boxes as binary masks.
+
+    Returns
+    -------
+    dict
+        Mapping ``fid -> extended bounding-box array``.
+    """
     grain_lgi_ex_all = find_extended_bbox_pix_fids(fids=fids, lfi=lfi, make_binary=make_binary)
     return grain_lgi_ex_all
 
@@ -582,6 +649,22 @@ def detect_grains_3d(state_array, connectivity=3, return_num_grains=False):
         return lfi_array
     
 def detect_grains_3d_optimized(state_array, connectivity=3, return_num_grains=False):
+    """Detect connected grains in a 3D state array using grouped labeling.
+
+    Parameters
+    ----------
+    state_array : ndarray
+        3D state array.
+    connectivity : int, optional
+        Connectivity order for 3D labeling (1, 2, or 3).
+    return_num_grains : bool, optional
+        If True, also return number of detected grains.
+
+    Returns
+    -------
+    ndarray or tuple
+        3D Labelled Feature Image, optionally with grain count.
+    """
     from scipy import ndimage
     
     # Validate input
@@ -634,6 +717,20 @@ def detect_grains_3d_optimized(state_array, connectivity=3, return_num_grains=Fa
     return (lfi_array, num_grains) if return_num_grains else lfi_array
 
 def detect_grains_using_s(scalar_data, scalar_ids):
+    """Detect and relabel connected regions for selected scalar IDs.
+
+    Parameters
+    ----------
+    scalar_data : ndarray
+        3D scalar/state field.
+    scalar_ids : iterable
+        Scalar IDs to segment and relabel.
+
+    Returns
+    -------
+    ndarray
+        3D Labelled Feature Image with unique global labels.
+    """
     from scipy import ndimage
     from scipy.ndimage import generate_binary_structure as GBS
     results = [ndimage.label(scalar_data == s, structure=GBS(3, 3)) for s in scalar_ids]
@@ -652,6 +749,20 @@ def detect_grains_using_s(scalar_data, scalar_ids):
 
 
 def detect_grains_fast_v3(scalar_data, scalar_ids):
+    """Fast 3D grain labeling by state-wise grouped bounding-box labeling.
+
+    Parameters
+    ----------
+    scalar_data : ndarray
+        3D scalar/state field.
+    scalar_ids : iterable
+        Scalar IDs to include in detection.
+
+    Returns
+    -------
+    ndarray
+        3D Labelled Feature Image.
+    """
     from scipy import ndimage
     from scipy.ndimage import generate_binary_structure as GBS
     grain_id_map = np.zeros(scalar_data.shape, dtype=np.int32)
@@ -698,6 +809,18 @@ def detect_grains_fast_v3(scalar_data, scalar_ids):
     return grain_id_map
 
 def detect_grains_greedy_3d(state_array):
+    """Detect 3D grains with greedy flood-fill using 26-neighbour traversal.
+
+    Parameters
+    ----------
+    state_array : ndarray
+        3D state array.
+
+    Returns
+    -------
+    ndarray
+        3D Labelled Feature Image.
+    """
     nx, ny, nz = state_array.shape
     lfi_array = np.zeros_like(state_array, dtype=np.int32)
     visited = np.zeros_like(state_array, dtype=bool)
@@ -827,6 +950,20 @@ majority_filter_3d_npass
 majority_filter_3d_1pass
 '''
 def get_ball_footprint(fpSize, removeEndVox=True):
+    """Create a spherical morphology footprint for 3D operations.
+
+    Parameters
+    ----------
+    fpSize : int
+        Radius/size argument passed to ``skimage.morphology.ball``.
+    removeEndVox : bool, optional
+        If True, remove extremal voxels along each axis.
+
+    Returns
+    -------
+    ndarray
+        3D boolean footprint.
+    """
     from skimage.morphology import ball
     fp = ball(fpSize)
     if removeEndVox:
@@ -842,6 +979,28 @@ def get_ball_footprint(fpSize, removeEndVox=True):
 def smooth_voxMorph_npass(lfi, niterations=2, DILfpSizes=[4, 4], 
                 ERSfpSizes=[4, 4], footprints=['ball', 'ball'],
                 removeEndVox=[True, True]):
+    """Apply multiple morphology smoothing passes to a 3D LFI.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+    niterations : int, optional
+        Number of smoothing passes.
+    DILfpSizes : list, optional
+        Dilation footprint sizes per pass.
+    ERSfpSizes : list, optional
+        Erosion footprint sizes per pass.
+    footprints : list, optional
+        Footprint type per pass.
+    removeEndVox : list, optional
+        End-voxel trimming flags per pass.
+
+    Returns
+    -------
+    ndarray
+        Smoothed 3D Labelled Feature Image.
+    """
     for i in np.arange(1, niterations+1):
         lfi = smooth_voxMorph_1pass(lfi, DILfpSize=DILfpSizes[i-1],
                 ERSfpSize=ERSfpSizes[i-1], footprint=footprints[i-1],
@@ -850,6 +1009,26 @@ def smooth_voxMorph_npass(lfi, niterations=2, DILfpSizes=[4, 4],
 
 def smooth_voxMorph_1pass(lfi, DILfpSize=4, ERSfpSize=4,
                 footprint='ball', removeEndVox=True):
+    """Apply one morphology smoothing pass (dilation then erosion).
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+    DILfpSize : int, optional
+        Dilation footprint size.
+    ERSfpSize : int, optional
+        Erosion footprint size.
+    footprint : str, optional
+        Footprint type, currently ``'ball'``/``'sphere'``.
+    removeEndVox : bool, optional
+        Reserved control for endpoint-voxel handling.
+
+    Returns
+    -------
+    ndarray
+        Smoothed 3D Labelled Feature Image.
+    """
     from skimage.morphology import dilation, erosion
     if footprint in ('ball', 'sphere'):
         DILfp = get_ball_footprint(DILfpSize)
@@ -1408,7 +1587,7 @@ def generate_darted_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, **plot
 
 #    DEVELOPER :---- FUNCTIONALITY LOCATION SEARCH
 
-# Sectioning operations. Search ID: SID_3dSectioningOps
+# Sectioning and PV grid helpers. Search ID: SID_3dSectioningOps
 # Bounding box operations. Search ID: SID_BBoxOps
 # Intra-grain location finding operations. Search ID: SID_IntraGrainLocOps
 # General LFI operations. Search ID: SID_GeneralLFIOps
