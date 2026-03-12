@@ -1,3 +1,37 @@
+"""
+Grain/Feature ID operations.
+
+This module provides utilities for Labelled Feature Image (LFI) processing,
+including neighbour detection, neighbour subset extraction, feature-ID
+classification (boundary/internal/corner/edge), and helper operations for
+2D/3D grain-label arrays.
+
+Imports
+-------
+import upxo.gsdataops.gid_ops as gidOps
+
+Metadata
+--------
+* Module: upxo.gsdataops.gid_ops
+* Package: upxo
+* License: GPL-3.0-only
+* Author: Dr. Sunil Anandatheertha
+* Email: vaasu.anandatheertha@ukaea.uk
+* Status: Active development
+* Last updated: 2026-03-12
+
+Applications
+------------
+* O(1) neighbourhood extraction in 2D and 3D LFIs
+* Probabilistic neighbour down-selection
+* Boundary/internal/corner/edge feature-ID detection
+* Island and small-feature identification
+
+Definitions
+-----------
+* LFI: Labelled Feature Image
+"""
+
 import numpy as np
 import pandas as pd
 from upxo._sup import dataTypeHandlers as dth
@@ -22,6 +56,22 @@ DXYZ_26 = np.array([(-1, -1, -1), (-1, -1, 0), (-1, -1, 1),
                     ( 1,  1, -1), ( 1,  1, 0), ( 1,  1, 1)], dtype=np.int32)
 
 def get_all_masks(section2d, as_coordinates=False):
+    """Build per-ID index/coordinate masks from a 2D labelled section.
+
+    Parameters
+    ----------
+    section2d : ndarray
+        2D Labelled Feature Image.
+    as_coordinates : bool, optional
+        If True, return coordinates ``(row, col)`` for each ID. If False,
+        return flattened index locations.
+
+    Returns
+    -------
+    dict
+        Mapping of ``feature_id -> indices`` or ``feature_id -> Nx2
+        coordinates`` depending on ``as_coordinates``.
+    """
     # Flatten the array and get indices
     flat_section = section2d.ravel()
     # Get the unique IDs and the indices where they occur
@@ -168,6 +218,30 @@ def find_O1_neigh_2d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_n
 
 def find_O2_neigh_3d_fids(lgi, fids, p=1.0, include_central_grain=False, throw_numba_dict=False,
                           validate_input=True, verbosity_nfids=2500):
+    """Find first-order neighbours in 3D for selected feature IDs.
+
+    Parameters
+    ----------
+    lgi : ndarray
+        3D Labelled Feature Image.
+    fids : list or ndarray
+        Feature IDs for which neighbours are required.
+    p : float, optional
+        Probability of retaining each neighbour. Default is 1.0.
+    include_central_grain : bool, optional
+        If True, include each central feature ID in its own neighbour list.
+    throw_numba_dict : bool, optional
+        If True, return the raw numba ``Dict`` output.
+    validate_input : bool, optional
+        If True, validate probability settings in post-processing.
+    verbosity_nfids : int, optional
+        Reserved verbosity control argument.
+
+    Returns
+    -------
+    dict or numba.typed.Dict
+        Neighbour mapping for requested feature IDs.
+    """
     lgi32 = lgi.astype(np.int32)
     fids_arr = np.asarray(fids, dtype=np.int32).ravel()
     if throw_numba_dict:
