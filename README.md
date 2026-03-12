@@ -68,11 +68,11 @@ Companies, industrial users, and other organisations wishing to use UPXO in **co
 For commercial licensing enquiries, please contact:
 
 **Dr. Sunil Anandatheertha**
-United Kingdom Atomic Energy Authority (UKAEA)  
-Email: *vaasu.anandatheertha@ukaea.uk*
+- United Kingdom Atomic Energy Authority (UKAEA)  
+- Email: *vaasu.anandatheertha@ukaea.uk*
 
 **Dr. Chris Hardie**
-United Kingdom Atomic Energy Authority (UKAEA)  
-Email: *chris.hardie@ukaea.uk*
+- United Kingdom Atomic Energy Authority (UKAEA)  
+- Email: *chris.hardie@ukaea.uk*
 
 Additional licensing information will be provided in `COMMERCIAL.md` .
