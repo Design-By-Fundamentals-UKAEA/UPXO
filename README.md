@@ -2,9 +2,9 @@
 
 **UPXO (UKAEA Poly-XTAL Operations)** is an open-source Python framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for computational materials science.
 
-The framework enables the creation of complex **2D and 3D microstructures** suitable for finite-element simulations, microstructure characterisation, and data-driven materials research.
+The framework enables the creation of complex **2D and 3D microstructures** suitable for finite-element simulations, microstructure characterisation, and data-driven materials research. 
 
-This work has been funded by STEP, a major technology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK’s prototype fusion powerplant and a path to the commercial viability of fusion.
+This work has been funded by STEP, a major tehnology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK's prototype fusion powerpoint and a path to the commercial visibility of fusion.
 ---
 
 ## Architecture
