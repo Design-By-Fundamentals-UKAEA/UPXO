@@ -7,6 +7,10 @@ from skimage.segmentation import find_boundaries
 from collections import defaultdict
 import upxo.gsdataops.grid_ops as gridOps
 
+# Import
+# ------
+# from upxo.gbops import mcgb2dops as mcgbOps2d
+
 def PL_cell_boundaries(lfi=None, nfeatures=None, neigh_fid=None,
                        connectivity=1, mode='thick', background=0,
                        local_seg_id_nDecPlaces=4, segIDMask_dtype=np.int32):
