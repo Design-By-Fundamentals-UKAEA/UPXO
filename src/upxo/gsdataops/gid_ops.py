@@ -24,7 +24,6 @@ DXYZ_26 = np.array([(-1, -1, -1), (-1, -1, 0), (-1, -1, 1),
 def get_all_masks(section2d, as_coordinates=False):
     # Flatten the array and get indices
     flat_section = section2d.ravel()
-    
     # Get the unique IDs and the indices where they occur
     # sorted_indices will group all identical IDs together
     sorted_indices = np.argsort(flat_section)
@@ -207,7 +206,6 @@ def extract_neigh_gid_subset(neigh_fids={}, subset_fids=[], type_correction=True
             raise ValueError("neigh_fids must be a dictionary.")
         if type(subset_fids) not in dth.dt.ITERABLES:
             raise ValueError("subset_fids must be an iterable.")
-
     if type_correction:
         # NGSS: Neigh Gid Sub-Set
         NGSS = {int(cgid): [int(i) for i in neigh_fids[cgid]] 
@@ -269,48 +267,36 @@ def _find_neigh_gid_numba_2d_(lgi):
     """
     shape_x, shape_y = lgi.shape
     max_gid = np.int32(lgi.max())
-
     neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:])
-
     max_neighbors = 8  # 2D Moore neighbourhood upper bound
     neighbor_counts = np.zeros(max_gid+1, dtype=np.int32)
-
     # Preallocate padded arrays
     for gid in range(max_gid + 1):
         neigh_gid[gid] = np.full(max_neighbors, -1, dtype=np.int32)
-
     # Scan image
     for x in range(shape_x):
         for y in range(shape_y):
             grain_id = lgi[x, y]
-
             for k in range(DXY_8.shape[0]):
                 dx = DXY_8[k, 0]
                 dy = DXY_8[k, 1]
-
                 nx = x + dx
                 ny = y + dy
-
                 if 0 <= nx < shape_x and 0 <= ny < shape_y:
                     neighbor_id = lgi[nx, ny]
-
                     if neighbor_id != grain_id:
                         count = neighbor_counts[grain_id]
-
                         # avoid duplicates
                         found = False
                         for i in range(count):
                             if neigh_gid[grain_id][i] == neighbor_id:
                                 found = True
                                 break
-
                         if not found:
                             neigh_gid[grain_id][count] = neighbor_id
                             neighbor_counts[grain_id] += 1
-
     # Trim padding and return final dict
     final_neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:])
-
     for gid in range(max_gid + 1):
         n = neighbor_counts[gid]
         trimmed = np.empty(n, dtype=np.int32)
@@ -338,69 +324,45 @@ def _find_neigh_gid_numba_3d_(lgi):
     """
     shape_x, shape_y, shape_z = lgi.shape
     max_gid = np.int32(lgi.max())
-    
     # Get unique grain IDs to avoid allocating for non-existent grains
     unique_gids = np.unique(lgi)
     num_grains = len(unique_gids)
-
     # Use temporary storage dict for building neighbor lists
-    neigh_gid_temp = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32[:]
-    )
-
+    neigh_gid_temp = Dict.empty(key_type=types.int32, value_type=types.int32[:])
     max_neighbors = 26  # 3D Moore neighbourhood upper bound
-    
     # Create mapping for efficient lookup and counting
-    neighbor_counts = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32
-    )
-    
+    neighbor_counts = Dict.empty(key_type=types.int32, value_type=types.int32)
     # Initialize only for grains that actually exist
     for gid in unique_gids:
         neigh_gid_temp[gid] = np.full(max_neighbors, -1, dtype=np.int32)
         neighbor_counts[gid] = np.int32(0)
-
     # Scan volume
     for x in range(shape_x):
         for y in range(shape_y):
             for z in range(shape_z):
                 grain_id = lgi[x, y, z]
-
                 for k in range(DXYZ_26.shape[0]):
                     dx = DXYZ_26[k, 0]
                     dy = DXYZ_26[k, 1]
                     dz = DXYZ_26[k, 2]
-
-                    nx = x + dx
-                    ny = y + dy
-                    nz = z + dz
-
+                    nx = x+dx
+                    ny = y+dy
+                    nz = z+dz
                     if 0 <= nx < shape_x and 0 <= ny < shape_y and 0 <= nz < shape_z:
                         neighbor_id = lgi[nx, ny, nz]
-
                         if neighbor_id != grain_id:
-
                             count = neighbor_counts[grain_id]
-
                             # check for duplicate
                             found = False
                             for i in range(count):
                                 if neigh_gid_temp[grain_id][i] == neighbor_id:
                                     found = True
                                     break
-
                             if not found:
                                 neigh_gid_temp[grain_id][count] = neighbor_id
                                 neighbor_counts[grain_id] = count + np.int32(1)
-
     # Trim padding and return final dict
-    final_neigh_gid = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32[:]
-    )
-
+    final_neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:])
     for gid in unique_gids:
         n = neighbor_counts[gid]
         trimmed = np.empty(n, dtype=np.int32)
@@ -432,38 +394,28 @@ def _find_neigh_selected_2d_(lgi, selected_fids):
     """
     H, W = lgi.shape
     ng = selected_fids.size
-
     # Map gid -> row index (0..ng-1)
-    gid2idx = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32,
-    )
+    gid2idx = Dict.empty(key_type=types.int32, value_type=types.int32,)
     for i in range(ng):
         gid = selected_fids[i]
         gid2idx[gid] = i
-
     max_neighbors = 8
     neigh_table = np.full((ng, max_neighbors), -1, dtype=np.int32)
     counts = np.zeros(ng, dtype=np.int32)
-
     # Scan image
     for x in range(H):
         for y in range(W):
             grain_id = lgi[x, y]
-
             # Only process central grains we care about
             if grain_id in gid2idx:
                 idx = gid2idx[grain_id]
-
                 for k in range(DXY_8.shape[0]):
                     dx = DXY_8[k, 0]
                     dy = DXY_8[k, 1]
-                    nx = x + dx
-                    ny = y + dy
-
+                    nx = x+dx
+                    ny = y+dy
                     if 0 <= nx < H and 0 <= ny < W:
                         neighbor_id = lgi[nx, ny]
-
                         if neighbor_id != grain_id:
                             # check for duplicate
                             count = counts[idx]
@@ -476,13 +428,8 @@ def _find_neigh_selected_2d_(lgi, selected_fids):
                                 # There are at most 8 first-order neighbours
                                 neigh_table[idx, count] = neighbor_id
                                 counts[idx] = count + 1
-
     # Build Dict[gid -> trimmed neighbour array]
-    neigh_gid = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32[:],
-    )
-
+    neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:],)
     for i in range(ng):
         gid = selected_fids[i]
         c = counts[i]
@@ -513,63 +460,45 @@ def _find_neigh_selected_3d_(lgi, selected_fids):
     """
     nx, ny, nz = lgi.shape
     ng = selected_fids.size
-
     # gid -> row index (0..ng-1)
-    gid2idx = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32,
-    )
+    gid2idx = Dict.empty(key_type=types.int32, value_type=types.int32,)
     for i in range(ng):
         gid = selected_fids[i]
         gid2idx[gid] = i
-
     max_neighbors = 26
     neigh_table = np.full((ng, max_neighbors), -1, dtype=np.int32)
     counts = np.zeros(ng, dtype=np.int32)
-
     # Scan volume
     for x in range(nx):
         for y in range(ny):
             for z in range(nz):
                 grain_id = lgi[x, y, z]
-
                 # Only process central grains we care about
                 if grain_id in gid2idx:
                     idx = gid2idx[grain_id]
-
                     for k in range(DXYZ_26.shape[0]):
                         dx = DXYZ_26[k, 0]
                         dy = DXYZ_26[k, 1]
                         dz = DXYZ_26[k, 2]
-
-                        xx = x + dx
-                        yy = y + dy
-                        zz = z + dz
-
+                        xx = x+dx
+                        yy = y+dy
+                        zz = z+dz
                         if 0 <= xx < nx and 0 <= yy < ny and 0 <= zz < nz:
                             neighbor_id = lgi[xx, yy, zz]
-
                             if neighbor_id != grain_id:
                                 c = counts[idx]
-
                                 # avoid duplicates
                                 found = False
                                 for j in range(c):
                                     if neigh_table[idx, j] == neighbor_id:
                                         found = True
                                         break
-
                                 if not found:
                                     # max 26 first-order neighbours
                                     neigh_table[idx, c] = neighbor_id
                                     counts[idx] = c + 1
-
     # Build Dict[gid -> trimmed neighbour array]
-    neigh_gid = Dict.empty(
-        key_type=types.int32,
-        value_type=types.int32[:],
-    )
-
+    neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:],)
     for i in range(ng):
         gid = selected_fids[i]
         c = counts[i]
@@ -599,7 +528,7 @@ def find_neighs2d(lfi, conn):
     Parameters
     ----------
     lfi : ndarray
-        2D array of grain labels (LFI).
+        2D Labelled Feature Image.
     conn : int
         Connectivity for defining neighbors (e.g., 4 or 8).
 
@@ -626,7 +555,7 @@ def find_neighs3d(lfi, conn):
     Parameters
     ----------
     lfi : ndarray
-        3D array of grain labels (LFI).
+        3D Labelled Feature Image.
     conn : int
         Connectivity for defining neighbors (e.g., 6, 18, or 26).
 
@@ -664,6 +593,24 @@ def get_nth_order_neighbors(target_fid, neigh_fids, n_order=1):
     return cluster
 
 def detect_islands(neigh_fids):
+    """Detect grain IDs that have exactly one listed neighbour.
+
+    Parameters
+    ----------
+    neigh_fids : dict
+        Mapping ``gid -> iterable of neighbouring gids``.
+
+    Returns
+    -------
+    list
+        Grain IDs whose neighbour list length is exactly one.
+
+    Notes
+    -----
+    This utility is commonly used with neighbour maps that include the
+    central grain ID itself. In that case, an "island" corresponds to a grain
+    that has no true external neighbours.
+    """
     islands = []
     for gid, neighs in neigh_fids.items():
         if len(neighs) == 1:
@@ -671,44 +618,149 @@ def detect_islands(neigh_fids):
     return islands
 
 def find_small_fids(lfi, threshold):
+    """Find grain IDs whose voxel/pixel count is below or equal to threshold.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        N-dimensional Labelled Feature Image.
+    threshold : int
+        Maximum allowed size (count) for a feature to be classified as small.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D array of small feature IDs.
+    """
     small_fids = np.where(np.bincount(lfi.ravel())[1:] <= threshold)[0]+1 
     return small_fids
 
 def find_boundary_fids2d(lfi):
-    boundLFI = np.unique(np.hstack((np.unique(lfi[0, :]),
-                     np.unique(lfi[-1, :]),
-                     np.unique(lfi[:, 0]),
-                     np.unique(lfi[:, -1]))))
+    """Return unique feature IDs touching the outer boundary of a 2D grid.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        2D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs appearing on any of the four outer edges.
+    """
+    boundLFI = np.unique(np.hstack((np.unique(lfi[0, :]), np.unique(lfi[-1, :]),
+                     np.unique(lfi[:, 0]), np.unique(lfi[:, -1]))))
     return boundLFI
 
 def find_boundary_fids3d(lfi):
-    boundLFI = np.unique(np.hstack((np.unique(lfi[0, :, :]),
-                     np.unique(lfi[-1, :, :]),
-                     np.unique(lfi[:, 0, :]),
-                     np.unique(lfi[:, -1, :]),
-                     np.unique(lfi[:, :, 0]),
+    """Return unique feature IDs touching the outer boundary of a 3D volume.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs appearing on any of the six outer faces.
+    """
+    boundLFI = np.unique(np.hstack((np.unique(lfi[0, :, :]), np.unique(lfi[-1, :, :]),
+                     np.unique(lfi[:, 0, :]), np.unique(lfi[:, -1, :]), np.unique(lfi[:, :, 0]),
                      np.unique(lfi[:, :, -1]))))
     return boundLFI
 
 def find_internal_fids2d(lfi):
+    """Return 2D feature IDs that do not touch the domain boundary.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        2D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs present only in the interior.
+    """
     return np.setdiff1d(np.unique(lfi), find_boundary_fids2d(lfi))
 
 def find_internal_fids3d(lfi):
+    """Return 3D feature IDs that do not touch the domain boundary.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs present only in the interior.
+    """
     return np.setdiff1d(np.unique(lfi), find_boundary_fids3d(lfi))
 
 def find_corner_fids2d(lfi):
+    """Return unique feature IDs located at 2D domain corners.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        2D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs from the four corner pixels.
+    """
     cornerLFI = np.unique(np.hstack((lfi[0, 0], lfi[0, -1], lfi[-1, 0], lfi[-1, -1])))
     return cornerLFI
 
 def find_corner_fids3d(lfi):
+    """Return unique feature IDs located at 3D domain corners.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs from the eight corner voxels.
+    """
     cornerLFI = np.unique(np.hstack((lfi[0, 0, 0], lfi[0, 0, -1], lfi[0, -1, 0], lfi[0, -1, -1],
                      lfi[-1, 0, 0], lfi[-1, 0, -1], lfi[-1, -1, 0], lfi[-1, -1, -1])))
     return cornerLFI
 
 def find_edge_fids2d(lfi):
+    """Return unique feature IDs present on 2D boundary edges.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        2D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs from all four boundary edges.
+    """
     return np.unique(np.hstack((lfi[0, :], lfi[-1, :], lfi[:, 0], lfi[:, -1])))
 
 def find_edge_fids3d(lfi):
+    """Return unique feature IDs present on 3D boundary edges.
+
+    Parameters
+    ----------
+    lfi : ndarray
+        3D Labelled Feature Image.
+
+    Returns
+    -------
+    numpy.ndarray
+        Sorted unique IDs sampled from the 12 domain edges.
+    """
     return np.unique(np.hstack((lfi[0, 0, :], lfi[0, -1, :], lfi[-1, 0, :], lfi[-1, -1, :],
                lfi[0, :, 0], lfi[0, :, -1], lfi[-1, :, 0], lfi[-1, :, -1],
                lfi[:, 0, 0], lfi[:, 0, -1], lfi[:, -1, 0], lfi[:, -1, -1])))
