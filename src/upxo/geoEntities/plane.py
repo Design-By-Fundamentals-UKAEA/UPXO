@@ -57,6 +57,12 @@ class Plane:
         Plane
             Plane instance passing through the three points.
 
+        Raises
+        ------
+        ValueError
+            If any input point is invalid, if any two input points coincide,
+            or if the three points are collinear.
+
         Notes
         ----
         The normal is computed as ``cross(point2 - point1, point3 - point1)``.
@@ -72,11 +78,18 @@ class Plane:
         plane_from_points = Plane.from_three_points(point1, point2, point3)
         print(plane_from_points)
         """
+        from upxo._sup.validation_values import val_point_and_get_coord
+        point1 = np.array(val_point_and_get_coord(point=point1, return_type='coord', safe_exit=False), dtype=float,)
+        point2 = np.array(val_point_and_get_coord(point=point2, return_type='coord', safe_exit=False), dtype=float,)
+        point3 = np.array(val_point_and_get_coord(point=point3, return_type='coord', safe_exit=False), dtype=float,)
+        if np.allclose(point1, point2) or np.allclose(point1, point3) or np.allclose(point2, point3):
+            raise ValueError('Input points must be distinct.')
         # Calculate two vectors lying within the plane
-        vector1 = point2-point1
-        vector2 = point3-point1
+        vector1, vector2 = point2-point1, point3-point1
         # Normal vector is the cross product of the vectors within the plane
         normal = np.cross(vector1, vector2)
+        if np.allclose(normal, 0.0):
+            raise ValueError('Input points must not be collinear.')
         # Use any of the three points on the plane
         return cls(point1, normal)
 
@@ -154,14 +167,10 @@ class Plane:
         Examples
         --------
         from upxo.geoEntities.plane import Plane
-        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1),
-                                ea_format='rpy', degree=False)
-        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1),
-                                ea_format='roe', degree=False)
-        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1),
-                                ea_format='bunge', degree=False)
-        Plane.from_euler_angles((0,np.pi/7,np.pi/2), (1, 1, 1),
-                                ea_format='bunge', degree=False)
+        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1), ea_format='rpy', degree=False)
+        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1), ea_format='roe', degree=False)
+        Plane.from_euler_angles((0,np.pi/2,np.pi/2), (1, 1, 1), ea_format='bunge', degree=False)
+        Plane.from_euler_angles((0,np.pi/7,np.pi/2), (1, 1, 1), ea_format='bunge', degree=False)
         """
         # Validations
         # ---------------------------------------------
@@ -193,25 +202,23 @@ class Plane:
             """
         else:
             raise ValueError('Invalid ea_format specification.')
-        # ---------------------------------------------
+
         if degree:
             roll, pitch, yaw = np.radians([roll, pitch, yaw])
-        # ---------------------------------------------
+
         cosroll, sinroll = np.cos(roll), np.sin(roll)
         cospitch, sinpitch = np.cos(pitch), np.sin(pitch)
         cosyaw, sinyaw = np.cos(yaw), np.sin(yaw)
-        # ---------------------------------------------
+
         # Rotation matrices
         R_roll = np.array([[1, 0, 0], [0, cosroll, -sinroll], [0, sinroll, cosroll]])
         R_pitch = np.array([[cospitch, 0, sinpitch], [0, 1, 0], [-sinpitch, 0, cospitch]])
         R_yaw = np.array([[cosyaw, -sinyaw, 0], [sinyaw, cosyaw, 0], [0, 0, 1]])
-        # ---------------------------------------------
-        # Combined rotation matrix
-        R = np.dot(R_yaw, np.dot(R_pitch, R_roll))
-        # ---------------------------------------------
-        # Normal vector along the z-axis
-        normal_vector = np.dot(R, np.array([0, 0, 1]))
-        # ---------------------------------------------
+
+        R = np.dot(R_yaw, np.dot(R_pitch, R_roll))  # Combined rotation matrix
+
+        normal_vector = np.dot(R, np.array([0, 0, 1]))  # Normal vector along the z-axis
+
         return cls(point_on_plane, normal_vector)
 
     @property
@@ -309,8 +316,7 @@ class Plane:
         """
         # Validations
         # --------------------------------
-        D = self.calc_perp_distances(point_coords,
-                                                   signed=False)
+        D = self.calc_perp_distances(point_coords, signed=False)
 
         # --------------------------------
 
@@ -358,8 +364,8 @@ class Plane:
         self.point) to the point we are trying to project (point). This
         happens inside distance_to_point. This distance tells us how far we
         need to move along the normal direction.
-        distance = self.distance_to_point(point)
         """
+        distance = self.distance_to_point(point)
 
         ''' We scale the plane's normal vector (self.normal) by the calculated
         distance. This gives us the vector that represents the exact movement
@@ -648,7 +654,6 @@ class Plane:
         in_plane_offset = offset_vector - projection_onto_plane
         # Offset the point by the in-plane offset vector
         return point + in_plane_offset
-
 
     def calculate_inclined_circle(self, center, radius, angle_A, angle_B, angle_C):
         """Compute points of an inclined circle associated with the plane.
