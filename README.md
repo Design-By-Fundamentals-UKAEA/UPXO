@@ -10,20 +10,15 @@ A dedicated wiki has been created to help users. Please find it [here](https://g
 
 ---
 
-## Architecture
+## Core capabilities
 
-UPXO is organised as a modular environment supporting the full workflow of synthetic microstructure modelling.
-
-Core capabilities include:
-
-- **Generation** — creation of grain structures using Monte Carlo simulations and Voronoi tessellation
-- **Characterisation and Analysis** — extraction of morphology, texture, and topological descriptors
-- **Manipulation Tools** — controlled introduction, removal, or modification of microstructural features
-- **Representativeness Assessment** — statistical evaluation of generated microstructures
-- **FE Meshing** — preparation of grain boundary geometry conformal and non-conformal meshes for simulation
-- **Data Interface** — import, export, and management of grain structure data
-- **Visualisation** — tools for plotting 2D and 3D microstructures
-- **Structure-Specific Utilities** — specialised tools tailored to different microstructure classes
+- **Generation of grain structures** - Voronoi type anbd Monte-Carlo simulation type.
+- **Characterisation and Analysis** - morphology, texture, and topological.
+- **Manipulation Tools** - feature removal, introduction, modification and replacement.
+- **Representativeness Assessment** - morphology, texture, and topological.
+- **FE Meshing** - grain boundary geometry conformant and non-conformant Finite Element meshes.
+- **Data Interface** - import, export, and management of grain structure data.
+- **Visualisation** - tools for plotting 2D and 3D microstructures.
 
 ---
 
@@ -39,27 +34,29 @@ UPXO can produce a broad range of synthetic grain structures, including:
 
 ## Applications
 
-UPXO is intended for research involving microstructure-based modelling of structural materials.
+UPXO is intended to cater to the needs of research involving microstructure-based modelling of structural materials.
 
 Typical applications include:
 
 ### Nuclear materials research
-Synthetic microstructures can be generated for materials relevant to nuclear systems, enabling computational investigations of irradiation-induced degradation and microstructural evolution.
+> Synthetic microstructures can be generated for nuclear fusion relevant structural materials, enabling computational investigations of irradiation-induced degradation and microstructural evolution.
 
 ### Aerospace and automotive materials
-The framework can produce non-equiaxed or gradient grain morphologies representative of manufacturing processes such as rolling, extrusion, forging, additive manufacturing, and welding.
+> Non-equiaxed, gradient grain morphologies representative of manufacturing processes such as rolling, extrusion, forging, additive manufacturing, and welding may be produced in UPXO.
 
 ### Data-driven materials modelling
 Large ensembles of statistically representative microstructures can be generated and analysed, supporting machine-learning approaches and surrogate modelling.
 
+### Research in grain growth kinetics
+> Researchers can take advantage of the easy to use pipelines and templates to run existing or custom Pott's model Monte-Carlo simulation algorithms. The frameworks provide multiple entry points to study the grain growth kinetics, such as (a) Energetics (b) Ensemble propertie of space partitioning (statistical - morphological, topological and spatial)
 ---
 
 ## Contributors
 
-- **Dr. Sunil Anandatheertha** — UK Atomic Energy Authority (UKAEA), United Kingdom
-- **Dr. Vikram Phalke** — UK Atomic Energy Authority (UKAEA), United Kingdom
-- **Dr. Chris Hardie** — UK Atomic Energy Authority (UKAEA), United Kingdom
-- **Dr. Eralp Demir** — University of Oxford, United Kingdom
+- **Dr. Sunil Anandatheertha** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
+- **Dr. Vikram Phalke** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
+- **Dr. Chris Hardie** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
+- **Dr. Eralp Demir** - University of Oxford, Parks Road, Oxford, OX1 3PJ, UK
 
 ---
 
@@ -70,13 +67,7 @@ UPXO is distributed under the **GNU General Public License v3.0 (GPL-3.0)** for 
 Companies, industrial users, and other organisations wishing to use UPXO in **commercial or proprietary applications** may obtain a separate commercial license.
 
 For commercial licensing enquiries, please contact:
+- **Dr. Sunil Anandatheertha** (Email: *vaasu.anandatheertha@ukaea.uk*) and
+- **Dr. Chris Hardie** (Email: *chris.hardie@ukaea.uk*)
 
-**Dr. Sunil Anandatheertha**
-- United Kingdom Atomic Energy Authority (UKAEA)  
-- Email: *vaasu.anandatheertha@ukaea.uk*
-
-**Dr. Chris Hardie**
-- United Kingdom Atomic Energy Authority (UKAEA)  
-- Email: *chris.hardie@ukaea.uk*
-
-Additional licensing information will be provided in `COMMERCIAL.md` .
+Additional licensing information is provided in `COMMERCIAL.md`.
