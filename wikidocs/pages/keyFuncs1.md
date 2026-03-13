@@ -7,10 +7,10 @@ Key functionalities include the following:
 > This supports grain structre feature (A) removal, (B) introduction, (C) replacer and (D) modifier.
 
 3. **Representativeness**
-> Supports (A) self-GS and cross-GS representativeness assessments. Any combination of sample and target GS are supported for synthetic and experimental GS. Statistical and connectivity based assessments are supported.
+> Supports (A) self-GS and cross-GS representativeness assessments. Any combination of sample and target GS are supported for synthetic and experimental GS. (B) representative generation.
 
-4. ****
-5. ****
-6. ****
-7. ****
-8. ****
+4. **FE meshing**
+> Supports 2D and 3D meshes which are both non-conforming and conforming to grain boundary (GB) morphology. User element set definitions can be generated. Voids can be introduced independent of the model.
+
+5. **Visualization**
+> Supports 2D and 3D GS and general data visualization. GS subsets can be queried and visulized.
