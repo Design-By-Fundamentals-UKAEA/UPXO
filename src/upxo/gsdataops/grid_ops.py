@@ -1453,7 +1453,7 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
         ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         # Formatting
-        ax.set_title("RVE optimized constrained hybrid Voronoi tessellation seeds", fontsize=8)
+        # ax.set_title("RVE optimized constrained hybrid Voronoi tessellation seeds", fontsize=8)
         ax.grid(True, linestyle='--', alpha=0.3)
         ax.set_aspect('equal')
         # Rigid RVE Cropping
