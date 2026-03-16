@@ -76,8 +76,10 @@ import pandas as pd
 # from upxo.meshing.mesher_2d import mesh_mcgs2d
 from upxo.dclasses.features import twingen
 import upxo.gsdataops.gid_ops as GidOps
+import upxo.viz.gbviz as gbViz
 import upxo.gsdataops.grid_ops as gridOps
 import upxo.connops.neighbour_ops as neighOps
+import upxo.jpops.jpops as jpOps
 from upxo._sup.gops import att
 from upxo._sup.data_ops import find_intersection, find_union_with_counts
 from upxo._sup.data_ops import increase_grid_resolution, decrease_grid_resolution
@@ -2010,6 +2012,42 @@ class mcgs2_grain_structure():
                 if neighbor_id > grain_id:  # Only add pairs where neighbor_id > grain_id to avoid duplicates
                     grain_pairs.append((grain_id, neighbor_id))
         return grain_pairs
+
+    def pad_lfi(self):
+        return gridOps.pad_lfi(self.lfi, 1, self.n+1)
+    
+    def find_gb(self, gsimage, plot_gb=False, figsize=(6, 6), dpi=100, cmap='nipy_spectral'):
+        return gridOps.find_gb_v1(gsimage, plot_gb=plot_gb, figsize=figsize, dpi=dpi, cmap=cmap)
+    
+    def segment_gb(self, gsimage, gbimage, neigh_fid, connectivity=8):
+        return gridOps.segment_grain_boundaries(gsimage, gbimage, neigh_fid,
+                            connectivity=connectivity)
+    
+    def make_gbsegImage(self, gbMask, segments, nsegments, neigh_fid):
+        return gridOps.make_gbsegImage(gbMask, segments, nsegments, neigh_fid)
+
+    def see_all_gbsegs(self, gbsegImage):
+        gbViz.see_all_gbsegs(gbsegImage)
+
+    def see_gbsegs_fid(self, gbsegImage, fid):
+        gbViz.see_gbsegs_fid(gbsegImage, fid)
+
+    def findJP(self, segments):
+        junctions = jpOps.findJP(segments)
+        return junctions
+    
+    def separate_junctions_by_order(self, segments):
+        jp_by_jpo = jpOps.separate_junctions_by_order(segments)
+        return jp_by_jpo
+
+    def see_gbsegs_jp_by_jpo(self, gbsegs, jps_by_order, style_by_order=None, default_style=None,
+            figsize=(5, 5), dpi=80, legend_anchor=(1.02, 1.0), ms2=4,
+            ms3=4, ms4=4, ms5=4, legend_loc='upper left', legend_title='Junction point data',
+            legend_frameon=True, hide_axis=True, cmap='rainbow'):
+        gbViz.see_gbsegs_jp_by_jpo(gbsegs, jps_by_order, style_by_order=style_by_order,
+        default_style=default_style, figsize=figsize, dpi=dpi, legend_anchor=legend_anchor,
+        ms2=ms2, ms3=ms3, ms4=ms4, ms5=ms5, legend_loc=legend_loc, legend_title=legend_title,
+        legend_frameon=legend_frameon, hide_axis=hide_axis, cmap=cmap)
     
     def make_graph(self, neigh_gid):
         """
