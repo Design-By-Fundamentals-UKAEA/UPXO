@@ -2881,47 +2881,28 @@ class mcgs3_grain_structure():
             Scalar field values in the slice.
         """
         sf_value = self.get_scalar_field(sf_name=sf_name)
-        if sf_value.ndim != 3:
+        if sf_value['sf'].ndim != 3:
             raise ValueError('Invalid sf_value dimensions. Expected 3.')
         # ----------------------------------
         if isinstance(slice_normal, str):
             if slice_normal in ('x', 'y', 'z'):
                 if slice_normal == 'x':
-                    if slice_location >= 0 and slice_location <= sf_value.shape[2]:
-                        sf_slice = sf_value[:, :, slice_location]
+                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[2]:
+                        sf_slice = sf_value['sf'][:, :, slice_location]
                     else:
                         raise ValueError('Invalid slice_location specified.')
                 elif slice_normal == 'y':
-                    if slice_location >= 0 and slice_location <= sf_value.shape[1]:
-                        sf_slice = sf_value[:, slice_location, :]
+                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[1]:
+                        sf_slice = sf_value['sf'][:, slice_location, :]
                     else:
                         raise ValueError('Invalid slice_location specified.')
                 elif slice_normal == 'z':
-                    if slice_location >= 0 and slice_location <= sf_value.shape[0]:
-                        sf_slice = sf_value[slice_location, :, :]
+                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[0]:
+                        sf_slice = sf_value['sf'][slice_location, :, :]
                     else:
                         raise ValueError('Invalid slice_location specified.')
-            elif slice_normal in ('xy', 'yx'):
-                """Slice normal to the xy plane."""
-                pass
-            elif slice_normal in ('yz', 'zy'):
-                """Slice normal to the yz plane."""
-                pass
-            elif slice_normal in ('zx', 'xz'):
-                """Slice normal to the xz plane."""
-                pass
-        # ----------------------------------
-        elif type(slice_normal) in dth.dt.ITERABLES:
-            if len(type(slice_normal)) != 3:
-                raise ValueError('Invalid slice_normal vector size specified.')
-            if interpolation not in ('nearest', 'linear'):
-                print('Valid interpolation options are:')
-                print("        'nearest' and 'linear'.")
-                raise ValueError('Invalid interpolation option specificaion.')
-            slice_normal = np.array(slice_normal).norm()
-            # Write codes to actually get the slice.
-        else:
-            raise ValueError("Invalid slice_normal specification.")
+            else:
+                raise ValueError("Invalid slice_normal specification.")
         return sf_slice
 
     def plot_scalar_field_slice_orthogonal(self, sf_name='lgi',
@@ -3288,7 +3269,7 @@ class mcgs3_grain_structure():
         THE GID TO THE USER
 
         """
-        gid = self.prop['area'].idxmax()+1
+        gid = self.nvoxels_values.argmax()+1
         # self.g[gid]['grain'].plot()  # <-- Replace by 3D plot function.
 
     def plot_longest_grain(self):
@@ -4515,8 +4496,8 @@ class mcgs3_grain_structure():
             https://github.com/aleksandrbazhin/ellipsoid_fit_python
             https://uk.mathworks.com/matlabcentral/fileexchange/24693-ellipsoid-fit
 
-        Authors
-        -------
+        Author credits
+        --------------
         Original MATLAB codes:
             Yury Petrov, Oculus VR, September, 2015
             https://uk.mathworks.com/matlabcentral/profile/authors/5507004
@@ -5407,7 +5388,7 @@ class mcgs3_grain_structure():
 
     def get_volnv_gids(self, gids):
         # Validations
-        return [self.mprop['volnv'][gid] for gid in gids]
+        return [floor(self.mprop['volnv'][gid]) for gid in gids]
 
     def find_grains_by_mprop_range(self, prop_name='volnv', low=10, high=15,
                                    low_ineq='ge', high_ineq='le'):
@@ -5820,8 +5801,8 @@ class mcgs3_grain_structure():
                                           'nan_replacement': -1,
                                           'inf_replacement': -1},
                        kdeplot=False, save_plot3d_grains=True,
-                       ave_plot2d_grains=True,
-                       save_plot2d_grains=False):
+                       ave_plot2d_grains=True, save_plot2d_grains=False,
+                       figsize=(5, 5), dpi=100):
         """
         Carry out surface -- sub-surface relationship study.
 
@@ -6081,7 +6062,7 @@ class mcgs3_grain_structure():
             for mpn3d, mpn2d in zip(mprop_names_3d, mprop_names_2d):
                 propvals3d = self.sssr['props'][(mpn3d, mpn2d)][0][gids_3d-1]
                 propvals2d = self.sssr['props'][(mpn3d, mpn2d)][1]
-                plt.figure(figsize=(5, 5), dpi=100)
+                plt.figure(figsize=figsize, dpi=dpi)
                 common_norm = True
                 if any((propvals3d.var() < 1E-5, propvals2d.var() < 1E-5)):
                     common_norm = False
