@@ -1659,15 +1659,6 @@ def make_gbsegImage(gbMask, segments, nsegments, neigh_fid):
     new_ids = {cg: np.round(np.linspace(cg, cg+1, nsegments[cg]+1)[:-1], 4) 
                for cg, ngs in neigh_fid.items()}
     from copy import deepcopy
-    grain_boundaries_new = np.asarray(deepcopy(gbMask), dtype=np.float32)
-    for cg, ngcoords in segments.items():
-        for i, (ng, ngsegcoords) in enumerate(ngcoords.items()):
-            segid = new_ids[cg][i]
-            for sc in ngsegcoords:
-                grain_boundaries_new[sc[0]][sc[1]] = segid
-
-
-
     new_ids = {cg: np.round(np.linspace(cg, cg+1, nsegments[cg]+1)[:-1], 4) 
                 for cg, ngs in neigh_fid.items()}
     from copy import deepcopy
