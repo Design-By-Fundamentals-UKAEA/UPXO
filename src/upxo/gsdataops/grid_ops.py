@@ -1580,6 +1580,106 @@ def generate_darted_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, **plot
     return seeds
 # #################################################################################
 # #################################################################################
+def pad_lfi(lfi, pad_width, padder):
+    """
+    Pad a local feature ID array (lfi) with a specified value on all sides.
+
+    Parameters
+    ----------
+    lfi : np.ndarray
+        N-dimensional Labelled Feature Image to be padded.
+    pad_width : int or tuple
+        The width of the padding to be applied on each side. If an integer is provided,
+        the same padding width will be applied to all sides. If a tuple is provided, it
+        should specify the padding width for each side in the format ((before_1, after_1),
+        (before_2, after_2), ...).
+    padder : int
+        The value to use for padding the array. This value will be assigned to the padded
+        regions around the original array.
+
+    Returns
+    -------
+    np.ndarray
+        The padded local feature ID array with the specified padding width and padder value.
+
+    Import
+    ------
+    import upxo.gsdataops.grid_ops as gridOps
+    Use as: gridOps.pad_lfi
+    """
+    def pad_with(vector, pad_width, iaxis, kwargs):
+        # REF: https://numpy.org/doc/stable/reference/generated/numpy.pad.html
+        pad_value = kwargs.get('padder', 10)
+        vector[:pad_width[0]] = pad_value
+        vector[-pad_width[1]:] = pad_value
+    lgi_padded = np.pad(lfi, pad_width=pad_width, mode=pad_with, padder=padder)
+    return lgi_padded
+
+def find_gb_v1(gsimage, plot_gb=True, figsize=(6, 6), dpi=100, cmap='nipy_spectral'):
+    from skimage.segmentation import find_boundaries
+    gsimg_padded_boundaries = find_boundaries(gsimage, connectivity=1, mode='thick', background=0)*gsimage
+    # gsimg_boundaries = gsimg_padded_boundaries[1:-1, 1:-1]
+    gsimg_boundaries = gsimg_padded_boundaries  # The above line would make it specific.
+    # As we have commeneted out the padding, we can keep the boundaries as is without cropping.
+    # NOTE: USERS WILL HAVE TO MORE CAREFUL in theire data entry.
+    if plot_gb:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=figsize, dpi=dpi)
+        plt.imshow(gsimg_boundaries, cmap=cmap, origin='lower')
+        plt.title("Grain Boundaries (Thick, Connectivity=1)")
+        plt.colorbar(label='Boundary ID')
+        plt.show()
+    return gsimg_boundaries
+
+def segment_grain_boundaries(gsimage, gbimage, neigh_fid, connectivity=8):
+    from collections import defaultdict
+    rows, cols = np.where(gbimage)
+    interfaces = defaultdict(list)
+    if connectivity == 4:
+        offsets = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    elif connectivity == 8:
+        offsets = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    gsimage_int = gsimage.astype(int)
+    max_r, max_c = gsimage.shape
+    for r, c in zip(rows, cols):
+        g1 = gsimage_int[r, c]
+        if g1 == 0: continue
+        for dr, dc in offsets:
+            nr, nc = r+dr, c+dc
+            if 0 <= nr < max_r and 0 <= nc < max_c:
+                g2 = gsimage_int[nr, nc]
+                if g2 != 0 and g2 != g1:
+                    interfaces[(g1, g2)].append((r, c))
+    segments = {pair: np.unique(np.array(pts), axis=0) for pair, pts in interfaces.items()}
+    segments = {cg: {ng: segments[(cg, ng)] for ng in ngs} for cg, ngs in neigh_fid.items()}
+    nsegments = {cg: len(segments[cg]) for cg in neigh_fid.keys()}
+    return segments, nsegments
+
+def make_gbsegImage(gbMask, segments, nsegments, neigh_fid):
+    new_ids = {cg: np.round(np.linspace(cg, cg+1, nsegments[cg]+1)[:-1], 4) 
+               for cg, ngs in neigh_fid.items()}
+    from copy import deepcopy
+    grain_boundaries_new = np.asarray(deepcopy(gbMask), dtype=np.float32)
+    for cg, ngcoords in segments.items():
+        for i, (ng, ngsegcoords) in enumerate(ngcoords.items()):
+            segid = new_ids[cg][i]
+            for sc in ngsegcoords:
+                grain_boundaries_new[sc[0]][sc[1]] = segid
+
+
+
+    new_ids = {cg: np.round(np.linspace(cg, cg+1, nsegments[cg]+1)[:-1], 4) 
+                for cg, ngs in neigh_fid.items()}
+    from copy import deepcopy
+    gbSegMask = np.asarray(deepcopy(gbMask), dtype=np.float32)
+    for cg, ngcoords in segments.items():
+        for i, (ng, ngsegcoords) in enumerate(ngcoords.items()):
+            segid = new_ids[cg][i]
+            for sc in ngsegcoords:
+                gbSegMask[sc[0]][sc[1]] = segid
+    return gbSegMask
+# #################################################################################
+# #################################################################################
 # This module is expected to grow quite a lot. In the interest of locating
 # the right definitions whilst development, I have provided the below
 # search ids. Just copy the search IDs and search for it. The definition 
