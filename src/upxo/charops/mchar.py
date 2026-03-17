@@ -1,3 +1,17 @@
+"""
+Module: mchar
+----------------
+This module provides functions for morphological character analysis in 2D and 3D image data. It includes feature detection and characterization based on connectivity criteria.
+Functions---------
+- detect_features(mcStateArray, connectivity=18, delta=0): Detects and labels connected features in 3D image data based on specified connectivity and delta threshold.
+- charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid, make_skprops=True, extract_coords=True, throw_bounding_box=True): Characterizes features in a 2D labeled image, extracting properties and coordinates.
+- charecterise_features_in_image_v2(labelled_image, Xgrid, Ygrid, make_skprops=True, extract_coords=True, throw_bounding_box=True): An alternative version of the feature characterization function for 2D images.
+Import
+------
+import upxo.charops._mchar2d as _mchar2d
+import upxo.charops._mchar3d as _mchar3d
+import upxo.charops.mchar as mchar
+"""
 from upxo.charops import _mchar2d, _mchar3d
 
 def detect_features(mcStateArray, connectivity=18, delta=0):
@@ -41,6 +55,7 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
     Import
     ------
     import upxo.charops.mchar as mchar
+    Use as: mchar.detect_features
 
     Examples
     --------
@@ -51,3 +66,32 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
     """
     lfi, N = _mchar3d.detect_features(mcStateArray, connectivity=connectivity, delta=delta)
     return lfi, N, connectivity
+
+def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
+                make_skprops=True, extract_coords=True, throw_bounding_box=True):
+    """
+    Import
+    ------
+    import upxo.charops.mchar as mchar
+    Use as: mchar.charecterise_features_in_image_2d
+    """
+    fx = _mchar2d.charecterise_features_in_image_2d
+    fxop = fx(labelled_image, Xgrid, Ygrid, make_skprops=make_skprops, 
+              extract_coords=extract_coords, throw_bounding_box=throw_bounding_box)
+    skprops, bbox_limits_ex, bboxes_ex, coords_dict = fxop
+    return skprops, bbox_limits_ex, bboxes_ex, coords_dict
+    
+def charecterise_features_in_image_v2(labelled_image, Xgrid, Ygrid,
+                make_skprops=True, extract_coords=True,
+                throw_bounding_box=True):
+    """
+    Import
+    ------
+    import upxo.charops.mchar as mchar
+    Use as: mchar.charecterise_features_in_image_v2
+    """
+    fx = _mchar2d.charecterise_features_in_image_v2
+    fxop = fx(labelled_image, Xgrid, Ygrid, make_skprops=make_skprops,
+              extract_coords=extract_coords, throw_bounding_box=throw_bounding_box)
+    skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict = fxop
+    return skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict
