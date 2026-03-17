@@ -76,6 +76,7 @@ import pandas as pd
 # from upxo.meshing.mesher_2d import mesh_mcgs2d
 from upxo.dclasses.features import twingen
 import upxo.gsdataops.gid_ops as GidOps
+import upxo.charops.mchar as mcharOps
 import upxo.viz.gbviz as gbViz
 import upxo.gsdataops.grid_ops as gridOps
 import upxo.connops.neighbour_ops as neighOps
@@ -694,7 +695,7 @@ class mcgs2_grain_structure():
         if method == 'mc state partitioned global' and len(vf) == 0:
             self.species[spid] = deepcopy(self.s)
         # ---------------------------------------------
-        fx1 = self.charecterise_features_in_image
+        fx1 = mcharOps.charecterise_features_in_image_2d
         Xgrid, Ygrid = self.xgr, self.ygr
         # ---------------------------------------------
         if ignore_vf:
@@ -709,7 +710,7 @@ class mcgs2_grain_structure():
                         species = gridOps.combine_partitions(deepcopy(self.s), combineids)
                         self.species[spid]['inst_'+str(i+1)] = deepcopy(species)
                         if detect_features:
-                            features = self.detect_features_in_image(deepcopy(species),
+                            features = gridOps.detect_features_in_image_MCstateWise_2d(deepcopy(species),
                                                               binary_structure_order=bso)
                             # instance number: i+1: image
                             name = 'inst_'+str(i+1)+'_img'
@@ -754,177 +755,6 @@ class mcgs2_grain_structure():
         if method == 'ng vf':
             pass
     
-    def detect_features_in_image(self, image_data, binary_structure_order=2,):
-        """
-        Detect features in an image and label them uniquely.
-
-        Parameters
-        ----------
-        image_data : numpy.ndarray
-            Input image array containing different states as integer values.
-        binary_structure_order : int, optional
-            Order of the binary structure for connectivity. Default is 2 (8-connectivity).
-        Returns
-        -------
-        labeled_image : numpy.ndarray
-            Labeled image where each detected feature has a unique integer label.
-        original_to_labels : dict
-            Mapping from original state values to lists of new feature labels.
-        labels_to_original : dict
-            Mapping from new feature labels to their corresponding original state values.
-
-        Example
-        -------
-        import numpy as np
-        image_data = np.array([[1, 1, 0, 2, 2],
-                               [1, 0, 0, 2, 2],
-                               [0, 0, 3, 3, 0],
-                               [4, 4, 0, 0, 0]])
-        labeled_image, orig_to_labels, labels_to_orig = detect_features_in_image(image_data, binary_structure_order=2)
-        print("Labeled Image:\n", labeled_image)
-        print("Original to Labels Mapping:\n", orig_to_labels)
-        print("Labels to Original Mapping:\n", labels_to_orig)
-        """
-        from scipy.ndimage import label as nd_label
-        from scipy.ndimage import generate_binary_structure
-        binstr = generate_binary_structure(2, binary_structure_order)
-        labeled_image = np.zeros_like(image_data, dtype=int)
-        original_to_labels = {}  # {original_state_id : [new_label_1, new_label_2]}
-        labels_to_original = {}  # {new_label_id: original_state_id}
-        current_label_offset = 1
-        unique_states = np.unique(image_data)
-        for state_val in unique_states:
-            mask = (image_data == state_val)
-            temp_labels, num_features = nd_label(mask, structure=binstr)
-            if num_features == 0:
-                continue
-            feature_mask = temp_labels > 0
-            temp_labels[feature_mask] += (current_label_offset-1)
-            labeled_image += temp_labels
-            new_ids = list(range(current_label_offset,
-                                 current_label_offset+num_features))
-            original_to_labels[state_val] = new_ids
-            for new_id in new_ids:
-                labels_to_original[new_id] = state_val
-            current_label_offset += num_features
-
-        return labeled_image, original_to_labels, labels_to_original
-    
-    def charecterise_features_in_image(self, labelled_image, Xgrid, Ygrid,
-                                       make_skprops=True, extract_coords=True,
-                                       throw_bounding_box=True
-                                       ):
-        """
-        Charecterise features in an image.
-        Parameters
-        ----------
-        labelled_image : numpy.ndarray
-            Labeled image where each feature has a unique integer label.
-        Xgrid : numpy.ndarray
-            X-coordinates grid corresponding to the image.
-        Ygrid : numpy.ndarray
-            Y-coordinates grid corresponding to the image.
-        make_skprops : bool, optional
-            Whether to create scikit-image regionprops for features. Default is True.
-        extract_coords : bool, optional
-            Whether to extract feature coordinates. Default is True.
-        throw_bounding_box : bool, optional
-            Whether to throw bounding box for features. Default is True.
-        
-        Returns
-        -------
-        skprops : dict
-            Dictionary with feature IDs as keys and their scikit-image regionprops as values.
-        bbox_limits_ex : dict
-            Dictionary with feature IDs as keys and their extended bounding box limits as values.
-        bboxes_ex : dict
-            Dictionary with feature IDs as keys and their extended bounding box images as values.
-        coords_dict : dict
-            Dictionary with feature IDs as keys and their coordinates as values.
-
-        Example
-        -------
-        skprops, bbox_limits, bboxes_ex, coords_dict = self.charecterise_features_in_image(labelled_image, Xgrid, Ygrid,
-                                       make_skprops=True, extract_coords=True,
-                                       throw_bounding_box=True
-                                       )
-        """
-        fids = [int(fid) for fid in np.unique(labelled_image)]
-        skprops = {fid: None for fid in fids}
-        bbox_limits_ex = {fid: None for fid in fids}
-        bboxes_ex = {fid: None for fid in fids}
-        coords_dict = {fid: None for fid in fids}
-        if make_skprops:
-            from skimage.measure import regionprops
-        for fid in fids:
-            _, L = cv2.connectedComponents(np.array(labelled_image == fid,
-                                                    dtype=np.uint8))
-            loc_ = np.where(L == 1)
-            rmin, rmax = loc_[0].min(), loc_[0].max()+1
-            cmin, cmax = loc_[1].min(), loc_[1].max()+1
-            Rlab, Clab = L.shape
-            rmin_ex, rmax_ex = rmin-int(rmin != 0), rmax+int(rmin != Rlab)
-            cmin_ex, cmax_ex = cmin-int(cmin != 0), cmax+int(cmax != Clab)
-            bbox_ex = np.array(L[rmin_ex:rmax_ex, cmin_ex:cmax_ex], dtype=np.uint8)
-            if throw_bounding_box:
-                bbox_limits_ex[fid] = [rmin_ex, rmax_ex, cmin_ex, cmax_ex]
-                bboxes_ex[fid] = bbox_ex
-            if extract_coords:
-                coords_dict[fid] = np.array([[Xgrid[ij[0], ij[1]], Ygrid[ij[0], ij[1]]]
-                                for ij in np.argwhere(L == 1)])
-            if make_skprops:
-                skprops[fid] = regionprops(bbox_ex, cache=False)[0]
-        return skprops, bbox_limits_ex, bboxes_ex, coords_dict
-    
-    def charecterise_features_in_image_v2(self, labelled_image, Xgrid=None, Ygrid=None, 
-                                        make_skprops=True, extract_coords=True, 
-                                        throw_bounding_box=True):
-        if Xgrid is None or Ygrid is None:
-            h, w = labelled_image.shape
-            indices = np.indices((h, w))
-            Xgrid, Ygrid = indices[1], indices[0]
-        # -------------------------------------
-        from skimage.measure import regionprops
-        props = regionprops(labelled_image)
-
-        skprops = {}
-        bbox_limits = {}
-        bbox_limits_ex = {}
-        bboxes = {}
-        bboxes_ex = {}
-        coords_dict = {}
-        Rlab, Clab = labelled_image.shape
-        for prop in props:
-            fid = prop.label
-            # prop.bbox gives (min_row, min_col, max_row, max_col)
-            rmin, cmin, rmax, cmax = prop.bbox
-
-            rmin = max(0, rmin)
-            rmax = min(Rlab, rmax)
-            cmin = max(0, cmin)
-            cmax = min(Clab, cmax)
-            
-            rmin_ex = max(0, rmin - 1)
-            rmax_ex = min(Rlab, rmax + 1)
-            cmin_ex = max(0, cmin - 1)
-            cmax_ex = min(Clab, cmax + 1)
-            if throw_bounding_box:
-                bbox_limits[fid] = [rmin, rmax, cmin, cmax]
-                bbox_limits_ex[fid] = [rmin_ex, rmax_ex, cmin_ex, cmax_ex]
-                # slice for the extended bounding box
-                bboxes[fid] = (labelled_image[rmin:rmax, cmin:cmax] == fid).astype(np.int32)
-                bboxes_ex[fid] = (labelled_image[rmin_ex:rmax_ex, cmin_ex:cmax_ex] == fid).astype(np.int32)
-            if extract_coords:
-                # prop.coords gives indices (row, col) of all pixels in the grain
-                coords = prop.coords 
-                rows = coords[:, 0]
-                cols = coords[:, 1]
-                coords_dict[fid] = np.column_stack((Xgrid[rows, cols], Ygrid[rows, cols]))
-            if make_skprops:
-                skprops[fid] = prop
-
-        return skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict
-
     def extract_feature_properties(self, skprops={}, area=True, eq_diameter=False,
                                    feret_diameter=False, perimeter=False,  perimeter_crofton=False,
                                    npixels_gb=False, gb_length_px=False, major_axis_length=True,
@@ -980,7 +810,7 @@ class mcgs2_grain_structure():
 
         Example
         -------
-        skprops, bbox_limits_ex, bboxes_ex, coords_dict = self.charecterise_features_in_image(labelled_image, Xgrid, Ygrid,
+        skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
                                        make_skprops=True, extract_coords=True,
                                        throw_bounding_box=True
                                        )
@@ -1829,17 +1659,18 @@ class mcgs2_grain_structure():
         # ---------------------------------------------
         # Rlab, Clab = self.lgi.shape[0], self.lgi.shape[1]
         if _redo_lgi_:
-            features = self.detect_features_in_image(deepcopy(self.lgi), binary_structure_order=bso)
+            features = gridOps.detect_features_in_image_MCstateWise_2d(deepcopy(self.lgi),
+                                    binary_structure_order=bso)
             self.lgi = deepcopy(features[0])
         use_charecterise_features_in_image_version = 2
         # ---------------------------------------------
         if use_charecterise_features_in_image_version == 1:
-            fx1 = self.charecterise_features_in_image
+            fx1 = mcharOps.charecterise_features_in_image_2d
             skprops, bbox_limits_ex, bboxes_ex, coords_dict = fx1(self.lgi, 
                     self.xgr, self.ygr, make_skprops=True, extract_coords=True,
                     throw_bounding_box=True)
         elif use_charecterise_features_in_image_version == 2:
-            fx1 = self.charecterise_features_in_image_v2
+            fx1 = mcharOps.charecterise_features_in_image_v2
             _fx1Output_ = fx1(self.lgi, Xgrid=self.xgr, Ygrid=self.ygr,
                               make_skprops=True, extract_coords=True, 
                               throw_bounding_box=True)
