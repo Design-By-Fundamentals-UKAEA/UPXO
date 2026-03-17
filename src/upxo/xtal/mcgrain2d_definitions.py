@@ -184,6 +184,7 @@ class grain2d():
                  )
 
     __get_item_behaviour = 'locs_away_from_centroid'
+    rtol = 1e-6
 
     def __init__(self):
         # Set position/location related slots
@@ -332,8 +333,15 @@ class grain2d():
         Currently accepted points data structure
         points = [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]]
         '''
-        # TO IMPLEMENT
-        pass
+        if type(points[0]) != list:
+            raise TypeError(f"Points should be a list of lists. Currently provided {type(points)}")
+        if self.loctree is None:
+            self.make_loctree()
+        contained = [None]*len(points[0])
+        for i, xy in enumerate(zip(points[0], points[1])):
+            dist, idx = self.loctree.query(xy, k=1)
+            contained[i] = dist <= self.rtol
+        return contained
 
     @property
     def lfi_gbsegs(self):
