@@ -1,5 +1,7 @@
 # UPXO
 
+![UPXO logo and banner](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/blob/dev/wikidocs/assets/logo/upxo_logo_and_banner.png)
+
 **UPXO (UKAEA Poly-XTAL Operations)** is an open-source Pythonic computational framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for materials science. Although primarily developed for applciations pertaining multi-scale computational studies of nuclear structural materials, it can also solve a wide range of such problems in the Aerospace and Automobile sectors.
 
 UPXO can enable you to create complex **2D and 3D poly-crystalline grain-structures** suitable for Finite Element (FE) simulations, microstructure characterisation, and data-driven materials research involving such computational domains.
@@ -49,6 +51,7 @@ Large ensembles of statistically representative microstructures can be generated
 
 ### Research in grain growth kinetics
 > Researchers can take advantage of the easy to use pipelines and templates to run existing or custom Pott's model Monte-Carlo simulation algorithms. The frameworks provide multiple entry points to study the grain growth kinetics, such as (a) Energetics (b) Ensemble propertie of space partitioning (statistical - morphological, topological and spatial)
+
 ---
 
 ## Contributors
