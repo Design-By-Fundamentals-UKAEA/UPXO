@@ -1729,6 +1729,62 @@ def combine_partitions(image_data, combinations):
     _, inverse_indices = np.unique(image_data, return_inverse=True)
     img_data_mod = inverse_indices.reshape(original_shape)+1
     return img_data_mod
+
+def detect_features_in_image_MCstateWise_2d(image_data, binary_structure_order=2,):
+    """
+    Detect features in an image and label them uniquely.
+
+    Parameters
+    ----------
+    image_data : numpy.ndarray
+        Input image array containing different states as integer values.
+    binary_structure_order : int, optional
+        Order of the binary structure for connectivity. Default is 2 (8-connectivity).
+    Returns
+    -------
+    labeled_image : numpy.ndarray
+        Labeled image where each detected feature has a unique integer label.
+    original_to_labels : dict
+        Mapping from original state values to lists of new feature labels.
+    labels_to_original : dict
+        Mapping from new feature labels to their corresponding original state values.
+
+    Example
+    -------
+    import numpy as np
+    image_data = np.array([[1, 1, 0, 2, 2],
+                            [1, 0, 0, 2, 2],
+                            [0, 0, 3, 3, 0],
+                            [4, 4, 0, 0, 0]])
+    labeled_image, orig_to_labels, labels_to_orig = detect_features_in_image_MCstateWise_2d(image_data, binary_structure_order=2)
+    print("Labeled Image:\n", labeled_image)
+    print("Original to Labels Mapping:\n", orig_to_labels)
+    print("Labels to Original Mapping:\n", labels_to_orig)
+    """
+    from scipy.ndimage import label as nd_label
+    from scipy.ndimage import generate_binary_structure
+    binstr = generate_binary_structure(2, binary_structure_order)
+    labeled_image = np.zeros_like(image_data, dtype=int)
+    original_to_labels = {}  # {original_state_id : [new_label_1, new_label_2]}
+    labels_to_original = {}  # {new_label_id: original_state_id}
+    current_label_offset = 1
+    unique_states = np.unique(image_data)
+    for state_val in unique_states:
+        mask = (image_data == state_val)
+        temp_labels, num_features = nd_label(mask, structure=binstr)
+        if num_features == 0:
+            continue
+        feature_mask = temp_labels > 0
+        temp_labels[feature_mask] += (current_label_offset-1)
+        labeled_image += temp_labels
+        new_ids = list(range(current_label_offset,
+                                current_label_offset+num_features))
+        original_to_labels[state_val] = new_ids
+        for new_id in new_ids:
+            labels_to_original[new_id] = state_val
+        current_label_offset += num_features
+
+    return labeled_image, original_to_labels, labels_to_original
 # #################################################################################
 # #################################################################################
 # This module is expected to grow quite a lot. In the interest of locating
