@@ -1669,6 +1669,66 @@ def make_gbsegImage(gbMask, segments, nsegments, neigh_fid):
             for sc in ngsegcoords:
                 gbSegMask[sc[0]][sc[1]] = segid
     return gbSegMask
+
+def combine_partitions(image_data, combinations):
+    """
+    Combine multiple partition IDs in an image array according to specified groupings.
+    This method merges partition regions by replacing multiple partition IDs with a single
+    target ID for each group. After combining, the partition IDs are renumbered sequentially
+    starting from 1.
+    
+    Parameters
+    ----------
+    image_data : numpy.ndarray
+        Input image array containing partition IDs as integer values.
+    combinations : list of list of int
+        List of groups where each group is a list of partition IDs to be combined.
+        The first valid ID in each group becomes the target ID for that group.
+    Returns
+    -------
+    numpy.ndarray
+        Modified image array with combined partitions and renumbered IDs starting from 1.
+        Has the same shape as the input image_data.
+    Notes
+    -----
+    - Only partition IDs that are present in the image_data are considered valid.
+    - Groups with fewer than 2 valid IDs are skipped.
+    - The final renumbering ensures sequential partition IDs without gaps.
+
+    Example
+    -------
+    import numpy as np
+    image_data = np.array([[1, 1, 2, 2],
+                            [1, 3, 3, 2],
+                            [4, 4, 3, 2]])
+    combinations = [[1, 2], [3, 4]]
+    combined_image = combine_partitions(image_data, combinations)
+    print(combined_image)
+    # Output:
+    # [[1 1 1 1]
+    #  [1 2 2 1]
+    #  [2 2 2 1]]
+
+    Import
+    ------
+    import upxo.gsdataops.grid_ops as gridOps
+    Use as: gridOps.combine_partitions
+    """
+    original_shape = image_data.shape 
+    present_values = set(np.unique(image_data))
+    for group in combinations:
+        valid_ids = [val for val in group if val in present_values]
+        if len(valid_ids) < 2:
+            continue  
+        target_id = valid_ids[0]
+        ids_to_replace = valid_ids[1:]
+        mask = np.isin(image_data, ids_to_replace)
+        image_data[mask] = target_id
+        for old_id in ids_to_replace:
+            present_values.discard(old_id)
+    _, inverse_indices = np.unique(image_data, return_inverse=True)
+    img_data_mod = inverse_indices.reshape(original_shape)+1
+    return img_data_mod
 # #################################################################################
 # #################################################################################
 # This module is expected to grow quite a lot. In the interest of locating
