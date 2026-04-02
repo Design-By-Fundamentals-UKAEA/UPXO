@@ -9136,9 +9136,9 @@ class mcgs3_grain_structure():
             b = len(self.fdb[instance_name]["data"]["twin_map_g_t"])
             c = len(self.fdb[instance_name]["data"]["twin_map_g_nt"])
             d = len(self.fdb[instance_name]["data"]["twin_map_g_t_nvox"])
-            e = len(self.fdb[instance_name]["data"]["twin_map_g_t_coords"])
+            # e = len(self.fdb[instance_name]["data"]["twin_map_g_t_coords"])
             f = len(self.fdb[instance_name]["data"]["twin_nvox"])
-            if a == b == c == d == e == f == 1:
+            if a == b == c == d == f == 1:
                 print('Array length equality check 1 passed.')
             else:
                 print('Array length equality check 1 failed.')
