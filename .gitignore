@@ -57,6 +57,7 @@ temp/
 # -----------------------------
 /admin/
 /data/upxo_performance
+/data/images
 src/upxo/Important links.md
 data/temp/
 data/cache/
