@@ -10,7 +10,7 @@ from scipy.ndimage import generic_filter
 import cv2
 import vtk
 import warnings
-import vedo as vd
+# import vedo as vd
 import pyvista as pv
 from numba import njit
 from scipy.spatial import cKDTree
@@ -75,6 +75,7 @@ class repgen3d:
         3. 'tgs.sgs': Use the actual target and sample grain structures.
     '''
 
+    # Valid Grain structure types for
     VALgs = ('upxo.mc2d', 'upxo.mc3d', 
              'upxo.pv2d', 'upxo.vv3d', 
              'upxo.v2d', 'upxo.v3d', 
@@ -93,12 +94,9 @@ class repgen3d:
         8. 'image3d': 3D image type.
     '''
 
-    def __init__(self,
-                 tdist=None, tstat=None, tgs=None,
-                 sgs=None, tdim=2,
-                 iroute='tgs.sgs',
-                 sgstype='upxo.mc3d', tgstype='upxo.mc3d'
-                 ):
+    def __init__(self,tdist=None, tstat=None, tgs=None,
+                 sgs=None, tdim=2, iroute='tgs.sgs',
+                 sgstype='upxo.mc3d', tgstype='upxo.mc3d'):
 
         if iroute not in self.VALiroutes:
             raise ValueError('Invalid iroute')
@@ -200,8 +198,7 @@ class repgen3d:
         return cls(tgs=tgs, sgs=sgs, iroute='tgs.sgs',
                    tgstype=tgstype, sgstype=sgstype)
     
-    def set_mpflags(self,
-                    volnv=False, volsr=False, volch=False,
+    def set_mpflags(self, volnv=False, volsr=False, volch=False,
                     arbbox=False, 
                     sanv=False, savi=False, sasr=False, 
                     pernv=False, pervl=False, pergl=False,
