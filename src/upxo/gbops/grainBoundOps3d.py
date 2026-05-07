@@ -53,6 +53,10 @@ def compute_gb_boundary_mask(lfi):
     -------
     boundary_mask : ndarray[bool]
         Boolean mask of boundary voxels including outer RVE shell.
+
+    Import
+    ------
+    import upxo.gbops.grainBoundOps3d as gbOps
     """
     # Step 1 — interior boundary detection
     boundary = compute_gb_boundary_mask_interiorVoxels(lfi)

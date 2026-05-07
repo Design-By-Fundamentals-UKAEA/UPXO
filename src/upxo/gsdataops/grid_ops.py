@@ -1463,6 +1463,110 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
     # 5. Standardize to [x, y] Cartesian coordinates
     return all_seeds
 
+import numpy as np
+from scipy.ndimage import distance_transform_edt
+
+def generate_constrained_hybrid_seeds_3d(lfi, target_spacing=0.5, bulk_spacing=10.0,
+                                         jitter_factor=1.0, margin=0.0, padding=1.0):
+    """
+    3D Seeding with Guard Sheets to eliminate RVE boundary irregularities.
+
+    Parameters
+    ----------
+    lfi : np.ndarray
+        3D Labelled Feature Volume (D, H, W).
+    target_spacing : float
+        Spacing along the grain boundary surfaces.
+    bulk_spacing : float
+        Spacing within the interior of grains.
+    jitter_factor : float
+        Magnitude of random displacement for bulk seeds.
+    margin : float
+        Internal buffer to keep bulk seeds away from RVE faces.
+    padding : float
+        Distance outside the RVE where guard seeds are placed.
+
+    Returns
+    -------
+    np.ndarray
+        Array of seed coordinates with shape (num_seeds, 3) as [x, y, z].
+    """
+    D, H, W = lfi.shape
+    
+    # 1. Interface Detection (3D Gradients)
+    # Detects where the label changes in any direction
+    gz, gy, gx = np.gradient(lfi)
+    boundary_mask = (gx != 0) | (gy != 0) | (gz != 0)
+    
+    # Surface Sampling
+    coords_boundary = np.argwhere(boundary_mask).astype(float)
+    stride = max(1, int(target_spacing))
+    seeds_boundary = coords_boundary[::stride]
+
+    # 2. Jittered Bulk Sampling
+    dist_to_boundary = distance_transform_edt(~boundary_mask)
+    
+    # Create internal volume mask
+    Z, Y, X = np.indices((D, H, W))
+    internal_mask = (X > margin) & (X < W - margin) & \
+                    (Y > margin) & (Y < H - margin) & \
+                    (Z > margin) & (Z < D - margin)
+    
+    bulk_mask = (dist_to_boundary > target_spacing * 3) & internal_mask
+    coords_bulk = np.argwhere(bulk_mask).astype(float)
+    
+    seeds_bulk = []
+    if len(coords_bulk) > 0:
+        bulk_stride = max(1, int(bulk_spacing))
+        seeds_bulk = coords_bulk[::bulk_stride]
+        # Apply 3D jitter
+        jitter = (np.random.rand(*seeds_bulk.shape) - 0.5) * (bulk_stride * jitter_factor)
+        seeds_bulk += jitter
+
+    # 3. RIGID GUARD SHEETS (The 3D Boundary Fix)
+    # We create 6 planes of seeds just outside the domain boundaries
+    guard_spacing = target_spacing
+    pad = padding
+    sheet_coords = []
+
+    # Helper to generate a 2D grid for the faces
+    def get_grid(dim1_range, dim2_range, fixed_val, axis):
+        grid_a, grid_b = np.meshgrid(
+            np.arange(-pad, dim1_range + pad, guard_spacing),
+            np.arange(-pad, dim2_range + pad, guard_spacing)
+        )
+        points = np.zeros((grid_a.size, 3))
+        if axis == 0: # X-Face
+            points[:, 0], points[:, 1], points[:, 2] = fixed_val, grid_a.ravel(), grid_b.ravel()
+        elif axis == 1: # Y-Face
+            points[:, 0], points[:, 1], points[:, 2] = grid_a.ravel(), fixed_val, grid_b.ravel()
+        else: # Z-Face
+            points[:, 0], points[:, 1], points[:, 2] = grid_a.ravel(), grid_b.ravel(), fixed_val
+        return points
+
+    # X-Faces (Left/Right)
+    sheet_coords.append(get_grid(H, D, -pad, axis=0))
+    sheet_coords.append(get_grid(H, D, W + pad, axis=0))
+    # Y-Faces (Front/Back)
+    sheet_coords.append(get_grid(W, D, -pad, axis=1))
+    sheet_coords.append(get_grid(W, D, H + pad, axis=1))
+    # Z-Faces (Top/Bottom)
+    sheet_coords.append(get_grid(W, H, -pad, axis=2))
+    sheet_coords.append(get_grid(W, H, D + pad, axis=2))
+
+    seeds_guard = np.vstack(sheet_coords)
+
+    # 4. Combine and Standardize
+    # Input is (z, y, x) from argwhere, so we flip to (x, y, z)
+    all_seeds = np.vstack([
+        seeds_boundary, 
+        seeds_bulk, 
+        seeds_guard
+    ])
+    
+    # Reorder from [z, y, x] to [x, y, z] for standard Cartesian output
+    return all_seeds[:, [2, 1, 0]]
+
 def generate_poisson_disk_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, **plotKwargs):
     """
     Generate Poisson Disk Sampling seeds within a specified rectangular domain defined by xbound and ybound.
