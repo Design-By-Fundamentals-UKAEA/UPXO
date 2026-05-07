@@ -14,7 +14,8 @@ class repgen2d:
     __slots__ = ('tdist', 'tstat', 'tgs', 'sgs',
                  'iroute', 'mpflags', 'rm0tests', 'rm0',
                  'sgstype', 'tgstype', 'tdim', 'px_size',
-                 'sdim', 'gsan_sgs', 'gsan_tgs', 'ebsd_file')
+                 'sdim', 'gsan_sgs', 'gsan_tgs', 'ebsd_file',
+                 'lfi_ebsd', 'euler_ebsd', 'quat_ebsd', 'neigh_gid_ebsd')
     '''
     Explanation of slot variables:
     ------------------------------
@@ -570,25 +571,31 @@ class repgen2d:
     # Quick re-characterisation (cc3d)
     # ------------------------------------------------------------------
 
-    def rechar(self, target='both', connectivity=4,
-               k_char_level='basic', gsids=None):
+    def rechar(self, target='tgs', connectivity=4,
+               k_char_level='basic', gsids=None,
+               min_grain_size=10, misori_tol=10):
         """
         Quickly re-detect grains, re-compute first-order neighbourhood, and
-        build the grain network model from the state matrix (``gs_obj.s``) of
-        the target and/or sample grain structure using cc3d.
+        build the grain network model.
 
-        Delegates entirely to existing UPXO functions:
+        For standard UPXO grain structure types (``'upxo.mc2d'``,
+        ``'upxo.pv2d'``, ``'image2d'``) this delegates to cc3d:
         - ``upxo.gsdataops.grid_ops.detect_grains_cc3d`` — grain labelling
-        - ``upxo.gsdataops.gid_ops.find_neighs2d`` — neighbourhood via
-          ``cc3d.region_graph`` (4 and 8 are the valid 2D connectivities)
-        - ``upxo.analysis.analysis2d.gsan2d.from_mcgs2d_single`` +
-          ``initiate_kmodel`` — network model
+        - ``upxo.gsdataops.gid_ops.find_neighs2d`` — neighbourhood
+        - ``upxo.analysis.analysis2d.gsan2d`` + ``initiate_kmodel`` — network
+
+        For ``'ebsd2d'`` (when ``tgstype='ebsd2d'`` and ``target`` includes
+        ``'tgs'``) the EBSD file stored in ``self.ebsd_file`` is loaded via
+        ``EBSDReader.from_file()``.  The extracted arrays are stored on
+        ``self`` and the neighbourhood is computed from ``lfi_ebsd``.
+        Full ``gsan2d`` network characterisation is not yet supported for
+        the ``'ebsd2d'`` route.
 
         Parameters
         ----------
         target : str
             Which grain structure(s) to re-characterise:
-            ``'sgs'``, ``'tgs'``, or ``'both'``. Default ``'both'``.
+            ``'sgs'``, ``'tgs'``, or ``'both'``. Default ``'tgs'``.
         connectivity : int
             cc3d connectivity. Valid 2D values: 4 (edge-only) or 8
             (edge+corner). Default 4.
@@ -598,6 +605,12 @@ class repgen2d:
             ``'advanced'``. Default ``'basic'``.
         gsids : list or None
             Grain structure IDs passed to ``initiate_kmodel``. Default [1].
+        min_grain_size : int, optional
+            Minimum grain size in pixels for EBSD grain detection.
+            Passed to ``EBSDReader.from_file()``. Default 10.
+        misori_tol : float, optional
+            Misorientation tolerance in degrees for EBSD grain boundary
+            detection. Passed to ``EBSDReader.from_file()``. Default 10.
 
         Raises
         ------
@@ -605,13 +618,20 @@ class repgen2d:
             If ``target`` is not one of the accepted values.
         ValueError
             If ``connectivity`` is not 4 or 8.
+        RuntimeError
+            If ``tgstype='ebsd2d'`` but ``self.ebsd_file`` is not set.
 
         Notes
         -----
-        Results written directly onto each grain structure object:
+        **Standard route** — results written onto each grain structure object:
         ``gs_obj.lgi``, ``gs_obj.n_grains``, ``gs_obj.neigh_gid``.
-        Network models stored in ``self.gsan_sgs`` and ``self.gsan_tgs``
-        (``gsan2d`` instances); graph + metrics via ``self.gsan_sgs.K[gsid]``.
+        Network models in ``self.gsan_sgs`` / ``self.gsan_tgs``.
+
+        **EBSD route** — arrays stored on ``self``:
+        ``self.lfi_ebsd`` (int32, ny×nx),
+        ``self.euler_ebsd`` (float64, ny×nx×3, radians),
+        ``self.quat_ebsd`` (float64, ny×nx×4),
+        ``self.neigh_gid_ebsd`` (dict grain_id → list of neighbour IDs).
         """
         from upxo.gsdataops import grid_ops as gridOps
         from upxo.gsdataops.gid_ops import find_neighs2d
@@ -625,7 +645,8 @@ class repgen2d:
         if gsids is None:
             gsids = [1]
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
+        UPXO_STANDARD_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+        UPXO_2D_TYPES = UPXO_STANDARD_TYPES + ('ebsd2d',)
 
         def _rechar_one(gs_obj):
             lfi, N, _ = gridOps.detect_grains_cc3d(
@@ -643,17 +664,48 @@ class repgen2d:
                                  recalculate_neighbours=False)
             return gsan
 
+        def _rechar_ebsd():
+            from upxo.interfaces.defdap.ebsd_reader import EBSDReader
+            try:
+                ebsd_file = self.ebsd_file
+            except AttributeError:
+                ebsd_file = None
+            if not ebsd_file:
+                raise RuntimeError(
+                    "tgstype='ebsd2d' but ebsd_file is not set. "
+                    "Pass ebsd_file when constructing via from_tgs()."
+                )
+            rdr = EBSDReader.from_file(
+                ebsd_file,
+                min_grain_size=min_grain_size,
+                misori_tol=misori_tol,
+            )
+            self.lfi_ebsd = rdr.lfi_ebsd
+            self.euler_ebsd = rdr.euler_ebsd
+            self.quat_ebsd = rdr.quat_ebsd
+            self.neigh_gid_ebsd = find_neighs2d(
+                rdr.lfi_ebsd, conn=connectivity
+            )
+            warnings.warn(
+                "ebsd2d route: lfi_ebsd, euler_ebsd, quat_ebsd and "
+                "neigh_gid_ebsd have been populated. "
+                "gsan2d network characterisation is not yet supported "
+                "for the ebsd2d route."
+            )
+
         do_sgs = target in ('sgs', 'both')
         do_tgs = target in ('tgs', 'both')
 
         if do_sgs:
-            if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
+            if self.sgs is not None and self.sgstype in UPXO_STANDARD_TYPES:
                 self.gsan_sgs = _rechar_one(self.sgs)
             else:
                 warnings.warn('sgs is None or not a supported UPXO 2D type; skipping rechar for sgs.')
 
         if do_tgs and self.iroute == 'tgs.sgs':
-            if self.tgs is not None and self.tgstype in UPXO_2D_TYPES:
+            if self.tgstype == 'ebsd2d':
+                _rechar_ebsd()
+            elif self.tgs is not None and self.tgstype in UPXO_STANDARD_TYPES:
                 self.gsan_tgs = _rechar_one(self.tgs)
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping rechar for tgs.')
