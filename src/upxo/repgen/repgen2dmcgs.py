@@ -14,7 +14,7 @@ class repgen2d:
     __slots__ = ('tdist', 'tstat', 'tgs', 'sgs',
                  'iroute', 'mpflags', 'rm0tests', 'rm0',
                  'sgstype', 'tgstype', 'tdim', 'px_size',
-                 'sdim', 'gsan_sgs', 'gsan_tgs')
+                 'sdim', 'gsan_sgs', 'gsan_tgs', 'ebsd_file')
     '''
     Explanation of slot variables:
     ------------------------------
@@ -51,7 +51,8 @@ class repgen2d:
     VALgs = ('upxo.mc2d', 'upxo.mc3d',
              'upxo.pv2d', 'upxo.vv3d',
              'upxo.v2d', 'upxo.v3d',
-             'image2d', 'image3d')
+             'image2d', 'image3d',
+             'ebsd2d')
     '''
     Explanation of VALgs:
     --------------------------------
@@ -64,6 +65,7 @@ class repgen2d:
         6. 'upxo.v3d': 3D Voronoi type.
         7. 'image2d': 2D image type.
         8. 'image3d': 3D image type.
+        9. 'ebsd2d': 2D EBSD-derived grain structure.
     '''
 
     def __init__(self, tdist=None, tstat=None, tgs=None,
@@ -104,7 +106,10 @@ class repgen2d:
         tdim: int, optional
             Dimensionality of the target grain structure data used for tdist. Defaults to 2.
         sgstype: str
-            Type of the sample grain structure. Must be in VALgs.
+            Type of the sample grain structure. Must be one of:
+            ``'upxo.mc2d'``, ``'upxo.mc3d'``, ``'upxo.pv2d'``,
+            ``'upxo.vv3d'``, ``'upxo.v2d'``, ``'upxo.v3d'``,
+            ``'image2d'``, ``'image3d'``, ``'ebsd2d'``.
 
         Returns
         -------
@@ -132,7 +137,10 @@ class repgen2d:
         tdim: int, optional
             Dimensionality of the target grain structure data used for tstat. Defaults to 2.
         sgstype: str
-            Type of the sample grain structure. Must be in VALgs.
+            Type of the sample grain structure. Must be one of:
+            ``'upxo.mc2d'``, ``'upxo.mc3d'``, ``'upxo.pv2d'``,
+            ``'upxo.vv3d'``, ``'upxo.v2d'``, ``'upxo.v3d'``,
+            ``'image2d'``, ``'image3d'``, ``'ebsd2d'``.
 
         Returns
         -------
@@ -159,9 +167,16 @@ class repgen2d:
         sgs: grain structure data object, optional
             The sample grain structure. Defaults to None.
         tgstype: str, optional
-            Type of the target grain structure. Must be in VALgs. Defaults to 'upxo.mc2d'.
+            Type of the target grain structure. Must be one of:
+            ``'upxo.mc2d'``, ``'upxo.mc3d'``, ``'upxo.pv2d'``,
+            ``'upxo.vv3d'``, ``'upxo.v2d'``, ``'upxo.v3d'``,
+            ``'image2d'``, ``'image3d'``, ``'ebsd2d'``.
+            Defaults to ``'upxo.mc2d'``.
         sgstype: str
-            Type of the sample grain structure. Must be in VALgs.
+            Type of the sample grain structure. Must be one of:
+            ``'upxo.mc2d'``, ``'upxo.mc3d'``, ``'upxo.pv2d'``,
+            ``'upxo.vv3d'``, ``'upxo.v2d'``, ``'upxo.v3d'``,
+            ``'image2d'``, ``'image3d'``, ``'ebsd2d'``.
 
         Returns
         -------
@@ -172,7 +187,7 @@ class repgen2d:
                    tgstype=tgstype, sgstype=sgstype)
 
     @classmethod
-    def from_tgs(cls, tgs=None, tgstype='upxo.mc2d'):
+    def from_tgs(cls, tgs=None, tgstype='upxo.mc2d', ebsd_file=None):
         """
         Alternative constructor for creating a RepGen2DMCGS instance using
         only a target grain structure. A sample grain structure will be
@@ -183,8 +198,15 @@ class repgen2d:
         tgs : grain structure data object, optional
             The target grain structure. Defaults to None.
         tgstype : str, optional
-            Type of the target grain structure. Must be in VALgs.
-            Defaults to 'upxo.mc2d'.
+            Type of the target grain structure. Must be one of:
+            ``'upxo.mc2d'``, ``'upxo.mc3d'``, ``'upxo.pv2d'``,
+            ``'upxo.vv3d'``, ``'upxo.v2d'``, ``'upxo.v3d'``,
+            ``'image2d'``, ``'image3d'``, ``'ebsd2d'``.
+            Defaults to ``'upxo.mc2d'``.
+        ebsd_file : str or None, optional
+            Path to an EBSD file (.ctf, .ang, .h5oina, etc.) associated with
+            the target grain structure. Stored for future use only; no parsing
+            is performed at construction time. Defaults to None.
 
         Returns
         -------
@@ -195,9 +217,12 @@ class repgen2d:
         -----
         ``self.tgs`` holds the target grain structure; ``self.sgs`` is None
         until a sample is generated and assigned.
+        ``self.ebsd_file`` stores the EBSD file path (not yet processed).
         """
-        return cls(tgs=tgs, sgs=None, iroute='tgs.sgs',
-                   tgstype=tgstype, sgstype='upxo.mc2d')
+        obj = cls(tgs=tgs, sgs=None, iroute='tgs.sgs',
+                  tgstype=tgstype, sgstype='upxo.mc2d')
+        obj.ebsd_file = ebsd_file
+        return obj
 
     # ------------------------------------------------------------------
     # Pixel size
@@ -405,7 +430,7 @@ class repgen2d:
                 'mpflags not set. Call set_mpflags() before char_gs().'
             )
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
 
         # Always characterise the sample grain structure
         if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
@@ -457,7 +482,7 @@ class repgen2d:
         Results stored in ``sgs.neigh_gid`` (and ``tgs.neigh_gid`` when
         iroute='tgs.sgs') as dicts mapping grain ID → list of neighbour IDs.
         """
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
         kwargs = dict(p=p, include_central_grain=include_central_grain,
                       throw_numba_dict=throw_numba_dict,
                       verbosity_nfids=verbosity_nfids)
@@ -510,7 +535,7 @@ class repgen2d:
         if gsids is None:
             gsids = [1]
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
         kw = dict(gsids=gsids,
                   k_char_level=k_char_level,
                   recalculate_neighbours=recalculate_neighbours,
@@ -600,7 +625,7 @@ class repgen2d:
         if gsids is None:
             gsids = [1]
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
 
         def _rechar_one(gs_obj):
             lfi, N, _ = gridOps.detect_grains_cc3d(
