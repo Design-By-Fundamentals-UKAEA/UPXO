@@ -171,6 +171,34 @@ class repgen2d:
         return cls(tgs=tgs, sgs=sgs, iroute='tgs.sgs',
                    tgstype=tgstype, sgstype=sgstype)
 
+    @classmethod
+    def from_tgs(cls, tgs=None, tgstype='upxo.mc2d'):
+        """
+        Alternative constructor for creating a RepGen2DMCGS instance using
+        only a target grain structure. A sample grain structure will be
+        generated internally during the representativeness workflow.
+
+        Parameters
+        ----------
+        tgs : grain structure data object, optional
+            The target grain structure. Defaults to None.
+        tgstype : str, optional
+            Type of the target grain structure. Must be in VALgs.
+            Defaults to 'upxo.mc2d'.
+
+        Returns
+        -------
+        RepGen2DMCGS
+            A new RepGen2DMCGS instance with sgs=None.
+
+        Notes
+        -----
+        ``self.tgs`` holds the target grain structure; ``self.sgs`` is None
+        until a sample is generated and assigned.
+        """
+        return cls(tgs=tgs, sgs=None, iroute='tgs.sgs',
+                   tgstype=tgstype, sgstype='upxo.mc2d')
+
     # ------------------------------------------------------------------
     # Pixel size
     # ------------------------------------------------------------------
@@ -430,8 +458,7 @@ class repgen2d:
         iroute='tgs.sgs') as dicts mapping grain ID → list of neighbour IDs.
         """
         UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
-        kwargs = dict(p=p,
-                      include_central_grain=include_central_grain,
+        kwargs = dict(p=p, include_central_grain=include_central_grain,
                       throw_numba_dict=throw_numba_dict,
                       verbosity_nfids=verbosity_nfids)
 
@@ -513,3 +540,95 @@ class repgen2d:
                 self.gsan_tgs.initiate_kmodel(**kw)
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping network characterisation for tgs.')
+
+    # ------------------------------------------------------------------
+    # Quick re-characterisation (cc3d)
+    # ------------------------------------------------------------------
+
+    def rechar(self, target='both', connectivity=4,
+               k_char_level='basic', gsids=None):
+        """
+        Quickly re-detect grains, re-compute first-order neighbourhood, and
+        build the grain network model from the state matrix (``gs_obj.s``) of
+        the target and/or sample grain structure using cc3d.
+
+        Delegates entirely to existing UPXO functions:
+        - ``upxo.gsdataops.grid_ops.detect_grains_cc3d`` — grain labelling
+        - ``upxo.gsdataops.gid_ops.find_neighs2d`` — neighbourhood via
+          ``cc3d.region_graph`` (4 and 8 are the valid 2D connectivities)
+        - ``upxo.analysis.analysis2d.gsan2d.from_mcgs2d_single`` +
+          ``initiate_kmodel`` — network model
+
+        Parameters
+        ----------
+        target : str
+            Which grain structure(s) to re-characterise:
+            ``'sgs'``, ``'tgs'``, or ``'both'``. Default ``'both'``.
+        connectivity : int
+            cc3d connectivity. Valid 2D values: 4 (edge-only) or 8
+            (edge+corner). Default 4.
+        k_char_level : str
+            Level of graph characterisation passed to ``initiate_kmodel``:
+            ``'none'``, ``'basic'``, ``'simple'``, ``'full'``, or
+            ``'advanced'``. Default ``'basic'``.
+        gsids : list or None
+            Grain structure IDs passed to ``initiate_kmodel``. Default [1].
+
+        Raises
+        ------
+        ValueError
+            If ``target`` is not one of the accepted values.
+        ValueError
+            If ``connectivity`` is not 4 or 8.
+
+        Notes
+        -----
+        Results written directly onto each grain structure object:
+        ``gs_obj.lgi``, ``gs_obj.n_grains``, ``gs_obj.neigh_gid``.
+        Network models stored in ``self.gsan_sgs`` and ``self.gsan_tgs``
+        (``gsan2d`` instances); graph + metrics via ``self.gsan_sgs.K[gsid]``.
+        """
+        from upxo.gsdataops import grid_ops as gridOps
+        from upxo.gsdataops.gid_ops import find_neighs2d
+
+        VALID_TARGETS = ('sgs', 'tgs', 'both')
+        if target not in VALID_TARGETS:
+            raise ValueError(f"target must be one of {VALID_TARGETS}, got '{target}'.")
+        if connectivity not in (4, 8):
+            raise ValueError("connectivity must be 4 or 8 for 2D cc3d.")
+
+        if gsids is None:
+            gsids = [1]
+
+        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
+
+        def _rechar_one(gs_obj):
+            lfi, N, _ = gridOps.detect_grains_cc3d(
+                gs_obj.s, connectivity=connectivity, delta=0,
+                return_num_grains=True)
+            gs_obj.lgi = lfi
+            gs_obj.n_grains = N
+            gs_obj.neigh_gid = find_neighs2d(lfi, conn=connectivity)
+            gsan = gsan2d.from_mcgs2d_single(
+                gs_obj,
+                prechar=True,
+                find_neigh=False,
+            )
+            gsan.initiate_kmodel(gsids=gsids, k_char_level=k_char_level,
+                                 recalculate_neighbours=False)
+            return gsan
+
+        do_sgs = target in ('sgs', 'both')
+        do_tgs = target in ('tgs', 'both')
+
+        if do_sgs:
+            if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
+                self.gsan_sgs = _rechar_one(self.sgs)
+            else:
+                warnings.warn('sgs is None or not a supported UPXO 2D type; skipping rechar for sgs.')
+
+        if do_tgs and self.iroute == 'tgs.sgs':
+            if self.tgs is not None and self.tgstype in UPXO_2D_TYPES:
+                self.gsan_tgs = _rechar_one(self.tgs)
+            else:
+                warnings.warn('tgs is None or not a supported UPXO 2D type; skipping rechar for tgs.')
