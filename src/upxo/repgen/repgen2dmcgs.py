@@ -16,7 +16,7 @@ class repgen2d:
                  'sgstype', 'tgstype', 'tdim', 'px_size',
                  'sdim', 'gsan_sgs', 'gsan_tgs', 'ebsd_file',
                  'lfi_ebsd', 'euler_ebsd', 'quat_ebsd', 'neigh_gid_ebsd',
-                 'prop_ebsd')
+                 'prop_ebsd', 'stat_ebsd')
     '''
     Explanation of slot variables:
     ------------------------------
@@ -432,17 +432,29 @@ class repgen2d:
                 'mpflags not set. Call set_mpflags() before char_gs().'
             )
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
+        UPXO_STANDARD_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
 
         # Always characterise the sample grain structure
-        if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
+        if self.sgs is not None and self.sgstype in UPXO_STANDARD_TYPES:
             self._char_single_gs(self.sgs)
         else:
             warnings.warn('sgs is None or not a supported UPXO 2D type; skipping sgs characterisation.')
 
         # Characterise target only for the tgs.sgs route
         if self.iroute == 'tgs.sgs':
-            if self.tgs is not None and self.tgstype in UPXO_2D_TYPES:
+            if self.tgstype == 'ebsd2d':
+                # EBSD route: morphology comes from rechar() -> prop_ebsd.
+                # Call compute_ebsd_stats() if prop_ebsd is already populated,
+                # otherwise remind the user to call rechar() first.
+                try:
+                    _ = self.prop_ebsd
+                    self.compute_ebsd_stats()
+                except AttributeError:
+                    warnings.warn(
+                        "tgstype='ebsd2d': call rechar() first to populate "
+                        "prop_ebsd, then char_gs() will compute stat_ebsd."
+                    )
+            elif self.tgs is not None and self.tgstype in UPXO_STANDARD_TYPES:
                 self._char_single_gs(self.tgs)
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping tgs characterisation.')
@@ -484,18 +496,28 @@ class repgen2d:
         Results stored in ``sgs.neigh_gid`` (and ``tgs.neigh_gid`` when
         iroute='tgs.sgs') as dicts mapping grain ID → list of neighbour IDs.
         """
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
+        UPXO_STANDARD_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
         kwargs = dict(p=p, include_central_grain=include_central_grain,
                       throw_numba_dict=throw_numba_dict,
                       verbosity_nfids=verbosity_nfids)
 
-        if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
+        if self.sgs is not None and self.sgstype in UPXO_STANDARD_TYPES:
             self.sgs.find_neigh_v2(**kwargs)
         else:
             warnings.warn('sgs is None or not a supported UPXO 2D type; skipping neighbour detection for sgs.')
 
         if self.iroute == 'tgs.sgs':
-            if self.tgs is not None and self.tgstype in UPXO_2D_TYPES:
+            if self.tgstype == 'ebsd2d':
+                # Neighbourhood for EBSD is already populated by rechar() in
+                # self.neigh_gid_ebsd; nothing to do here.
+                try:
+                    _ = self.neigh_gid_ebsd
+                except AttributeError:
+                    warnings.warn(
+                        "tgstype='ebsd2d': call rechar() first to populate "
+                        "neigh_gid_ebsd before using find_neighbours()."
+                    )
+            elif self.tgs is not None and self.tgstype in UPXO_STANDARD_TYPES:
                 self.tgs.find_neigh_v2(**kwargs)
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping neighbour detection for tgs.')
@@ -537,13 +559,13 @@ class repgen2d:
         if gsids is None:
             gsids = [1]
 
-        UPXO_2D_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d', 'ebsd2d')
+        UPXO_STANDARD_TYPES = ('upxo.mc2d', 'upxo.pv2d', 'image2d')
         kw = dict(gsids=gsids,
                   k_char_level=k_char_level,
                   recalculate_neighbours=recalculate_neighbours,
                   include_central_grain=include_central_grain)
 
-        if self.sgs is not None and self.sgstype in UPXO_2D_TYPES:
+        if self.sgs is not None and self.sgstype in UPXO_STANDARD_TYPES:
             self.gsan_sgs = gsan2d.from_mcgs2d_single(
                 self.sgs,
                 prechar=True,
@@ -556,7 +578,13 @@ class repgen2d:
             warnings.warn('sgs is None or not a supported UPXO 2D type; skipping network characterisation for sgs.')
 
         if self.iroute == 'tgs.sgs':
-            if self.tgs is not None and self.tgstype in UPXO_2D_TYPES:
+            if self.tgstype == 'ebsd2d':
+                raise NotImplementedError(
+                    "char_network() is not yet supported for tgstype='ebsd2d'. "
+                    "Use rechar() which populates neigh_gid_ebsd, then use "
+                    "the NetworkX graph tools directly on neigh_gid_ebsd."
+                )
+            elif self.tgs is not None and self.tgstype in UPXO_STANDARD_TYPES:
                 self.gsan_tgs = gsan2d.from_mcgs2d_single(
                     self.tgs,
                     prechar=True,
@@ -567,6 +595,73 @@ class repgen2d:
                 self.gsan_tgs.initiate_kmodel(**kw)
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping network characterisation for tgs.')
+
+    # ------------------------------------------------------------------
+    # EBSD statistics
+    # ------------------------------------------------------------------
+
+    def compute_ebsd_stats(self):
+        """
+        Compute per-property descriptive statistics across all grains in
+        ``prop_ebsd`` and store the result in ``stat_ebsd``.
+
+        Statistics computed for every scalar property in ``prop_ebsd``:
+        mean, std, min, max, median, 25th percentile (q25), 75th
+        percentile (q75), and count (number of grains).
+
+        Non-scalar properties (``centroid``, ``bbox``) are skipped.
+
+        Raises
+        ------
+        RuntimeError
+            If ``prop_ebsd`` has not been populated yet (call ``rechar()``
+            first).
+
+        Notes
+        -----
+        Stored in ``self.stat_ebsd`` as a dict:
+        ``{property_name: {'mean': ..., 'std': ..., 'min': ...,
+                           'max': ..., 'median': ..., 'q25': ...,
+                           'q75': ..., 'count': ...}}``
+        """
+        try:
+            prop = self.prop_ebsd
+        except AttributeError:
+            raise RuntimeError(
+                "prop_ebsd is not set. Call rechar() before compute_ebsd_stats()."
+            )
+
+        if not prop:
+            self.stat_ebsd = {}
+            return
+
+        # Identify scalar property keys from the first grain entry
+        first = next(iter(prop.values()))
+        scalar_keys = [k for k, v in first.items()
+                       if isinstance(v, (int, float)) and not isinstance(v, bool)]
+
+        stat = {}
+        for key in scalar_keys:
+            vals = np.array(
+                [g[key] for g in prop.values()
+                 if isinstance(g[key], (int, float)) and not np.isnan(float(g[key]))],
+                dtype=np.float64
+            )
+            if vals.size == 0:
+                stat[key] = {s: float('nan') for s in
+                             ('mean', 'std', 'min', 'max', 'median', 'q25', 'q75', 'count')}
+                continue
+            stat[key] = {
+                'mean':   float(np.mean(vals)),
+                'std':    float(np.std(vals, ddof=1) if vals.size > 1 else 0.0),
+                'min':    float(np.min(vals)),
+                'max':    float(np.max(vals)),
+                'median': float(np.median(vals)),
+                'q25':    float(np.percentile(vals, 25)),
+                'q75':    float(np.percentile(vals, 75)),
+                'count':  int(vals.size),
+            }
+        self.stat_ebsd = stat
 
     # ------------------------------------------------------------------
     # Quick re-characterisation (cc3d)
