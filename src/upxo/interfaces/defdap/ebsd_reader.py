@@ -199,6 +199,153 @@ class EBSDReader:
         except AttributeError:
             return "EBSDReader(uninitialised)"
 
+    # ------------------------------------------------------------------
+    # LFI re-characterisation
+    # ------------------------------------------------------------------
+
+    def rechar_lfi(self, connectivity=4):
+        """
+        Re-characterise ``lfi_ebsd`` by filling every non-positive pixel
+        (values <= 0, including DefDAP's -1 remnant-boundary and -2
+        sub-minimum-size codes, and non-indexed 0) with the label of the
+        spatially largest grain that borders that connected region.
+        ``euler_ebsd`` and ``quat_ebsd`` for the filled pixels are then
+        updated with the grain-average orientation of the assigned grain.
+
+        Algorithm
+        ---------
+        1. Identify all non-positive pixels as the *unknown* mask.
+        2. Use cc3d to label connected components of the unknown mask
+           (connectivity 4 or 8, matching the supplied parameter).
+        3. Assign each connected component a temporary unique label
+           ``n_grains + cc_id`` in a working copy of ``lfi_ebsd``.
+        4. Call ``find_neighs2d`` on the augmented label field to obtain
+           the adjacency list for every label (standard + temporary).
+        5. For each temporary CC label, find the neighbouring valid grain
+           with the greatest pixel count and assign that grain's ID to all
+           pixels of the CC.
+        6. Compute per-grain mean Euler angles and mean (normalised)
+           quaternion from the *original* valid pixels of each grain.
+        7. Write those averages into ``euler_ebsd`` and ``quat_ebsd`` at
+           the newly filled pixel positions.
+        8. Store the updated arrays back to ``self``.
+
+        Parameters
+        ----------
+        connectivity : int
+            cc3d connectivity for labelling the unknown region.
+            Valid 2D values: 4 (edge-only) or 8 (edge+corner). Default 4.
+
+        Raises
+        ------
+        ValueError
+            If ``connectivity`` is not 4 or 8.
+
+        Notes
+        -----
+        After calling this method ``lfi_ebsd`` should contain only
+        positive grain labels (>= 1).  ``euler_ebsd`` and ``quat_ebsd``
+        are updated in-place on ``self``.  The grain-average orientation
+        used for filling is the arithmetic mean of the *original* valid
+        pixels — adequate for intra-grain spread; it is not a proper
+        quaternion mean but sufficient for neighbourhood-assignment.
+        """
+        import cc3d
+        from upxo.gsdataops.gid_ops import find_neighs2d
+
+        if connectivity not in (4, 8):
+            raise ValueError("connectivity must be 4 or 8 for 2D cc3d.")
+
+        lfi = self.lfi_ebsd.astype(np.int32)
+        unknown_mask = lfi <= 0
+
+        if not unknown_mask.any():
+            return  # nothing to do
+
+        # ------------------------------------------------------------------
+        # Step 1-3: label connected components of unknown pixels
+        # ------------------------------------------------------------------
+        n_valid = int(lfi.max())   # largest valid grain ID
+
+        cc_labels = cc3d.connected_components(
+            unknown_mask.astype(np.uint8), connectivity=connectivity
+        )                              # shape (ny, nx), values 1..n_cc, 0 elsewhere
+        n_cc = int(cc_labels.max())
+
+        # Build augmented lfi: valid pixels unchanged; unknown pixels get
+        # a unique temporary label n_valid + cc_id
+        lfi_aug = lfi.copy()
+        lfi_aug[unknown_mask] = (n_valid + cc_labels[unknown_mask]).astype(np.int32)
+
+        # ------------------------------------------------------------------
+        # Step 4: adjacency of every label in the augmented field
+        # ------------------------------------------------------------------
+        neigh = find_neighs2d(lfi_aug, conn=connectivity)
+
+        # ------------------------------------------------------------------
+        # Step 5: for each CC, assign the largest bordering valid grain
+        # ------------------------------------------------------------------
+        # Pre-compute grain sizes from original valid pixels
+        valid_pixels = lfi[~unknown_mask]
+        ids, counts = np.unique(valid_pixels, return_counts=True)
+        grain_size = dict(zip(ids.tolist(), counts.tolist()))
+
+        lfi_filled = lfi.copy()
+        cc_assignment = {}   # cc_id -> assigned grain ID
+
+        for cc_id in range(1, n_cc + 1):
+            temp_label = n_valid + cc_id
+            valid_neighbours = [
+                nb for nb in neigh.get(temp_label, [])
+                if 1 <= nb <= n_valid
+            ]
+            if not valid_neighbours:
+                # Isolated island with no valid neighbour — leave as-is
+                continue
+            largest = max(valid_neighbours,
+                          key=lambda g: grain_size.get(g, 0))
+            cc_mask = cc_labels == cc_id
+            lfi_filled[cc_mask] = largest
+            cc_assignment[cc_id] = largest
+
+        # ------------------------------------------------------------------
+        # Step 6-7: compute grain-average orientations and fill
+        # ------------------------------------------------------------------
+        euler = self.euler_ebsd.copy()   # (ny, nx, 3)
+        quat = self.quat_ebsd.copy()     # (ny, nx, 4)
+
+        # Cache grain-average euler and quat (computed once per grain)
+        grain_avg_euler = {}
+        grain_avg_quat = {}
+
+        assigned_grains = set(cc_assignment.values())
+        for gid in assigned_grains:
+            orig_mask = (lfi == gid)
+            if not orig_mask.any():
+                continue
+            avg_e = euler[orig_mask].mean(axis=0)
+            avg_q = quat[orig_mask].mean(axis=0)
+            norm = np.linalg.norm(avg_q)
+            if norm > 0:
+                avg_q = avg_q / norm
+            if avg_q[0] < 0:
+                avg_q = -avg_q
+            grain_avg_euler[gid] = avg_e
+            grain_avg_quat[gid] = avg_q
+
+        for cc_id, gid in cc_assignment.items():
+            cc_mask = cc_labels == cc_id
+            if gid in grain_avg_euler:
+                euler[cc_mask] = grain_avg_euler[gid]
+                quat[cc_mask] = grain_avg_quat[gid]
+
+        # ------------------------------------------------------------------
+        # Step 8: store back
+        # ------------------------------------------------------------------
+        self.lfi_ebsd = lfi_filled
+        self.euler_ebsd = euler
+        self.quat_ebsd = quat
+
 
 # ---------------------------------------------------------------------------
 # Private helpers
