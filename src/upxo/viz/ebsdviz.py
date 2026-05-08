@@ -257,3 +257,1323 @@ def plot_grain_structure_with_boundaries(rdr,
           f'({100 * n_gb_px / gb.size:.2f}% of map)')
 
     return fig, axes_arr if n_panels > 1 else axes_arr[0]
+
+
+# ---------------------------------------------------------------------------
+# MDF visualisation
+# ---------------------------------------------------------------------------
+
+def plot_mdf(
+        mdf: dict,
+        peaks: dict,
+        figsize: tuple[float, float] = (9, 4),
+        angle_max: float = 65.0,
+) -> tuple:
+    """
+    Plot a grain-boundary MDF histogram with KDE overlay, CSL reference lines,
+    and auto-detected peak annotations.
+
+    Parameters
+    ----------
+    mdf : dict
+        Output of ``crystal_orientation.compute_mdf_from_quats()``.
+    peaks : dict
+        Output of ``crystal_orientation.detect_mdf_peaks()``.
+    figsize : (float, float)
+        Figure size. Default (9, 4).
+    angle_max : float
+        Upper x-axis limit in degrees. Default 65.
+
+    Returns
+    -------
+    fig, ax
+    """
+    centers    = mdf['hist_bin_centers']
+    density    = mdf['hist_density']
+    bw         = float(centers[1] - centers[0])
+    theta_fine = peaks['theta_fine']
+    kde_vals   = peaks['kde_vals']
+    csl        = peaks['csl']
+    csl_tol    = peaks['csl_tol']
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(centers, density, width=bw, color='steelblue', edgecolor='k',
+           linewidth=0.3, alpha=0.55, label='MDF (histogram)')
+    ax.plot(theta_fine, kde_vals, color='navy', lw=1.8, label='KDE')
+
+    for csl_label, ang in csl.items():
+        if ang <= angle_max:
+            ax.axvline(ang, color='crimson', lw=0.9, ls='--', alpha=0.7)
+            ax.text(ang + 0.3, ax.get_ylim()[1] * 0.92, csl_label,
+                    fontsize=7, color='crimson', rotation=90, va='top')
+
+    for pi, angle in zip(peaks['peak_indices'], peaks['peak_angles']):
+        ax.annotate(
+            f'{angle:.1f}°',
+            xy=(angle, density[pi]),
+            xytext=(0, 10),
+            textcoords='offset points',
+            ha='center', fontsize=8,
+            arrowprops=dict(arrowstyle='->', lw=0.8),
+        )
+
+    ax.set_xlabel('Misorientation angle (°)')
+    ax.set_ylabel('Probability density (°⁻¹)')
+    ax.set_title(f'MDF with CSL annotations + KDE — {mdf["n_pairs"]} grain-boundary pairs')
+    ax.set_xlim(0, angle_max)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    return fig, ax
+
+
+def mdf_peak_selector(peaks: dict) -> dict:
+    """
+    Display an interactive ipywidgets checklist so the user can pick which
+    MDF peaks to retain for downstream analysis.
+
+    All peaks are pre-ticked.  Click **Confirm selection** to update
+    ``selected_peaks``.
+
+    Parameters
+    ----------
+    peaks : dict
+        Output of ``crystal_orientation.detect_mdf_peaks()``.
+
+    Returns
+    -------
+    selected_peaks : dict  (also stored in the returned ``state`` dict)
+        Pre-populated with all peaks; updated in-place on confirmation.
+        Keys: ``'angles'`` (list of float), ``'indices'`` (list of int).
+
+    Notes
+    -----
+    Call this inside a Jupyter cell.  The returned dict is mutated by the
+    widget callback — read it in the *next* cell after clicking Confirm.
+    """
+    import ipywidgets as widgets
+    from IPython.display import display, clear_output
+
+    peak_indices  = peaks['peak_indices']
+    peak_labels   = peaks['peak_labels']
+    peak_angles   = peaks['peak_angles']
+
+    checkboxes = [
+        widgets.Checkbox(value=True, description=lbl,
+                         layout=widgets.Layout(width='480px'))
+        for lbl in peak_labels
+    ]
+    confirm_btn = widgets.Button(description='Confirm selection',
+                                 button_style='success', icon='check')
+    output_box  = widgets.Output()
+
+    selected_peaks: dict = {
+        'angles':  list(peak_angles),
+        'indices': list(peak_indices),
+    }
+
+    def _on_confirm(_):
+        selected_peaks['angles']  = [peak_angles[i]  for i, cb in enumerate(checkboxes) if cb.value]
+        selected_peaks['indices'] = [peak_indices[i] for i, cb in enumerate(checkboxes) if cb.value]
+        with output_box:
+            clear_output()
+            print('✔  selected_peaks updated')
+            print(f"   angles : {selected_peaks['angles']}")
+
+    confirm_btn.on_click(_on_confirm)
+
+    print('Select which MDF peaks to retain for downstream analysis:')
+    display(widgets.VBox(checkboxes + [confirm_btn, output_box]))
+    return selected_peaks
+
+
+def plot_mdf_selected(
+        mdf: dict,
+        peaks: dict,
+        selected_peaks: dict,
+        figsize: tuple[float, float] = (9, 4),
+        angle_max: float = 65.0,
+) -> tuple:
+    """
+    Replot the MDF histogram + KDE with only the user-selected peaks
+    highlighted in colour (unselected bins are greyed out).
+
+    Parameters
+    ----------
+    mdf : dict
+        Output of ``crystal_orientation.compute_mdf_from_quats()``.
+    peaks : dict
+        Output of ``crystal_orientation.detect_mdf_peaks()``.
+    selected_peaks : dict
+        Output of ``mdf_peak_selector()`` after user confirmation.
+        Keys: ``'angles'`` and ``'indices'``.
+    figsize : (float, float)
+    angle_max : float
+
+    Returns
+    -------
+    fig, ax
+    """
+    centers    = mdf['hist_bin_centers']
+    density    = mdf['hist_density']
+    bw         = float(centers[1] - centers[0])
+    theta_fine = peaks['theta_fine']
+    kde_vals   = peaks['kde_vals']
+    csl        = peaks['csl']
+    csl_tol    = peaks['csl_tol']
+    sel_angles = selected_peaks['angles']
+    sel_set    = set(int(i) for i in selected_peaks['indices'])
+
+    bar_colors = [
+        'steelblue' if any(abs(centers[ci] - a) < bw * 0.5 + 1e-9 for a in sel_angles)
+        else 'lightgrey'
+        for ci in range(len(centers))
+    ]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(centers, density, width=bw, color=bar_colors, edgecolor='k',
+           linewidth=0.3, alpha=0.75, label='MDF (histogram)')
+    ax.plot(theta_fine, kde_vals, color='navy', lw=1.8, label='KDE')
+
+    for csl_label, ang in csl.items():
+        if ang <= angle_max:
+            ax.axvline(ang, color='crimson', lw=0.9, ls='--', alpha=0.6)
+            ax.text(ang + 0.3, ax.get_ylim()[1] * 0.92, csl_label,
+                    fontsize=7, color='crimson', rotation=90, va='top')
+
+    for pi_idx in selected_peaks['indices']:
+        angle   = float(centers[pi_idx])
+        nearest = min(csl, key=lambda k: abs(csl[k] - angle))
+        delta   = angle - csl[nearest]
+        csl_tag = f'\n≈ {nearest}' if abs(delta) <= csl_tol else ''
+        ax.annotate(
+            f'{angle:.1f}°{csl_tag}',
+            xy=(angle, density[pi_idx]),
+            xytext=(0, 12),
+            textcoords='offset points',
+            ha='center', fontsize=8,
+            arrowprops=dict(arrowstyle='->', lw=0.9, color='darkblue'),
+            color='darkblue',
+        )
+
+    ax.set_xlabel('Misorientation angle (°)')
+    ax.set_ylabel('Probability density (°⁻¹)')
+    ax.set_title(f'MDF — {len(sel_angles)} selected peak(s) highlighted  '
+                 f'(total pairs = {mdf["n_pairs"]})')
+    ax.set_xlim(0, angle_max)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
+    return fig, ax
+
+
+# ---------------------------------------------------------------------------
+# CSL grain map
+# ---------------------------------------------------------------------------
+
+def plot_csl_grain_map(
+        lfi: 'np.ndarray',
+        csl_grains: dict,
+        figsize: tuple[float, float] = (10, 5),
+        dpi: int = 130,
+        alpha_bg: float = 0.15,
+        suptitle: str | None = None,
+) -> tuple:
+    """
+    Colour-code the grain label field by CSL boundary participation.
+
+    Each CSL type present in *csl_grains* gets its own colour.  Grains
+    that touch boundaries of more than one CSL type have blended colours.
+    Non-CSL grains are shown in semi-transparent light grey.
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field (positive = grain ID, ≤0 = unindexed).
+    csl_grains : dict
+        Output of ``crystal_orientation.segregate_csl_pairs()``.
+        Keys are CSL labels; each value must have ``'grains_all'``,
+        ``'n_pairs'``, and ``'n_grains'``.
+    figsize, dpi, alpha_bg, suptitle
+        Standard figure parameters.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+
+    lfi = np.asarray(lfi, dtype=int)
+    ny, nx = lfi.shape
+
+    palette = list(mcolors.TABLEAU_COLORS.values())
+
+    # grain_id → set of CSL indices
+    label_map: dict[int, set] = {}
+    for ci, (csl_label, info) in enumerate(csl_grains.items()):
+        for gid in info['grains_all']:
+            label_map.setdefault(int(gid), set()).add(ci)
+
+    # Build RGBA image — start with light grey
+    rgba      = np.ones((ny, nx, 4), dtype=float)
+    rgba[..., :3] = 0.88
+    rgba[lfi <= 0, 3] = 0.0   # transparent unindexed pixels
+
+    gid_flat  = lfi.ravel()
+    rgba_flat = rgba.reshape(-1, 4)
+
+    for gid, csl_set in label_map.items():
+        mask = gid_flat == gid
+        if not mask.any():
+            continue
+        cols  = [mcolors.to_rgba(palette[ci % len(palette)]) for ci in csl_set]
+        blend = np.mean(cols, axis=0)
+        rgba_flat[mask] = blend
+
+    rgba = rgba_flat.reshape(ny, nx, 4)
+
+    # Dim non-CSL grains
+    non_csl = set(int(g) for g in np.unique(lfi[lfi > 0])) - set(label_map)
+    for gid in non_csl:
+        mask = lfi == gid
+        rgba[mask, :3] = 0.85
+        rgba[mask,  3] = alpha_bg
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.imshow(rgba, interpolation='nearest', aspect='equal')
+
+    patches = [
+        mpatches.Patch(
+            color=palette[ci % len(palette)],
+            label=f'{lbl}  ({info["n_pairs"]} boundaries, {info["n_grains"]} grains)',
+        )
+        for ci, (lbl, info) in enumerate(csl_grains.items())
+    ]
+    patches.append(mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)),
+                                  label='Non-CSL grains'))
+    ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
+    ax.set_axis_off()
+    if suptitle:
+        ax.set_title(suptitle, fontsize=10)
+    plt.tight_layout()
+    return fig, ax
+
+
+# ---------------------------------------------------------------------------
+# Parent / twin grain summary
+# ---------------------------------------------------------------------------
+
+def print_parent_grain_summary(
+        parent_info: dict,
+        csl_grains: dict,
+) -> None:
+    """
+    Print a formatted table of parent / twin / intermediate grain counts
+    for each CSL type.
+
+    Parameters
+    ----------
+    parent_info : dict
+        Output of ``crystal_orientation.identify_parent_grains()``.
+    csl_grains : dict
+        Output of ``crystal_orientation.segregate_csl_pairs()`` — used to
+        retrieve the number of pairs per CSL label.
+    """
+    header = (f"{'CSL type':<18} {'ref °':>6}  {'pairs':>6}  "
+              f"{'pure parents':>13}  {'pure twins':>11}  {'intermediates':>14}")
+    print(header)
+    print('─' * 75)
+    for lbl, v in parent_info.items():
+        n_pairs = len(csl_grains[lbl]['pairs']) if lbl in csl_grains else 0
+        print(f"{lbl:<18} {v['csl_angle']:>6.2f}  {n_pairs:>6}  "
+              f"{v['n_pure_parents']:>13}  "
+              f"{v['n_pure_twins']:>11}  "
+              f"{v['n_intermediates']:>14}")
+
+
+def plot_parent_grain_summary(
+        parent_info: dict,
+        figsize: tuple[float, float] = (8, 4),
+        dpi: int = 120,
+        title: str = 'Parent / twin / intermediate grain counts per CSL type',
+        bar_width: float = 0.25,
+        colors: tuple[str, str, str] = ('steelblue', 'coral', 'mediumseagreen'),
+) -> tuple:
+    """
+    Grouped bar chart of pure-parent, pure-twin, and intermediate grain
+    counts for each CSL type.
+
+    Parameters
+    ----------
+    parent_info : dict
+        Output of ``crystal_orientation.identify_parent_grains()``.
+    figsize, dpi, title
+        Standard figure parameters.
+    bar_width : float
+        Width of each bar group.
+    colors : tuple of str
+        Three colours for (pure parents, pure twins, intermediates).
+
+    Returns
+    -------
+    fig, ax
+    """
+    labels   = list(parent_info.keys())
+    x        = np.arange(len(labels))
+    w        = bar_width
+    pp_vals  = [parent_info[l]['n_pure_parents']  for l in labels]
+    pt_vals  = [parent_info[l]['n_pure_twins']    for l in labels]
+    im_vals  = [parent_info[l]['n_intermediates'] for l in labels]
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    b1 = ax.bar(x - w, pp_vals, w, label='Pure parents',  color=colors[0], edgecolor='k', linewidth=0.5)
+    b2 = ax.bar(x,     pt_vals, w, label='Pure twins',    color=colors[1], edgecolor='k', linewidth=0.5)
+    b3 = ax.bar(x + w, im_vals, w, label='Intermediates', color=colors[2], edgecolor='k', linewidth=0.5)
+    ax.bar_label(b1, padding=3, fontsize=8)
+    ax.bar_label(b2, padding=3, fontsize=8)
+    ax.bar_label(b3, padding=3, fontsize=8)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel('Number of grains')
+    ax.set_title(title)
+    ax.legend()
+    plt.tight_layout()
+    return fig, ax
+
+
+def plot_parent_twin_map(
+        lfi: 'np.ndarray',
+        parent_info: dict,
+        figsize: tuple[float, float] = (10, 5),
+        dpi: int = 130,
+        alpha_bg: float = 0.12,
+        colors: dict | None = None,
+        suptitle: str | None = None,
+) -> tuple:
+    """
+    Colour-code the grain label field by parent / twin / intermediate role
+    for each CSL type present in *parent_info*.
+
+    One subplot is produced per CSL type.  Within each subplot:
+
+    * **Pure parents**   – solid blue (default)
+    * **Pure twins**     – solid coral / red
+    * **Intermediates**  – solid green
+    * **Non-role grains** – semi-transparent light grey
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field.
+    parent_info : dict
+        Output of ``crystal_orientation.identify_parent_grains()``.
+    figsize, dpi
+        Figure dimensions per subplot (total width scaled by n_csl).
+    alpha_bg : float
+        Opacity of non-role background grains.
+    colors : dict, optional
+        Override role colours.  Keys: ``'pure_parent'``, ``'pure_twin'``,
+        ``'intermediate'``.  Values: any Matplotlib colour spec.
+    suptitle : str, optional
+        Figure-level title.
+
+    Returns
+    -------
+    fig, axes
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+
+    default_colors = {
+        'pure_parent':  '#4878CF',   # steel blue
+        'pure_twin':    '#D65F5F',   # coral red
+        'intermediate': '#59A14F',   # medium green
+    }
+    if colors:
+        default_colors.update(colors)
+
+    lfi   = np.asarray(lfi, dtype=int)
+    ny, nx = lfi.shape
+    labels = list(parent_info.keys())
+    n      = len(labels)
+
+    fig_w  = figsize[0] * n
+    fig, axes = plt.subplots(1, n, figsize=(fig_w, figsize[1]), dpi=dpi,
+                             squeeze=False)
+
+    for col, lbl in enumerate(labels):
+        ax   = axes[0, col]
+        info = parent_info[lbl]
+
+        pp_set = set(info['pure_parents'].tolist())
+        pt_set = set(info['pure_twins'].tolist())
+        im_set = set(info['intermediates'].tolist())
+
+        # Start with light grey background (non-role grains)
+        rgba      = np.ones((ny, nx, 4), dtype=float)
+        rgba[..., :3] = 0.88
+        rgba[lfi <= 0, 3] = 0.0   # transparent unindexed
+
+        gid_flat  = lfi.ravel()
+        rgba_flat = rgba.reshape(-1, 4)
+
+        role_map = [
+            (pp_set, mcolors.to_rgba(default_colors['pure_parent'])),
+            (pt_set, mcolors.to_rgba(default_colors['pure_twin'])),
+            (im_set, mcolors.to_rgba(default_colors['intermediate'])),
+        ]
+
+        all_role_gids: set[int] = pp_set | pt_set | im_set
+        # Dim non-role grains first
+        for gid in np.unique(lfi[lfi > 0]):
+            if int(gid) not in all_role_gids:
+                mask = gid_flat == gid
+                rgba_flat[mask, :3] = 0.85
+                rgba_flat[mask,  3] = alpha_bg
+
+        # Paint roles
+        for gid_set, colour in role_map:
+            c = np.array(colour, dtype=float)
+            for gid in gid_set:
+                mask = gid_flat == gid
+                if mask.any():
+                    rgba_flat[mask] = c
+
+        rgba = rgba_flat.reshape(ny, nx, 4)
+        ax.imshow(rgba, interpolation='nearest', aspect='equal')
+        ax.set_axis_off()
+        ax.set_title(lbl, fontsize=10)
+
+        patches = [
+            mpatches.Patch(color=default_colors['pure_parent'],
+                           label=f"Pure parents ({info['n_pure_parents']})"),
+            mpatches.Patch(color=default_colors['pure_twin'],
+                           label=f"Pure twins ({info['n_pure_twins']})"),
+            mpatches.Patch(color=default_colors['intermediate'],
+                           label=f"Intermediates ({info['n_intermediates']})"),
+            mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)),
+                           label='Non-role grains'),
+        ]
+        ax.legend(handles=patches, loc='upper right', fontsize=7, framealpha=0.9)
+
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=11, y=1.01)
+    plt.tight_layout()
+    return fig, axes
+
+
+def plot_combined_parent_twin_map(
+        lfi: 'np.ndarray',
+        parent_info: dict,
+        figsize: tuple[float, float] = (10, 5),
+        dpi: int = 130,
+        alpha_bg: float = 0.10,
+        color_parent: str = '#4878CF',
+        color_twin: str = '#D65F5F',
+        color_intermediate: str = '#59A14F',
+        suptitle: str | None = 'Pure-parent and pure-twin grains (all CSL types combined)',
+) -> tuple:
+    """
+    Single map showing pure-parent, pure-twin and intermediate grains
+    aggregated across **all** CSL types in *parent_info*.
+
+    A grain that is a pure-parent in *any* CSL type → coloured as parent.
+    A grain that is a pure-twin   in *any* CSL type → coloured as twin.
+    A grain that is intermediate  in *any* CSL type → coloured as intermediate.
+    Priority when a grain appears in multiple roles: intermediate > parent > twin.
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field.
+    parent_info : dict
+        Output of ``crystal_orientation.identify_parent_grains()``.
+    figsize, dpi
+        Figure size and resolution.
+    alpha_bg : float
+        Opacity of non-role grains.
+    color_parent, color_twin, color_intermediate : str
+        Matplotlib colour specs for each role.
+    suptitle : str or None
+        Figure title.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+
+    lfi    = np.asarray(lfi, dtype=int)
+    ny, nx = lfi.shape
+
+    # ── Aggregate grain sets across all CSL types ─────────────────────────────
+    all_pp: set[int] = set()
+    all_pt: set[int] = set()
+    all_im: set[int] = set()
+
+    for info in parent_info.values():
+        all_pp.update(info['pure_parents'].tolist())
+        all_pt.update(info['pure_twins'].tolist())
+        all_im.update(info['intermediates'].tolist())
+
+    # Resolve overlaps: intermediate > parent > twin
+    only_pp = (all_pp | all_pt) - all_im   # in pp or pt but NOT intermediate
+    # within only_pp, parent takes priority over twin
+    pure_parent_final   = only_pp & all_pp
+    pure_twin_final     = only_pp & all_pt - pure_parent_final
+    intermediate_final  = all_im
+
+    # ── Build RGBA image ──────────────────────────────────────────────────────
+    rgba      = np.ones((ny, nx, 4), dtype=float)
+    rgba[..., :3] = 0.88
+    rgba[lfi <= 0, 3] = 0.0
+
+    gid_flat  = lfi.ravel()
+    rgba_flat = rgba.reshape(-1, 4)
+
+    all_role_gids = pure_parent_final | pure_twin_final | intermediate_final
+
+    # Dim non-role grains
+    for gid in np.unique(lfi[lfi > 0]):
+        if int(gid) not in all_role_gids:
+            mask = gid_flat == gid
+            rgba_flat[mask, :3] = 0.85
+            rgba_flat[mask,  3] = alpha_bg
+
+    for gid_set, colour_str in [
+        (pure_twin_final,     color_twin),
+        (pure_parent_final,   color_parent),
+        (intermediate_final,  color_intermediate),
+    ]:
+        c = np.array(mcolors.to_rgba(colour_str), dtype=float)
+        for gid in gid_set:
+            mask = gid_flat == gid
+            if mask.any():
+                rgba_flat[mask] = c
+
+    rgba = rgba_flat.reshape(ny, nx, 4)
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.imshow(rgba, interpolation='nearest', aspect='equal')
+    ax.set_axis_off()
+
+    patches = [
+        mpatches.Patch(color=color_parent,      label=f'Pure parents ({len(pure_parent_final)})'),
+        mpatches.Patch(color=color_twin,         label=f'Pure twins ({len(pure_twin_final)})'),
+        mpatches.Patch(color=color_intermediate, label=f'Intermediates ({len(intermediate_final)})'),
+        mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)), label='Non-role grains'),
+    ]
+    ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
+
+    if suptitle:
+        ax.set_title(suptitle, fontsize=10)
+    plt.tight_layout()
+    return fig, ax
+
+
+# ---------------------------------------------------------------------------
+# Grain-role morphological / topological statistics
+# ---------------------------------------------------------------------------
+
+def plot_grain_role_property_stats(
+        lfi: 'np.ndarray',
+        parent_info: dict,
+        prop: dict,
+        neigh_gid: dict,
+        selected_props: list | None = None,
+        selected_groups: list | None = None,
+        step_size: float = 1.0,
+        bins: int = 40,
+        bw_method: str = 'scott',
+        peak_prominence: float = 0.01,
+        figsize_per: tuple[float, float] = (5, 4),
+        dpi: int = 110,
+        suptitle: str = 'Grain morphological & topological statistics by role',
+        ncols: int | None = None,
+        fontsize: float = 9.0,
+) -> tuple:
+    """
+    For each selected property, plot overlaid histograms + KDE + detected peaks
+    for each selected grain-role group (pure parents, pure twins, intermediates,
+    non-role).  Min / max / mean / std are embedded in the legend labels.
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field.
+    parent_info : dict
+        Output of ``identify_parent_grains()``.
+    prop : dict
+        Per-grain property dict (grain_id → dict) as from ``prop_ebsd``.
+        Expected keys: ``'area'``, ``'aspect_ratio'``, ``'perimeter'``,
+        ``'solidity'``.
+    neigh_gid : dict
+        Neighbour-grain dict (grain_id → list of neighbour IDs) as from
+        ``neigh_gid_ebsd``.  Used to derive ``n_neighbours``.
+    selected_props : list of str, optional
+        Subset of ``['area', 'aspect_ratio', 'perimeter', 'solidity',
+        'n_neighbours']``.  Defaults to all five.
+    selected_groups : list of str, optional
+        Subset of ``['pure_parents', 'pure_twins', 'intermediates',
+        'non_role']``.  Defaults to all four.
+    step_size : float
+        EBSD step size (µm).  Multiplied into area (px² → µm²) and
+        perimeter (px → µm) values.
+    bins : int
+        Number of histogram bins.
+    bw_method : str
+        Bandwidth selector passed to ``scipy.stats.gaussian_kde``.
+    peak_prominence : float
+        Fraction of KDE max used as minimum prominence for peak annotation.
+    figsize_per : tuple
+        ``(width, height)`` in inches for each subplot.
+    dpi : int
+        Figure resolution.
+    suptitle : str
+        Figure-level title.
+    ncols : int or None
+        Number of columns in the subplot grid.  ``None`` (default) places all
+        subplots in a single row.  E.g. ``ncols=2`` gives a 2-column grid;
+        ``ncols=1`` gives a single column.
+    fontsize : float
+        Base font size in points.  Axis labels and titles use this size;
+        tick labels use ``fontsize - 2``; legend text uses ``fontsize - 2``;
+        peak annotations use ``fontsize - 3``; the figure suptitle uses
+        ``fontsize + 1``.  Default ``9.0``.
+
+    Returns
+    -------
+    fig, axes
+    """
+    from scipy.stats import gaussian_kde
+    from scipy.signal import find_peaks
+
+    ALL_PROPS   = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
+    ALL_GROUPS  = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
+    PROP_LABELS = {
+        'area':         f'Area (µm²)',
+        'aspect_ratio': 'Aspect ratio',
+        'perimeter':    f'Perimeter (µm)',
+        'solidity':     'Solidity',
+        'n_neighbours': 'Number of neighbours',
+    }
+    GROUP_COLORS = {
+        'pure_parents':  '#4878CF',
+        'pure_twins':    '#D65F5F',
+        'intermediates': '#59A14F',
+        'non_role':      '#888888',
+    }
+    GROUP_LABELS_DISPLAY = {
+        'pure_parents':  'Pure parents',
+        'pure_twins':    'Pure twins',
+        'intermediates': 'Intermediates',
+        'non_role':      'Non-role',
+    }
+
+    if selected_props  is None:
+        selected_props  = ALL_PROPS
+    if selected_groups is None:
+        selected_groups = ALL_GROUPS
+
+    # ── Build grain-role sets (merged across all CSL types) ──────────────────
+    all_pp: set[int] = set()
+    all_pt: set[int] = set()
+    all_im: set[int] = set()
+    for info in parent_info.values():
+        all_pp.update(info['pure_parents'].tolist())
+        all_pt.update(info['pure_twins'].tolist())
+        all_im.update(info['intermediates'].tolist())
+
+    only_pp_or_pt   = (all_pp | all_pt) - all_im
+    pure_parent_set = only_pp_or_pt & all_pp
+    pure_twin_set   = (only_pp_or_pt & all_pt) - pure_parent_set
+    intermediate_set  = all_im
+    all_role          = pure_parent_set | pure_twin_set | intermediate_set
+    indexed_gids      = set(int(g) for g in np.unique(lfi[lfi > 0]))
+    non_role_set      = indexed_gids - all_role
+
+    grain_sets = {
+        'pure_parents':  pure_parent_set,
+        'pure_twins':    pure_twin_set,
+        'intermediates': intermediate_set,
+        'non_role':      non_role_set,
+    }
+
+    # ── Extract property values per group ────────────────────────────────────
+    def _get_vals(gids: set, pname: str) -> np.ndarray:
+        vals = []
+        for gid in gids:
+            if pname == 'n_neighbours':
+                nb = neigh_gid.get(gid)
+                if nb is not None:
+                    vals.append(len(nb))
+            else:
+                p = prop.get(gid)
+                if p is not None and pname in p:
+                    v = float(p[pname])
+                    if pname == 'area':
+                        v = v * step_size ** 2
+                    elif pname == 'perimeter':
+                        v = v * step_size
+                    vals.append(v)
+        arr = np.array(vals, dtype=float)
+        return arr[np.isfinite(arr)]
+
+    # ── Layout ───────────────────────────────────────────────────────────────
+    n_props = len(selected_props)
+    _ncols  = n_props if ncols is None else max(1, min(ncols, n_props))
+    _nrows  = int(np.ceil(n_props / _ncols))
+    fig_w   = figsize_per[0] * _ncols
+    fig_h   = figsize_per[1] * _nrows
+    fig, axes = plt.subplots(_nrows, _ncols,
+                             figsize=(fig_w, fig_h), dpi=dpi,
+                             squeeze=False)
+
+    # Hide any spare axes in the grid
+    for _idx in range(n_props, _nrows * _ncols):
+        axes[_idx // _ncols, _idx % _ncols].set_visible(False)
+
+    for col, pname in enumerate(selected_props):
+        ax = axes[col // _ncols, col % _ncols]
+
+        all_vals_flat = []
+        for grp in selected_groups:
+            v = _get_vals(grain_sets[grp], pname)
+            if v.size > 1:
+                all_vals_flat.append(v)
+
+        if not all_vals_flat:
+            ax.set_visible(False)
+            continue
+
+        combined  = np.concatenate(all_vals_flat)
+        vmin, vmax = combined.min(), combined.max()
+        if vmin == vmax:
+            ax.set_visible(False)
+            continue
+        bin_edges = np.linspace(vmin, vmax, bins + 1)
+        bin_w     = bin_edges[1] - bin_edges[0]
+
+        for grp in selected_groups:
+            vals   = _get_vals(grain_sets[grp], pname)
+            if vals.size < 2:
+                continue
+            colour = GROUP_COLORS[grp]
+
+            # histogram (density)
+            counts, _ = np.histogram(vals, bins=bin_edges, density=True)
+            ax.bar(bin_edges[:-1], counts, width=bin_w,
+                   color=colour, alpha=0.28, edgecolor='none', align='edge')
+
+            # KDE
+            kde  = gaussian_kde(vals, bw_method=bw_method)
+            xs   = np.linspace(vmin, vmax, 600)
+            ys   = kde(xs)
+            ax.plot(xs, ys, color=colour, linewidth=1.8)
+
+            # Peaks on KDE
+            peak_idx, _ = find_peaks(ys, prominence=peak_prominence * ys.max())
+            for pi in peak_idx:
+                ax.axvline(xs[pi], color=colour, linewidth=0.8,
+                           linestyle='--', alpha=0.7)
+                ax.text(xs[pi], ys[pi] * 1.03, f'{xs[pi]:.3g}',
+                        fontsize=fontsize - 3, color=colour, ha='center', va='bottom',
+                        rotation=90)
+
+            # Stats legend entry
+            mn, mx = vals.min(), vals.max()
+            mu, sd = vals.mean(), vals.std()
+            lbl = (f"{GROUP_LABELS_DISPLAY[grp]} (n={len(vals)})\n"
+                   f"  µ={mu:.3g}  σ={sd:.3g}  [{mn:.3g}, {mx:.3g}]")
+            ax.plot([], [], color=colour, linewidth=2.5, label=lbl)
+
+        ax.set_xlabel(PROP_LABELS.get(pname, pname), fontsize=fontsize)
+        ax.set_ylabel('Density', fontsize=fontsize)
+        ax.set_title(PROP_LABELS.get(pname, pname), fontsize=fontsize)
+        ax.legend(fontsize=fontsize - 2, loc='upper right', framealpha=0.85,
+                  handlelength=1.2)
+        ax.tick_params(labelsize=fontsize - 2)
+
+    fig.suptitle(suptitle, fontsize=fontsize + 1, y=1.02)
+    plt.tight_layout()
+    return fig, axes
+
+
+def make_property_stats_widgets(
+        props: list[str] | None = None,
+        groups: list[str] | None = None,
+        default_ncols: int = 0,
+        default_fontsize: float = 9.0,
+) -> dict:
+    """
+    Build and display the ipywidgets control panel for
+    :func:`plot_grain_role_property_stats`.
+
+    Returns a dict with keys ``prop_checkboxes``, ``group_checkboxes``,
+    ``ncols_slider``, and ``fontsize_slider``.  Pass the returned dict
+    directly to :func:`read_property_stats_widgets` to extract current
+    values before calling the plot function.
+
+    Parameters
+    ----------
+    props : list of str, optional
+        Property names to show (all ticked by default).  Subset of
+        ``['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']``.
+    groups : list of str, optional
+        Group names to show (all ticked by default).  Subset of
+        ``['pure_parents', 'pure_twins', 'intermediates', 'non_role']``.
+    default_ncols : int
+        Initial value of the columns slider (0 = single row).
+    default_fontsize : float
+        Initial font size value.
+
+    Returns
+    -------
+    dict
+        ``{'prop_checkboxes': dict, 'group_checkboxes': dict,
+           'ncols_slider': IntSlider, 'fontsize_slider': FloatSlider}``
+    """
+    import ipywidgets as widgets
+    from IPython.display import display
+
+    ALL_PROPS = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
+    ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
+    PROP_LABELS_UI = {
+        'area':         'Area (µm²)',
+        'aspect_ratio': 'Aspect ratio',
+        'perimeter':    'Perimeter (µm)',
+        'solidity':     'Solidity',
+        'n_neighbours': 'N neighbours',
+    }
+    GROUP_LABELS_UI = {
+        'pure_parents':  'Pure parents',
+        'pure_twins':    'Pure twins',
+        'intermediates': 'Intermediates',
+        'non_role':      'Non-role grains',
+    }
+
+    if props is None:
+        props = ALL_PROPS
+    if groups is None:
+        groups = ALL_GROUPS
+
+    prop_checkboxes = {
+        p: widgets.Checkbox(value=True, description=PROP_LABELS_UI[p],
+                            layout=widgets.Layout(width='200px'))
+        for p in props
+    }
+    group_checkboxes = {
+        g: widgets.Checkbox(value=True, description=GROUP_LABELS_UI[g],
+                            layout=widgets.Layout(width='200px'))
+        for g in groups
+    }
+    ncols_slider = widgets.IntSlider(
+        value=default_ncols, min=0, max=5, step=1,
+        description='Columns:',
+        style={'description_width': 'initial'},
+        layout=widgets.Layout(width='300px'),
+        readout=True,
+    )
+    fontsize_slider = widgets.FloatSlider(
+        value=default_fontsize, min=6.0, max=20.0, step=0.5,
+        description='Font size:',
+        style={'description_width': 'initial'},
+        layout=widgets.Layout(width='350px'),
+        readout=True,
+        readout_format='.1f',
+    )
+
+    display(widgets.VBox([
+        widgets.HTML('<b style="font-size:13px">Morphological / topological properties:</b>'),
+        widgets.HBox(list(prop_checkboxes.values())),
+        widgets.HTML('<b style="font-size:13px">Grain groups:</b>'),
+        widgets.HBox(list(group_checkboxes.values())),
+        widgets.HTML('<b style="font-size:13px">Subplot columns (0 = single row):</b>'),
+        ncols_slider,
+        widgets.HTML('<b style="font-size:13px">Font size:</b>'),
+        fontsize_slider,
+    ]))
+
+    return {
+        'prop_checkboxes':  prop_checkboxes,
+        'group_checkboxes': group_checkboxes,
+        'ncols_slider':     ncols_slider,
+        'fontsize_slider':  fontsize_slider,
+    }
+
+
+def read_property_stats_widgets(widgets_dict: dict) -> dict:
+    """
+    Read current values from the dict returned by
+    :func:`make_property_stats_widgets`.
+
+    Returns
+    -------
+    dict
+        ``{'selected_props': list, 'selected_groups': list,
+           'ncols': int | None, 'fontsize': float}``
+    """
+    selected_props  = [k for k, cb in widgets_dict['prop_checkboxes'].items()  if cb.value]
+    selected_groups = [k for k, cb in widgets_dict['group_checkboxes'].items() if cb.value]
+    ncols_val       = widgets_dict['ncols_slider'].value
+    return {
+        'selected_props':  selected_props,
+        'selected_groups': selected_groups,
+        'ncols':           ncols_val if ncols_val > 0 else None,
+        'fontsize':        widgets_dict['fontsize_slider'].value,
+    }
+
+
+def print_grain_role_ratios(ratios: dict) -> None:
+    """
+    Print a formatted table of grain-role counts and ratios produced by
+    ``crystal_orientation.compute_grain_role_ratios()``.
+
+    Parameters
+    ----------
+    ratios : dict
+        Output of :func:`~upxo.xtalphy.crystal_orientation.compute_grain_role_ratios`.
+    """
+    N = ratios['total']['count']
+    print(f'Total indexed grains : {N}\n')
+    print(f"{'Role':<18}  {'Count':>7}  {'Ratio':>8}  {'% of total':>11}")
+    print('\u2500' * 50)
+    for key, label in [
+        ('pure_parents',  'Pure parents'),
+        ('pure_twins',    'Pure twins'),
+        ('intermediates', 'Intermediates'),
+        ('non_role',      'Non-role'),
+    ]:
+        n = ratios[key]['count']
+        r = ratios[key]['ratio']
+        print(f'{label:<18}  {n:>7}  {r:>8.4f}  {r * 100:>10.2f}%')
+    print('\u2500' * 50)
+    n_ar = ratios['all_role']['count']
+    r_ar = ratios['all_role']['ratio']
+    print(f"{'All role grains':<18}  {n_ar:>7}  {r_ar:>8.4f}  {r_ar * 100:>10.2f}%")
+
+
+def plot_grain_role_map(
+        lfi: 'np.ndarray',
+        role_sets: dict,
+        figsize: tuple[float, float] = (10, 5),
+        dpi: int = 130,
+        alpha_bg: float = 0.10,
+        color_parent: str = '#4878CF',
+        color_twin: str = '#D65F5F',
+        color_intermediate: str = '#59A14F',
+        suptitle: str | None = None,
+) -> tuple:
+    """
+    Plot a grain role map from pre-computed role sets (output of
+    ``crystal_orientation.assign_grain_roles_by_ratio()`` or
+    ``crystal_orientation.compute_grain_role_ratios()``).
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field.
+    role_sets : dict
+        Dict with keys ``'pure_parents'``, ``'pure_twins'``,
+        ``'intermediates'``, ``'non_role'`` — each value either a set of
+        grain IDs or a sub-dict with a ``'grain_ids'`` key (as returned by
+        :func:`~upxo.xtalphy.crystal_orientation.assign_grain_roles_by_ratio`).
+    figsize, dpi, alpha_bg
+        Figure parameters.
+    color_parent, color_twin, color_intermediate : str
+        Matplotlib colour specs for each role.
+    suptitle : str or None
+        Figure title.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.patches as mpatches
+    import matplotlib.colors as mcolors
+
+    def _ids(v):
+        return v['grain_ids'] if isinstance(v, dict) else v
+
+    pp_set = _ids(role_sets['pure_parents'])
+    pt_set = _ids(role_sets['pure_twins'])
+    im_set = _ids(role_sets['intermediates'])
+    nr_set = _ids(role_sets.get('non_role', set()))
+
+    lfi = np.asarray(lfi, dtype=int)
+    ny, nx = lfi.shape
+
+    rgba = np.ones((ny, nx, 4), dtype=float)
+    rgba[..., :3] = 0.88
+    rgba[lfi <= 0, 3] = 0.0
+
+    gid_flat  = lfi.ravel()
+    rgba_flat = rgba.reshape(-1, 4)
+
+    all_role_gids = pp_set | pt_set | im_set
+
+    for gid in np.unique(lfi[lfi > 0]):
+        if int(gid) not in all_role_gids:
+            mask = gid_flat == gid
+            rgba_flat[mask, :3] = 0.85
+            rgba_flat[mask,  3] = alpha_bg
+
+    for gid_set, colour_str in [
+        (pt_set, color_twin),
+        (pp_set, color_parent),
+        (im_set, color_intermediate),
+    ]:
+        c = np.array(mcolors.to_rgba(colour_str), dtype=float)
+        for gid in gid_set:
+            mask = gid_flat == gid
+            if mask.any():
+                rgba_flat[mask] = c
+
+    rgba = rgba_flat.reshape(ny, nx, 4)
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.imshow(rgba, interpolation='nearest', aspect='equal')
+    ax.set_axis_off()
+
+    patches = [
+        mpatches.Patch(color=color_parent,      label=f'Pure parents ({len(pp_set)})'),
+        mpatches.Patch(color=color_twin,         label=f'Pure twins ({len(pt_set)})'),
+        mpatches.Patch(color=color_intermediate, label=f'Intermediates ({len(im_set)})'),
+        mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)),
+                       label=f'Non-role ({len(nr_set)})'),
+    ]
+    ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
+
+    if suptitle:
+        ax.set_title(suptitle, fontsize=10)
+    plt.tight_layout()
+    return fig, ax
+
+
+def plot_twin_introduction_map(
+        lfi_before: 'np.ndarray',
+        twin_result: dict,
+        figsize: tuple = (14, 5),
+        dpi: int = 130,
+        color_parent: str = '#4878CF',
+        color_twin: str = '#D65F5F',
+        color_other: str = '#CCCCCC',
+        alpha_other: float = 0.30,
+        show_cut_lines: bool = True,
+        suptitle=None,
+) -> tuple:
+    """
+    Side-by-side comparison of the grain label field before and after twin
+    introduction, with cut-lines overlaid on the "after" panel.
+
+    Parameters
+    ----------
+    lfi_before : ndarray, shape (ny, nx)
+        Grain label field before twin introduction.
+    twin_result : dict
+        Output of ``crystal_orientation.introduce_twins_by_csl()``.
+    figsize : tuple
+        Total figure size (width, height).
+    dpi : int
+        Figure resolution.
+    color_parent : str
+        Colour for parent grains.
+    color_twin : str
+        Colour for newly introduced twin grains.
+    color_other : str
+        Colour for all other grains.
+    alpha_other : float
+        Opacity for other grains.
+    show_cut_lines : bool
+        If True, overlay the Sline2d cut-lines on the "after" panel.
+    suptitle : str or None
+        Figure-level title.
+
+    Returns
+    -------
+    fig, axes
+    """
+    import matplotlib.patches as mpatches
+
+    lfi_after  = twin_result['lfi']
+    twin_lines = twin_result['twin_lines']
+    new_twin_gids = twin_result['new_twin_gids']
+    csl_label  = twin_result['csl_label']
+
+    parent_gids   = set(twin_lines.keys())
+    all_twin_gids = set()
+    for gids in new_twin_gids.values():
+        all_twin_gids.update(gids)
+
+    _c_p = np.array(plt.matplotlib.colors.to_rgba(color_parent))
+    _c_t = np.array(plt.matplotlib.colors.to_rgba(color_twin))
+    _c_o = list(plt.matplotlib.colors.to_rgb(color_other)) + [alpha_other]
+
+    def _make_rgba(lfi):
+        ny, nx = lfi.shape
+        rgba = np.ones((ny, nx, 4), dtype=float)
+        rgba[..., :3] = 0.90
+        rgba[lfi <= 0, 3] = 0.0
+        for gid in np.unique(lfi[lfi > 0]):
+            gid = int(gid)
+            mask = lfi == gid
+            if gid in parent_gids:
+                rgba[mask] = _c_p
+            elif gid in all_twin_gids:
+                rgba[mask] = _c_t
+            else:
+                rgba[mask] = _c_o
+        return rgba
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize, dpi=dpi)
+
+    axes[0].imshow(_make_rgba(lfi_before), interpolation='nearest', aspect='equal')
+    axes[0].set_axis_off()
+    axes[0].set_title('Before twin introduction', fontsize=10)
+
+    axes[1].imshow(_make_rgba(lfi_after), interpolation='nearest', aspect='equal')
+    axes[1].set_axis_off()
+    axes[1].set_title(f'After twin introduction — {csl_label}', fontsize=10)
+
+    if show_cut_lines:
+        for lines in twin_lines.values():
+            for line in lines:
+                axes[1].plot([line.x0, line.x1], [line.y0, line.y1],
+                             color='yellow', linewidth=0.8, alpha=0.85,
+                             linestyle='--')
+
+    patches = [
+        mpatches.Patch(color=color_parent, label=f'Parent grains ({len(parent_gids)})'),
+        mpatches.Patch(color=color_twin,   label=f'New twin grains ({len(all_twin_gids)})'),
+        mpatches.Patch(facecolor=color_other, alpha=alpha_other, label='Other grains'),
+    ]
+    axes[1].legend(handles=patches, loc='upper right', fontsize=7, framealpha=0.9)
+
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=11, y=1.01)
+    plt.tight_layout()
+    return fig, axes
+
+
+def plot_twin_thickness_stats(
+    stats: dict,
+    bins: int = 30,
+    figsize: tuple = (7, 4),
+    dpi: int = 120,
+    color: str = 'steelblue',
+    title: str | None = None,
+) -> tuple:
+    """
+    Plot a histogram of twin lamella thickness from the dict returned by
+    ``compute_twin_thickness_stats``.
+
+    Parameters
+    ----------
+    stats : dict
+        Output of ``compute_twin_thickness_stats``.
+    bins : int
+        Number of histogram bins.
+    figsize : (width, height)
+    dpi : int
+    color : str
+        Bar fill colour.
+    title : str or None
+        Custom figure title; auto-generated when *None*.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    thick_um  = stats['thick_um']
+    col       = stats['col']
+    step_um   = stats['step_um']
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.hist(thick_um, bins=bins, color=color, edgecolor='white', density=True)
+    ax.axvline(stats['mean'],   color='red',    lw=1.8, ls='--',
+               label=f"Mean {stats['mean']:.2f} µm")
+    ax.axvline(stats['median'], color='orange', lw=1.8, ls=':',
+               label=f"Median {stats['median']:.2f} µm")
+    ax.set_xlabel('Twin thickness (µm)', fontsize=12)
+    ax.set_ylabel('Probability density', fontsize=12)
+    _title = title or (
+        f'EBSD – twin grain thickness distribution\n'
+        f'(proxy: {col},  step = {step_um} µm/px,  N = {len(thick_um)})'
+    )
+    ax.set_title(_title, fontsize=11)
+    ax.legend(fontsize=10)
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_grain_area_comparison(
+    scale_result: dict,
+    bins: int = 50,
+    pct_clip: float = 97.0,
+    figsize: tuple = (8, 4),
+    dpi: int = 120,
+    color_ebsd: str = 'steelblue',
+    color_sim: str = 'tomato',
+) -> tuple:
+    """
+    Plot overlapping grain-area histograms for the EBSD target and the
+    scaled synthetic structure.
+
+    Parameters
+    ----------
+    scale_result : dict
+        Output of ``compute_scale_factor_grain_size``.  Must contain
+        ``'areas_ebsd_um2'``, ``'areas_sim_um2'``, ``'mean_area_ebsd_um2'``,
+        ``'scale_factor'``, and ``'mean_area_sim_um2'``.
+    bins : int
+        Number of histogram bins.
+    pct_clip : float
+        Upper percentile used to clip the x-axis range (avoids giant outlier
+        grains dominating the axis).
+    figsize, dpi : figure size and resolution.
+    color_ebsd, color_sim : bar fill colours.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    areas_ebsd = scale_result['areas_ebsd_um2']
+    areas_sim  = scale_result['areas_sim_um2']
+    sf         = scale_result['scale_factor']
+    mean_ebsd  = scale_result['mean_area_ebsd_um2']
+    mean_sim   = scale_result['mean_area_sim_um2']
+
+    if areas_ebsd is None:
+        raise ValueError(
+            "scale_result['areas_ebsd_um2'] is None — pass prop_ebsd to "
+            "compute_scale_factor_grain_size() to populate it."
+        )
+
+    combined   = np.concatenate([areas_ebsd, areas_sim])
+    bin_edges  = np.linspace(0, np.percentile(combined, pct_clip), bins + 1)
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    ax.hist(areas_ebsd, bins=bin_edges, density=True, alpha=0.6,
+            color=color_ebsd, edgecolor='white',
+            label=f'EBSD  (mean = {mean_ebsd:.1f} µm²)')
+    ax.hist(areas_sim,  bins=bin_edges, density=True, alpha=0.6,
+            color=color_sim,  edgecolor='white',
+            label=f'Sim scaled  (mean = {mean_sim:.1f} µm²)')
+    ax.axvline(mean_ebsd, color=color_ebsd, lw=2, ls='--')
+    ax.axvline(mean_sim,  color=color_sim,  lw=2, ls='--')
+    ax.set_xlabel('Grain area (µm²)', fontsize=12)
+    ax.set_ylabel('Probability density', fontsize=12)
+    ax.set_title(
+        f'Grain area distribution: EBSD vs scaled synthetic\n'
+        f'Scale factor = {sf:.4f} µm/px',
+        fontsize=11,
+    )
+    ax.legend(fontsize=10)
+    fig.tight_layout()
+    return fig, ax
