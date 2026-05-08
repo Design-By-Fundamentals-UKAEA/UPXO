@@ -307,6 +307,56 @@ class EBSDReader:
             return obj
 
     # ------------------------------------------------------------------
+    # Full EBSD characterisation pipeline
+    # ------------------------------------------------------------------
+
+    def characterise(self, connectivity=4):
+        """
+        Run the complete post-load characterisation pipeline on ``self``
+        and return a result dict ready for consumption by
+        ``repgen2d.rechar()`` or directly by user code.
+
+        Steps
+        -----
+        1. ``rechar_lfi(connectivity)`` — fill non-positive pixels, update
+           ``euler_ebsd`` / ``quat_ebsd`` in-place.
+        2. ``_char_lfi(lfi_ebsd, step_size)`` — compute per-grain morphological
+           properties (area, perimeter, aspect ratio, …).
+        3. ``find_neighs2d(lfi_ebsd, conn)`` — build first-order neighbour dict.
+
+        Parameters
+        ----------
+        connectivity : int
+            cc3d connectivity for ``rechar_lfi`` and ``find_neighs2d``.
+            Valid 2D values: 4 or 8. Default 4.
+
+        Returns
+        -------
+        dict with keys:
+            ``'lfi'``        np.ndarray int32  (ny, nx)   cleaned label field
+            ``'euler'``      np.ndarray float64 (ny, nx, 3) Bunge angles, radians
+            ``'quat'``       np.ndarray float64 (ny, nx, 4) unit quaternions
+            ``'neigh_gid'``  dict  grain_id -> list[int]  first-order neighbours
+            ``'prop'``       dict  grain_id -> property dict (see ``_char_lfi``)
+            ``'step_size'``  float  pixel step size in microns
+        """
+        from upxo.gsdataops.gid_ops import find_neighs2d
+
+        self.rechar_lfi(connectivity=connectivity)
+        prop = _char_lfi(self.lfi_ebsd,
+                         px_size=getattr(self, 'step_size', 1.0))
+        neigh = find_neighs2d(self.lfi_ebsd, conn=connectivity)
+
+        return {
+            'lfi':       self.lfi_ebsd,
+            'euler':     self.euler_ebsd,
+            'quat':      self.quat_ebsd,
+            'neigh_gid': neigh,
+            'prop':      prop,
+            'step_size': getattr(self, 'step_size', 1.0),
+        }
+
+    # ------------------------------------------------------------------
     # LFI re-characterisation
     # ------------------------------------------------------------------
 
@@ -520,6 +570,71 @@ class EBSDReader:
         self.euler_ebsd = euler
         self.quat_ebsd  = quat
         print("[rechar_lfi] Done.", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Module-level helper: quick skimage characterisation of a label field
+# ---------------------------------------------------------------------------
+
+def _char_lfi(lfi, px_size=1.0):
+    """
+    Compute basic grain morphological properties from a 2D integer label
+    field using ``skimage.measure.regionprops``.
+
+    Parameters
+    ----------
+    lfi : np.ndarray, int, shape (ny, nx)
+        Grain label field.  Labels must be >= 1.  Non-positive values are
+        ignored.
+    px_size : float, optional
+        Physical size of one pixel (microns or simulation units).
+        Area is reported in px_size² and lengths in px_size. Default 1.0.
+
+    Returns
+    -------
+    dict
+        Mapping grain_id (int) -> dict of properties:
+
+        ``area``               float  — grain area in px_size² units
+        ``perimeter``          float  — grain perimeter in px_size units
+        ``eq_diameter``        float  — equivalent circular diameter
+        ``aspect_ratio``       float  — major_axis_length / minor_axis_length
+        ``major_axis_length``  float  — major axis in px_size units
+        ``minor_axis_length``  float  — minor axis in px_size units
+        ``eccentricity``       float  — eccentricity of best-fit ellipse
+        ``solidity``           float  — area / convex hull area
+        ``euler_number``       int    — Euler characteristic
+        ``centroid``           tuple  — (row, col) in pixel coordinates
+        ``bbox``               tuple  — (min_row, min_col, max_row, max_col)
+        ``npixels``            int    — number of pixels
+    """
+    from skimage.measure import regionprops
+
+    props_dict = {}
+    ps = float(px_size)
+
+    for region in regionprops(lfi):
+        gid = region.label
+        if gid <= 0:
+            continue
+        maj = region.major_axis_length * ps
+        mn  = region.minor_axis_length * ps
+        ar  = (maj / mn) if mn > 0 else float('nan')
+        props_dict[gid] = {
+            'area':               region.area * ps ** 2,
+            'perimeter':          region.perimeter * ps,
+            'eq_diameter':        region.equivalent_diameter * ps,
+            'aspect_ratio':       ar,
+            'major_axis_length':  maj,
+            'minor_axis_length':  mn,
+            'eccentricity':       region.eccentricity,
+            'solidity':           region.solidity,
+            'euler_number':       region.euler_number,
+            'centroid':           region.centroid,
+            'bbox':               region.bbox,
+            'npixels':            region.area,
+        }
+    return props_dict
 
 
 # ---------------------------------------------------------------------------
