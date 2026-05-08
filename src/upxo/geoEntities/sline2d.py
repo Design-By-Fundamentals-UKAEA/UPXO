@@ -2825,7 +2825,8 @@ class Sline2d():
         if vis:
             x, y = points
             splot(self, x, y, x[nearest], y[nearest])
-        return list(np.argwhere(nearest).T.squeeze())
+        idx = np.argwhere(nearest).ravel()
+        return list(idx)
 
     def find_neigh_point_by_count(self, *, plist=None, n=None,
                                   plane='xy'):
