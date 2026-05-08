@@ -776,21 +776,14 @@ class repgen2d:
                 min_grain_size=min_grain_size,
                 misori_tol=misori_tol,
             )
-            # Fill non-positive pixels (non-indexed, boundary remnants,
-            # sub-minimum grains) by assigning each connected region to
-            # its largest bordering grain; update euler/quat accordingly.
-            rdr.rechar_lfi(connectivity=connectivity)
-            self.lfi_ebsd = rdr.lfi_ebsd
-            self.euler_ebsd = rdr.euler_ebsd
-            self.quat_ebsd = rdr.quat_ebsd
-            # Compute neighbourhood from the cleaned label field
-            self.neigh_gid_ebsd = find_neighs2d(
-                rdr.lfi_ebsd, conn=connectivity
-            )
-            # Quick morphological characterisation of the cleaned lfi
-            self.prop_ebsd = _char_lfi(rdr.lfi_ebsd, px_size=(
-                rdr.step_size if hasattr(rdr, 'step_size') else 1.0
-            ))
+            # Delegate the full pipeline (fill pixels + morphology + neighbours)
+            # to EBSDReader.characterise() — all EBSD logic lives there.
+            result = rdr.characterise(connectivity=connectivity)
+            self.lfi_ebsd      = result['lfi']
+            self.euler_ebsd    = result['euler']
+            self.quat_ebsd     = result['quat']
+            self.neigh_gid_ebsd = result['neigh_gid']
+            self.prop_ebsd     = result['prop']
             warnings.warn(
                 "ebsd2d route: lfi_ebsd, euler_ebsd, quat_ebsd, "
                 "neigh_gid_ebsd and prop_ebsd have been populated. "
@@ -816,66 +809,6 @@ class repgen2d:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping rechar for tgs.')
 
 
-# ---------------------------------------------------------------------------
-# Module-level helper: quick skimage characterisation of a label field
-# ---------------------------------------------------------------------------
-
-def _char_lfi(lfi, px_size=1.0):
-    """
-    Compute basic grain morphological properties from a 2D integer label
-    field using ``skimage.measure.regionprops``.
-
-    Parameters
-    ----------
-    lfi : np.ndarray, int, shape (ny, nx)
-        Grain label field.  Labels must be >= 1.  Non-positive values are
-        ignored.
-    px_size : float, optional
-        Physical size of one pixel (microns or simulation units).
-        Area is reported in px_size² and lengths in px_size. Default 1.0.
-
-    Returns
-    -------
-    dict
-        Mapping grain_id (int) -> dict of properties:
-
-        ``area``               float  — grain area in px_size² units
-        ``perimeter``          float  — grain perimeter in px_size units
-        ``eq_diameter``        float  — equivalent circular diameter
-        ``aspect_ratio``       float  — major_axis_length / minor_axis_length
-        ``major_axis_length``  float  — major axis in px_size units
-        ``minor_axis_length``  float  — minor axis in px_size units
-        ``eccentricity``       float  — eccentricity of best-fit ellipse
-        ``solidity``           float  — area / convex hull area
-        ``euler_number``       int    — Euler characteristic
-        ``centroid``           tuple  — (row, col) in pixel coordinates
-        ``bbox``               tuple  — (min_row, min_col, max_row, max_col)
-        ``npixels``            int    — number of pixels
-    """
-    from skimage.measure import regionprops
-
-    props_dict = {}
-    ps = float(px_size)
-
-    for region in regionprops(lfi):
-        gid = region.label
-        if gid <= 0:
-            continue
-        maj = region.major_axis_length * ps
-        mn = region.minor_axis_length * ps
-        ar = (maj / mn) if mn > 0 else float('nan')
-        props_dict[gid] = {
-            'area':               region.area * ps ** 2,
-            'perimeter':          region.perimeter * ps,
-            'eq_diameter':        region.equivalent_diameter * ps,
-            'aspect_ratio':       ar,
-            'major_axis_length':  maj,
-            'minor_axis_length':  mn,
-            'eccentricity':       region.eccentricity,
-            'solidity':           region.solidity,
-            'euler_number':       region.euler_number,
-            'centroid':           region.centroid,
-            'bbox':               region.bbox,
-            'npixels':            region.area,
-        }
-    return props_dict
+# _char_lfi has moved to upxo.interfaces.defdap.ebsd_reader as a
+# module-level helper.  Import it here for any legacy internal callers.
+from upxo.interfaces.defdap.ebsd_reader import _char_lfi  # noqa: F401
