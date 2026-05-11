@@ -662,6 +662,18 @@ class repgen2d:
                 'count':  int(vals.size),
             }
         self.stat_ebsd = stat
+        self._print_ebsd_stats_table()
+
+    def _print_ebsd_stats_table(self):
+        """Print ``stat_ebsd`` as a formatted table to stdout."""
+        stat = getattr(self, 'stat_ebsd', {})
+        if not stat:
+            return
+        print(f"{'Property':<22}  {'mean':>10}  {'std':>10}  {'min':>10}  {'max':>10}  {'count':>6}")
+        print('-' * 75)
+        for prop, s in stat.items():
+            print(f"{prop:<22}  {s['mean']:>10.3f}  {s['std']:>10.3f}  "
+                  f"{s['min']:>10.3f}  {s['max']:>10.3f}  {s['count']:>6d}")
 
     # ------------------------------------------------------------------
     # Quick re-characterisation (cc3d)
