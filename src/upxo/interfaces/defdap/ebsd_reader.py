@@ -571,6 +571,62 @@ class EBSDReader:
         self.quat_ebsd  = quat
         print("[rechar_lfi] Done.", flush=True)
 
+    # ------------------------------------------------------------------
+    # Visualisation orchestrator — thin wrappers around ebsdviz
+    # ------------------------------------------------------------------
+
+    def plot_grain_map(self, **kwargs):
+        """Plot the grain label field (lfi_ebsd) with optional boundary overlay.
+
+        All keyword arguments are forwarded to
+        ``upxo.viz.ebsdviz.plot_grain_labels``.
+
+        Returns
+        -------
+        fig, ax
+        """
+        from upxo.viz import ebsdviz as _ev
+        return _ev.plot_grain_labels(self, **kwargs)
+
+    def plot_euler_maps(self, **kwargs):
+        """Plot phi1, Phi, phi2 Euler angle maps side-by-side.
+
+        All keyword arguments are forwarded to
+        ``upxo.viz.ebsdviz.plot_euler_maps``.
+
+        Returns
+        -------
+        fig, axes
+        """
+        from upxo.viz import ebsdviz as _ev
+        return _ev.plot_euler_maps(self, **kwargs)
+
+    def plot_grain_size_histogram(self, **kwargs):
+        """Plot a grain area histogram in physical units (µm²).
+
+        All keyword arguments are forwarded to
+        ``upxo.viz.ebsdviz.plot_grain_size_histogram``.
+
+        Returns
+        -------
+        fig, ax
+        """
+        from upxo.viz import ebsdviz as _ev
+        return _ev.plot_grain_size_histogram(self, **kwargs)
+
+    def plot_grain_structure_with_boundaries(self, **kwargs):
+        """Plot grain label map and Euler channel side-by-side with boundaries.
+
+        All keyword arguments are forwarded to
+        ``upxo.viz.ebsdviz.plot_grain_structure_with_boundaries``.
+
+        Returns
+        -------
+        fig, axes
+        """
+        from upxo.viz import ebsdviz as _ev
+        return _ev.plot_grain_structure_with_boundaries(self, **kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Module-level helper: quick skimage characterisation of a label field
