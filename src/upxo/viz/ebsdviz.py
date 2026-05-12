@@ -326,64 +326,13 @@ def plot_mdf(
     return fig, ax
 
 
-def mdf_peak_selector(peaks: dict) -> dict:
-    """
-    Display an interactive ipywidgets checklist so the user can pick which
-    MDF peaks to retain for downstream analysis.
-
-    All peaks are pre-ticked.  Click **Confirm selection** to update
-    ``selected_peaks``.
-
-    Parameters
-    ----------
-    peaks : dict
-        Output of ``crystal_orientation.detect_mdf_peaks()``.
-
-    Returns
-    -------
-    selected_peaks : dict  (also stored in the returned ``state`` dict)
-        Pre-populated with all peaks; updated in-place on confirmation.
-        Keys: ``'angles'`` (list of float), ``'indices'`` (list of int).
-
-    Notes
-    -----
-    Call this inside a Jupyter cell.  The returned dict is mutated by the
-    widget callback — read it in the *next* cell after clicking Confirm.
-    """
-    import ipywidgets as widgets
-    from IPython.display import display, clear_output
-
-    peak_indices  = peaks['peak_indices']
-    peak_labels   = peaks['peak_labels']
-    peak_angles   = peaks['peak_angles']
-
-    checkboxes = [
-        widgets.Checkbox(value=True, description=lbl,
-                         layout=widgets.Layout(width='480px'))
-        for lbl in peak_labels
-    ]
-    confirm_btn = widgets.Button(description='Confirm selection',
-                                 button_style='success', icon='check')
-    output_box  = widgets.Output()
-
-    selected_peaks: dict = {
-        'angles':  list(peak_angles),
-        'indices': list(peak_indices),
-    }
-
-    def _on_confirm(_):
-        selected_peaks['angles']  = [peak_angles[i]  for i, cb in enumerate(checkboxes) if cb.value]
-        selected_peaks['indices'] = [peak_indices[i] for i, cb in enumerate(checkboxes) if cb.value]
-        with output_box:
-            clear_output()
-            print('✔  selected_peaks updated')
-            print(f"   angles : {selected_peaks['angles']}")
-
-    confirm_btn.on_click(_on_confirm)
-
-    print('Select which MDF peaks to retain for downstream analysis:')
-    display(widgets.VBox(checkboxes + [confirm_btn, output_box]))
-    return selected_peaks
+from upxo.interfaces.user_inputs.nbWidgets import (  # noqa: E402
+    mdf_peak_selector,
+    selectProps_twinGS,
+    selectProps_twinGS as make_property_stats_widgets,  # legacy alias
+    readProps_twinGS,
+    readProps_twinGS as read_property_stats_widgets,    # legacy alias
+)
 
 
 def plot_mdf_selected(
@@ -945,15 +894,14 @@ def plot_grain_role_property_stats(
     -------
     fig, axes
     """
-    from scipy.stats import gaussian_kde
-    from scipy.signal import find_peaks
+    from upxo.viz.vizDistr import plot_grouped_distributions
 
-    ALL_PROPS   = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
-    ALL_GROUPS  = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
+    ALL_PROPS  = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
+    ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
     PROP_LABELS = {
-        'area':         f'Area (µm²)',
+        'area':         'Area (µm²)',
         'aspect_ratio': 'Aspect ratio',
-        'perimeter':    f'Perimeter (µm)',
+        'perimeter':    'Perimeter (µm)',
         'solidity':     'Solidity',
         'n_neighbours': 'Number of neighbours',
     }
@@ -975,7 +923,7 @@ def plot_grain_role_property_stats(
     if selected_groups is None:
         selected_groups = ALL_GROUPS
 
-    # ── Build grain-role sets (merged across all CSL types) ──────────────────
+    # Build grain-role sets (merged across all CSL types)
     all_pp: set[int] = set()
     all_pt: set[int] = set()
     all_im: set[int] = set()
@@ -984,13 +932,13 @@ def plot_grain_role_property_stats(
         all_pt.update(info['pure_twins'].tolist())
         all_im.update(info['intermediates'].tolist())
 
-    only_pp_or_pt   = (all_pp | all_pt) - all_im
-    pure_parent_set = only_pp_or_pt & all_pp
-    pure_twin_set   = (only_pp_or_pt & all_pt) - pure_parent_set
-    intermediate_set  = all_im
-    all_role          = pure_parent_set | pure_twin_set | intermediate_set
-    indexed_gids      = set(int(g) for g in np.unique(lfi[lfi > 0]))
-    non_role_set      = indexed_gids - all_role
+    only_pp_or_pt    = (all_pp | all_pt) - all_im
+    pure_parent_set  = only_pp_or_pt & all_pp
+    pure_twin_set    = (only_pp_or_pt & all_pt) - pure_parent_set
+    intermediate_set = all_im
+    all_role         = pure_parent_set | pure_twin_set | intermediate_set
+    indexed_gids     = set(int(g) for g in np.unique(lfi[lfi > 0]))
+    non_role_set     = indexed_gids - all_role
 
     grain_sets = {
         'pure_parents':  pure_parent_set,
@@ -999,7 +947,7 @@ def plot_grain_role_property_stats(
         'non_role':      non_role_set,
     }
 
-    # ── Extract property values per group ────────────────────────────────────
+    # Extract property values per group into plain arrays
     def _get_vals(gids: set, pname: str) -> np.ndarray:
         vals = []
         for gid in gids:
@@ -1012,216 +960,32 @@ def plot_grain_role_property_stats(
                 if p is not None and pname in p:
                     v = float(p[pname])
                     if pname == 'area':
-                        v = v * step_size ** 2
+                        v *= step_size ** 2
                     elif pname == 'perimeter':
-                        v = v * step_size
+                        v *= step_size
                     vals.append(v)
         arr = np.array(vals, dtype=float)
         return arr[np.isfinite(arr)]
 
-    # ── Layout ───────────────────────────────────────────────────────────────
-    n_props = len(selected_props)
-    _ncols  = n_props if ncols is None else max(1, min(ncols, n_props))
-    _nrows  = int(np.ceil(n_props / _ncols))
-    fig_w   = figsize_per[0] * _ncols
-    fig_h   = figsize_per[1] * _nrows
-    fig, axes = plt.subplots(_nrows, _ncols,
-                             figsize=(fig_w, fig_h), dpi=dpi,
-                             squeeze=False)
-
-    # Hide any spare axes in the grid
-    for _idx in range(n_props, _nrows * _ncols):
-        axes[_idx // _ncols, _idx % _ncols].set_visible(False)
-
-    for col, pname in enumerate(selected_props):
-        ax = axes[col // _ncols, col % _ncols]
-
-        all_vals_flat = []
-        for grp in selected_groups:
-            v = _get_vals(grain_sets[grp], pname)
-            if v.size > 1:
-                all_vals_flat.append(v)
-
-        if not all_vals_flat:
-            ax.set_visible(False)
-            continue
-
-        combined  = np.concatenate(all_vals_flat)
-        vmin, vmax = combined.min(), combined.max()
-        if vmin == vmax:
-            ax.set_visible(False)
-            continue
-        bin_edges = np.linspace(vmin, vmax, bins + 1)
-        bin_w     = bin_edges[1] - bin_edges[0]
-
-        for grp in selected_groups:
-            vals   = _get_vals(grain_sets[grp], pname)
-            if vals.size < 2:
-                continue
-            colour = GROUP_COLORS[grp]
-
-            # histogram (density)
-            counts, _ = np.histogram(vals, bins=bin_edges, density=True)
-            ax.bar(bin_edges[:-1], counts, width=bin_w,
-                   color=colour, alpha=0.28, edgecolor='none', align='edge')
-
-            # KDE
-            kde  = gaussian_kde(vals, bw_method=bw_method)
-            xs   = np.linspace(vmin, vmax, 600)
-            ys   = kde(xs)
-            ax.plot(xs, ys, color=colour, linewidth=1.8)
-
-            # Peaks on KDE
-            peak_idx, _ = find_peaks(ys, prominence=peak_prominence * ys.max())
-            for pi in peak_idx:
-                ax.axvline(xs[pi], color=colour, linewidth=0.8,
-                           linestyle='--', alpha=0.7)
-                ax.text(xs[pi], ys[pi] * 1.03, f'{xs[pi]:.3g}',
-                        fontsize=fontsize - 3, color=colour, ha='center', va='bottom',
-                        rotation=90)
-
-            # Stats legend entry
-            mn, mx = vals.min(), vals.max()
-            mu, sd = vals.mean(), vals.std()
-            lbl = (f"{GROUP_LABELS_DISPLAY[grp]} (n={len(vals)})\n"
-                   f"  µ={mu:.3g}  σ={sd:.3g}  [{mn:.3g}, {mx:.3g}]")
-            ax.plot([], [], color=colour, linewidth=2.5, label=lbl)
-
-        ax.set_xlabel(PROP_LABELS.get(pname, pname), fontsize=fontsize)
-        ax.set_ylabel('Density', fontsize=fontsize)
-        ax.set_title(PROP_LABELS.get(pname, pname), fontsize=fontsize)
-        ax.legend(fontsize=fontsize - 2, loc='upper right', framealpha=0.85,
-                  handlelength=1.2)
-        ax.tick_params(labelsize=fontsize - 2)
-
-    fig.suptitle(suptitle, fontsize=fontsize + 1, y=1.02)
-    plt.tight_layout()
-    return fig, axes
-
-
-def make_property_stats_widgets(
-        props: list[str] | None = None,
-        groups: list[str] | None = None,
-        default_ncols: int = 0,
-        default_fontsize: float = 9.0,
-) -> dict:
-    """
-    Build and display the ipywidgets control panel for
-    :func:`plot_grain_role_property_stats`.
-
-    Returns a dict with keys ``prop_checkboxes``, ``group_checkboxes``,
-    ``ncols_slider``, and ``fontsize_slider``.  Pass the returned dict
-    directly to :func:`read_property_stats_widgets` to extract current
-    values before calling the plot function.
-
-    Parameters
-    ----------
-    props : list of str, optional
-        Property names to show (all ticked by default).  Subset of
-        ``['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']``.
-    groups : list of str, optional
-        Group names to show (all ticked by default).  Subset of
-        ``['pure_parents', 'pure_twins', 'intermediates', 'non_role']``.
-    default_ncols : int
-        Initial value of the columns slider (0 = single row).
-    default_fontsize : float
-        Initial font size value.
-
-    Returns
-    -------
-    dict
-        ``{'prop_checkboxes': dict, 'group_checkboxes': dict,
-           'ncols_slider': IntSlider, 'fontsize_slider': FloatSlider}``
-    """
-    import ipywidgets as widgets
-    from IPython.display import display
-
-    ALL_PROPS = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
-    ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
-    PROP_LABELS_UI = {
-        'area':         'Area (µm²)',
-        'aspect_ratio': 'Aspect ratio',
-        'perimeter':    'Perimeter (µm)',
-        'solidity':     'Solidity',
-        'n_neighbours': 'N neighbours',
-    }
-    GROUP_LABELS_UI = {
-        'pure_parents':  'Pure parents',
-        'pure_twins':    'Pure twins',
-        'intermediates': 'Intermediates',
-        'non_role':      'Non-role grains',
+    data = {
+        pname: {grp: _get_vals(grain_sets[grp], pname) for grp in selected_groups}
+        for pname in selected_props
     }
 
-    if props is None:
-        props = ALL_PROPS
-    if groups is None:
-        groups = ALL_GROUPS
-
-    prop_checkboxes = {
-        p: widgets.Checkbox(value=True, description=PROP_LABELS_UI[p],
-                            layout=widgets.Layout(width='200px'))
-        for p in props
-    }
-    group_checkboxes = {
-        g: widgets.Checkbox(value=True, description=GROUP_LABELS_UI[g],
-                            layout=widgets.Layout(width='200px'))
-        for g in groups
-    }
-    ncols_slider = widgets.IntSlider(
-        value=default_ncols, min=0, max=5, step=1,
-        description='Columns:',
-        style={'description_width': 'initial'},
-        layout=widgets.Layout(width='300px'),
-        readout=True,
+    return plot_grouped_distributions(
+        data            = data,
+        prop_labels     = PROP_LABELS,
+        group_colors    = {g: GROUP_COLORS[g] for g in selected_groups},
+        group_labels    = {g: GROUP_LABELS_DISPLAY[g] for g in selected_groups},
+        bins            = bins,
+        bw_method       = bw_method,
+        peak_prominence = peak_prominence,
+        figsize_per     = figsize_per,
+        dpi             = dpi,
+        suptitle        = suptitle,
+        ncols           = ncols,
+        fontsize        = fontsize,
     )
-    fontsize_slider = widgets.FloatSlider(
-        value=default_fontsize, min=6.0, max=20.0, step=0.5,
-        description='Font size:',
-        style={'description_width': 'initial'},
-        layout=widgets.Layout(width='350px'),
-        readout=True,
-        readout_format='.1f',
-    )
-
-    display(widgets.VBox([
-        widgets.HTML('<b style="font-size:13px">Morphological / topological properties:</b>'),
-        widgets.HBox(list(prop_checkboxes.values())),
-        widgets.HTML('<b style="font-size:13px">Grain groups:</b>'),
-        widgets.HBox(list(group_checkboxes.values())),
-        widgets.HTML('<b style="font-size:13px">Subplot columns (0 = single row):</b>'),
-        ncols_slider,
-        widgets.HTML('<b style="font-size:13px">Font size:</b>'),
-        fontsize_slider,
-    ]))
-
-    return {
-        'prop_checkboxes':  prop_checkboxes,
-        'group_checkboxes': group_checkboxes,
-        'ncols_slider':     ncols_slider,
-        'fontsize_slider':  fontsize_slider,
-    }
-
-
-def read_property_stats_widgets(widgets_dict: dict) -> dict:
-    """
-    Read current values from the dict returned by
-    :func:`make_property_stats_widgets`.
-
-    Returns
-    -------
-    dict
-        ``{'selected_props': list, 'selected_groups': list,
-           'ncols': int | None, 'fontsize': float}``
-    """
-    selected_props  = [k for k, cb in widgets_dict['prop_checkboxes'].items()  if cb.value]
-    selected_groups = [k for k, cb in widgets_dict['group_checkboxes'].items() if cb.value]
-    ncols_val       = widgets_dict['ncols_slider'].value
-    return {
-        'selected_props':  selected_props,
-        'selected_groups': selected_groups,
-        'ncols':           ncols_val if ncols_val > 0 else None,
-        'fontsize':        widgets_dict['fontsize_slider'].value,
-    }
 
 
 def print_grain_role_ratios(ratios: dict) -> None:
