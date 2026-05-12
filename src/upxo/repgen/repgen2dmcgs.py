@@ -5,6 +5,7 @@ from copy import deepcopy
 from upxo._sup import dataTypeHandlers as dth
 from upxo.repqual.grain_network_repr_assesser import KREPR
 from upxo.analysis.analysis2d import gsan2d
+import matplotlib.pyplot as plt
 
 warnings.simplefilter('ignore', DeprecationWarning)
 
@@ -676,6 +677,181 @@ class repgen2d:
                   f"{s['min']:>10.3f}  {s['max']:>10.3f}  {s['count']:>6d}")
 
     # ------------------------------------------------------------------
+    # Distribution visualisation
+    # ------------------------------------------------------------------
+
+    def see_distr(self, prop='area', source='ebsd', nbins=40, vis='hist',
+                  show_kde=True, show_stats=True, color='steelblue',
+                  figsize=(7, 4), log_scale=False, step_size=None):
+        """
+        Visualise the distribution of a grain morphological property.
+
+        Parameters
+        ----------
+        prop : str
+            Grain property name, e.g. ``'area'``, ``'perimeter'``,
+            ``'aspect_ratio'``, ``'eq_diameter'``, ``'solidity'``,
+            ``'eccentricity'``, ``'major_axis_length'``,
+            ``'minor_axis_length'``, ``'npixels'``.
+        source : str
+            Which grain structure to draw data from:
+
+            ``'ebsd'``  — ``self.prop_ebsd`` (EBSD target, dict of dicts).
+            Requires ``rechar()`` or ``characterise()`` to have been called.
+
+            ``'sgs'``   — ``self.sgs.prop`` (simulated sample grain structure,
+            pandas DataFrame). Requires ``char_gs()`` to have been called.
+
+            ``'tgs'``   — ``self.tgs.prop`` (non-EBSD target grain structure,
+            pandas DataFrame). Requires ``char_gs()`` to have been called.
+
+        nbins : int
+            Number of histogram bins. Default 40.
+        vis : str
+            Plot style: ``'hist'``, ``'kde'``, or ``'hist_kde'``. Default
+            ``'hist'``.
+        show_kde : bool
+            Overlay KDE on the histogram (``vis='hist'`` only). Default True.
+        show_stats : bool
+            Annotate mean and median lines. Default True.
+        color : str
+            Histogram / KDE fill colour. Default ``'steelblue'``.
+        figsize : tuple
+            Figure (width, height) in inches. Default ``(7, 4)``.
+        log_scale : bool
+            Log x-axis. Default False.
+        step_size : float or None
+            Physical pixel size (µm) for x-label annotation. When ``None``
+            and ``source='ebsd'``, the value is not shown in the label
+            (it is already embedded in the physical-unit values stored in
+            ``prop_ebsd``). Default None.
+
+        Returns
+        -------
+        fig, ax : matplotlib Figure and Axes
+
+        Raises
+        ------
+        RuntimeError
+            If the requested source has not been populated yet.
+        KeyError
+            If *prop* is not present in the property data.
+        ValueError
+            If *source* or *vis* is not one of the accepted values.
+
+        Examples
+        --------
+        >>> fig, ax = rg.see_distr(prop='area', source='ebsd', nbins=40)
+        >>> plt.show()
+        >>> fig, ax = rg.see_distr(prop='aspect_ratio', source='sgs',
+        ...                        vis='hist_kde')
+        >>> plt.show()
+        """
+        from upxo.viz.vizDistr import DistrViz, PROP_UNITS
+
+        if source == 'ebsd':
+            try:
+                prop_data = self.prop_ebsd
+            except AttributeError:
+                raise RuntimeError(
+                    "prop_ebsd is not populated. "
+                    "Call rechar(target='tgs') or rdr.characterise() first."
+                )
+            data = np.array([v[prop] for v in prop_data.values()])
+
+        elif source in ('sgs', 'tgs'):
+            gs_obj = self.sgs if source == 'sgs' else self.tgs
+            if gs_obj is None:
+                raise RuntimeError(
+                    f"self.{source} is None — no grain structure available."
+                )
+            try:
+                df = gs_obj.prop
+            except AttributeError:
+                raise RuntimeError(
+                    f"self.{source}.prop is not populated. "
+                    "Call char_gs() first."
+                )
+            data = df[prop].to_numpy()
+
+        else:
+            raise ValueError(
+                f"source must be 'ebsd', 'sgs', or 'tgs'; got '{source!r}'"
+            )
+
+        label = prop.replace('_', ' ').title()
+        dv = DistrViz(data, label=label, units=PROP_UNITS.get(prop, ''))
+        return dv.plot(vis=vis, bins=nbins, show_kde=show_kde,
+                       show_stats=show_stats, color=color, figsize=figsize,
+                       log_scale=log_scale, step_size=step_size)
+
+    # ------------------------------------------------------------------
+    # EBSD re-characterisation from a pre-loaded reader
+    # ------------------------------------------------------------------
+
+    def clean_and_rechar_from_rdr(self, rdr, connectivity=4,
+                                   min_grain_size=0, verbose=True):
+        """
+        Clean and re-characterise the EBSD target grain structure from an
+        already-loaded (and optionally cropped) ``EBSDReader``, then assign
+        all results to the corresponding ``rg.*_ebsd`` slots.
+
+        Internally calls ``rdr.characterise(connectivity, min_grain_size)``
+        which performs:
+
+        1. Pixel filling — non-indexed / boundary pixels (values ≤ 0) are
+           assigned to the spatially largest neighbouring grain and their
+           orientations are updated (cleaning step).
+        2. Morphological characterisation — per-grain area, perimeter,
+           aspect ratio, etc. via ``skimage.measure.regionprops``.
+           Grains smaller than ``min_grain_size`` pixels are excluded from
+           ``prop_ebsd``.
+        3. Neighbourhood graph — first-order grain adjacency via cc3d.
+
+        This is the preferred path when ``rdr`` has been built and cropped
+        outside ``rechar()`` — it avoids reloading the file from disk.
+
+        Parameters
+        ----------
+        rdr : EBSDReader
+            A populated (and optionally cropped) ``EBSDReader`` instance.
+        connectivity : int
+            Pixel connectivity for cleaning and neighbour detection.
+            4 (edge-only) or 8 (edge + corner). Default 4.
+        min_grain_size : int, optional
+            Minimum grain size in pixels.  Grains with fewer pixels are
+            excluded from ``prop_ebsd`` after characterisation. Default 0
+            (all grains included).
+        verbose : bool
+            Print a timing and grain-count summary on completion. Default True.
+
+        Notes
+        -----
+        Populated slots after return: ``lfi_ebsd``, ``euler_ebsd``,
+        ``quat_ebsd``, ``neigh_gid_ebsd``, ``prop_ebsd``.
+        """
+        import time, warnings
+        t0 = time.perf_counter()
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter('always')
+            result = rdr.characterise(connectivity=connectivity,
+                                      min_grain_size=min_grain_size)
+        elapsed = time.perf_counter() - t0
+
+        self.lfi_ebsd       = result['lfi']
+        self.euler_ebsd     = result['euler']
+        self.quat_ebsd      = result['quat']
+        self.neigh_gid_ebsd = result['neigh_gid']
+        self.prop_ebsd      = result['prop']
+
+        if verbose:
+            print(f'clean_and_rechar_from_rdr() completed in {elapsed:.1f} s')
+            print(f'Non-positive pixels remaining : {int(np.sum(self.lfi_ebsd <= 0))}')
+            print(f'Grains after cleaning         : {int(self.lfi_ebsd.max())}')
+            print(f'Neighbour entries             : {len(self.neigh_gid_ebsd)}')
+            print(f'prop_ebsd grain count         : {len(self.prop_ebsd)}')
+
+    # ------------------------------------------------------------------
     # Quick re-characterisation (cc3d)
     # ------------------------------------------------------------------
 
@@ -820,6 +996,101 @@ class repgen2d:
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping rechar for tgs.')
 
+    def compute_mdf_ebsd(self):
+        """
+        Compute the misorientation distribution function (MDF) from the EBSD
+        dataset attached to this repgen2d instance and display it.
+
+        Prerequisites
+        -------------
+        ``clean_and_rechar_from_rdr`` (or ``rechar``) must have been called
+        with ``tgstype='ebsd2d'`` beforehand so that ``self.lfi_ebsd``,
+        ``self.quat_ebsd``, and ``self.neigh_gid_ebsd`` are populated.
+
+        Returns
+        -------
+        mdf : np.ndarray
+            1-D array of grain-boundary misorientation angles (degrees) for
+            every unique neighbour pair found in the EBSD map.
+        peaks : dict
+            Peak-detection results with keys ``'peak_indices'``,
+            ``'peak_labels'``, and ``'peak_angles'``.  Pass directly to
+            ``nbWidgets.mdf_peak_selector`` for interactive peak selection.
+
+        Side Effects
+        ------------
+        Calls ``ebsdviz.plot_mdf`` and ``plt.show()``, rendering the MDF
+        histogram with detected peaks in the current matplotlib backend.
+        """
+        from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
+        mdf = compute_mdf_from_quats(self.lfi_ebsd, self.quat_ebsd, self.neigh_gid_ebsd)
+        # -------------------------------------------------
+        from upxo.xtalphy.crystal_orientation import detect_mdf_peaks
+        peaks = detect_mdf_peaks(mdf)
+        print(f"{'Detected peaks':─^55}")
+        for label, (csl_name, delta) in zip(peaks['peak_labels'], peaks['csl_nearest']):
+            print(f'  {label}')
+        # -------------------------------------------------
+        import upxo.viz.ebsdviz as ebsdviz
+        ebsdviz.plot_mdf(mdf, peaks)
+        plt.show()
+        # -------------------------------------------------
+        return mdf, peaks
+    
+    def segregate_csl_pairs(self):
+        """
+        Segregate grain boundary pairs by coincidence site lattice (CSL) type.
+
+        Uses the MDF peaks previously selected via the interactive widget
+        (``nbWidgets.mdf_peak_selector``) together with the CSL information
+        returned by ``compute_mdf_ebsd()`` to classify every unique
+        grain-boundary pair into its nearest CSL relationship.
+
+        Prerequisites
+        -------------
+        ``compute_mdf_ebsd()`` must have been called first so that ``mdf``
+        and ``peaks`` are available in the calling scope, and the user must
+        have selected the desired peaks via ``nbWidgets.mdf_peak_selector``
+        (which populates ``selected_peaks``).
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        csl_grains : dict
+            A dict keyed by CSL label (e.g. ``'Σ3'``); each value is a dict
+            with:
+
+            - ``csl_angle``  : float — reference misorientation angle (degrees)
+            - ``pairs``      : ndarray (M, 2) — grain-ID pairs at this boundary type
+            - ``miso_deg``   : ndarray (M,) — disorientation of those pairs (degrees)
+            - ``grains_A``   : ndarray — unique grain IDs on one side of the boundary
+            - ``grains_B``   : ndarray — unique grain IDs on the other side
+            - ``grains_all`` : ndarray — all unique grain IDs touching this boundary type
+
+        Side Effects
+        ------------
+        Prints a table with columns ``CSL type``, ``ref °``, ``pairs``, and
+        ``grains`` for every CSL relationship found among the selected peaks.
+
+        Notes
+        -----
+        ``selected_peaks`` and ``peaks`` must be defined in the scope where
+        this method is invoked (typically a Jupyter notebook cell).
+        """
+        from upxo.xtalphy.crystal_orientation import segregate_csl_pairs
+        # Segregate using selected_peaks from the widget cell
+        csl_grains = segregate_csl_pairs(mdf, selected_peaks, csl=peaks['csl'], csl_tol=peaks['csl_tol'])
+        # Summary table
+        print(f"{'CSL type':<18} {'ref °':>6}  {'pairs':>6}  {'grains':>7}")
+        print('─' * 42)
+        for lbl, info in csl_grains.items():
+            print(f"{lbl:<18} {info['csl_angle']:>6.2f}  "
+                f"{len(info['pairs']):>6}  {len(info['grains_all']):>7}")
+            
+        return csl_grains
 
 # _char_lfi has moved to upxo.interfaces.defdap.ebsd_reader as a
 # module-level helper.  Import it here for any legacy internal callers.
