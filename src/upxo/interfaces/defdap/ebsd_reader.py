@@ -90,7 +90,7 @@ class EBSDReader:
     """
 
     __slots__ = ('lfi_ebsd', 'euler_ebsd', 'quat_ebsd',
-                 'step_size', 'file_path', 'shape')
+                 'step_size', 'file_path', 'shape', 'prop')
 
     def __init__(self):
         # Slots are populated by the class-methods; direct construction
@@ -171,6 +171,7 @@ class EBSDReader:
         obj.lfi_ebsd = _extract_lfi(ebsd_map)
         obj.euler_ebsd = _extract_euler(ebsd_map)
         obj.quat_ebsd = _extract_quat(ebsd_map)
+        obj.prop = None
 
         return obj
 
@@ -310,7 +311,7 @@ class EBSDReader:
     # Full EBSD characterisation pipeline
     # ------------------------------------------------------------------
 
-    def characterise(self, connectivity=4):
+    def characterise(self, connectivity=4, min_grain_size=0):
         """
         Run the complete post-load characterisation pipeline on ``self``
         and return a result dict ready for consumption by
@@ -320,8 +321,9 @@ class EBSDReader:
         -----
         1. ``rechar_lfi(connectivity)`` — fill non-positive pixels, update
            ``euler_ebsd`` / ``quat_ebsd`` in-place.
-        2. ``_char_lfi(lfi_ebsd, step_size)`` — compute per-grain morphological
-           properties (area, perimeter, aspect ratio, …).
+        2. ``_char_lfi(lfi_ebsd, step_size, min_grain_size)`` — compute
+           per-grain morphological properties; grains smaller than
+           ``min_grain_size`` pixels are excluded.
         3. ``find_neighs2d(lfi_ebsd, conn)`` — build first-order neighbour dict.
 
         Parameters
@@ -329,6 +331,10 @@ class EBSDReader:
         connectivity : int
             cc3d connectivity for ``rechar_lfi`` and ``find_neighs2d``.
             Valid 2D values: 4 or 8. Default 4.
+        min_grain_size : int, optional
+            Minimum grain size in pixels.  Grains with fewer pixels are
+            excluded from the returned ``'prop'`` dict. Default 0 (all
+            grains included).
 
         Returns
         -------
@@ -344,8 +350,10 @@ class EBSDReader:
 
         self.rechar_lfi(connectivity=connectivity)
         prop = _char_lfi(self.lfi_ebsd,
-                         px_size=getattr(self, 'step_size', 1.0))
+                         px_size=getattr(self, 'step_size', 1.0),
+                         min_grain_size=min_grain_size)
         neigh = find_neighs2d(self.lfi_ebsd, conn=connectivity)
+        self.prop = prop
 
         return {
             'lfi':       self.lfi_ebsd,
@@ -627,12 +635,84 @@ class EBSDReader:
         from upxo.viz import ebsdviz as _ev
         return _ev.plot_grain_structure_with_boundaries(self, **kwargs)
 
+    def see_distr(self, prop='area', nbins=40, vis='hist',
+                  show_kde=True, show_stats=True,
+                  color='steelblue', figsize=(7, 4), log_scale=False):
+        """
+        Visualise the distribution of a grain morphological property.
+
+        Requires :meth:`characterise` to have been called first (it populates
+        ``self.prop`` with per-grain property dicts).
+
+        Parameters
+        ----------
+        prop : str
+            Grain property to plot. Valid names (all scaled to physical units
+            via ``step_size``):
+            ``'area'``, ``'perimeter'``, ``'eq_diameter'``,
+            ``'aspect_ratio'``, ``'major_axis_length'``,
+            ``'minor_axis_length'``, ``'eccentricity'``,
+            ``'solidity'``, ``'npixels'``.
+        nbins : int
+            Number of histogram bins. Default 40.
+        vis : str
+            Plot style: ``'hist'`` — histogram with optional KDE overlay;
+            ``'kde'`` — pure kernel density estimate;
+            ``'hist_kde'`` — density-normalised histogram + KDE.
+            Default ``'hist'``.
+        show_kde : bool
+            Overlay a KDE curve on the histogram (``vis='hist'`` only).
+            Default True.
+        show_stats : bool
+            Annotate mean and median lines. Default True.
+        color : str
+            Histogram / KDE fill colour. Default ``'steelblue'``.
+        figsize : tuple
+            Figure size (width, height) in inches. Default ``(7, 4)``.
+        log_scale : bool
+            Apply log scale to the x-axis. Default False.
+
+        Returns
+        -------
+        fig, ax : matplotlib Figure and Axes
+
+        Raises
+        ------
+        RuntimeError
+            If ``self.prop`` is not populated (characterise not yet called).
+        KeyError
+            If *prop* is not present in the property dicts.
+        ValueError
+            If *vis* is not one of the supported values.
+
+        Examples
+        --------
+        >>> fig, ax = rdr.see_distr(prop='area', nbins=40)
+        >>> plt.show()
+        >>> fig, ax = rdr.see_distr(prop='aspect_ratio', vis='hist_kde')
+        >>> plt.show()
+        """
+        import numpy as np
+        from upxo.viz.vizDistr import DistrViz, PROP_UNITS
+
+        if not hasattr(self, 'prop') or self.prop is None:
+            raise RuntimeError(
+                "self.prop is not populated. Call rdr.characterise() first."
+            )
+
+        data = np.array([v[prop] for v in self.prop.values()])
+        label = prop.replace('_', ' ').title()
+        dv = DistrViz(data, label=label, units=PROP_UNITS.get(prop, ''))
+        return dv.plot(vis=vis, bins=nbins, show_kde=show_kde,
+                       show_stats=show_stats, color=color, figsize=figsize,
+                       log_scale=log_scale, step_size=self.step_size)
+
 
 # ---------------------------------------------------------------------------
 # Module-level helper: quick skimage characterisation of a label field
 # ---------------------------------------------------------------------------
 
-def _char_lfi(lfi, px_size=1.0):
+def _char_lfi(lfi, px_size=1.0, min_grain_size=0):
     """
     Compute basic grain morphological properties from a 2D integer label
     field using ``skimage.measure.regionprops``.
@@ -645,6 +725,10 @@ def _char_lfi(lfi, px_size=1.0):
     px_size : float, optional
         Physical size of one pixel (microns or simulation units).
         Area is reported in px_size² and lengths in px_size. Default 1.0.
+    min_grain_size : int, optional
+        Minimum grain size in **pixels**.  Grains with fewer pixels than
+        this threshold are excluded from the returned dict. Default 0
+        (all grains included).
 
     Returns
     -------
@@ -672,6 +756,8 @@ def _char_lfi(lfi, px_size=1.0):
     for region in regionprops(lfi):
         gid = region.label
         if gid <= 0:
+            continue
+        if region.area < min_grain_size:
             continue
         maj = region.major_axis_length * ps
         mn  = region.minor_axis_length * ps
