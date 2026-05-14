@@ -145,7 +145,7 @@ class MC_GS_Container2d:
 
                 use_version=2,
                 bbox=True,                   bbox_ex=False,
-                npixels=False,               identify_pixel_locations=True,
+                npixels=True,                identify_pixel_locations=True,
                 npixels_gb=False,
                 area=True,                   aspect_ratio=True,
                 solidity=True,               major_axis_length=True,
@@ -182,7 +182,7 @@ class MC_GS_Container2d:
         _CHAR_DEFAULTS: dict = dict(
             use_version=2,
             bbox=True,                   bbox_ex=False,
-            npixels=False,               identify_pixel_locations=True,
+            npixels=True,                identify_pixel_locations=True,
             npixels_gb=False,
             area=True,                   aspect_ratio=True,
             solidity=True,               major_axis_length=True,
@@ -259,6 +259,7 @@ class MC_GS_Container2d:
         fontsize: float = 10.0,
         suptitle: str = 'Temporal evolution of grain-property distributions',
         cmap: str = 'nipy_spectral',
+        show_stats_table: bool = True,
     ):
         """
         Plot KDE distributions — one curve per temporal slice — overlaid for
@@ -297,6 +298,11 @@ class MC_GS_Container2d:
             Figure-level title.
         cmap : str, optional
             Matplotlib colormap name.  Default ``'nipy_spectral'``.
+        show_stats_table : bool, optional
+            If ``True`` (default), display the combined statistics table
+            after the figure using ``IPython.display`` (or ``print`` as
+            fallback).  Set to ``False`` to suppress the table; the data
+            is still computed and stored in :attr:`stats_table`.
 
         Returns
         -------
@@ -445,10 +451,11 @@ class MC_GS_Container2d:
             for p in props
         }
 
-        try:
-            from IPython.display import display as _display
-            _display(df_all)
-        except Exception:
-            print(df_all.to_string(index=False))
+        if show_stats_table:
+            try:
+                from IPython.display import display as _display
+                _display(df_all)
+            except Exception:
+                print(df_all.to_string(index=False))
 
         return fig, axes
