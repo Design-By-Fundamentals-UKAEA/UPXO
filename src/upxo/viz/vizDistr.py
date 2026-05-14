@@ -49,13 +49,13 @@ PROP_UNITS = {
 
 # CSL reference angles for cubic symmetry (Σ label → disorientation angle °)
 _CSL_ANGLES = {
-    'Σ3':   60.00,
-    'Σ5':   36.87,
-    'Σ7':   38.21,
-    'Σ9':   38.94,
-    'Σ11':  50.48,
-    'Σ13a': 22.62,
-    'Σ13b': 27.80,
+    'S3':   60.00,
+    'S5':   36.87,
+    'S7':   38.21,
+    'S9':   38.94,
+    'S11':  50.48,
+    'S13a': 22.62,
+    'S13b': 27.80,
 }
 
 
@@ -620,3 +620,388 @@ def plot_grouped_distributions(
     if do_tight_layout:
         plt.tight_layout()
     return fig, axes
+
+
+def plot_repr_rank(
+        repr_rank_ng: dict,
+        figsize=None,
+        dpi: int = 100,
+        fontsize_annot: float = 8.0,
+        fontsize_tick: float = 9.0,
+        fontsize_title: float = 9.0,
+        fontsize_suptitle: float = 11.0,
+) -> None:
+    """
+    Five vertically stacked heatmaps showing the per-property rank of every
+    MC time slice under each representativeness metric (ratio, Wasserstein,
+    energy distance, KS statistic, Anderson–Darling statistic).
+
+    Colour encodes rank within each column independently:
+    green = best (rank 1), red = worst (rank N).  Cell text shows the raw
+    numeric score.  Rows are ordered best-to-worst by the aggregate score
+    (inherited from the DataFrame sort order in ``repr_rank_ng``).
+
+    Ranking rule per column:
+    - ratio, property columns  : rank by ``|value − 1|`` ascending
+      (closest to 1.0 = best)
+    - ratio, aggregate column  : rank by value ascending (lowest = best)
+    - wasserstein / energy     : rank by value ascending (lowest = best)
+
+    Parameters
+    ----------
+    repr_rank_ng : dict
+        ``{'ratio': df, 'wasserstein': df, 'energy': df}`` — as stored in
+        ``repgen2d.repr_rank_ng`` after calling ``find_repr_mcgs_props``.
+    figsize : tuple or None
+        Override default figure size.  Default auto-computes from data shape.
+    dpi : int
+        Figure resolution.
+    fontsize_annot : float
+        Font size for the numeric value printed in each cell.
+    fontsize_tick : float
+        Font size for axis tick labels (slice keys on y-axis, column names
+        on x-axis).
+    fontsize_title : float
+        Font size for each panel title.
+    fontsize_suptitle : float
+        Font size for the overall figure title.
+    """
+    metrics = ('ratio', 'wasserstein', 'energy', 'ks', 'ad')
+    titles = {
+        'ratio':       'Ratio  (mean offset)\n1.0 = perfect  |  green = closest to 1.0',
+        'wasserstein': 'Wasserstein  (shape distance)\n0 = identical  |  green = smallest',
+        'energy':      'Energy  (shape distance)\n0 = identical  |  green = smallest',
+        'ks':          'KS statistic  (max CDF gap)\n0 = identical  |  green = smallest',
+        'ad':          'Anderson–Darling  (tail-sensitive CDF)\n0 = identical  |  green = smallest',
+    }
+    fmt = {'ratio': '{:.3f}', 'wasserstein': '{:.4f}', 'energy': '{:.4f}',
+           'ks': '{:.4f}', 'ad': '{:.4f}'}
+
+    sample_df = repr_rank_ng['wasserstein']
+    n_slices, n_cols = sample_df.shape
+    if figsize is None:
+        figsize = (max(10, n_cols * 1.8), max(20, n_slices * 0.65 * 5))
+
+    fig, axes = plt.subplots(5, 1, figsize=figsize, dpi=dpi)
+
+    for ax, metric in zip(axes, metrics):
+        df   = repr_rank_ng[metric]
+        vals = df.values.astype(float)
+        cols = list(df.columns)
+        rows = [str(k) for k in df.index]
+        nr, nc = vals.shape
+
+        rank_mat = np.empty_like(vals)
+        for j, col in enumerate(cols):
+            col_vals = vals[:, j]
+            if metric == 'ratio' and col != 'aggregate':
+                order = np.argsort(np.abs(col_vals - 1.0))
+            else:
+                order = np.argsort(col_vals)
+            ranks = np.empty(nr, dtype=float)
+            ranks[order] = np.arange(nr)
+            rank_mat[:, j] = ranks
+
+        norm_rank = rank_mat / max(nr - 1, 1)   # 0 = best, 1 = worst
+
+        ax.imshow(norm_rank, cmap='RdYlGn_r', vmin=0, vmax=1,
+                  aspect='auto', interpolation='nearest')
+        for i in range(nr):
+            for j in range(nc):
+                ax.text(j, i, fmt[metric].format(vals[i, j]),
+                        ha='center', va='center',
+                        fontsize=fontsize_annot, color='black')
+
+        ax.set_xticks(range(nc))
+        ax.set_xticklabels(cols, rotation=30, ha='right', fontsize=fontsize_tick)
+        ax.set_yticks(range(nr))
+        ax.set_yticklabels(rows, fontsize=fontsize_tick)
+        ax.set_ylabel('MC time slice  (top = best aggregate)',
+                      fontsize=fontsize_tick)
+        ax.set_title(titles[metric], fontsize=fontsize_title, pad=8)
+        ax.axvline(nc - 1.5, color='white', linewidth=2)
+
+    fig.suptitle('MC–EBSD representativeness ranking',
+                 fontsize=fontsize_suptitle, y=1.01)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_normalized_prop_distributions(
+        ebsd_data: dict,
+        mc_data: dict,
+        props: list,
+        scores: dict | None = None,
+        prop_labels: dict | None = None,
+        bins: int = 40,
+        bw_method='scott',
+        figsize_per: tuple = (5, 4),
+        dpi: int = 100,
+        ncols: int | None = None,
+        fontsize: float = 9.0,
+        show_hist: bool = True,
+        show_peaks: bool = True,
+        legend_loc: str = 'upper right',
+        legend_ncol: int = 1,
+        legend_fontsize: float | None = None,
+) -> None:
+    """
+    Overlaid normalised property distributions for EBSD (merged) and MC slices.
+
+    Each distribution is normalised by its own mean before plotting, matching
+    the normalisation used in ``find_repr_mcgs_props``.  All curves are therefore
+    centred near 1.0 on the x-axis and are directly shape-comparable.
+
+    Wasserstein and energy distances are annotated in each subplot legend when
+    ``scores`` is provided.
+
+    Parameters
+    ----------
+    ebsd_data : dict
+        ``{prop: array}`` of EBSD-merged property values, each already divided
+        by its own mean.
+    mc_data : dict
+        ``{slice_key: {prop: array}}`` of MC property values, each already
+        divided by its own mean.
+    props : list of str
+        Ordered list of property names to plot.
+    scores : dict or None
+        ``{slice_key: {prop: {'wasserstein': v, 'energy': v}}}`` extracted from
+        ``repr_rank_ng``.  When supplied, each MC curve's legend entry is
+        annotated with ``W=...  E=...`` for the per-property distance.
+    prop_labels : dict or None
+        ``{prop: display_label}``.  Defaults to ``f'{prop}  (mean normalized)'``.
+    bins, bw_method, figsize_per, dpi, ncols, fontsize, show_hist, show_peaks
+        Forwarded to :func:`plot_grouped_distributions`.
+    legend_loc : str
+        Legend location string passed to ``ax.legend(loc=...)``.
+        Examples: ``'upper right'``, ``'upper left'``, ``'lower right'``,
+        ``'center left'``, ``'best'``.  Default ``'upper right'``.
+    legend_ncol : int
+        Number of columns in the legend.  Values > 1 split entries side-by-side,
+        reducing legend height and — when entries are uniform in width — the
+        overall legend footprint.  Default ``1`` (single column).
+    legend_fontsize : float or None
+        Font size for legend text.  Reducing this is the most direct way to
+        shrink the legend box since box width is driven by label text length.
+        Defaults to ``fontsize - 2`` when None.
+    """
+    _MC_PALETTE = [
+        '#4878CF', '#D65F5F', '#59A14F', '#F28E2B',
+        '#76B7B2', '#E15759', '#B07AA1', '#FF9DA7',
+    ]
+
+    if prop_labels is None:
+        prop_labels = {p: f'{p}  (mean normalized)' for p in props}
+
+    group_colors = {'EBSD (merged)': '#222222'}
+    for i, k in enumerate(mc_data):
+        group_colors[f'MC  t={k}'] = _MC_PALETTE[i % len(_MC_PALETTE)]
+
+    data = {}
+    for p in props:
+        groups = {'EBSD (merged)': ebsd_data[p]}
+        for k, mc_props in mc_data.items():
+            groups[f'MC  t={k}'] = mc_props[p]
+        data[p] = groups
+
+    # Always defer layout so we can post-process legends uniformly.
+    fig, axes = plot_grouped_distributions(
+        data,
+        prop_labels=prop_labels,
+        group_colors=group_colors,
+        bins=bins, bw_method=bw_method,
+        figsize_per=figsize_per, dpi=dpi, ncols=ncols, fontsize=fontsize,
+        show_hist=show_hist, show_peaks=show_peaks,
+        suptitle='Normalised property distributions — EBSD (merged) vs MC slices',
+        do_tight_layout=False,
+    )
+
+    # Append score annotations and re-apply legend with user-controlled style.
+    _MC_PALETTE_LIST = list(_MC_PALETTE)
+    for idx, p in enumerate(props):
+        ax = axes.flat[idx]
+        if scores is not None:
+            for i, k in enumerate(mc_data):
+                if k in scores and p in scores[k]:
+                    sc = scores[k][p]
+                    w = sc.get('wasserstein', float('nan'))
+                    e = sc.get('energy', float('nan'))
+                    colour = _MC_PALETTE_LIST[i % len(_MC_PALETTE_LIST)]
+                    ax.plot([], [], color=colour, lw=0,
+                            label=f'  → W={w:.4f}  E={e:.4f}')
+        ax.legend(fontsize=legend_fontsize if legend_fontsize is not None else fontsize - 2,
+                  loc=legend_loc, framealpha=0.85,
+                  ncol=legend_ncol)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_qq_comparison(
+        ebsd_data: dict,
+        mc_data: dict,
+        props: list,
+        prop_labels: dict | None = None,
+        figsize_per: tuple = (4, 4),
+        dpi: int = 100,
+        ncols: int | None = None,
+        fontsize: float = 9.0,
+) -> None:
+    """
+    Quantile–Quantile (Q-Q) comparison of EBSD vs MC grain property distributions.
+
+    A Q-Q plot maps the quantiles of one distribution against the quantiles of
+    another at the same probability levels (0 % to 100 %).  Both distributions
+    are normalised by their own mean before comparison, so the x- and y-axes
+    share the same dimensionless scale centred near 1.0.
+
+    Interpretation
+    --------------
+    - Points on the diagonal (y = x) — the two distributions have identical
+      shape at that quantile.  Perfect agreement.
+    - Points **above** the diagonal — the MC distribution has *larger* values
+      than EBSD at that quantile (heavier upper tail or higher spread in MC).
+    - Points **below** the diagonal — the MC distribution has *smaller* values
+      than EBSD at that quantile.
+    - Deviations concentrated in the **lower-left** — fine/small grains differ.
+    - Deviations concentrated in the **upper-right** — large/coarse grains differ.
+
+    One subplot is drawn per property; each MC slice is a separate line.
+    The dashed black diagonal marks perfect distributional agreement.
+
+    Parameters
+    ----------
+    ebsd_data : dict
+        ``{prop: array}`` of EBSD-merged values, each normalised by own mean.
+    mc_data : dict
+        ``{slice_key: {prop: array}}`` of MC values, each normalised by own mean.
+    props : list of str
+        Properties to plot.
+    prop_labels : dict or None
+        ``{prop: display_label}``.  Defaults to ``f'{prop}  (mean normalized)'``.
+    figsize_per : tuple
+        ``(width, height)`` per subplot in inches.
+    dpi : int
+    ncols : int or None
+        Subplot grid columns.  ``None`` places all panels in a single row.
+    fontsize : float
+    """
+    _MC_PALETTE = [
+        '#4878CF', '#D65F5F', '#59A14F', '#F28E2B',
+        '#76B7B2', '#E15759', '#B07AA1', '#FF9DA7',
+    ]
+
+    if prop_labels is None:
+        prop_labels = {p: f'{p}  (mean normalized)' for p in props}
+
+    n_props = len(props)
+    _ncols = n_props if ncols is None else max(1, min(ncols, n_props))
+    _nrows = int(np.ceil(n_props / _ncols))
+    fig, axes = plt.subplots(
+        _nrows, _ncols,
+        figsize=(_ncols * figsize_per[0], _nrows * figsize_per[1]),
+        dpi=dpi, squeeze=False,
+    )
+
+    q = np.linspace(0, 100, 300)
+
+    for idx, p in enumerate(props):
+        ax = axes[idx // _ncols, idx % _ncols]
+        ebsd_q = np.percentile(ebsd_data[p], q)
+
+        all_vals = list(ebsd_q)
+        for i, (k, mc_props) in enumerate(mc_data.items()):
+            mc_q = np.percentile(mc_props[p], q)
+            all_vals.extend(mc_q)
+            colour = _MC_PALETTE[i % len(_MC_PALETTE)]
+            ax.plot(ebsd_q, mc_q, color=colour, lw=1.5, label=f'MC  t={k}')
+
+        vmin, vmax = min(all_vals), max(all_vals)
+        ax.plot([vmin, vmax], [vmin, vmax], 'k--', lw=1.0, label='perfect match')
+
+        ax.set_xlabel(f'EBSD  {prop_labels[p]}', fontsize=fontsize)
+        ax.set_ylabel(f'MC  {prop_labels[p]}', fontsize=fontsize)
+        ax.set_title(prop_labels[p], fontsize=fontsize)
+        ax.tick_params(labelsize=fontsize - 1)
+        ax.legend(fontsize=fontsize - 2, framealpha=0.8)
+
+    for spare in range(n_props, _nrows * _ncols):
+        axes[spare // _ncols, spare % _ncols].set_visible(False)
+
+    fig.suptitle('Q-Q plots — EBSD (merged) vs MC slices  (mean-normalised)',
+                 fontsize=fontsize + 1, y=1.01)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_ebsd_tvf(
+        tvf_result: dict,
+        figsize: tuple = (7, 4),
+        dpi: int = 100,
+        fontsize: float = 9.0,
+        title: str = 'EBSD grain-role area fractions',
+) -> None:
+    """
+    Horizontal bar chart of EBSD twin area fraction broken down by grain role.
+
+    Bars are drawn for each of the four grain-role categories:
+
+    - **Pure parents** — matrix grains; never a twin of any grain.
+    - **Primary twins** — first-generation twins whose parent is a pure parent.
+    - **Secondary twins** — twins whose parent is itself an intermediate
+      (twin-of-a-twin, 2nd generation).
+    - **Intermediate twins** — grains that are simultaneously a twin of one
+      grain and a parent of another (twin chains).
+
+    The overall twin area fraction (primary + secondary + intermediate) is
+    annotated on the figure.
+
+    Parameters
+    ----------
+    tvf_result : dict
+        Output of ``repgen2d.compute_ebsd_tvf``.  Must contain keys
+        ``'pure_parent_frac'``, ``'primary_twin_frac'``,
+        ``'secondary_twin_frac'``, ``'intermediate_frac'``,
+        ``'overall_twin_frac'``.
+    figsize : tuple
+        Figure size ``(width, height)`` in inches.
+    dpi : int
+        Figure resolution.
+    fontsize : float
+        Base font size for labels and tick marks.
+    title : str
+        Figure title.
+    """
+    categories = [
+        ('Pure parents',     tvf_result['pure_parent_frac'],    '#555555'),
+        ('Primary twins',    tvf_result['primary_twin_frac'],   '#4878CF'),
+        ('Secondary twins',  tvf_result['secondary_twin_frac'], '#F28E2B'),
+        ('Intermediate twins', tvf_result['intermediate_frac'], '#59A14F'),
+    ]
+    labels = [c[0] for c in categories]
+    values = [c[1] for c in categories]
+    colors = [c[2] for c in categories]
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    bars = ax.barh(labels, values, color=colors, edgecolor='white', height=0.5)
+
+    for bar, val in zip(bars, values):
+        ax.text(val + 0.002, bar.get_y() + bar.get_height() / 2,
+                f'{val:.4f}', va='center', ha='left', fontsize=fontsize - 1)
+
+    ax.set_xlabel('Area fraction', fontsize=fontsize)
+    ax.tick_params(labelsize=fontsize)
+    ax.set_title(title, fontsize=fontsize + 1)
+    ax.set_xlim(0, max(values) * 1.25 if max(values) > 0 else 1)
+    ax.invert_yaxis()
+
+    overall = tvf_result['overall_twin_frac']
+    ax.text(0.98, 0.04, f'Overall TVF = {overall:.4f}',
+            transform=ax.transAxes, ha='right', va='bottom',
+            fontsize=fontsize, color='#222222',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='#f5f5f5',
+                      edgecolor='#cccccc'))
+
+    plt.tight_layout()
+    plt.show()
