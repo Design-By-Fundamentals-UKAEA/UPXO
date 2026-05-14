@@ -175,6 +175,53 @@ class EBSDReader:
 
         return obj
 
+    @classmethod
+    def from_file_subsampled(
+            cls,
+            src_path,
+            dst_path,
+            stride_x: int = 2,
+            stride_y: int = 2,
+            min_grain_size: int = 10,
+            misori_tol: float = 10,
+            data_type=None,
+    ):
+        """
+        Sub-sample a CTF file, write the result to *dst_path*, then load
+        it via the normal ``from_file`` pipeline.
+
+        This is Method C sub-sampling: the file is reduced before DefDAP
+        ever reads it, so grain detection runs on the smaller map and
+        memory usage is proportional to the sub-sampled size.
+
+        Parameters
+        ----------
+        src_path : str or pathlib.Path
+            Source ``.ctf`` file.
+        dst_path : str or pathlib.Path
+            Destination for the written sub-sampled CTF file.  The parent
+            directory must already exist.
+        stride_x : int
+            Keep every *stride_x*-th pixel along X.  Default 2.
+        stride_y : int
+            Keep every *stride_y*-th pixel along Y.  Default 2.
+        min_grain_size : int
+            Forwarded to ``from_file()``.  Default 10.
+        misori_tol : float
+            Forwarded to ``from_file()``.  Default 10.
+        data_type : str or None
+            Forwarded to ``from_file()``.  Default None (auto-detected).
+
+        Returns
+        -------
+        EBSDReader
+            Instance loaded from the written sub-sampled CTF file.
+        """
+        out = write_subsampled_ctf(src_path, dst_path,
+                                   stride_x=stride_x, stride_y=stride_y)
+        return cls.from_file(out, min_grain_size=min_grain_size,
+                             misori_tol=misori_tol, data_type=data_type)
+
     # ------------------------------------------------------------------
     # Convenience properties
     # ------------------------------------------------------------------
@@ -349,9 +396,23 @@ class EBSDReader:
         from upxo.gsdataops.gid_ops import find_neighs2d
 
         self.rechar_lfi(connectivity=connectivity)
+
         prop = _char_lfi(self.lfi_ebsd,
                          px_size=getattr(self, 'step_size', 1.0),
                          min_grain_size=min_grain_size)
+
+        # Relabel lfi_ebsd so surviving grain IDs are contiguous 1…N.
+        # Done after _char_lfi so min_grain_size drops are already resolved.
+        # Small-grain pixels (not in prop) are zeroed out in lfi_ebsd.
+        # euler_ebsd / quat_ebsd need no remapping — they are (row,col) arrays.
+        surviving = sorted(prop.keys())
+        lut = np.zeros(int(self.lfi_ebsd.max()) + 1, dtype=self.lfi_ebsd.dtype)
+        for new_id, old_id in enumerate(surviving, start=1):
+            lut[old_id] = new_id
+        self.lfi_ebsd = lut[self.lfi_ebsd]
+        prop = {new_id: prop[old_id]
+                for new_id, old_id in enumerate(surviving, start=1)}
+
         neigh = find_neighs2d(self.lfi_ebsd, conn=connectivity)
         self.prop = prop
 
@@ -805,6 +866,142 @@ def _infer_data_type(path):
             f"Pass data_type explicitly to override."
         )
     return _EXT_TO_DATATYPE[ext]
+
+
+def write_subsampled_ctf(
+        src_path,
+        dst_path,
+        stride_x: int = 2,
+        stride_y: int = 2,
+) -> pathlib.Path:
+    """
+    Read a CTF file, sub-sample every *stride_x*-th column and
+    *stride_y*-th row, update the header metadata, and write a new valid
+    CTF file to *dst_path*.
+
+    The X / Y physical-coordinate values in the kept data rows are left
+    unchanged — they already carry the correct micron positions.  Only
+    the ``XCells``, ``YCells``, ``XStep``, and ``YStep`` header fields
+    are updated to reflect the new pixel pitch and map dimensions.
+
+    Parameters
+    ----------
+    src_path : str or pathlib.Path
+        Source ``.ctf`` file.  A ``ValueError`` is raised for other
+        extensions.
+    dst_path : str or pathlib.Path
+        Destination path for the sub-sampled CTF file.  The parent
+        directory must already exist.
+    stride_x : int
+        Keep every *stride_x*-th pixel along the X (column) axis.
+        Default 2.
+    stride_y : int
+        Keep every *stride_y*-th pixel along the Y (row) axis.
+        Default 2.
+
+    Returns
+    -------
+    pathlib.Path
+        Absolute path to the written file (*dst_path*), so the caller
+        can chain directly into ``EBSDReader.from_file()``.
+
+    Raises
+    ------
+    ValueError
+        If *src_path* does not have a ``.ctf`` extension.
+    FileNotFoundError
+        If *src_path* does not exist.
+    """
+    import math
+
+    src_path = pathlib.Path(src_path).resolve()
+    dst_path = pathlib.Path(dst_path).resolve()
+
+    if src_path.suffix.lower() != '.ctf':
+        raise ValueError(
+            f"write_subsampled_ctf only supports .ctf files; "
+            f"got '{src_path.suffix}'."
+        )
+    _check_file(src_path)
+
+    # ── 1. Parse header ────────────────────────────────────────────────
+    header_lines = []   # verbatim header lines (to be modified below)
+    col_header   = ''   # the "Phase  X  Y  Euler1 ..." line
+    xcells = ycells = None
+    xstep  = ystep  = None
+
+    with src_path.open('r', encoding='latin-1') as fh:
+        for raw in fh:
+            line = raw.rstrip('\n')
+            stripped = line.strip()
+
+            # Detect end of header: the column-name line starts with the
+            # token "Phase" (case-insensitive) regardless of whether the
+            # separator is a tab or a space.
+            tokens = stripped.split()
+            if tokens and tokens[0].lower() == 'phase':
+                col_header = raw
+                break
+
+            # Extract key header fields
+            if stripped.startswith('XCells'):
+                xcells = int(stripped.split()[-1])
+            elif stripped.startswith('YCells'):
+                ycells = int(stripped.split()[-1])
+            elif stripped.startswith('XStep'):
+                xstep = float(stripped.split()[-1])
+            elif stripped.startswith('YStep'):
+                ystep = float(stripped.split()[-1])
+
+            header_lines.append(raw)
+
+        # Read all remaining data lines
+        data_lines = fh.readlines()
+
+    if None in (xcells, ycells, xstep, ystep):
+        raise ValueError(
+            "Could not parse XCells/YCells/XStep/YStep from CTF header. "
+            f"File: {src_path}"
+        )
+
+    # ── 2. Compute updated header values ──────────────────────────────
+    new_xcells = math.ceil(xcells / stride_x)
+    new_ycells = math.ceil(ycells / stride_y)
+    new_xstep  = xstep * stride_x
+    new_ystep  = ystep * stride_y
+
+    def _patch_header(lines):
+        out = []
+        for raw in lines:
+            s = raw.strip()
+            if s.startswith('XCells'):
+                out.append(f'XCells\t{new_xcells}\n')
+            elif s.startswith('YCells'):
+                out.append(f'YCells\t{new_ycells}\n')
+            elif s.startswith('XStep'):
+                out.append(f'XStep\t{new_xstep}\n')
+            elif s.startswith('YStep'):
+                out.append(f'YStep\t{new_ystep}\n')
+            else:
+                out.append(raw if raw.endswith('\n') else raw + '\n')
+        return out
+
+    # ── 3. Sub-sample data rows ────────────────────────────────────────
+    # Rows are ordered row-major: Y-index (iy) increments slowest,
+    # X-index (ix) fastest.  Pixel at flat index k:
+    #   iy = k // xcells,  ix = k % xcells
+    kept = [
+        row for k, row in enumerate(data_lines)
+        if (k // xcells) % stride_y == 0 and (k % xcells) % stride_x == 0
+    ]
+
+    # ── 4. Write new CTF file ──────────────────────────────────────────
+    with dst_path.open('w', encoding='latin-1') as fh:
+        fh.writelines(_patch_header(header_lines))
+        fh.write(col_header)
+        fh.writelines(kept)
+
+    return dst_path
 
 
 def _extract_lfi(ebsd_map):
