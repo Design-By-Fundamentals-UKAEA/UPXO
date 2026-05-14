@@ -195,3 +195,141 @@ def readProps_twinGS(widgets_dict: dict) -> dict:
         'ncols':           ncols_val if ncols_val > 0 else None,
         'fontsize':        widgets_dict['fontsize_slider'].value,
     }
+
+
+def selectProps_reprComp(
+        props: list[str] | None = None,
+) -> dict:
+    """
+    Show a property-selection checklist for MC–EBSD comparison.
+
+    Lightweight variant of :func:`selectProps_twinGS` with only property
+    checkboxes — no grain-group controls, no layout sliders.  All properties
+    are pre-ticked.  Must be called inside a Jupyter cell.
+
+    Parameters
+    ----------
+    props : list of str, optional
+        Property names to show.  Defaults to the standard set of shared float
+        properties between ``prop_ebsd_merged_df`` and MC ``gsset[k].prop``.
+
+    Returns
+    -------
+    dict
+        ``{'prop_checkboxes': dict}`` — pass to :func:`readProps_reprComp`.
+    """
+    import ipywidgets as widgets
+    from IPython.display import display
+
+    ALL_PROPS = ['area', 'eq_diameter', 'perimeter', 'aspect_ratio',
+                 'major_axis_length', 'minor_axis_length', 'eccentricity', 'solidity']
+    LABELS = {
+        'area':              'Area',
+        'eq_diameter':       'Equiv. diameter',
+        'perimeter':         'Perimeter',
+        'aspect_ratio':      'Aspect ratio',
+        'major_axis_length': 'Major axis length',
+        'minor_axis_length': 'Minor axis length',
+        'eccentricity':      'Eccentricity',
+        'solidity':          'Solidity',
+    }
+    if props is None:
+        props = ALL_PROPS
+
+    prop_checkboxes = {
+        p: widgets.Checkbox(value=True, description=LABELS.get(p, p),
+                            layout=widgets.Layout(width='220px'))
+        for p in props
+    }
+    display(widgets.VBox([
+        widgets.HTML('<b style="font-size:13px">Properties for MC–EBSD comparison:</b>'),
+        widgets.HBox(list(prop_checkboxes.values())),
+    ]))
+    return {'prop_checkboxes': prop_checkboxes}
+
+
+def readProps_reprComp(widgets_dict: dict) -> list[str]:
+    """
+    Read selected property names from the dict returned by
+    :func:`selectProps_reprComp`.
+
+    Parameters
+    ----------
+    widgets_dict : dict
+        The dict returned by :func:`selectProps_reprComp`.
+
+    Returns
+    -------
+    list of str
+        Names of the ticked properties.
+    """
+    selected = [k for k, cb in widgets_dict['prop_checkboxes'].items() if cb.value]
+    print(f'Selected properties : {selected}')
+    return selected
+
+
+def selectSlices_reprComp(grain_count_rank_ng) -> dict:
+    """
+    Show an ipywidgets checklist of MC time slices so the user can choose
+    which to carry forward into property-distribution comparison.
+
+    Each checkbox label shows the slice key, grain count, ratio relative
+    to the de-twinned EBSD, and eligibility.  Eligible slices
+    (``eligible == 1``) are pre-ticked; ineligible slices are shown but
+    unticked.  Must be called inside a Jupyter cell.
+
+    Parameters
+    ----------
+    grain_count_rank_ng : pd.DataFrame
+        The DataFrame stored in ``rg.grain_count_rank_ng`` after calling
+        :meth:`rank_mcgs_by_n`.  Expected columns: ``n_mc``, ``ratio``,
+        ``eligible``.
+
+    Returns
+    -------
+    dict
+        ``{'slice_checkboxes': dict[key, Checkbox]}`` — pass to
+        :func:`readSlices_reprComp`.
+    """
+    import ipywidgets as widgets
+    from IPython.display import display
+
+    slice_checkboxes = {}
+    for key, row in grain_count_rank_ng.iterrows():
+        eligible = bool(row.get('eligible', 1))
+        label = (f"t={key}  |  n={int(row['n_mc'])}  |  "
+                 f"ratio={row['ratio']:.3f}  |  "
+                 f"{'eligible' if eligible else 'INELIGIBLE'}")
+        slice_checkboxes[key] = widgets.Checkbox(
+            value=eligible,
+            description=label,
+            layout=widgets.Layout(width='540px'),
+            style={'description_width': 'initial'},
+        )
+
+    display(widgets.VBox([
+        widgets.HTML('<b style="font-size:13px">Select MC time slices for property comparison:</b>'),
+        *slice_checkboxes.values(),
+    ]))
+    return {'slice_checkboxes': slice_checkboxes}
+
+
+def readSlices_reprComp(widgets_dict: dict) -> list:
+    """
+    Read selected slice keys from the dict returned by
+    :func:`selectSlices_reprComp`.
+
+    Parameters
+    ----------
+    widgets_dict : dict
+        The dict returned by :func:`selectSlices_reprComp`.
+
+    Returns
+    -------
+    list
+        MC time-slice keys (same type as ``grain_count_rank_ng`` index)
+        for the ticked entries.
+    """
+    selected = [k for k, cb in widgets_dict['slice_checkboxes'].items() if cb.value]
+    print(f'Selected MC time slices : {selected}')
+    return selected
