@@ -992,12 +992,12 @@ def compute_mdf_from_quats(
 
 #: Default cubic CSL reference angles (degrees)
 CUBIC_CSL: dict[str, float] = {
-    'Σ3  (twin)': 60.00,   # {111}<110>
-    'Σ5':         36.87,   # {210}<001>
-    'Σ7':         38.21,   # {211}<111>
-    'Σ9':         38.94,   # {221}<110>
-    'Σ11':        50.48,
-    'Σ13b':       27.80,
+    'S3  (twin)': 60.00,   # {111}<110>
+    'S5':         36.87,   # {210}<001>
+    'S7':         38.21,   # {211}<111>
+    'S9':         38.94,   # {221}<110>
+    'S11':        50.48,
+    'S13b':       27.80,
 }
 
 
@@ -1298,6 +1298,67 @@ def identify_parent_grains(
             'csl_angle':       csl_angle,
         }
 
+    return result
+
+
+def classify_grain_roles_extended(parent_info: dict) -> dict:
+    """
+    Extend the EBSD parent_info dict with ``'primary_twins'`` and
+    ``'secondary_twins'`` keys, derived from the existing ``'pairs_labeled'``
+    and ``'intermediates'`` arrays.
+
+    Operates entirely on EBSD grain IDs — no MC data involved.
+
+    A **primary twin** is a ``pure_twin`` whose direct parent (the larger grain
+    in its CSL pair) is itself a ``pure_parent``.  It is a first-generation twin
+    with no twins of its own.
+
+    A **secondary twin** is a ``pure_twin`` whose direct parent is an
+    ``intermediate`` grain (a grain that is both someone's twin and someone's
+    parent).  It is a twin-of-a-twin — second generation or deeper.
+
+    Parameters
+    ----------
+    parent_info : dict
+        Output of :func:`identify_parent_grains`.  Each value must contain
+        ``'pairs_labeled'``, ``'pure_twins'``, and ``'intermediates'``.
+
+    Returns
+    -------
+    dict
+        Same structure as ``parent_info`` with two extra keys per CSL label:
+
+        ``'primary_twins'``     — ndarray of first-generation twin grain IDs
+        ``'secondary_twins'``   — ndarray of second-generation twin grain IDs
+        ``'n_primary_twins'``   — int
+        ``'n_secondary_twins'`` — int
+
+    Notes
+    -----
+    ``pure_twins ≡ primary_twins ∪ secondary_twins`` (the sets are disjoint and
+    their union equals the existing ``pure_twins`` array).
+    """
+    result = {}
+    for label, info in parent_info.items():
+        intermediates   = set(info['intermediates'].tolist())
+        pure_twins      = set(info['pure_twins'].tolist())
+        twin_to_parent  = {twin: parent
+                           for parent, twin in info['pairs_labeled']}
+        primary_twins   = np.array(sorted(
+            gid for gid in pure_twins
+            if twin_to_parent.get(gid) not in intermediates
+        ), dtype=int)
+        secondary_twins = np.array(sorted(
+            gid for gid in pure_twins
+            if twin_to_parent.get(gid) in intermediates
+        ), dtype=int)
+        result[label] = {
+            **info,
+            'primary_twins':     primary_twins,
+            'secondary_twins':   secondary_twins,
+            'n_primary_twins':   len(primary_twins),
+            'n_secondary_twins': len(secondary_twins),
+        }
     return result
 
 
@@ -1792,6 +1853,14 @@ _SIGMA3_Q = np.array([
     1.0 / (2.0 * np.sqrt(3.0)),
 ], dtype=np.float64)
 
+# Σ5 rotations: 36.87° about each cubic <100> axis — three symmetry-equivalent variants
+_S5_HW = np.radians(36.87 / 2.0)
+_SIGMA5_Q_VARIANTS = np.array([
+    [np.cos(_S5_HW), np.sin(_S5_HW), 0.0,            0.0           ],  # [100]
+    [np.cos(_S5_HW), 0.0,            np.sin(_S5_HW), 0.0           ],  # [010]
+    [np.cos(_S5_HW), 0.0,            0.0,            np.sin(_S5_HW)],  # [001]
+], dtype=np.float64)
+
 
 def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
     """Hamilton product of two unit quaternions stored as (w, x, y, z)."""
@@ -1808,6 +1877,53 @@ def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 def _positive_w(q: np.ndarray) -> np.ndarray:
     """Return *q* in the canonical hemisphere (w ≥ 0)."""
     return q if q[0] >= 0.0 else -q
+
+
+def compute_s3_lamella_angle_2d(q: 'np.ndarray') -> float:
+    """
+    Compute the 2D S3 twin lamella trace angle in the sample XY plane.
+
+    The active {111} plane variant is the one whose sample-frame normal has
+    the largest XY-plane projected norm.  The lamella trace direction is
+    perpendicular to that projected normal.
+
+    Parameters
+    ----------
+    q : array-like, shape (4,)
+        Host grain quaternion [w, x, y, z].
+
+    Returns
+    -------
+    float
+        Lamella trace angle in degrees, in [0°, 180°).
+    """
+    q = np.asarray(q, dtype=np.float64)
+    q = q / np.linalg.norm(q)
+    w, x, y, z = q
+
+    R = np.array([
+        [1 - 2*(y*y + z*z),   2*(x*y - w*z),   2*(x*z + w*y)],
+        [  2*(x*y + w*z), 1 - 2*(x*x + z*z),   2*(y*z - w*x)],
+        [  2*(x*z - w*y),   2*(y*z + w*x), 1 - 2*(x*x + y*y)],
+    ])
+
+    inv_sqrt3 = 1.0 / np.sqrt(3.0)
+    n_crystal = np.array([
+        [ 1.0,  1.0,  1.0],
+        [-1.0,  1.0,  1.0],
+        [ 1.0, -1.0,  1.0],
+        [ 1.0,  1.0, -1.0],
+    ]) * inv_sqrt3
+
+    n_sample = (R @ n_crystal.T).T    # shape (4, 3)
+    n_xy     = n_sample[:, :2]        # project onto XY plane
+    norms    = np.linalg.norm(n_xy, axis=1)
+    best     = np.argmax(norms)
+    n_sel    = n_xy[best]
+
+    # Trace is perpendicular to the selected projected normal
+    trace = np.array([-n_sel[1], n_sel[0]])
+    return float(np.degrees(np.arctan2(trace[1], trace[0])) % 180.0)
 
 
 def assign_orientations_mdf_matched(
@@ -2006,6 +2122,121 @@ def assign_orientations_mdf_matched(
         'grain_quats':   grain_quats,
         'quat_pixel':    quat_pixel,
         'neigh_gid_sim': neigh_gid_sim_lists,
+    }
+
+
+def assign_parent_orientations(
+    host_gids: np.ndarray,
+    sim_lfi: np.ndarray,
+    ebsd_parent_gids: np.ndarray,
+    ebsd_lfi: np.ndarray,
+    ebsd_quat: np.ndarray,
+    rng_seed=None,
+    max_retries: int = 50,
+) -> dict:
+    """
+    Assign EBSD pure-parent quaternions to MC host grains with a
+    neighbour-conflict-free constraint: no two directly adjacent host grains
+    receive the same quaternion (which would imply zero misorientation between
+    them, contradicting the existence of a grain boundary).
+
+    When the EBSD parent pool is exhausted (all remaining pool entries still
+    conflict with every neighbour after *max_retries* redraws), the function
+    falls back to FCC-texture quaternions generated by
+    ``tops.synth_fcc_quats``.
+
+    Parameters
+    ----------
+    host_gids : array-like of int
+        MC grain IDs that will host twins.
+    sim_lfi : ndarray (ny, nx)
+        MC grain label field.
+    ebsd_parent_gids : array-like of int
+        EBSD pure-parent grain IDs (typically
+        ``parent_info[csl_label]['pure_parents']``).
+    ebsd_lfi : ndarray (ny_e, nx_e)
+        EBSD grain label field (``rg.lfi_ebsd``).
+    ebsd_quat : ndarray (ny_e, nx_e, 4)
+        Per-pixel EBSD quaternions in [w, x, y, z] convention
+        (``rg.quat_ebsd``).
+    rng_seed : int or None
+        Seed for reproducibility.
+    max_retries : int
+        Maximum redraws from the EBSD pool before switching to FCC fallback
+        for a given grain.
+
+    Returns
+    -------
+    dict with keys
+        ``'host_quats'``  : {gid: ndarray(4,)} — assigned quaternion per host
+        ``'pool_size'``   : int — unique EBSD parent orientations available
+        ``'n_hosts'``     : int
+        ``'n_fallback'``  : int — grains that needed the synth-FCC fallback
+    """
+    import cc3d
+    from upxo.xtalphy.texops import tops
+
+    rng = np.random.default_rng(rng_seed)
+    host_gids = np.asarray(host_gids, dtype=int)
+    host_set  = set(host_gids.tolist())
+
+    # -- EBSD parent quaternion pool ----------------------------------------
+    all_gids_e, q_mean_e = grain_avg_quats(ebsd_lfi, ebsd_quat)
+    gid2q      = {int(g): q_mean_e[i] for i, g in enumerate(all_gids_e)}
+    parent_set = {int(g) for g in np.asarray(ebsd_parent_gids).ravel()}
+    pool       = np.array([gid2q[g] for g in sorted(parent_set) if g in gid2q],
+                          dtype=np.float64)
+    n_pool     = len(pool)
+
+    # -- Fallback FCC pool (generated lazily on first need) -----------------
+    _state: dict = {'fcc': None, 'idx': 0}
+
+    def _get_fallback() -> np.ndarray:
+        if _state['fcc'] is None or _state['idx'] >= len(_state['fcc']):
+            _state['fcc'] = tops.synth_fcc_quats(N=max(200, len(host_set)))
+            _state['idx'] = 0
+        q = _state['fcc'][_state['idx']]
+        _state['idx'] += 1
+        return _positive_w(q.copy())
+
+    # -- 4-connected adjacency restricted to host grains --------------------
+    edges = cc3d.region_graph(sim_lfi.astype(np.int32), connectivity=4)
+    adjacency: dict[int, set] = {int(g): set() for g in host_set}
+    for a, b in edges:
+        a, b = int(a), int(b)
+        if a in host_set and b in host_set:
+            adjacency[a].add(b)
+            adjacency[b].add(a)
+
+    # -- Neighbour-conflict-free assignment ---------------------------------
+    host_quats: dict[int, np.ndarray] = {}
+    n_fallback = 0
+
+    for gid in rng.permutation(host_gids).tolist():
+        used_by_neigh = {
+            host_quats[nb].tobytes()
+            for nb in adjacency[int(gid)]
+            if nb in host_quats
+        }
+
+        chosen = None
+        for _ in range(max_retries):
+            candidate = _positive_w(pool[int(rng.integers(0, n_pool))].copy())
+            if candidate.tobytes() not in used_by_neigh:
+                chosen = candidate
+                break
+
+        if chosen is None:
+            chosen = _get_fallback()
+            n_fallback += 1
+
+        host_quats[int(gid)] = chosen
+
+    return {
+        'host_quats':  host_quats,
+        'pool_size':   n_pool,
+        'n_hosts':     len(host_gids),
+        'n_fallback':  n_fallback,
     }
 
 

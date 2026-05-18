@@ -1419,7 +1419,7 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
     internal_mask = (X > margin) & (X < N-margin) & (Y > margin) & (Y < M-margin)
     bulk_mask = (dist_to_boundary > target_spacing * 3) & internal_mask
     coords_bulk = np.argwhere(bulk_mask).astype(float)
-    seeds_bulk = []
+    seeds_bulk = np.empty((0, 2))
     if len(coords_bulk) > 0:
         bulk_stride = max(1, int(bulk_spacing))
         seeds_bulk = coords_bulk[::bulk_stride]
@@ -1889,6 +1889,205 @@ def detect_features_in_image_MCstateWise_2d(image_data, binary_structure_order=2
         current_label_offset += num_features
 
     return labeled_image, original_to_labels, labels_to_original
+
+
+# ---------------------------------------------------------------------------
+# Twin lamella analysis helpers  (SID_TwinAnalysisOps)
+# ---------------------------------------------------------------------------
+
+def compute_twin_thickness_stats(
+    parent_info: dict,
+    prop_ebsd: dict,
+    step_size_um: float,
+    thickness_key=None,
+    lfi=None,
+    abrupt_threshold: float = 0.8,
+) -> dict:
+    """
+    Compute twin lamella thickness statistics from EBSD grain properties.
+
+    Parameters
+    ----------
+    parent_info : dict
+        Output of ``identify_parent_grains``.
+    prop_ebsd : dict
+        ``{grain_id: {'minor_axis_length': ..., ...}}``.
+    step_size_um : float
+        EBSD step size in µm/pixel.
+    thickness_key : str or None
+        Property key to use as thickness proxy.  Defaults to
+        ``'minor_axis_length'`` when available, else ``'eq_diameter'``.
+    lfi : ndarray or None
+        EBSD label field image.  When supplied, abrupt-twin detection is
+        performed by comparing each twin's extent along the parent's major
+        axis direction against the parent's own extent.
+    abrupt_threshold : float
+        Twins with ``twin_span / parent_span < abrupt_threshold`` are
+        counted as abruptly-ending.  Default 0.8.
+
+    Returns
+    -------
+    dict with keys: ``gids``, ``thick_px``, ``thick_um``, ``col``,
+    ``step_um``, ``mean``, ``median``, ``std``, ``min``, ``max``,
+    ``pct10``, ``pct90``, ``n_abrupt_ebsd``, ``abrupt_frac_ebsd``.
+    """
+    import numpy as np
+
+    twin_gids: set = set()
+    for info in parent_info.values():
+        twin_gids.update(int(g) for g in np.asarray(info['pure_twins']).ravel())
+        twin_gids.update(int(g) for g in np.asarray(info['intermediates']).ravel())
+
+    gids_in_prop    = set(prop_ebsd.keys())
+    twin_gids_found = sorted(twin_gids & gids_in_prop)
+
+    sample_keys = list(prop_ebsd[next(iter(prop_ebsd))].keys())
+    if thickness_key is None:
+        if 'minor_axis_length' in sample_keys:
+            thickness_key = 'minor_axis_length'
+        elif 'eq_diameter' in sample_keys:
+            thickness_key = 'eq_diameter'
+        else:
+            raise RuntimeError(f'No suitable thickness key. Available: {sample_keys}')
+
+    thick_px = np.array(
+        [prop_ebsd[g][thickness_key] for g in twin_gids_found
+         if prop_ebsd[g][thickness_key] is not None
+         and prop_ebsd[g][thickness_key] > 0],
+        dtype=np.float64,
+    )
+    thick_um = thick_px * float(step_size_um)
+
+    result = {
+        'gids':             twin_gids_found,
+        'thick_px':         thick_px,
+        'thick_um':         thick_um,
+        'col':              thickness_key,
+        'step_um':          float(step_size_um),
+        'mean':             float(thick_um.mean()),
+        'median':           float(np.median(thick_um)),
+        'std':              float(thick_um.std(ddof=1)),
+        'min':              float(thick_um.min()),
+        'max':              float(thick_um.max()),
+        'pct10':            float(np.percentile(thick_um, 10)),
+        'pct90':            float(np.percentile(thick_um, 90)),
+        'n_abrupt_ebsd':    0,
+        'abrupt_frac_ebsd': 0.0,
+    }
+
+    if lfi is None or len(twin_gids_found) == 0:
+        return result
+
+    # Abrupt-twin detection — single regionprops pass avoids repeated np.where
+    import cc3d
+    from skimage.measure import regionprops as _skrp
+
+    gid2props = {p.label: p for p in _skrp(lfi.astype(np.int32))}
+
+    pure_parents_all: set = set()
+    for info in parent_info.values():
+        pure_parents_all.update(int(g) for g in np.asarray(info.get('pure_parents', [])).ravel())
+
+    twin_gids_set = set(int(g) for g in twin_gids_found)
+    edges = cc3d.region_graph(lfi.astype(np.int32), connectivity=4)
+    twin_to_parent: dict = {}
+    for a, b in edges:
+        a, b = int(a), int(b)
+        if a in twin_gids_set and b in pure_parents_all and a not in twin_to_parent:
+            twin_to_parent[a] = b
+        elif b in twin_gids_set and a in pure_parents_all and b not in twin_to_parent:
+            twin_to_parent[b] = a
+
+    n_abrupt  = 0
+    n_checked = 0
+    for twin_gid in twin_gids_found:
+        parent_gid = twin_to_parent.get(twin_gid)
+        if parent_gid is None or twin_gid not in gid2props or parent_gid not in gid2props:
+            continue
+        rp_par  = gid2props[parent_gid]
+        rp_twin = gid2props[twin_gid]
+        d = np.array([-np.sin(rp_par.orientation), np.cos(rp_par.orientation)])
+        proj_par  = rp_par.coords @ d
+        proj_twin = rp_twin.coords @ d
+        parent_span = float(proj_par.max() - proj_par.min())
+        twin_span   = float(proj_twin.max() - proj_twin.min())
+        if parent_span > 0 and (twin_span / parent_span) < abrupt_threshold:
+            n_abrupt += 1
+        n_checked += 1
+
+    if n_checked > 0:
+        result['n_abrupt_ebsd']    = n_abrupt
+        result['abrupt_frac_ebsd'] = n_abrupt / n_checked
+
+    return result
+
+
+def compute_grain_intercept_lengths(rp, lfi, n_sample_pts=None) -> 'np.ndarray':
+    """
+    Compute chord (intercept) lengths through a grain perpendicular to its
+    major axis, by ray-casting from evenly-spaced sample points along the
+    major axis.
+
+    Parameters
+    ----------
+    rp : skimage.measure.RegionProperties
+        regionprops object for the grain — pre-computed by the caller so
+        the LFI is only iterated once for the full grain set.
+    lfi : ndarray (ny, nx)
+        Label field image.
+    n_sample_pts : int or None
+        Number of sample points along the major axis.  Defaults to
+        ``int(major_axis_length)``, capped from above by that value.
+
+    Returns
+    -------
+    ndarray(n,)
+        Intercept lengths in pixels, one value per sample point.
+    """
+    import numpy as np
+
+    orientation = rp.orientation
+    major_ax    = rp.major_axis_length
+    centroid    = np.array(rp.centroid, dtype=np.float64)
+    gid         = rp.label
+
+    if major_ax < 1.0:
+        return np.array([float(len(rp.coords))], dtype=np.float64)
+
+    # Long-axis and perpendicular (minor-axis) directions in (row, col) space
+    d  = np.array([-np.sin(orientation),  np.cos(orientation)])
+    pd = np.array([ np.cos(orientation),  np.sin(orientation)])
+
+    half = major_ax / 2.0
+    n    = min(n_sample_pts or int(major_ax), max(1, int(major_ax)))
+    pts  = np.linspace(centroid - half * d, centroid + half * d, n)
+
+    ny, nx = lfi.shape
+    max_step   = max(ny, nx)
+    intercepts = np.zeros(n, dtype=np.float64)
+
+    for i, pt in enumerate(pts):
+        count_pos = 0
+        for step in range(1, max_step):
+            r = int(round(pt[0] + step * pd[0]))
+            c = int(round(pt[1] + step * pd[1]))
+            if 0 <= r < ny and 0 <= c < nx and lfi[r, c] == gid:
+                count_pos += 1
+            else:
+                break
+        count_neg = 0
+        for step in range(1, max_step):
+            r = int(round(pt[0] - step * pd[0]))
+            c = int(round(pt[1] - step * pd[1]))
+            if 0 <= r < ny and 0 <= c < nx and lfi[r, c] == gid:
+                count_neg += 1
+            else:
+                break
+        intercepts[i] = float(count_pos + count_neg + 1)
+
+    return intercepts
+
+
 # #################################################################################
 # #################################################################################
 # This module is expected to grow quite a lot. In the interest of locating

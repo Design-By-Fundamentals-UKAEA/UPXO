@@ -80,6 +80,40 @@ class tops:
                                   n_sampling_instances=n_sampling_instances)
         return tex
 
+    @classmethod
+    def synth_fcc_quats(cls, N: int = 500, **tc_kwargs) -> np.ndarray:
+        """
+        Sample *N* FCC-consistent quaternions in [w, x, y, z] convention.
+
+        Calls :meth:`synth_fcc` (single tex/sampling instance), extracts the
+        Bunge Euler angles, and converts them to unit quaternions via
+        ``scipy.spatial.transform.Rotation``.  Orientations are returned in the
+        canonical positive-w hemisphere (w >= 0).
+
+        Parameters
+        ----------
+        N : int
+            Number of orientations to generate.
+        **tc_kwargs
+            Forwarded to :meth:`synth_fcc` (e.g. custom ``tc_info`` dict).
+
+        Returns
+        -------
+        quats : ndarray, shape (N, 4), dtype float64
+            Unit quaternions in [w, x, y, z] convention.
+        """
+        from scipy.spatial.transform import Rotation as _Rotation
+        tex = cls.synth_fcc(N=N, n_tex_instances=1, n_sampling_instances=1,
+                            **tc_kwargs)
+        tc_stacks = (tex.tex['tex_instance.1']
+                        ['sampling_instances']['ossi.1']['tc_ori_stacks'])
+        ea = np.vstack(list(tc_stacks.values())).astype(np.float64)
+        q_xyzw = _Rotation.from_euler('ZXZ', ea, degrees=True).as_quat()
+        q_wxyz = np.column_stack([q_xyzw[:, 3], q_xyzw[:, :3]])
+        neg_w = q_wxyz[:, 0] < 0
+        q_wxyz[neg_w] *= -1
+        return q_wxyz
+
     def plot_pole_figure(self, euler_angles_deg, pole_family='100', title=""):
         """
         Creates a complete pole figure scatter plot for a specified pole family.

@@ -2136,22 +2136,41 @@ class GrainManifold2D(VoronoiMasking):
         # Add logic to load shapely geometries from file here
         return instance
     
-    def smooth_interfaces(self, iterations=10, lmbda=0.5, mu=-0.53):
-        # Initial adjacency and coordinate state
-        adj = self._get_vertex_adjacency()
-        # Initial map: p -> current_position
-        coords = {p: p for p in adj.keys()}
-        
-        for _ in range(iterations):
-            # Step A: Shrink (lambda)
-            coords = self._laplacian_step(lmbda, coords_map=coords)
-            # Step B: Inflate (mu)
-            coords = self._laplacian_step(mu, coords_map=coords)
-        
-        # Final step: update the Shapely objects
-        self._reconstruct_from_coords(coords)
+    def smooth_interfaces(self, iterations=10, lmbda=0.5, mu=-0.53,
+                          method='taubin', ma_window=3, corner_angle_deg=30.0,
+                          thin_grain_px=0.0):
+        if method == 'taubin':
+            from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
+            adj = self._get_vertex_adjacency()
+            coords = {p: p for p in adj.keys()}
+            frozen: set = set()
+            if corner_angle_deg > 0:
+                for geom in self.cells.values():
+                    polys = (list(geom.geoms)
+                             if isinstance(geom, (MultiPolygon, GeometryCollection))
+                             else [geom])
+                    for poly in polys:
+                        if not isinstance(poly, Polygon):
+                            continue
+                        c = np.array(poly.exterior.coords)
+                        for i, ang in enumerate(self._compute_vertex_angles(c)):
+                            if ang < corner_angle_deg:
+                                frozen.add(tuple(c[i]))
+            frozen |= self._collect_thin_grain_vertices(thin_grain_px)
+            for _ in range(iterations):
+                coords = self._laplacian_step(lmbda, coords_map=coords, frozen=frozen)
+                coords = self._laplacian_step(mu,     coords_map=coords, frozen=frozen)
+            self._reconstruct_from_coords(coords)
+        elif method == 'moving_average':
+            for _ in range(iterations):
+                self._apply_moving_average_v2(window_size=ma_window,
+                                              corner_angle_deg=corner_angle_deg,
+                                              thin_grain_px=thin_grain_px)
+        else:
+            raise ValueError(f"Unknown smoothing method: {method!r}. "
+                             f"Choose 'taubin' or 'moving_average'.")
 
-    def _laplacian_step(self, factor, coords_map=None):
+    def _laplacian_step(self, factor, coords_map=None, frozen=None):
         """
         Smoothing step. Calculates displacement for each vertex toward the average of its neighbors.
         """
@@ -2171,7 +2190,9 @@ class GrainManifold2D(VoronoiMasking):
             is_junction = len(neighbors) > 2
             # 3. Handle Endpoints (isolated segments)
             is_endpoint = len(neighbors) < 2
-            if is_on_boundary or is_junction or is_endpoint:
+            # 4. Freeze explicitly supplied vertices (e.g. sharp-angle tips)
+            is_frozen = frozen is not None and p in frozen
+            if is_on_boundary or is_junction or is_endpoint or is_frozen:
                 # Anchor these points to maintain manifold integrity
                 new_coords[p] = coords_map[p]
             else:
@@ -2318,12 +2339,53 @@ class GrainManifold2D(VoronoiMasking):
 
         return new_polygons
 
-    def _apply_moving_average_v2(self, window_size=3):
+    @staticmethod
+    def _compute_vertex_angles(coords: np.ndarray) -> np.ndarray:
+        """Interior angle (degrees) at each vertex of a closed polygon ring."""
+        n = len(coords) - 1  # last coord repeats first
+        angles = np.full(n, 180.0)
+        for i in range(n):
+            u = coords[i - 1] - coords[i]
+            w = coords[(i + 1) % n] - coords[i]
+            denom = np.linalg.norm(u) * np.linalg.norm(w)
+            if denom > 1e-12:
+                cos_a = np.clip(np.dot(u, w) / denom, -1.0, 1.0)
+                angles[i] = np.degrees(np.arccos(cos_a))
+        return angles
+
+    def _collect_thin_grain_vertices(self, width_threshold: float) -> set:
+        """
+        Return the set of all exterior vertex coords belonging to polygons whose
+        minimum bounding-rectangle width is below `width_threshold` (pixel units).
+        Freezing all vertices of a thin polygon prevents it from self-intersecting
+        during smoothing.
+        """
+        from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
+        thin_verts: set = set()
+        if width_threshold <= 0:
+            return thin_verts
+        for geom in self.cells.values():
+            polys = (list(geom.geoms)
+                     if isinstance(geom, (MultiPolygon, GeometryCollection))
+                     else [geom])
+            for poly in polys:
+                if not isinstance(poly, Polygon) or poly.is_empty:
+                    continue
+                mrr = poly.minimum_rotated_rectangle
+                c = list(mrr.exterior.coords)
+                d1 = ((c[0][0]-c[1][0])**2 + (c[0][1]-c[1][1])**2) ** 0.5
+                d2 = ((c[1][0]-c[2][0])**2 + (c[1][1]-c[2][1])**2) ** 0.5
+                if min(d1, d2) < width_threshold:
+                    for x, y in list(poly.exterior.coords)[:-1]:
+                        thin_verts.add((float(x), float(y)))
+        return thin_verts
+
+    def _apply_moving_average_v2(self, window_size=3, corner_angle_deg=30.0, thin_grain_px=0.0):
         """
         Applies segment-based smoothing using the user's mean_coordinates logic.
         Each boundary segment between anchor points is smoothed independently.
         """
-        from shapely.geometry import Polygon, MultiPolygon
+        from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
         from shapely.ops import unary_union
         import numpy as np
 
@@ -2350,12 +2412,37 @@ class GrainManifold2D(VoronoiMasking):
         # 1. Identify Anchor Points (Triple points and RVE boundaries)
         adj = self._get_vertex_adjacency()
         height, width = self.lfi.shape[:2]
-        anchors = {p for p, neighbors in adj.items() 
-                if len(neighbors) > 2 or p[0] <= 0 or p[0] >= width or p[1] <= 0 or p[1] >= height}
+        anchors = {p for p, neighbors in adj.items()
+                   if len(neighbors) > 2
+                   or p[0] <= 0 or p[0] >= width
+                   or p[1] <= 0 or p[1] >= height}
+
+        # Also freeze vertices with very acute interior angles (thin grain tips / twin lamellae)
+        if corner_angle_deg > 0:
+            for geom in self.cells.values():
+                polys_to_scan = (list(geom.geoms)
+                                 if isinstance(geom, (MultiPolygon, GeometryCollection))
+                                 else [geom])
+                for poly in polys_to_scan:
+                    if not isinstance(poly, Polygon):
+                        continue
+                    coords = np.array(poly.exterior.coords)
+                    angles = self._compute_vertex_angles(coords)
+                    for i, ang in enumerate(angles):
+                        if ang < corner_angle_deg:
+                            anchors.add(tuple(coords[i]))
+
+        # Freeze ALL vertices of geometrically thin polygons (entire grain frozen)
+        anchors |= self._collect_thin_grain_vertices(thin_grain_px)
 
         new_cells = {}
         for gid, geom in self.cells.items():
-            parts = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
+            if isinstance(geom, MultiPolygon):
+                parts = list(geom.geoms)
+            elif isinstance(geom, GeometryCollection):
+                parts = [g for g in geom.geoms if isinstance(g, Polygon)]
+            else:
+                parts = [geom]
             smoothed_parts = []
             
             for part in parts:
@@ -2382,7 +2469,11 @@ class GrainManifold2D(VoronoiMasking):
                 new_poly = Polygon(smoothed_ring)
                 smoothed_parts.append(new_poly.buffer(0))
 
-            new_cells[gid] = unary_union(smoothed_parts) if len(smoothed_parts) > 1 else smoothed_parts[0]
+            merged = unary_union(smoothed_parts) if len(smoothed_parts) > 1 else smoothed_parts[0]
+            if isinstance(merged, GeometryCollection) and not isinstance(merged, MultiPolygon):
+                polys = [g for g in merged.geoms if isinstance(g, Polygon) and g.area > 0]
+                merged = unary_union(polys) if polys else merged
+            new_cells[gid] = merged
 
         self.cells = new_cells
         # Update raw vertices so Taubin uses the smoothed segment nodes

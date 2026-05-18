@@ -149,6 +149,66 @@ def plot_euler_maps(rdr,
     return fig, axes
 
 
+def build_ipf_rgb(
+        lfi: np.ndarray,
+        quats_dict: dict,
+        sample_direction=(0., 0., 1.),
+        grey: tuple = (0.75, 0.75, 0.75),
+) -> np.ndarray:
+    """
+    Build a pixel-level IPF RGB image from an integer label field and a
+    grain-quaternion mapping.
+
+    Parameters
+    ----------
+    lfi : ndarray (ny, nx), int
+        Pixel label field; each value is a grain ID.
+    quats_dict : dict {int gid -> ndarray (4,)}
+        Quaternion ``(w, x, y, z)`` for each oriented grain.
+    sample_direction : array-like (3,)
+        Sample reference direction for IPF colouring. Default [001] (ND).
+    grey : tuple of 3 floats
+        RGB colour for pixels whose grain has no assigned orientation.
+
+    Returns
+    -------
+    rgb : ndarray (ny, nx, 3), float32 in [0, 1]
+    """
+    sd = np.asarray(sample_direction, dtype=np.float64)
+    sd /= np.linalg.norm(sd) + 1e-12
+
+    max_gid = int(lfi.max())
+    q_lut   = np.zeros((max_gid + 1, 4), dtype=np.float64)
+    q_lut[:, 0] = 1.0                        # identity quaternion default
+    valid   = np.zeros(max_gid + 1, dtype=bool)
+    for gid, q in quats_dict.items():
+        g = int(gid)
+        if 0 <= g <= max_gid:
+            q_lut[g] = q
+            valid[g] = True
+
+    qmap = q_lut[lfi]                        # (ny, nx, 4)
+    w = qmap[..., 0]; x = qmap[..., 1]
+    y = qmap[..., 2]; z = qmap[..., 3]
+
+    # v = |R(q).T @ sd|  (standard IPF colour formula)
+    # R(q) columns:
+    #   col0 = [1-2(y²+z²),  2(xy+wz),   2(xz-wy)]
+    #   col1 = [2(xy-wz),    1-2(x²+z²), 2(yz+wx)]
+    #   col2 = [2(xz+wy),    2(yz-wx),   1-2(x²+y²)]
+    s0, s1, s2 = sd
+    v0 = (1 - 2*(y*y + z*z))*s0 + 2*(x*y + w*z)*s1 + 2*(x*z - w*y)*s2
+    v1 = 2*(x*y - w*z)*s0 + (1 - 2*(x*x + z*z))*s1 + 2*(y*z + w*x)*s2
+    v2 = 2*(x*z + w*y)*s0 + 2*(y*z - w*x)*s1 + (1 - 2*(x*x + y*y))*s2
+
+    v   = np.stack([np.abs(v0), np.abs(v1), np.abs(v2)], axis=-1)
+    vmx = v.max(axis=-1, keepdims=True)
+    vmx = np.where(vmx == 0, 1.0, vmx)
+    rgb = np.clip(v / vmx, 0.0, 1.0).astype(np.float32)
+    rgb[~valid[lfi]] = np.asarray(grey, dtype=np.float32)
+    return rgb
+
+
 def plot_grain_size_histogram(rdr,
                                figsize: tuple = (7, 4),
                                dpi: int = 100,
