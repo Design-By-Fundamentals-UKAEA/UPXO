@@ -443,6 +443,8 @@ class confMesh2dGMSH():
         'nsets',
         # pyvista grid (kept for optional pyvista workflows)
         'grid',
+        # export record
+        '_exported',
     )
 
     def __init__(self):
@@ -468,6 +470,7 @@ class confMesh2dGMSH():
         self.elID_ranges = {}
         self.nsets = {}
         self.grid = None
+        self._exported = []
 
     # ------------------------------------------------------------------
     # Main meshing entry point
@@ -476,7 +479,8 @@ class confMesh2dGMSH():
     def femesh_gmsh(self, flat_cells, gid_map=None,
                     mesh_size_gb=1.0, mesh_size_bulk=4.0,
                     mesh_algo=6, mesh_order=1,
-                    recombine_to_quads=False):
+                    recombine_to_quads=False,
+                    out_dir=None, basename='gs_mesh', formats=None):
         """
         Full gmsh meshing pipeline.
 
@@ -496,8 +500,15 @@ class confMesh2dGMSH():
             Element order (1=linear, 2=quadratic).
         recombine_to_quads : bool
             Whether to recombine triangles into quads after meshing.
+        out_dir : str or None
+            Directory to write exported mesh files.  No export when None.
+        basename : str
+            Filename stem for exported files (extension appended per format).
+        formats : list of str or None
+            File format extensions to export, e.g. ``['msh', 'inp', 'vtk']``.
         """
         import gmsh
+        import os
         self.elementShape = 'quad' if recombine_to_quads else 'tri'
         self.elementOrder = mesh_order
         self.meshingAlgorithmID = mesh_algo
@@ -516,6 +527,14 @@ class confMesh2dGMSH():
         self._extract_nodes_and_elements(gmsh)
         self._extract_gblines(gmsh)
 
+        self._exported = []
+        if out_dir and formats:
+            os.makedirs(out_dir, exist_ok=True)
+            for fmt in formats:
+                path = os.path.join(out_dir, f'{basename}.{fmt}')
+                gmsh.write(path)
+                self._exported.append(path)
+
         gmsh.finalize()
 
         self._detect_available_eltypes()
@@ -525,11 +544,24 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def _build_geometry(self, flat_cells, mesh_size_gb, gmsh):
-        """Register points and build surfaces for every grain polygon."""
-        self.point_registry = {}   # (x_round, y_round) -> gmsh point tag
-        self.surface_tags = {}     # flat_id -> gmsh surface tag
+        """Register points and build surfaces for every grain polygon.
 
-        tol = 1e-10  # coordinate rounding tolerance exponent
+        Island grains (polygons completely contained within another grain) are
+        registered as *holes* in the parent grain's Gmsh plane surface via a
+        three-pass approach:
+          Pass 1 — build all shared points + curve loops.
+          Pass 2 — detect containment (direct parent per island grain) using
+                   a Shapely STRtree for performance.
+          Pass 3 — create plane surfaces; island curve loops are passed as
+                   additional arguments to addPlaneSurface so Gmsh carves
+                   them out of the parent surface instead of overlapping.
+        """
+        from collections import defaultdict
+        from shapely.strtree import STRtree
+
+        self.point_registry = {}
+        self.surface_tags = {}
+
         round_digits = 10
 
         def _get_or_add_point(x, y):
@@ -539,31 +571,64 @@ class confMesh2dGMSH():
                 self.point_registry[key] = tag
             return self.point_registry[key]
 
+        flat_id_list = list(flat_cells.keys())
+        polygon_list  = [flat_cells[fid] for fid in flat_id_list]
+
+        # ── Pass 1: register all shared points and build curve loops ─────────
+        loop_tags: dict = {}
         for flat_id, polygon in flat_cells.items():
-            coords = list(polygon.exterior.coords)[:-1]  # drop closing duplicate
-            pt_tags = [_get_or_add_point(x, y) for x, y in coords]
+            coords   = list(polygon.exterior.coords)[:-1]
+            pt_tags  = [_get_or_add_point(x, y) for x, y in coords]
+            n        = len(pt_tags)
+            line_tags = [
+                gmsh.model.geo.addLine(pt_tags[i], pt_tags[(i + 1) % n])
+                for i in range(n)
+            ]
+            loop_tags[flat_id] = gmsh.model.geo.addCurveLoop(line_tags)
 
-            # Build curve loop
-            line_tags = []
-            n = len(pt_tags)
-            for i in range(n):
-                lt = gmsh.model.geo.addLine(pt_tags[i], pt_tags[(i + 1) % n])
-                line_tags.append(lt)
+        # ── Pass 2: detect island grains — find direct parent for each ───────
+        # For each polygon, find which OTHER polygons contain it (i.e., it is
+        # an island/inclusion inside them).  We do a bounding-box pre-filter
+        # via STRtree then an explicit .contains() check so the result is
+        # version-independent and numerically robust after Taubin smoothing.
+        outer_to_holes: dict = defaultdict(list)
+        tree = STRtree(polygon_list)
+        for i, fid_inner in enumerate(flat_id_list):
+            # tree.query without predicate returns bounding-box candidates only
+            candidates = tree.query(polygon_list[i])
+            container_indices = [
+                j for j in candidates
+                if j != i and polygon_list[j].contains(polygon_list[i])
+            ]
+            if container_indices:
+                # Direct parent = smallest-area container (handles nesting)
+                direct_parent_idx = min(container_indices,
+                                        key=lambda j: polygon_list[j].area)
+                outer_to_holes[flat_id_list[direct_parent_idx]].append(
+                    loop_tags[fid_inner]
+                )
 
-            loop_tag = gmsh.model.geo.addCurveLoop(line_tags)
-            surf_tag = gmsh.model.geo.addPlaneSurface([loop_tag])
+        # ── Pass 3: create plane surfaces; holes carved from parent ──────────
+        for flat_id in flat_cells:
+            outer_loop = loop_tags[flat_id]
+            hole_loops  = outer_to_holes.get(flat_id, [])
+            surf_tag    = gmsh.model.geo.addPlaneSurface([outer_loop] + hole_loops)
             self.surface_tags[flat_id] = surf_tag
 
         gmsh.model.geo.synchronize()
 
     def _assign_physical_groups(self, flat_cells, gmsh):
-        """Create one physical surface per grain using original grain IDs."""
-        self.physical_surface_tags = {}
+        """Create one physical surface per original grain ID.
+        MultiPolygon parts sharing the same orig_gid are merged into one group."""
+        from collections import defaultdict
+        orig_to_surfs = defaultdict(list)
         for flat_id in flat_cells:
             orig_gid = self.gid_map.get(flat_id, flat_id)
-            tag = gmsh.model.addPhysicalGroup(2, [self.surface_tags[flat_id]],
-                                              name=f"grain.{orig_gid}")
-            self.physical_surface_tags[flat_id] = tag
+            orig_to_surfs[orig_gid].append(self.surface_tags[flat_id])
+        self.physical_surface_tags = {}
+        for orig_gid, surfs in orig_to_surfs.items():
+            tag = gmsh.model.addPhysicalGroup(2, surfs, name=f"grain.{orig_gid}")
+            self.physical_surface_tags[orig_gid] = tag
 
     def _set_mesh_options_and_generate(self, mesh_size_gb, mesh_size_bulk,
                                        mesh_algo, mesh_order,
