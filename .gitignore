@@ -60,6 +60,7 @@ temp/
 # -----------------------------
 # Project-specific ignored paths
 # -----------------------------
+src/upxo/meshing/mesher2d_ChrisHardie.py
 /admin/
 /data/upxo_performance
 /data/images
