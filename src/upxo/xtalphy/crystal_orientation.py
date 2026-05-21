@@ -47,7 +47,9 @@ High-level utilities
     gbmd_from_lfi(lfi, euler_array, connectivity=4, ...)
         Convenience wrapper: auto-detects grain boundary pairs from a
         label-field image and returns the GBMD.
-    ipf_color(euler_deg, sample_direction=[0,0,1])  – IPF colour (R,G,B) tuple
+
+    ipf_color(euler_deg, sample_direction=[0,0,1])
+        IPF colour (R,G,B) tuple.
 
 Special orientation relationships
     get_ks_rotations()           – 24 Kurdjumov-Sachs BCC variant matrices
@@ -501,6 +503,7 @@ def cubic_misorientation(EA1, EA2,
         Up to 3 smallest unique misorientation angles (degrees), ascending.
     """
     def _as_R(x):
+        """ as r."""
         arr = np.asarray(x, dtype=float)
         if arr.shape == (3, 3):
             return arr
@@ -555,6 +558,7 @@ def cubic_misorientation_scalar(EA1, EA2,
     ``cubic_misorientation``.
     """
     def _as_R(x):
+        """ as r."""
         arr = np.asarray(x, dtype=float)
         if arr.shape == (3, 3):
             return arr
@@ -778,6 +782,7 @@ def gbmd_from_lfi(lfi: np.ndarray,
     pairs_set: set[tuple[int, int]] = set()
 
     def _add(a_arr, b_arr):
+        """ add."""
         mask = (a_arr > 0) & (b_arr > 0) & (a_arr != b_arr)
         for a, b in zip(a_arr[mask].ravel(), b_arr[mask].ravel()):
             pair = (int(min(a, b)), int(max(a, b)))
@@ -1113,19 +1118,16 @@ def segregate_csl_pairs(
     csl : dict or None
         ``{label: reference_angle_degrees}``. Defaults to ``CUBIC_CSL``.
     csl_tol : float
-        Tolerance in degrees. Pairs with |Δθ| ≤ csl_tol are included.
+        Tolerance in degrees. Pairs with ``|Δθ| ≤ csl_tol`` are included.
         Default 2.0.
 
     Returns
     -------
-    result : dict  keyed by CSL label, each value is a dict with
-        ``'csl_angle'``   – float, reference angle (degrees)
-        ``'pairs'``       – ndarray (M, 2), matching grain-ID pairs
-        ``'miso_deg'``    – ndarray (M,), disorientation of those pairs
-        ``'grains_A'``    – ndarray of unique grain IDs on one side
-        ``'grains_B'``    – ndarray of unique grain IDs on other side
-        ``'grains_all'``  – ndarray of all unique grain IDs that touch
-                            at least one boundary of this type
+    result : dict
+        Keyed by CSL label. Each value is a dict with keys:
+        ``'csl_angle'`` (float), ``'pairs'`` (ndarray M×2),
+        ``'miso_deg'`` (ndarray M), ``'grains_A'``, ``'grains_B'``,
+        ``'grains_all'`` (ndarrays of unique grain IDs).
 
     Notes
     -----
@@ -1404,6 +1406,7 @@ def compute_grain_role_ratios(
     N                = len(total_gids)
 
     def _entry(gset: set) -> dict:
+        """ entry."""
         n = len(gset)
         return {'count': n, 'ratio': n / N if N else 0.0, 'grain_ids': gset}
 
@@ -1489,6 +1492,7 @@ def assign_grain_roles_by_ratio(
     all_role_set = pp_set | pt_set | im_set
 
     def _entry(gset: set) -> dict:
+        """ entry."""
         n = len(gset)
         return {'count': n, 'ratio': n / N, 'grain_ids': gset}
 
@@ -1552,10 +1556,12 @@ def introduce_twins_by_csl(
     Returns
     -------
     dict
-        ``{'lfi': ndarray,
-           'twin_lines': dict[parent_gid -> list[Sline2d]],
-           'new_twin_gids': dict[parent_gid -> list[new_gid]],
-           'csl_label': str}``
+        A dict with keys::
+
+            {'lfi': ndarray,
+             'twin_lines': dict[parent_gid -> list[Sline2d]],
+             'new_twin_gids': dict[parent_gid -> list[new_gid]],
+             'csl_label': str}
     """
     from upxo.geoEntities.sline2d import Sline2d as Sl2d
 
@@ -1846,19 +1852,21 @@ def compute_twin_thickness_stats(
 # ---------------------------------------------------------------------------
 
 # Σ3 twinning rotation: 60° about [111]/√3  (w, x, y, z) convention
+# Use ** 0.5 (pure Python) so module-level init works when numpy is mocked.
 _SIGMA3_Q = np.array([
-    np.sqrt(3.0) / 2.0,
-    1.0 / (2.0 * np.sqrt(3.0)),
-    1.0 / (2.0 * np.sqrt(3.0)),
-    1.0 / (2.0 * np.sqrt(3.0)),
+    3.0 ** 0.5 / 2.0,
+    1.0 / (2.0 * 3.0 ** 0.5),
+    1.0 / (2.0 * 3.0 ** 0.5),
+    1.0 / (2.0 * 3.0 ** 0.5),
 ], dtype=np.float64)
 
 # Σ5 rotations: 36.87° about each cubic <100> axis — three symmetry-equivalent variants
-_S5_HW = np.radians(36.87 / 2.0)
+import math as _math
+_S5_HW = _math.radians(36.87 / 2.0)
 _SIGMA5_Q_VARIANTS = np.array([
-    [np.cos(_S5_HW), np.sin(_S5_HW), 0.0,            0.0           ],  # [100]
-    [np.cos(_S5_HW), 0.0,            np.sin(_S5_HW), 0.0           ],  # [010]
-    [np.cos(_S5_HW), 0.0,            0.0,            np.sin(_S5_HW)],  # [001]
+    [_math.cos(_S5_HW), _math.sin(_S5_HW), 0.0,               0.0              ],  # [100]
+    [_math.cos(_S5_HW), 0.0,               _math.sin(_S5_HW), 0.0              ],  # [010]
+    [_math.cos(_S5_HW), 0.0,               0.0,               _math.sin(_S5_HW)],  # [001]
 ], dtype=np.float64)
 
 
@@ -2022,6 +2030,7 @@ def assign_orientations_mdf_matched(
     im_set      = all_im
 
     def _build_pool(gid_set):
+        """ build pool."""
         qs = [gid_to_q_ebsd[g] for g in gid_set if g in gid_to_q_ebsd]
         return np.array(qs, dtype=np.float64) if qs else np.empty((0, 4), dtype=np.float64)
 
@@ -2192,6 +2201,7 @@ def assign_parent_orientations(
     _state: dict = {'fcc': None, 'idx': 0}
 
     def _get_fallback() -> np.ndarray:
+        """ get fallback."""
         if _state['fcc'] is None or _state['idx'] >= len(_state['fcc']):
             _state['fcc'] = tops.synth_fcc_quats(N=max(200, len(host_set)))
             _state['idx'] = 0
@@ -2250,8 +2260,7 @@ def get_ks_rotations() -> np.ndarray:
     as (24, 3, 3) rotation matrices.
 
     The K-S OR is defined by the relationship between FCC austenite and
-    BCC martensite/ferrite:
-        {111}γ ∥ {110}α,   <110>γ ∥ <111>α
+    BCC martensite/ferrite: ``{111}γ ∥ {110}α,   <110>γ ∥ <111>α``.
 
     Returns
     -------
