@@ -38,6 +38,8 @@ setup(
         "pyvoro>=1.3.2",
         "tetgen>=0.8.2",
         "connected-components-3d>=3.26.1",
+        "xlrd>=2.0.1",
+        "termcolor>=2.4.0",
     ],
     python_requires=">=3.13",
     classifiers=classifiers,
