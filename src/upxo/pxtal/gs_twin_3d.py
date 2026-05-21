@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Created on Tue Oct 21 11:47:44 2025
 
-@author: rg5749
+@author: Dr. Sunil Anandatheertha
 """
 
 from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
