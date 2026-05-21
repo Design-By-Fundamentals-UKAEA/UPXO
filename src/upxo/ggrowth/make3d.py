@@ -26,6 +26,7 @@ class voxel_from_pixel:
         A PyVista UniformGrid object for 3D visualization.
     """
     def __init__(self, STACK, meta_dict={'creation': 'from_sstack'}):
+        """Initialise the instance."""
         self.meta_dict = meta_dict
 
         if meta_dict['creation'] == 'from_sstack':
@@ -40,6 +41,7 @@ class voxel_from_pixel:
         self.build_pvgrid()
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         if self.meta_dict['creation'] == 'from_sstack':
             stack_size = len(self.sstack)
         elif self.meta_dict['creation'] == 'from_gsstack':
@@ -51,18 +53,26 @@ class voxel_from_pixel:
 
     @classmethod
     def from_gsstack(cls, gsstack, meta_dict=dict()):
+        """Construct this instance from gsstack."""
         meta_dict.setdefault('creation', 'from_gsstack')
         return cls(gsstack, meta_dict=meta_dict)
 
     @classmethod
     def from_sstack(cls, sstack, meta_dict=dict()):
+        """Construct this instance from sstack."""
         meta_dict.setdefault('creation', 'from_sstack')
         return cls(sstack, meta_dict=meta_dict)
 
     @classmethod
-    def from_gsgen(cls, input_dashboard='C:\\Development\\UPXO\\upxo_library\\src\\upxo\\demos\\profiling\\input_files\\Profiling-001-Alg200-Q20-M10.xls',
+    def from_gsgen(cls, input_dashboard=None,
                    meta_dict=dict(),
                    retain_gsdb=False):
+        """Construct this instance from gsgen."""
+        if input_dashboard is None:
+            raise ValueError(
+                "input_dashboard must be provided — supply the path to your "
+                "UPXO input Excel file (e.g. 'my_params.xls')."
+            )
         # ---------- Import MCGS ----------
         from upxo.ggrowth.mcgs import mcgs
         pxt = mcgs(input_dashboard=input_dashboard)
@@ -81,20 +91,24 @@ class voxel_from_pixel:
 
     @classmethod
     def from_empty(cls):
+        """Construct this instance from empty."""
         meta_dict = {'creation': 'from_empty'}
         STACK = dict()
         return cls(STACK, meta_dict=meta_dict)
 
     def stack(self):
+        """Stack."""
         self.s = np.stack([self.sstack[k] 
                            for k in sorted(self.sstack.keys())],
                            axis=-1, dtype=np.int16)
         self.q = np.unique(self.s)
 
     def add_slice(self, location, gs, gstype='2D'):
+        """Add or insert slice."""
         self.gsstack[location] = gs
 
     def find_cells(self, method, connectivity=3):
+        """Find cells."""
         if method == 1:
             from upxo.gsdataops.grid_ops import detect_grains_3d
             self.lfi = detect_grains_3d(self.s, connectivity=connectivity,
@@ -120,9 +134,11 @@ class voxel_from_pixel:
         self.build_s_lfi()
 
     def build_fids(self):
+        """Build and return  fids."""
         self.fid = np.asarray(np.unique(self.lfi), dtype=np.int64)
 
     def build_coords(self):
+        """Build and return  coords."""
         coords = {}
         for fid in self.fid:
             coords[int(fid)] = np.argwhere(self.lfi == fid)
@@ -130,6 +146,7 @@ class voxel_from_pixel:
         self.build_rep_coords()
     
     def build_rep_coords(self):
+        """Build and return  rep coords."""
         rep_coords = []
         for coord in self.coords.values():
             rep_coords.append(coord[0])
@@ -137,10 +154,12 @@ class voxel_from_pixel:
 
 
     def build_lfi_s(self):
+        """Build and return  lfi s."""
         self.fid_s = {int(fid): int(self.s[coord[0], coord[1], coord[2]]) 
                  for fid, coord in zip(self.fid, self.rep_coords)}
 
     def build_s_lfi(self):
+        """Build and return  s lfi."""
         self.s_fid = {int(s): [] for s in self.q}
         for fid, s in self.fid_s.items():
             self.s_fid[s].append(fid)
@@ -148,6 +167,7 @@ class voxel_from_pixel:
     def build_pvgrid(self, db='s',
                      origin=(0, 0, 0),
                      spacing=(1.0, 1.0, 1.0)):
+        """Build and return  pvgrid."""
         if not hasattr(self, 'pvgrid'):
             self.pvgrid = dict()
 
@@ -163,10 +183,12 @@ class voxel_from_pixel:
                                         spacing=spacing)
 
     def see_stack(self, db='s', opacity='linear', cmap='nipy_spectral'):
+        """See stack."""
         self.pvgrid[db].plot(cmap=cmap, show_scalar_bar=True,
                    opacity=opacity, jupyter_backend='pythreejs')
 
     def section(self, db='s', axis=0, location=0):
+        """Section."""
         if db == 's':
             DB = self.s
         elif db == 'lfi':
@@ -178,6 +200,7 @@ class voxel_from_pixel:
         return section_from_3d(DB, axis=axis, location=location)
     
     def see_section(self, db='s', axis=0, location=0, preset='minimal',):
+        """See section."""
         section = self.section(db=db, axis=axis, location=location)
         viz.see_map(section, cmap='viridis', preset=preset,
                     title=f"Section of {db} at axis {axis}, loc {location}",

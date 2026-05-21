@@ -79,6 +79,7 @@ class grid():
     def __init__(self, study='independent', input_dashboard='input_dashboard.xls',
                  consider_NLM_b=False, consider_NLM_d=False, AR_teevrate=0, AR_GrainAxis="-45",
                  display_messages=True):
+        """Initialise the instance."""
         self.study = study
         if study == 'independent':
             from upxo.interfaces.user_inputs.gather_user_inputs import load_uidata
@@ -106,6 +107,7 @@ class grid():
             pass
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         self.index = 0
         return self
 
@@ -1097,7 +1099,8 @@ class grid():
                     print(f'MC temporal slice no {m} invalid. Skipped')
 
     def detect_grains_v2(self):
-        pass
+        """Detect grains v2."""
+        raise NotImplementedError("detect_grains_v2 is not yet implemented.")
 
     def set_characterization_settings_2d(self, setid=-1):
         """
@@ -1683,16 +1686,19 @@ class grid():
 
     @property
     def pxtal_length(self):
+        """Pxtal length."""
         # Length of the pixelated crystal in the x-direction
         return self.uigrid.xmax-self.uigrid.xmin
 
     @property
     def pxtal_height(self):
+        """Pxtal height."""
         # Height of the pixelated crystal in the y-direction
         return self.uigrid.ymax-self.uigrid.ymin
 
     @property
     def pxtal_area(self):
+        """Pxtal area."""
         # Area of the pixelated crystal
         return self.pxtal_length*self.pxtal_height
 # ---------------------------------------------------------------------
@@ -1706,6 +1712,7 @@ class mcgs(grid):
                  info_message_display_level='detailed',
                  consider_NLM_b=False, consider_NLM_d=False, AR_factor=0,
                  AR_GrainAxis="-45", display_messages=True):
+        """Initialise the instance."""
         super().__init__(study=study, input_dashboard=input_dashboard,
                          consider_NLM_b=consider_NLM_b, consider_NLM_d=consider_NLM_d,
                          AR_teevrate=AR_factor, AR_GrainAxis=AR_GrainAxis,
@@ -1831,7 +1838,8 @@ class mcgs(grid):
             self.tslices = list(self.gs.keys())
 
     def start_algo2d_with_hops(self, user_LIWM=False, LIWM=np.ones((3,3), dtype=np.float32)):
-        pass
+        """Start algo2d with hops."""
+        raise NotImplementedError("start_algo2d_with_hops is not yet implemented.")
 
     def start_algo3d_without_hops(self, rsfso=3, user_LIWM=False, LIWM=np.ones((3,3,3), dtype=np.float32), verbose=True):
         """
@@ -1949,6 +1957,7 @@ class mcgs(grid):
         return NLM
 
     def NLM_elements(self):
+        """Nlm elements."""
         # Build the Non-Locality Matrix
         _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
         NLM_00, NLM_01, NLM_02 = _a  # Unpack 3 colms of 1st row
