@@ -1,30 +1,25 @@
 """
-Core module of UKAEA Poly-XTAL Operations.
+3D point geometry entities for UPXO.
 
-Authors
+Provides the :class:`Point3d` full-featured 3D point and the
+:class:`p3d_leanest` lightweight variant for performance-critical use.
+
+Classes
 -------
-Dr. Sunil Anandatheertha
+Point3d
+    Full-featured 3D point with coordinate operations, equality checks,
+    distance calculations, and neighbour-finding methods.
+p3d_leanest
+    Minimal 3D point for performance-critical collections. Intended for
+    internal use only.
 
-@Developer notes
-----------------
-We could benefit a lot from the below links.
-https://docs.sympy.org/latest/modules/geometry/points.html
-https://www.geeksforgeeks.org/python-sympy-segment-perpendicular_bisector-method/?ref=next_article
-https://www.geeksforgeeks.org/python-sympy-line-is_parallel-method/
-https://www.geeksforgeeks.org/python-sympy-line-smallest_angle_between-method/
-https://www.geeksforgeeks.org/python-sympy-line-parallel_line-method/
-https://www.geeksforgeeks.org/python-sympy-line-are_concurrent-method/
-https://www.geeksforgeeks.org/python-sympy-ellipse-equation-method/
-https://www.geeksforgeeks.org/python-sympy-ellipse-method/
-https://www.geeksforgeeks.org/python-sympy-plane-equation-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-polygon-cut_section-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-is_coplanar-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-perpendicular_plane-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-plane-projection-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-line-intersection-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-curve-translate-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-triangle-is_right-method/?ref=ml_lbp
-https://www.geeksforgeeks.org/python-sympy-triangle-is_isosceles-method/?ref=ml_lbp
+Usage
+-----
+::
+
+    from upxo.geoEntities.point3d import Point3d as p3d
+
+@author: Dr. Sunil Anandatheertha
 """
 
 import math
@@ -47,20 +42,20 @@ class _coord_():
 
 class p3d_leanest():
     """
-    Leanest redefinition of 3d point class. Intended for private use only.
+    Minimal 3D point class for performance-critical internal use.
 
-    Author
-    ------
-    Dr. Sunil Anandatheertha
-
-    @dev
-    ----
-    Restrict any further development
+    Notes
+    -----
+    Intentionally minimal — no methods beyond ``__init__`` and ``__repr__``.
+    Further development should be avoided to keep memory overhead low.
 
     Examples
     --------
-    from upxo.geoEntities.point3d import p3d_leanest
-    a = [p3d_leanest(1, 2, 0), p3d_leanest(1, 2, 0)]
+    .. code-block:: python
+
+        from upxo.geoEntities.point3d import p3d_leanest
+
+        pts = [p3d_leanest(1, 2, 0), p3d_leanest(3, 4, 1)]
     """
 
     __slots__ = ('_x', '_y', '_z')
@@ -76,57 +71,36 @@ class p3d_leanest():
 
 class Point3d(UPXO_Point):
     """
-    UPXO Point2d object, new version.
-
-    DEVELOPMENTAL PHASES AND PROGRESS
-    ---------------------------------
-    __eq__: DONE
-    __ne__: DONE
-
+    3D point entity for UPXO.
 
     Parameters
     ----------
-    pln: Denotes plane which contains the self point.
-    i: 1st coordinate of the point.
-    j: 2nd coordinate of the point.
-    f: Feature dictionary containsing features attached to the point.
+    x : float
+        x-coordinate.
+    y : float
+        y-coordinate.
+    z : float, optional
+        z-coordinate (default 0.0).
 
-    Explanations
-    ------------
-    If pln is 'ij' or 'ji': x, y = x_, y_: True representation
-    If pln is 'jk' or 'kj': x, y = y_, z_: False representation
-    If pln is 'ki' or 'ik': x, y = x_, z_: False representation
-    Where, x_, y_ and z_ are actual coordinate axes.
+    Notes
+    -----
+    Inherits from :class:`~upxo.geoEntities.bases.UPXO_Point`. Pydantic
+    validation is intentionally avoided to minimise instantiation cost and
+    memory overhead.
 
-    Notes to users
-    --------------
-    @user: Please refer to examples and Jupyter notebook demos before use.
+    Examples
+    --------
+    .. code-block:: python
 
-    Notes to developers and maintainers
-    -----------------------------------
-    @dev: Inherits from ABC: Point.
-    @dev: Lets not use pydantic in the interest of maintaining speed of
-        instantiation and reducing memory overhead.
+        from upxo.geoEntities.point3d import Point3d as p3d
 
-    Import statement
-    ----------------
-    from upxo.geoEntities.point3d import Point2d as p2d
-    Example 1: Creation
-    -------------------
-    A, B, C = p3d(10, 12), p3d(10, 12), p3d(11, 12)
-    print(A, B, C)
+        A, B, C = p3d(10, 12, 0), p3d(10, 12, 0), p3d(11, 12, 0)
+        print(A, B, C)
 
-    Example 2: equality check
-    -------------------------
-    print(A == B, A != B, A == C, A != C)
+        print(A == B, A != B, A == C, A != C)
 
-    Example 3: Addition and subtraction
-    -----------------------------------
-    A + 10
-    print(A)
-    A - 10
-    print(A)
-    A + [10, 20, 30]
+        A * 2
+        A + [10, 20, 30]
     """
 
     ε = 1E-8
@@ -145,20 +119,34 @@ class Point3d(UPXO_Point):
 
     def __eq__(self, plist):
         """
-        Boolean inequality.
+        Test equality between self and one or more points.
 
+        Parameters
+        ----------
+        plist : point or list of points
+            A single point object, list of point objects, or nested
+            coordinate list.
 
-        from upxo.geoEntities.point3d import p3d_leanest
+        Returns
+        -------
+        list of bool
+            Element-wise equality results.
 
-        print(p3d(3, 4, 5) == p3d_leanest(3, 4, 5))
-        print(p3d(3, 4, 5) == [p3d_leanest(1, 4, 5), p3d_leanest(3, 4, 5)])
-        print(p3d(3, 4, 5) == p3d(3, 4, 5))
-        print(p3d(3, 4, 5) == [p3d(1, 2, 5), p3d(3, 4, 5)])
-        print(p3d(3, 4, 5) == (p3d(1, 4, 5), p3d(3, 4, 5)))
-        print(p3d(3, 4, 5) == [[1, 2, 5], [3, 4, 5], [5, 6, 5]])
-        print(p3d(3, 4, 5) == [[1, 3, 5], [2, 4, 6]])
-        print(p3d(3, 4, 5) == [[3, 4, 5]])
-        print(p3d(3, 4, 5) == [[3], [4], [5]])
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d, p3d_leanest
+
+            print(p3d(3, 4, 5) == p3d_leanest(3, 4, 5))
+            print(p3d(3, 4, 5) == [p3d_leanest(1, 4, 5), p3d_leanest(3, 4, 5)])
+            print(p3d(3, 4, 5) == p3d(3, 4, 5))
+            print(p3d(3, 4, 5) == [p3d(1, 2, 5), p3d(3, 4, 5)])
+            print(p3d(3, 4, 5) == (p3d(1, 4, 5), p3d(3, 4, 5)))
+            print(p3d(3, 4, 5) == [[1, 2, 5], [3, 4, 5], [5, 6, 5]])
+            print(p3d(3, 4, 5) == [[1, 3, 5], [2, 4, 6]])
+            print(p3d(3, 4, 5) == [[3, 4, 5]])
+            print(p3d(3, 4, 5) == [[3], [4], [5]])
         """
         if not plist:
             raise ValueError("plist is empty.")
@@ -226,42 +214,83 @@ class Point3d(UPXO_Point):
 
     def eq(self, plist, use_tol=False, tolerance=None):
         """
-        Overloaded __eq__.
+        Overloaded equality check with optional tolerance.
 
-        from upxo.geoEntities.point3d import Point3d as p3d
-        from upxo.geoEntities.point3d import p3d_leanest
+        Parameters
+        ----------
+        plist : point or list of points
+            Points to compare against self.
+        use_tol : bool, optional
+            If True, apply tolerance (not yet implemented).
+        tolerance : float, optional
+            Tolerance threshold (not yet implemented).
 
-        print(p3d(3, 4, 5).eq(p3d_leanest(3, 4, 5)))
-        print(p3d(3, 4, 5).eq([p3d_leanest(1, 4, 5), p3d_leanest(3, 4, 5)]))
-        print(p3d(3, 4, 5).eq(p3d(3, 4, 5)))
-        print(p3d(3, 4, 5).eq([p3d(1, 2, 5), p3d(3, 4, 5)]))
-        print(p3d(3, 4, 5).eq((p3d(1, 4, 5), p3d(3, 4, 5))))
-        print(p3d(3, 4, 5).eq([[1, 2, 5], [3, 4, 5], [5, 6, 5]]))
-        print(p3d(3, 4, 5).eq([[1, 3, 5], [2, 4, 6]]))
-        print(p3d(3, 4, 5).eq([[3, 4, 5]]))
-        print(p3d(3, 4, 5).eq([[3], [4], [5]]))
+        Returns
+        -------
+        list of bool
+            Element-wise equality results.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d, p3d_leanest
+
+            print(p3d(3, 4, 5).eq(p3d_leanest(3, 4, 5)))
+            print(p3d(3, 4, 5).eq([p3d_leanest(1, 4, 5), p3d_leanest(3, 4, 5)]))
+            print(p3d(3, 4, 5).eq(p3d(3, 4, 5)))
+            print(p3d(3, 4, 5).eq([p3d(1, 2, 5), p3d(3, 4, 5)]))
+            print(p3d(3, 4, 5).eq((p3d(1, 4, 5), p3d(3, 4, 5))))
+            print(p3d(3, 4, 5).eq([[1, 2, 5], [3, 4, 5], [5, 6, 5]]))
+            print(p3d(3, 4, 5).eq([[1, 3, 5], [2, 4, 6]]))
+            print(p3d(3, 4, 5).eq([[3, 4, 5]]))
+            print(p3d(3, 4, 5).eq([[3], [4], [5]]))
         """
         if not use_tol:
             return self.__eq__(plist)
 
     def eq_fast(self, plist, use_tol=False, point_spec=1):
         """
-        Overloaded eq.
+        Fast equality check with explicit point-type specification.
 
-        from upxo.geoEntities.point3d import Point3d as p3d
-        from upxo.geoEntities.point3d import p3d_leanest
+        Parameters
+        ----------
+        plist : point or array-like
+            Points to compare.
+        use_tol : bool, optional
+            Tolerance flag (not yet implemented).
+        point_spec : int, optional
+            Integer code identifying the layout of ``plist``:
 
-        print(p3d(3,4,5).eq_fast(p3d(3,4,5), point_spec=1))
-        print(p3d(3,4,5).eq_fast([p3d(1,2,5), p3d(3,4,5)], point_spec=2))
-        print(p3d(3,4,5).eq_fast((p3d(1,4,5), p3d(3,4,5)), point_spec=2))
-        print(p3d(3,4,5).eq_fast(p3d_leanest(3,4,5), point_spec=3))
-        print(p3d(3,4,5).eq_fast([p3d_leanest(1,4,5), p3d_leanest(3, 4, 5)], point_spec=4))
-        print(p3d(3,4,5).eq_fast([1,2,5], point_spec=5))
-        print(p3d(3,4,5).eq_fast([[1,2,5]], point_spec=6))
-        print(p3d(3,4,5).eq_fast([[1,2,5],[3,4,5],[5,6,5]], point_spec=7))
-        print(p3d(3,4,5).eq_fast([[1,3,5],[2,4,6]]))  # INvalid comparison
-        print(p3d(3,4,5).eq_fast([[3],[4],[5]], point_spec=8))
-        print(p3d(3,4,5).eq_fast([[3,3,4],[4,4,4],[5,5,5]], point_spec=8))
+            1 – ``Point3d``;
+            2 – ``[Point3d]``;
+            3 – ``p3d_leanest``;
+            4 – ``[p3d_leanest]``;
+            5 – ``[x, y, z]``;
+            6 – ``[[x, y, z]]``;
+            7 – ``[[x1,x2,...], [y1,y2,...], [z1,z2,...]]`` (row layout);
+            8 – ``[[x1,...], [y1,...], [z1,...]]`` (column layout).
+
+        Returns
+        -------
+        list of bool or None
+            Element-wise equality results, or ``None`` for unrecognised spec.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d, p3d_leanest
+
+            print(p3d(3, 4, 5).eq_fast(p3d(3, 4, 5), point_spec=1))
+            print(p3d(3, 4, 5).eq_fast([p3d(1, 2, 5), p3d(3, 4, 5)], point_spec=2))
+            print(p3d(3, 4, 5).eq_fast((p3d(1, 4, 5), p3d(3, 4, 5)), point_spec=2))
+            print(p3d(3, 4, 5).eq_fast(p3d_leanest(3, 4, 5), point_spec=3))
+            print(p3d(3, 4, 5).eq_fast([p3d_leanest(1, 4, 5), p3d_leanest(3, 4, 5)], point_spec=4))
+            print(p3d(3, 4, 5).eq_fast([1, 2, 5], point_spec=5))
+            print(p3d(3, 4, 5).eq_fast([[1, 2, 5]], point_spec=6))
+            print(p3d(3, 4, 5).eq_fast([[1, 2, 5], [3, 4, 5], [5, 6, 5]], point_spec=7))
+            print(p3d(3, 4, 5).eq_fast([[3], [4], [5]], point_spec=8))
         """
         cmp = None
         if point_spec == 1:
@@ -316,24 +345,35 @@ class Point3d(UPXO_Point):
 
     @classmethod
     def from_three_planes(cls, plane1, plane2, plane3):
-        """Finds the point of intersection of three planes, if it exists.
+        """Find the point of intersection of three planes.
 
-        Args:
-            plane1, plane2, plane3: Plane objects.
+        Parameters
+        ----------
+        plane1 : Plane
+            First plane.
+        plane2 : Plane
+            Second plane.
+        plane3 : Plane
+            Third plane.
 
-        Returns:
-            A NumPy array representing the intersection point, or None if no solution exists.
-
-        Example
+        Returns
         -------
-        from upxo.geoEntities.point3d import Point3d as p3d
-        from upxo.geoEntities.plane import Plane
+        Point3d or None
+            Intersection point, or ``None`` if no unique solution exists
+            (parallel or coincident planes).
 
-        plane1 = Plane(point=(0, 0, 1), normal=(1, 1, 1))
-        plane2 = Plane(point=(0, 0, 0), normal=(0, 1, 0))
-        plane3 = Plane(point=(0, 0, 0), normal=(0, 0, 1))
-        intersection_point = p3d.from_three_planes(plane1, plane2, plane3)
-        print(intersection_point)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d
+            from upxo.geoEntities.plane import Plane
+
+            plane1 = Plane(point=(0, 0, 1), normal=(1, 1, 1))
+            plane2 = Plane(point=(0, 0, 0), normal=(0, 1, 0))
+            plane3 = Plane(point=(0, 0, 0), normal=(0, 0, 1))
+            intersection_point = p3d.from_three_planes(plane1, plane2, plane3)
+            print(intersection_point)
         """
         A = np.array([plane1.normal, plane2.normal, plane3.normal])
         D = np.array([[plane1.point @ plane1.normal],
@@ -351,44 +391,54 @@ class Point3d(UPXO_Point):
         """Return ``[x, y]`` as a numpy array (2D projection of this 3D point)."""
         return np.array([self.x, self.y])
 
-    def squared_distance(self, plist=None, point_spec = -1):
+    def squared_distance(self, plist=None, point_spec=-1):
         """
-        Calculate the squared distances between self point and plist, having
-        a list of 3D points.
+        Calculate squared distances between self and one or more points.
 
         Parameters
         ----------
-        plist: List of point objects
-        point_spec: Integer representaing the type of point specification
+        plist : point or array-like
+            Single point, list of points, or coordinate array. The expected
+            layout depends on ``point_spec``.
+        point_spec : int, optional
+            Integer code identifying the type of ``plist`` (default ``-1``
+            for automatic detection):
 
-        DEVELOPMENT PHASES AND PROGRESS
-        -------------------------------
-        PHASE 1: 2D case: DONE
-        PHASE 2: 3D case: DONE
-        PHASE 3: Improve validations
+            -1 – auto-detect via :func:`~upxo.geoEntities.featmake.make_p3d`;
+             1 – ``Point3d``;
+             2 – ``[Point3d]``;
+             3 – ``p3d_leanest``;
+             4 – ``[p3d_leanest]``;
+             5 – ``(x, y, z)`` tuple;
+             6 – ``[(x, y, z)]``;
+             7 – ``[[x,y,z], ...]`` row-major;
+             8 – ``[[x1,...], [y1,...], [z1,...]]`` column-major or ``(3, n)`` array.
+
+        Returns
+        -------
+        float or numpy.ndarray
+            Squared Euclidean distance(s) from self to each input point.
 
         Examples
         --------
-        from upxo.geoEntities.point3d import Point3d as p3d
-        from upxo.geoEntities.point3d import p3d_leanest
+        .. code-block:: python
 
-        p3d(0,0,0).squared_distance(p3d(1,1,0), point_spec=-1)
-        p3d(0,0,0).squared_distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]],
-                                    point_spec=-1)
-        points = np.random.random((3, 100000))
-        p3d(0,0,0).squared_distance(points)
+            from upxo.geoEntities.point3d import Point3d as p3d, p3d_leanest
+            import numpy as np
 
-        p3d(0,0,0).squared_distance(p3d(1,1,0), point_spec=1)
-        p3d(0,0,0).squared_distance([p3d(1,1,0)], point_spec=2)
-        p3d(0,0,0).squared_distance(p3d_leanest(1,1,0), point_spec=3)
-        p3d(0,0,0).squared_distance([p3d_leanest(1,1,0)], point_spec=4)
-        p3d(0,0,0).squared_distance((1,1,0), point_spec=5)
-        p3d(0,0,0).squared_distance([(1,1,0)], point_spec=6)
-        p3d(0,0,0).squared_distance([[1,2,3],[4,5,6],[7,8,9]], point_spec=7)
-        p3d(0,0,0).squared_distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]],
-                                    point_spec=8)
-        p3d(0,0,0).squared_distance(np.random.random((3, 100000)),
-                                    point_spec=8)
+            p3d(0, 0, 0).squared_distance(p3d(1, 1, 0), point_spec=-1)
+            p3d(0, 0, 0).squared_distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=-1)
+            points = np.random.random((3, 100000))
+            p3d(0, 0, 0).squared_distance(points)
+            p3d(0, 0, 0).squared_distance(p3d(1, 1, 0), point_spec=1)
+            p3d(0, 0, 0).squared_distance([p3d(1, 1, 0)], point_spec=2)
+            p3d(0, 0, 0).squared_distance(p3d_leanest(1, 1, 0), point_spec=3)
+            p3d(0, 0, 0).squared_distance([p3d_leanest(1, 1, 0)], point_spec=4)
+            p3d(0, 0, 0).squared_distance((1, 1, 0), point_spec=5)
+            p3d(0, 0, 0).squared_distance([(1, 1, 0)], point_spec=6)
+            p3d(0, 0, 0).squared_distance([[1,2,3],[4,5,6],[7,8,9]], point_spec=7)
+            p3d(0, 0, 0).squared_distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=8)
+            p3d(0, 0, 0).squared_distance(np.random.random((3, 100000)), point_spec=8)
         """
         # Validations
         if plist is None:
@@ -466,37 +516,38 @@ class Point3d(UPXO_Point):
 
     def distance(self, plist=None, point_spec=-1):
         """
-        Calculate the distances between self point and plist.
+        Calculate Euclidean distances between self and one or more points.
 
-        DEVELOPMENT PHASES AND PROGRESS
-        -------------------------------
-        PHASE 1: 2D case: DONE
-        PHASE 2: 3D case: DONE
+        Parameters
+        ----------
+        plist : point or array-like
+            See :meth:`squared_distance` for accepted formats.
+        point_spec : int, optional
+            Point layout code passed through to :meth:`squared_distance`.
 
-        DEVELOPMENT PHASES AND PROGRESS
-        -------------------------------
-        PHASE 1: 2D case: DONE
-        PHASE 2: 3D case: DONE
-        PHASE 3: Improve validations
+        Returns
+        -------
+        float or numpy.ndarray
+            Euclidean distance(s) from self to each input point.
 
         Examples
         --------
-        from upxo.geoEntities.point3d import Point3d as p3d
-        from upxo.geoEntities.point3d import p3d_leanest
+        .. code-block:: python
 
-        p3d(0,0,0).distance(p3d(1,1,0), point_spec=-1)
-        p3d(0,0,0).distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=-1)
-        points = np.random.random((3, 100000))
-        p3d(0,0,0).distance(points)
-        p3d(0,0,0).distance(p3d(1,1,0), point_spec=1)
-        p3d(0,0,0).distance([p3d(1,1,0)], point_spec=2)
-        p3d(0,0,0).distance(p3d_leanest(1,1,0), point_spec=3)
-        p3d(0,0,0).distance([p3d_leanest(1,1,0)], point_spec=4)
-        p3d(0,0,0).distance((1,1,0), point_spec=5)
-        p3d(0,0,0).distance([(1,1,0)], point_spec=6)
-        p3d(0,0,0).distance([[1,2,3],[4,5,6],[7,8,9]], point_spec=7)
-        p3d(0,0,0).distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=8)
-        p3d(0,0,0).distance(np.random.random((3, 100000)), point_spec=8)
+            from upxo.geoEntities.point3d import Point3d as p3d, p3d_leanest
+            import numpy as np
+
+            p3d(0, 0, 0).distance(p3d(1, 1, 0), point_spec=-1)
+            p3d(0, 0, 0).distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=-1)
+            p3d(0, 0, 0).distance(p3d(1, 1, 0), point_spec=1)
+            p3d(0, 0, 0).distance([p3d(1, 1, 0)], point_spec=2)
+            p3d(0, 0, 0).distance(p3d_leanest(1, 1, 0), point_spec=3)
+            p3d(0, 0, 0).distance([p3d_leanest(1, 1, 0)], point_spec=4)
+            p3d(0, 0, 0).distance((1, 1, 0), point_spec=5)
+            p3d(0, 0, 0).distance([(1, 1, 0)], point_spec=6)
+            p3d(0, 0, 0).distance([[1,2,3],[4,5,6],[7,8,9]], point_spec=7)
+            p3d(0, 0, 0).distance([[1,2,3,4],[1,2,3,4],[1,2,3,4]], point_spec=8)
+            p3d(0, 0, 0).distance(np.random.random((3, 100000)), point_spec=8)
         """
         return np.sqrt(self.squared_distance(plist=plist,
                                              point_spec=point_spec))
@@ -504,25 +555,34 @@ class Point3d(UPXO_Point):
     def translate(self, *, vector=None, dist=None, update=False,
                   throw=True):
         """
-        Translate the self along the vector by dist.
+        Translate self along a vector by a given distance.
 
-        Development phases
-        ------------------
-        PHASE 1:
-        PHASE 2: Validation for dist
-        PHASE 3: Validation for vector
+        Parameters
+        ----------
+        vector : array-like
+            Direction vector of translation.
+        dist : float
+            Distance to translate along ``vector``.
+        update : bool, optional
+            If True, modify self in place.
+        throw : bool, optional
+            If True, return the translated point.
+
+        Returns
+        -------
+        Point3d or None
+            Translated point if ``throw`` is True, else ``None``.
 
         Examples
         --------
-        from upxo.geoEntities.point3d import Point3d as p3d
-        A = p3d(0, 0, 0)
+        .. code-block:: python
 
-        Example-1
-        ---------
-        A.translate(vector=[-1,-1,-1], dist=3.4641016151377544,
-                    update=True,
-                    throw=False)
-        A
+            from upxo.geoEntities.point3d import Point3d as p3d
+
+            A = p3d(0, 0, 0)
+            A.translate(vector=[-1, -1, -1], dist=3.4641016151377544,
+                        update=True, throw=False)
+            print(A)
         """
         distances = (np.array(vector) / np.linalg.norm(vector)) * dist
         if update:
@@ -627,11 +687,32 @@ class Point3d(UPXO_Point):
             else:
                 return np.argwhere(sd < r)
 
-    def find_neigh_point_by_count(self, *, plist=None, n=None,
-                                  plane='xy'):
+    def find_neigh_point_by_count(self, *, plist=None, n=None, plane='xy'):
         """
-        from upxo.geoEntities.point3d import Point3d as p3d
-        p2d(0,0,0).find_neigh_point_by_count( [[1, 2], [10, 12], [0, -5], [0, 0]], 2)
+        Find the ``n`` nearest points in ``plist`` by squared distance.
+
+        Parameters
+        ----------
+        plist : array-like
+            Pool of candidate points.
+        n : int
+            Number of nearest neighbours to return.
+        plane : str, optional
+            Reserved for plane-filtered searches. Currently unused.
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            Indices of the ``n`` nearest points in ``plist``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d
+
+            p3d(0, 0, 0).find_neigh_point_by_count(
+                plist=[[1, 2, 0], [10, 12, 0], [0, -5, 0], [0, 0, 0]], n=2)
         """
         # Validate plist
         # Validate n
@@ -686,13 +767,29 @@ class Point3d(UPXO_Point):
 
     def make_vtk_point(self, z=0):
         """
-        from upxo.geoEntities.point3d import Point2d as p2d
-        A, z = p2d(10, 12), 100
-        vtkobj = A.make_vtk_point(z=100)
+        Create a VTK point dataset from self.
 
-        # Accessing data in the vtk_point
-        x, y, z = vtkobj['pd'].GetPoint(vtkobj['id'])
-        print(x, y, z)
+        Parameters
+        ----------
+        z : float, optional
+            Unused; retained for API compatibility.
+
+        Returns
+        -------
+        dict
+            Dictionary with keys ``'id'`` (point ID), ``'pd'``
+            (``vtkPolyData``), and ``'help'`` (usage hint string).
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point3d import Point3d as p3d
+
+            A = p3d(10, 12, 100)
+            vtkobj = A.make_vtk_point()
+            x, y, z = vtkobj['pd'].GetPoint(vtkobj['id'])
+            print(x, y, z)
         """
         points = vtk.vtkPoints()
         point_id = points.InsertNextPoint(self.x,
