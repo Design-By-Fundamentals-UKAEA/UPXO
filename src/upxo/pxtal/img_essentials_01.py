@@ -8,6 +8,7 @@ class part_cntr_CLS:
     connectivity: int
     bstruct: any = field(init=False)
     def __post_init__(self):
+        """Generate the binary structuring element from ``connectivity``."""
         self.bstruct = generate_binary_structure(3, self.connectivity)
 @dataclass(frozen=False)
 class ids_counts_CLS:
@@ -68,6 +69,7 @@ class ids_CLS:
     cbseG: np.array = field(init=False)  # CBS edge IDs, global numbering
     cbsejG: np.array = field(init=False)  # CBSE Junc pnt IDs, glb nmbrng
     def __repr__(self):
+        """Return a compact ID-object summary string."""
         return f"UPXO.IMG.3D - IDs object. {id(self)}"
 @dataclass(frozen=False)
 class vox_CLS:
@@ -79,6 +81,7 @@ class vox_CLS:
     l: float
     @property
     def vol(self) -> float:
+        """Voxel volume (``l³``) in cubic micrometres."""
         return self.l**3
 @dataclass(frozen=False)
 class rve_CLS:
@@ -94,9 +97,12 @@ class rve_CLS:
     n: int = field(init=False)
     vol: float = field(init=False)
     def __post_init__(self):
+        """Compute ``n`` (total voxel count) and ``vol`` (domain volume) after dataclass init."""
         self.n = self.get_n()
         self.vol = self.set_vol()
     def set_n(self) -> float:
+        """Return total number of voxels (``nx * ny * nz``)."""
         return self.nx*self.ny*self.nz
     def set_vol(self) -> float:
+        """Return total domain volume in cubic micrometres."""
         return self.n*(self.vox.l**3)

@@ -7,6 +7,7 @@ from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
 def run(uisim, uiint, uidata, uigrid,
         xgr, ygr, zgr, px_size,
         _a, _b, _c, S, AIA0, AIA1, display_messages):
+    """Run."""
     # ---------------------------------------------
     print("Using ALG-200gen: SA's NL-1 weighted Q-Pott's model:")
     print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG200gen' + 15*'-' + '|')

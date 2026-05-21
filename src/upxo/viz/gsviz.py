@@ -359,6 +359,7 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
     return fig, ax
 
 def make_pvgrid(lfi, scalar_name='lfi', origin=(0, 0, 0), spacing=(1, 1, 1)):
+    """Build and return pvgrid."""
     pvgrid = pv.ImageData()
     pvgrid.dimensions = np.array(lfi.shape) + 1
     pvgrid.origin = origin
@@ -415,6 +416,7 @@ def grain_viewer(lfi):
     actor = {"mesh": None}
 
     def show_grain(gid):
+        """Visualise grain using Matplotlib or PyVista."""
         if actor["mesh"] is not None:
             plotter.remove_actor(actor["mesh"])
             actor["mesh"] = None
@@ -719,6 +721,7 @@ def viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='viridis',
         pvp.show()
 # ===============================================================================================
 def vox2geom_plots(plotType, **kwargs):
+    """Vox2geom plots."""
     if plotType == 1:
         view_grains(**kwargs)
     elif plotType == 2:
@@ -734,25 +737,30 @@ def vox2geom_plots(plotType, **kwargs):
                          " 'view_boundary_voxels', 'see_clip_plane', 'see_mesh_slice', 'see_mesh_slice_ortho'.")
 
 def view_grains(lfi=None, **kwargs):
+    """View grains."""
     grain_viewer(lfi, **kwargs)
 
 def view_boundary_voxels(lfi=None, **kwargs):
+    """View boundary voxels."""
     view_selected_grain_boundary_voxels(lfi[::1, ::1, ::1], np.unique(lfi),
                         viewInternalOnly=True, spacing=(1.0, 1.0, 1.0),
                         origin=(0.0, 0.0, 0.0), cmap="gist_ncar", opacity=1.0, point_size=6.0,
                         show_as_cubes=True, show=True)
 
 def see_clip_plane(lfi=None, **kwargs):
+    """See clip plane."""
     viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
                     cmap='gist_ncar', invert=True, crinkle=True,
                         normal_rotation=True, add_outline=False, throw=False, pvp=None)
 
 def see_mesh_slice(lfi=None, **kwargs):
+    """See mesh slice."""
     viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
                         cmap='gist_ncar', normal_rotation=True, add_outline=False,
                         throw=False, pvp=None)
     
 def see_mesh_slice_ortho(lfi=None, **kwargs):
+    """See mesh slice ortho."""
     viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='gist_ncar',
             style='surface', add_outline=False,
             throw=False, pvp=None)

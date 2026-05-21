@@ -46,6 +46,7 @@ def exlwrite(self, data):
 
 
     def write(self):
+        """Write."""
         # Create a sample numpy array
         data = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
 
@@ -152,6 +153,7 @@ class ctf():
                  'data_format_ORIX', 'H', 'H_ORIX')
 
     def __init__(self):
+        """Initialise the instance."""
         self.root = os.getcwd()
         self.phase = self.ea1 = self.ea2 = self.ea3 = None
         self.path = self.header = self.header_lines = self.data_format = None
@@ -193,6 +195,7 @@ Phases\t1
 Phase	X	Y	Bands	Euler1	Euler2	Euler3	Error	MAD	BC	BS"""
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return "UPXO.ctf"
 
     def load_header_file(self,
@@ -314,6 +317,7 @@ Phase	X	Y	Bands	Euler1	Euler2	Euler3	Error	MAD	BC	BS"""
         self.euler3 = euler3
 
     def make_header_from_lines(self):
+        """Build and return header from lines."""
         self.header = ''.join(self.header_lines)
         print('Header lines creation successful.')
 
@@ -494,7 +498,7 @@ _ea_ += _pm_*_del_
         Author: Dr. Sunil Anandatheertha
         pxt.gs[8].g[1]['grain'].neigh -- lists the neighbouring grains
         """
-        pass
+        raise NotImplementedError("add_misori is not yet implemented.")
 
     def gen_rand_grid_field_data(self):
         """
@@ -573,6 +577,7 @@ _ea_ += _pm_*_del_
             self.gen_rand_grid_field_data()
 
     def assemble_grid_data(self):
+        """Assemble grid data."""
         ctf_numerical_data = np.vstack((self.phase.ravel(),
                                         self.hgrid.ravel(),
                                         self.vgrid.ravel(),
@@ -590,6 +595,7 @@ _ea_ += _pm_*_del_
         return ctf_numerical_data
 
     def write_ctf_file(self, folder, fileName):
+        """Export or convert to te ctf file."""
         nc, nr = self.hgrid.shape
         # data_lines = [self.header.format(nc, nr)]
         data_lines = [self.H.format(nc, nr)]
@@ -620,6 +626,7 @@ _ea_ += _pm_*_del_
             print(file_path)
 
     def write_ctf_file_ORIX(self, folder, fileName):
+        """Export or convert to te ctf file ORIX."""
         nr, nc = self.hgrid.shape
         # data_lines = [self.header.format(nc, nr)]
         data_lines = [self.H_ORIX.format(nc, nr)]

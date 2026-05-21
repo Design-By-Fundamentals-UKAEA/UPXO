@@ -728,7 +728,7 @@ class muledge2d():
     @property
     def roughness(self):
         """Roughness measure of the chain. Not yet implemented."""
-        pass
+        raise NotImplementedError("roughness is not yet implemented.")
 
     @property
     def angles180(self):
@@ -1486,7 +1486,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("insert_coord_at is not yet implemented.")
 
     def insert_point_bw(self, k=0.5):
         """Insert a point at fractional position ``k`` along each edge. Not yet implemented."""
@@ -1504,7 +1504,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("insert_point_bw is not yet implemented.")
 
     # #########################################################
     def move_nthpoint(self, n=0, xyincr=[0, 0], overlap_action='exit'):
@@ -1589,7 +1589,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("move_pointat is not yet implemented.")
 
     # #########################################################
     def explode(self, k, method='centroid'):
@@ -1610,7 +1610,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("explode is not yet implemented.")
 
     def move(self):
         """Translate the entire multi-edge chain. Not yet implemented."""
@@ -1629,7 +1629,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("move is not yet implemented.")
 
     def stretch(self):
         """Stretch the chain along an axis. Not yet implemented."""
@@ -1648,7 +1648,7 @@ class muledge2d():
         # Update elean
         # Update empoints
         # Update the ring object
-        pass
+        raise NotImplementedError("stretch is not yet implemented.")
 
     # #########################################################
     def plotme(self, i=None, j=None, show_coord=True):

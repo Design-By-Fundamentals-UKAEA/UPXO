@@ -44,6 +44,7 @@ class ImageConfig:
 class MorphologicalOps(BaseOperations):
     """Morphological operations implementation"""
     def __init__(self, config: ImageConfig):
+        """Initialise with an ``ImageConfig`` and build the structuring element."""
         self.config = config
         self.structure = self._create_structure()
         
@@ -60,6 +61,7 @@ class MorphologicalOps(BaseOperations):
 class TopologicalOps(BaseOperations):
     """Topological operations implementation"""
     def __init__(self, config: ImageConfig):
+        """Initialise with an ``ImageConfig``."""
         self.config = config
         
     def part(self, img: np.ndarray) -> Tuple[np.ndarray, int]:
@@ -70,6 +72,7 @@ class TopologicalOps(BaseOperations):
 class SpatialOps(BaseOperations):
     """Spatial operations implementation"""
     def __init__(self, config: ImageConfig):
+        """Initialise with an ``ImageConfig``."""
         self.config = config
         
     def part(self, img: np.ndarray) -> Tuple[np.ndarray, int]:
@@ -80,6 +83,7 @@ class SpatialOps(BaseOperations):
 class MorphologicalProps(BaseProperties):
     """Calculator for morphological properties"""
     def __init__(self, image3d: 'IMAGE_3D_New'):
+        """Initialise with a reference to the parent ``IMAGE_3D_New`` object."""
         self.image3d = image3d
         
     def calculate(self, feature_id: int) -> Dict[str, Any]:
@@ -101,6 +105,7 @@ class MorphologicalProps(BaseProperties):
 class TopologicalProps(BaseProperties):
     """Calculator for topological properties"""
     def __init__(self, image3d: 'IMAGE_3D_New'):
+        """Initialise with a reference to the parent ``IMAGE_3D_New`` object."""
         self.image3d = image3d
         self.graph = None
         
@@ -124,6 +129,7 @@ class TopologicalProps(BaseProperties):
 class SpatialProps(BaseProperties):
     """Calculator for spatial properties"""
     def __init__(self, image3d: 'IMAGE_3D_New'):
+        """Initialise with a reference to the parent ``IMAGE_3D_New`` object."""
         self.image3d = image3d
         
     def calculate(self, feature_id: int) -> Dict[str, Any]:
@@ -145,6 +151,7 @@ class SpatialProps(BaseProperties):
 class MorphologicalViz(BaseVisualizer):
     """Visualizer for morphological features"""
     def __init__(self, image3d: 'IMAGE_3D_New'):
+        """Initialise with a reference to the parent ``IMAGE_3D_New`` object."""
         self.image3d = image3d
         
     def show(self, data: np.ndarray) -> None:
@@ -160,6 +167,7 @@ class MorphologicalViz(BaseVisualizer):
 class TopologicalViz(BaseVisualizer):
     """Visualizer for topological features"""
     def __init__(self, image3d: 'IMAGE_3D_New'):
+        """Initialise with a reference to the parent ``IMAGE_3D_New`` object."""
         self.image3d = image3d
         
     def show(self, data: np.ndarray) -> None:
@@ -242,6 +250,7 @@ class IMAGE_3D_New:
         self._feature_cache.clear()
     
     def __repr__(self) -> str:
+        """Return ``IMAGE_3D_New(shape=..., features=...)`` summary string."""
         return f"IMAGE_3D_New(shape={self.img.shape}, features={self.count_features()})"
 
     def count_features(self) -> int:

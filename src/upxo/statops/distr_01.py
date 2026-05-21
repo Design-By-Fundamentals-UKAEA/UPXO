@@ -30,6 +30,7 @@ class distribution():
                  nbins = [None],
                  be_estimator = 'auto',
                  ):
+        """Initialise the instance."""
         colorama_init()
         #*******************************
         if isinstance(data_name, list):
@@ -57,6 +58,7 @@ class distribution():
         #*******************************
     #-----------------------------------------
     def update_summary(self):
+        """Set or update te summary."""
         self.find_min()
         self.find_mean()
         self.find_median(axis = None)
@@ -76,25 +78,33 @@ class distribution():
                               )
     #-----------------------------------------
     def find_min(self):
+        """Find min."""
         self.S.minimum = self.data.min()
     def find_mean(self):
+        """Find mean."""
         self.S.mean = self.data.mean()
     def find_median(self,
                     axis = None
                     ):
+        """Find median."""
         self.S.median = np.median(a = self.data,
                                   axis = axis
                                   )
     def find_max(self):
+        """Find max."""
         self.S.maximum = self.data.max()
     def find_total(self):
+        """Find total."""
         self.S.total = self.data.sum()
     def find_std_dev(self,
                      axis = 0):
+        """Find std dev."""
         self.S.sdev = self.data.std()
     def find_skewness(self):
+        """Find skewness."""
         self.S.skew = stats.skew(self.data, bias = True)
     def find_kurtosis(self):
+        """Find kurtosis."""
         self.S.kurt = stats.kurtosis(self.data, bias = True)
     def find_variance(self,
                       limits = None,
@@ -117,6 +127,7 @@ class distribution():
                          throw_format = 'list',
                          see = False
                          ):
+        """Find percentiles."""
         _ = [np.percentile(self.data, _p) for _p in percentile_list]
         if throw_format == 'dict':
             self.S.percentiles = dict(zip(percentile_list, _))
@@ -139,11 +150,13 @@ class distribution():
         self.H.hv, _ = np.histogram(self.data, bins = self.H.be)
     #-----------------------------------------
     def calc_rv_histogram(self):
+        """Return the  rv histogram."""
         # Resample from existing histogram to yield a similar histogram
-        pass
+        raise NotImplementedError("calc_rv_histogram is not yet implemented.")
     #-----------------------------------------
     def plot_histogram(self,
                        be_estimator = 'auto'):
+        """Visualise histogram using Matplotlib or PyVista."""
         # First calculate the histogram
         self.calc_histogram(be_estimator = be_estimator)
         # Then plot using "plt.bar"

@@ -116,15 +116,15 @@ class geotess2d():
 
     def __getitem__(self):
         """Return item at the given index or key."""
-        pass
+        raise NotImplementedError("__getitem__ is not yet implemented.")
 
     def __setitem__(self):
         """Set item at the given index or key."""
-        pass
+        raise NotImplementedError("__setitem__ is not yet implemented.")
 
     def __repr__(self):
         """Return a string representation of this instance."""
-        pass
+        raise NotImplementedError("__repr__ is not yet implemented.")
 
     def set_seed_points(self, upxo_mp2d=None):
         """Set or update seed points."""
@@ -132,51 +132,51 @@ class geotess2d():
 
     def make_seeds_random(self):
         """Build and return seeds random."""
-        pass
+        raise NotImplementedError("make_seeds_random is not yet implemented.")
 
     def make_seeds_pdisc(self):
         """Build and return seeds pdisc."""
-        pass
+        raise NotImplementedError("make_seeds_pdisc is not yet implemented.")
 
     def make_seeds_dart(self):
         """Build and return seeds dart."""
-        pass
+        raise NotImplementedError("make_seeds_dart is not yet implemented.")
 
     def set_seeds(self):
         """Set or update seeds."""
-        pass
+        raise NotImplementedError("set_seeds is not yet implemented.")
 
     def save(self):
         """Save."""
-        pass
+        raise NotImplementedError("save is not yet implemented.")
 
     def load(self):
         """Load."""
-        pass
+        raise NotImplementedError("load is not yet implemented.")
 
     def find_neighbours(self):
         """Find neighbours."""
-        pass
+        raise NotImplementedError("find_neighbours is not yet implemented.")
 
     def find_first_nearest_neighbours(self):
         """Find first nearest neighbours."""
-        pass
+        raise NotImplementedError("find_first_nearest_neighbours is not yet implemented.")
 
     def find_second_nearest_neighbours(self):
         """Find second nearest neighbours."""
-        pass
+        raise NotImplementedError("find_second_nearest_neighbours is not yet implemented.")
 
     def filter_grains_by_prop(self):
         """Filter grains by prop."""
-        pass
+        raise NotImplementedError("filter_grains_by_prop is not yet implemented.")
 
     def filter_grains_by_loc(self):
         """Filter grains by loc."""
-        pass
+        raise NotImplementedError("filter_grains_by_loc is not yet implemented.")
 
     def _add_vertexpoint_in_grainboundaries(self):
         """ add vertexpoint in grainboundaries."""
-        pass
+        raise NotImplementedError("_add_vertexpoint_in_grainboundaries is not yet implemented.")
 
     def divide_all_edges_in_half(self):
         """Divide all edges in half."""
@@ -184,7 +184,7 @@ class geotess2d():
 
     def move_new_vertex_point(self):
         """Move new vertex point."""
-        pass
+        raise NotImplementedError("move_new_vertex_point is not yet implemented.")
 
     def perturb_grain_boundaries(self, factor):
         """Perturb grain boundaries."""
@@ -194,16 +194,16 @@ class geotess2d():
 
     def convert_to_pixels(self):
         """Convert to pixels."""
-        pass
+        raise NotImplementedError("convert_to_pixels is not yet implemented.")
 
 
 class geoxtal2d():
     def __init__(self):
         """Initialise the instance."""
-        pass
+        raise NotImplementedError("__init__ is not yet implemented.")
     def __repr__(self):
         """Return a string representation of this instance."""
-        pass
+        raise NotImplementedError("__repr__ is not yet implemented.")
 
 
 
@@ -214,42 +214,42 @@ class vtgs3d():
 
     def __init__(self):
         """Initialise the instance."""
-        pass
+        raise NotImplementedError("__init__ is not yet implemented.")
 
     def __iter__(self):
         """Return an iterator over this instance."""
-        pass
+        raise NotImplementedError("__iter__ is not yet implemented.")
 
     def __len__(self):
         """Return the number of items in this instance."""
-        pass
+        raise NotImplementedError("__len__ is not yet implemented.")
 
     def __getitem__(self):
         """Return item at the given index or key."""
-        pass
+        raise NotImplementedError("__getitem__ is not yet implemented.")
 
     def __setitem__(self):
         """Set item at the given index or key."""
-        pass
+        raise NotImplementedError("__setitem__ is not yet implemented.")
 
     def set_seeds(self):
         """Set or update seeds."""
-        pass
+        raise NotImplementedError("set_seeds is not yet implemented.")
 
     def save(self):
         """Save."""
-        pass
+        raise NotImplementedError("save is not yet implemented.")
 
     def load(self):
         """Load."""
-        pass
+        raise NotImplementedError("load is not yet implemented.")
 
     def filter_boundary_grains(self):
         """Filter boundary grains."""
-        pass
+        raise NotImplementedError("filter_boundary_grains is not yet implemented.")
 
     def filter_internal_grains(self):
         """Filter internal grains."""
-        pass
+        raise NotImplementedError("filter_internal_grains is not yet implemented.")
 
 

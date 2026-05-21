@@ -72,41 +72,37 @@ class MSline3d():
     __slots__ = ('lines', 'x0', 'y0', 'z0', 'x1', 'y1', 'z1', 'f', 'closed')
 
     def __init__(self, llist):
+        """Initialise from a list of ``Sline3d`` objects."""
         self.lines = llist
 
     def __repr__(self):
+        """Return ``UPXO MSline3d. n=<N>. ID: <id>`` summary string."""
         return f"UPXO MSline3d. n={len(self.lines)}. ID: {id(self)}"
 
     @classmethod
     def from_lines(cls, llist, close=True):
         """
-        Make a multi-straight line in 3d.
+        Construct a ``MSline3d`` from a list of ``Sline3d`` objects.
 
-        Make mul-straight-line-3d using multiple lines, strt and connectvity
-        specification. Recommended way to make the msl3d.
+        Parameters
+        ----------
+        llist : list of Sline3d
+            Ordered sequence of 3D line segments.
+        close : bool, optional
+            If ``True``, append a closing segment from the last endpoint back
+            to the first. Default ``True``.
 
-        Development phases
-        ------------------
-        Phase-1: Basic working codes with basic validations. DONE
-        Phase-2: Include additional validations.
+        Returns
+        -------
+        MSline3d
 
         Examples
         --------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        e0 = sl3d(0.0,0.0,0.0, 1.0,1.0,1.0)
-        e1 = sl3d(1.0,1.0,1.0, 1.5,1.5,0.0)
-        e2 = sl3d(1.5,1.5,0.0, 2.5,2.5,3.0)
-        e3 = sl3d(2.5,2.5,3.0, 4.0,4.0,3.5)
-        e4 = sl3d(4.0,4.0,3.5, 4.0,6.0,3.5)
-
-        lines = [e0,e1,e2,e3,e4]
-        me = msl3d.from_lines(lines, close=True)
-        me.lines
-
-        lines = [e0,e1,e2,e3,e4]
-        me = msl3d.from_lines(lines, close=False)
-        me.lines
+        >>> from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+        >>> from upxo.geoEntities.sline3d import Sline3d as sl3d
+        >>> lines = [sl3d(0,0,0, 1,1,1), sl3d(1,1,1, 2,2,2)]
+        >>> me = msl3d.from_lines(lines, close=True)
+        >>> me.n
         """
         lines = llist
         if close:
@@ -122,7 +118,8 @@ class MSline3d():
                          'min_total_length': 8,
                          'mean_length': 1,}
                 ):
-        pass
+        """Construct a multi-line by random walk with specified length/angle variation. Not yet implemented."""
+        raise NotImplementedError("by_walk is not yet implemented.")
 
     @property
     def n(self):

@@ -831,41 +831,41 @@ class PolyXTAL():
     #---------------------------------------------------dir---------------------------------------------------------------------------------------
     def GSvisualise(self):
         """Gsvisualise."""
-        pass
+        raise NotImplementedError("GSvisualise is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def pf(self):
         """Pf."""
-        pass
+        raise NotImplementedError("pf is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def ipf(self):
         """Ipf."""
-        pass
+        raise NotImplementedError("ipf is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def odfSec(self):
         """Odfsec."""
-        pass
+        raise NotImplementedError("odfSec is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def ipfMap(self):
         """Ipfmap."""
-        pass
+        raise NotImplementedError("ipfMap is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def makeFillerDataCTF(self):
         """Makefillerdatactf."""
-        pass
+        raise NotImplementedError("makeFillerDataCTF is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def writeCTF(self):
         """Writectf."""
-        pass
+        raise NotImplementedError("writeCTF is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def genFEMesh(self):
         """Genfemesh."""
-        pass
+        raise NotImplementedError("genFEMesh is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def writeINP(self):
         """Writeinp."""
-        pass
+        raise NotImplementedError("writeINP is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------
     def schmidTensor(self):
         """Schmidtensor."""
-        pass
+        raise NotImplementedError("schmidTensor is not yet implemented.")
     #------------------------------------------------------------------------------------------------------------------------------------------

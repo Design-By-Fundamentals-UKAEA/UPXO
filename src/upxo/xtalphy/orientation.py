@@ -1,9 +1,10 @@
 """
-definitions and classes to deal with orientations and misorientations
--------------------------
-def eamo -- Major work done. Validations pending.
-def qmo -- Major work done. Validations pending.
--------------------------
+Orientation and misorientation utilities.
+
+Functions
+---------
+eamo : Euler-angle misorientation (major work done; validations pending).
+qmo  : Quaternion misorientation (major work done; validations pending).
 """
 
 import numpy as np
@@ -12,32 +13,29 @@ from defdap.quat import Quat
 
 def eamo(e1, e2list, symm):
     """
-    Euler Angle Mis-Orientation
-    ---------------------------
-    ea1, ea2: Bunge's Euler angles in degrees
-    symm: Symmetry: 'cubic', OTHER OPRION CHECK RFOM DEFDAP MANUAL
+    Euler-angle misorientation between one orientation and a list of others.
 
-    EXAMPLE CALL
-    ------------
-    e1 = np.array([0, 0, 0], dtype=float)
-    e2list = np.array([[0, 0, 0],
-                       [45, 0, 0],
-                       [45, 45, 0]], dtype=float)
-    symm = 'cubic'
-    eamo(e1, e2list, symm)
+    Parameters
+    ----------
+    e1 : ndarray, shape (3,)
+        Bunge Euler angles of the reference orientation, in degrees.
+    e2list : ndarray, shape (N, 3)
+        Bunge Euler angles of N comparison orientations, in degrees.
+    symm : str
+        Crystal symmetry label (e.g. ``'cubic'``).
 
-    fcc_w = np.array([0, 0, 0], dtype=float)  # Cube
-    fcc_g = np.array([0, 45, 0], dtype=float)  # Goss
-    fcc_b = np.array([35, 45, 0], dtype=float)  # Brass
-    fcc_s = np.array([59, 37, 63], dtype=float)  # S
-    fcc_cu = np.array([90, 35, 45], dtype=float)  # Copper
-    fcc_rc = np.array([0, 0, 45], dtype=float)  # Rotated Cube
-    fcc_rcu = np.array([0, 35, 45], dtype=float)  # Rotated Copper
-    fcc_gt = np.array([90, 25, 45], dtype=float)  # Goss twin
-    fcc_cut = np.array([90, 74, 45], dtype=float)  # Copper twin
+    Returns
+    -------
+    ndarray, shape (N,)
+        Misorientation angles in degrees.
 
-    e1 = fcc_g
-    e2list = np.vstack((fcc_w, fcc_g, fcc_b, fcc_s, fcc_cu))
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from upxo.xtalphy.orientation import eamo
+    >>> e1 = np.array([0, 0, 0], dtype=float)
+    >>> e2list = np.array([[0, 0, 0], [45, 0, 0], [45, 45, 0]], dtype=float)
+    >>> eamo(e1, e2list, 'cubic')
     """
     # VALIDATION FOR e1 AND e2list
     # Initial set of validations and corrections
@@ -53,14 +51,25 @@ def eamo(e1, e2list, symm):
 
 def qmo(q1, q2list, symm):
     """
-    Quaternion Mis-Orientation
-    --------------------------
-    q1, q2: Quaternions
-    symm: Symmetry: 'cubic', OTHER OPRION CHECK RFOM DEFDAP MANUAL
+    Quaternion misorientation between one quaternion and a list of others.
 
-    EXAMPLE CALL
-    ------------
-    qmo(q1, q2, 'cubic')
+    Parameters
+    ----------
+    q1 : defdap.quat.Quat
+        Reference quaternion.
+    q2list : list of defdap.quat.Quat
+        Comparison quaternions.
+    symm : str
+        Crystal symmetry label (e.g. ``'cubic'``).
+
+    Returns
+    -------
+    ndarray
+        Misorientation angles in degrees.
+
+    Examples
+    --------
+    >>> qmo(q1, q2list, 'cubic')
     """
     # VALIDATION FOR q1 AND q2
     # VALIDATION TO Also deal with q1 ans q2 which are not defdap types
@@ -68,37 +77,25 @@ def qmo(q1, q2list, symm):
 
 
 def ipf(vector, symm):
-    pass
+    """Ipf."""
+    raise NotImplementedError("ipf is not yet implemented.")
 
 
 class grainoris():
     """
-    __coords: Coordinate locations defining the grain
-    ea: Set of euler angles in radians
-    pea1 (User Input): [min, max] of ea perturbtaion in degrees
-    pea1 (Attribute): [min, max] of ea perturbtaion in radians
+    Grain orientation container: Euler angles, quaternions, and statistics.
 
-    EXAMPLE
-    -------
-    from upxo.xtalphy.orientation import grainoris
-
-    n = 4
-    ea1 = np.random.random_integers(0, 90, n)
-    ea2 = np.random.random_integers(0, 90, n)
-    ea3 = np.random.random_integers(0, 90, n)
-    G = grainoris(ea = np.vstack((ea1, ea2, ea3)).T)
-    G.compute_quats()
-    G.compute_avg()
-
-    @ DEVELOPER
-    -----------
-    EA = [[0*np.pi/180, 0, 0], [0*np.pi/180, 0, 0]]
-    Quat.fromEulerAngles(EA)
-    q1 = Quat.fromEulerAngles(0*np.pi/180, 0, 0)
-    q2 = Quat.fromEulerAngles(45*np.pi/180, 0, 0)
-    mori12 = round(q1.misOri(q2, 'cubic'), 5)
-
-    round(2*np.arccos(mori12)*180/np.pi, 10)
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from upxo.xtalphy.orientation import grainoris
+    >>> n = 4
+    >>> ea1 = np.random.randint(0, 90, n)
+    >>> ea2 = np.random.randint(0, 90, n)
+    >>> ea3 = np.random.randint(0, 90, n)
+    >>> G = grainoris(ea=np.vstack((ea1, ea2, ea3)).T)
+    >>> G.compute_quats()
+    >>> G.compute_avg()
     """
     __slots__ = ('__coords', 'ea', 'pea1', 'pea2', 'pea3', 'q', 'gid', 's',
                  'qavg'
@@ -109,6 +106,7 @@ class grainoris():
                  pea1=[0.0, 0.0], pea2=[0.0, 0.0], pea3=[0.0, 0.0],
                  deg=False
                  ):
+        """Initialise the instance."""
         self.gid, self.s = None, None
         if deg:
             self.ea = np.radians(ea)
@@ -119,23 +117,28 @@ class grainoris():
         self.__coords = None
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"grain orientation set. gid: {self.gid} @s: {self.s}"
 
     def compute_avg(self):
+        """Return the ute avg."""
         self.qavg = Quat.calcAverageOri(self.q)
 
     def compute_quats(self):
+        """Return the ute quats."""
         self.q = np.array([Quat.fromEulerAngles(ea1, ea2, ea3)
                            for ea1, ea2, ea3 in self.ea*np.pi/180])
 
     @property
     def perturb(self, pea1, pea2, pea3):
+        """Perturb."""
         return (tuple(self.pea1(pea1)),
                 tuple(self.pea2(pea2)),
                 tuple(self.pea3(pea3)))
 
     @perturb.setter
     def eapert(self, pertea):
+        """Eapert."""
         # VALIDATIONS NEEDED
         self.pea1 = pertea[0]
         self.pea2 = pertea[1]
@@ -143,36 +146,45 @@ class grainoris():
 
     @property
     def p_ea1_deg(self):
+        """P ea1 deg."""
         return self.pea1
 
     @p_ea1_deg.setter
     def p_ea1_deg(self, pea1):
+        """P ea1 deg."""
         self.pea1 = pea1
 
     @property
     def p_ea2_deg(self):
+        """P ea2 deg."""
         return self.pea1
 
     @p_ea2_deg.setter
     def p_ea2_deg(self, pea1):
+        """P ea2 deg."""
         self.pea1 = pea1
 
     @property
     def p_ea3_deg(self):
+        """P ea3 deg."""
         return self.pea1
 
     @p_ea3_deg.setter
     def p_ea3_deg(self, pea1):
+        """P ea3 deg."""
         self.pea1 = pea1
 
     @property
     def coords(self):
+        """Coords."""
         return self.__coords
 
     @coords.setter
     def coords(self, value):
+        """Coords."""
         self.__coords = value
 
     @coords.deleter
     def coords(self):
+        """Coords."""
         del self.__coords

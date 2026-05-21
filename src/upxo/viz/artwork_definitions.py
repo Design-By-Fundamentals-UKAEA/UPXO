@@ -8,11 +8,13 @@ class artwork():
     __slots__ = ('GrColArr',
                  )
     def __init__(self):
+        """Initialise the instance."""
         pass
 
     def s_partitioned_tranition_probabilities(self,
                                               S,
                                               s_boltz_prob):
+        """S partitioned tranition probabilities."""
         fig = plt.figure(0,
                          figsize=(3.5, 3.5),
                          dpi=75,

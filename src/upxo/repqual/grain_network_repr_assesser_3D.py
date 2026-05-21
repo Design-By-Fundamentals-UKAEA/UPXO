@@ -40,7 +40,11 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from networkx.algorithms import community
 from scipy.stats import wasserstein_distance, ks_2samp, energy_distance
-import netlsd
+try:
+    import netlsd
+    _NETLSD_AVAILABLE = True
+except ImportError:
+    _NETLSD_AVAILABLE = False
 from upxo._sup.data_ops import calculate_angular_distance as calc_angdist
 from upxo._sup.data_ops import calculate_density_bins
 from upxo._sup.data_ops import approximate_to_bin_means
@@ -188,6 +192,7 @@ class KREPR():
                    'mi': 'mi',}
 
     def __init__(self, **kwargs):
+        """Initialise the instance."""
         self._cim_ = kwargs['_cim_']
         # --------------------------------------------
         self.dim = namedtuple('dim', ['tgt', 'smp'])
@@ -610,9 +615,11 @@ class KREPR():
 
     @property
     def creation_method(self):
+        """Creation method."""
         return self._cim_
 
     def init_subdef_set_dim(self):
+        """Init subdef set dim."""
         if self.gstype.tgt and isinstance(self.gstype.tgt, str):
             if '2' in self.gstype.tgt:
                 self.dim.tgt = 2
@@ -633,6 +640,7 @@ class KREPR():
             self.dim.smp = 2.01  # Assumed to be 2D.
 
     def init_subdef_set_gsid(self, data):
+        """Init subdef set gsid."""
         print('Setting grain structure IDs.')
         if data['tsid_source'] == 'from_gs':
             from_gs, from_k, from_neigh = True, False, False
@@ -662,13 +670,16 @@ class KREPR():
         self.ntid, self.nsid = len(self.tid), len(self.sid)
 
     def init_subdef_set_neighs(self, data):
+        """Init subdef set neighs."""
         self.set_ordern(data['ordern'])
         self.find_neigh_order_n(saa=True, throw=False)
 
     def init_subdef_set_networks(self):
+        """Init subdef set networks."""
         self.create_tgt_smp_networks(saa=True, throw=False)
 
     def init_subdef_set_prop_flags(self):
+        """Init subdef set prop flags."""
         if 3 not in (self.dim.tgt, self.dim.smp):
             '''
             This means that eiythewr:
@@ -705,6 +716,7 @@ class KREPR():
         self.ordern = ordern
 
     def set_tid(self, from_gs=False, from_k=False, from_neigh=False, tid=None):
+        """Set or update tid."""
         if from_gs and not from_k and not from_neigh:
             self.tid = list(self.tgset.keys())
         elif not from_gs and from_k and not from_neigh:
@@ -715,6 +727,7 @@ class KREPR():
             self.tid = tid
 
     def set_sid(self, from_gs=False, from_k=False, from_neigh=False, sid=None):
+        """Set or update sid."""
         if from_gs and not from_k and not from_neigh:
             self.sid = list(self.sgset.keys())
         elif not from_gs and from_k and not from_neigh:
@@ -847,6 +860,7 @@ class KREPR():
                                        if key not in mpnames})
 
     def set_prop_flag(self, propname, propflagvalue):
+        """Set or update prop flag."""
         if not isinstance(propflagvalue, bool):
             raise TypeError(f'Invalid propflagvalue (={propflagvalue}) type. ',
                              'Must be bool.')
@@ -1198,6 +1212,7 @@ class KREPR():
                              include_parent=True,
                              output_type='nparray',
                              print_msg=False):
+        """ find neigh order n ."""
         # non = gs.get_upto_nth_order_neighbors_all_grains(ordern,
         #                                                  include_parent=True,
         #                                                  output_type='nparray')
@@ -1208,6 +1223,7 @@ class KREPR():
         return non
 
     def find_neigh_order_n(self, saa=True, throw=False):
+        """Find neigh order n."""
         # Validation
         ngh = self._find_neigh_order_n_
         # --------------------------------------
@@ -1723,6 +1739,7 @@ class KREPR():
                 self.rkf['js'][neigh_order][idsmp, idtgt] = r
 
     def calculate_rkf_wd_on(self, neigh_order=1, equal_bins=False):
+        """Calculate rkf wd on."""
         # Validations
         print(f'Calculating RKF-WD for neighbour order {neigh_order}')
         tkset = list(self.tkset[neigh_order].values())
@@ -1739,6 +1756,7 @@ class KREPR():
                                         neigh_order_tgt=1,
                                         neigh_order_smp=1,
                                         equal_bins=False):
+        """Calculate rkf wd on generalized."""
         # Validations
         print(f'Calculating RKF-JS for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1753,6 +1771,7 @@ class KREPR():
                 rkf_wd[idsmp, idtgt] = r
 
     def calculate_rkf_ksp_on(self, neigh_order=1, equal_bins=False):
+        """Calculate rkf ksp on."""
         # Validations
         print(f'Calculating RKF-KSP for neighbour order {neigh_order}')
         tkset = list(self.tkset[neigh_order].values())
@@ -1768,6 +1787,7 @@ class KREPR():
                                          neigh_order_tgt=1,
                                          neigh_order_smp=1,
                                          equal_bins=False):
+        """Calculate rkf ksp on generalized."""
         # Validations
         print(f'Calculating RKF-KSP for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1782,6 +1802,7 @@ class KREPR():
                 rkf_ksp[idsmp, idtgt] = r
 
     def calculate_rkf_ed_on(self, neigh_order=1, equal_bins=False):
+        """Calculate rkf ed on."""
         # Validations
         print(f'Calculating RKF-ED for neighbour order {neigh_order}')
         tkset = list(self.tkset[neigh_order].values())
@@ -1798,6 +1819,7 @@ class KREPR():
                                         neigh_order_tgt=1,
                                         neigh_order_smp=1,
                                         equal_bins=False):
+        """Calculate rkf ed on generalized."""
         # Validations
         print(f'Calculating RKF-ED for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1814,6 +1836,7 @@ class KREPR():
     def calculate_rkf_nlsd_on(self, neigh_order=1,
                               timescales=np.logspace(-2, 2, 20),
                               equal_bins=False):
+        """Calculate rkf nlsd on."""
         # Validations
         print(f'Calculating RKF-NLSD for neighbour order {neigh_order}')
         tkset = list(self.tkset[neigh_order].values())
@@ -1832,6 +1855,7 @@ class KREPR():
                                           neigh_order_tgt=1,
                                           neigh_order_smp=1,
                                           equal_bins=False):
+        """Calculate rkf ed nlsd generalized."""
         # Validations
         print(f'Calculating RKF-NLSD for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1846,23 +1870,28 @@ class KREPR():
                 rkf_nlsd[idsmp, idtgt] = r
 
     def calculate_rkf_js(self):
+        """Calculate rkf js."""
         for no in self.ordern:
             self.calculate_rkf_js_on(neigh_order=no)
 
     def calculate_rkf_wd(self):
+        """Calculate rkf wd."""
         for no in self.ordern:
             self.calculate_rkf_wd_on(neigh_order=no)
 
     def calculate_rkf_ksp(self):
+        """Calculate rkf ksp."""
         for no in self.ordern:
             self.calculate_rkf_ksp_on(neigh_order=no)
 
     def calculate_rkf_ed(self):
+        """Calculate rkf ed."""
         for no in self.ordern:
             self.calculate_rkf_ed_on(neigh_order=no)
 
     def calculate_rkf_nlsd(self, timescales=np.logspace(-2, 2, 20),
                            equal_bins=False):
+        """Calculate rkf nlsd."""
         # Validations
         for no in self.ordern:
             self.calculate_rkf_nlsd_on(neigh_order=no,
@@ -1872,6 +1901,7 @@ class KREPR():
     def calculate_rkf_pairwise(self, neigh_order,
                                idtgt, idsmp,
                                prop='kdegree', printmsg=False):
+        """Calculate rkf pairwise."""
         # Validations
         ktgt = self.tkset[neigh_order][self.tid[idtgt]]
         ksmp = self.skset[neigh_order][self.sid[idsmp]]
@@ -1920,6 +1950,7 @@ class KREPR():
                                            neigh_order_tgt, neigh_order_smp,
                                            idtgt, idsmp,
                                            prop='kdegree', printmsg=False):
+        """Calculate rkf pairwise generalized."""
         # Validations
         ktgt = self.tkset[neigh_order_tgt][idtgt]
         ksmp = self.skset[neigh_order_smp][idsmp]
@@ -1962,6 +1993,7 @@ class KREPR():
         return r_js, r_wd, r_ksp, r_ed, r_nlsd
 
     def calculate_rkf_no(self, neigh_order, prop='kdegree'):
+        """Calculate rkf no."""
         for I, idtgt in enumerate(self.tid, start=0):
             for J, idsmp in enumerate(self.sid, start=0):
                 if idtgt % 5 == idsmp % 20 == 0:
@@ -2002,7 +2034,8 @@ class KREPR():
             self.calculate_rkf_no(no, prop=prop)
 
     def calc_self_repr(self, order, recalc_neigh=True):
-        pass
+        """Return the  self repr."""
+        raise NotImplementedError("calc_self_repr is not yet implemented.")
 
     def calculate_uncertainty_angdist(self,
                                       rkf_measure='js',
@@ -2011,6 +2044,7 @@ class KREPR():
                                       data_title='Jaccard sim. measure',
                                       throw=False,
                                       plot_ad=True):
+        """Calculate uncertainty angdist."""
         # Validations
         if rkf_measure in self.rkf_flags.keys():
             if self.rkf_flags[rkf_measure]:
@@ -2085,6 +2119,7 @@ class KREPR():
                       data_title='DATA TITLE',
                       cmap='nipy_spectral', throw_axis=True
                       ):
+        """Visualise ang dist using Matplotlib or PyVista."""
         plt.figure(figsize=figsize,
                    dpi=dpi,
                    constrained_layout=True)

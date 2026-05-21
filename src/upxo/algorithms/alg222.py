@@ -11,4 +11,4 @@ def mc_iterations_3d_alg222(self):
 
     STEP 4: Merge them with neighbours
     """
-    pass
+    raise NotImplementedError("mc_iterations_3d_alg222 is not yet implemented.")

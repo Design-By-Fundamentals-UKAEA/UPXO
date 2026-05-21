@@ -7,6 +7,7 @@ https://stackoverflow.com/questions/20515554/colorize-voronoi-diagram/20678647#2
 #//////////////////////////////////////////////////////////////////////////////
 def _clip_Voronoi_Tess_BoundBox(xtals = None,
                                 boundary_object = None):
+    """Clip each Voronoi grain polygon to the boundary box and return only non-empty results."""
     #import random
     #from shapely.ops import voronoi_diagram
     #from shapely.geometry import LineString, MultiPolygon, Polygon, Point, MultiPoint, LinearRing
@@ -34,6 +35,7 @@ def _shapely(point_method = 'mulpoints',
              ybound = None,
              vis_vtgs = True
              ):
+    """Compute a clipped 2D Voronoi tessellation using Shapely and optionally visualise it."""
     #******************
     #import random
     from shapely.ops import voronoi_diagram
@@ -95,6 +97,7 @@ def _shapely(point_method = 'mulpoints',
     return pxtal#, vgrains
 #//////////////////////////////////////////////////////////////////////////////
 def _finite_vtpols(vo):
+    """Reconstruct finite Voronoi cell polygons from a ``scipy.spatial.Voronoi`` object."""
     import numpy as np
     from shapely.geometry import Polygon
     from scipy.spatial import Voronoi
@@ -149,6 +152,7 @@ def _finite_vtpols(vo):
     return cells, points
 #//////////////////////////////////////////////////////////////////////////////
 def _make_bounding_polygon(data = None, method = 'auto_from_scipy_vto'):
+    """Build a Shapely bounding polygon from Voronoi object extents."""
     if method == 'auto_from_scipy_vto':
         min_x = data.min_bound[0] - 0.00
         max_x = data.max_bound[0] + 0.00

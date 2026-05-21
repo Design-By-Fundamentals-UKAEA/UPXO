@@ -34,10 +34,12 @@ class MPoint3d():
     __slots__ = ('coords', 'tree', 'pdist')
 
     def __init__(self, coords=None):
+        """Initialise from an ``(N, 3)`` numpy array of 3D coordinates."""
         self.coords = coords
         self.pdist = pdist
 
     def __repr__(self):
+        """Return ``UPXO-mp3d. n=<N>.`` summary string."""
         return f'UPXO-mp3d. n={self.n}.'
 
     def __iter__(self):
@@ -227,7 +229,8 @@ class MPoint3d():
 
     @classmethod
     def from_mulpoint2d(cls, mp2d, zloc=0.0):
-        pass
+        """Construct from a ``MPoint2d`` by appending a constant z-value. Not yet implemented."""
+        raise NotImplementedError("from_mulpoint2d is not yet implemented.")
 
     @classmethod
     def from_mulpoint3d(cls,
@@ -376,7 +379,8 @@ class MPoint3d():
 
     @classmethod
     def from_mulsline3d(cls, msline3d):
-        pass
+        """Construct from a ``MSline3d`` endpoint collection. Not yet implemented."""
+        raise NotImplementedError("from_mulsline3d is not yet implemented.")
 
     @classmethod
     def from_xyz_grid(cls,
@@ -449,38 +453,47 @@ class MPoint3d():
 
     @property
     def n(self):
+        """Number of points in the collection."""
         return len(self.coords)
 
     @property
     def centroid(self):
+        """Mean 3D coordinate of all points as a ``(3,)`` array."""
         return np.mean(self.coords, axis=0)
 
     @property
     def points(self):
+        """Return a list of ``Point3d`` objects built from ``self.coords``."""
         return [Point3d(x, y, z) for x, y, z in zip(self.x, self.y, self.z)]
 
     @property
     def x(self):
+        """x-coordinates of all points as a 1-D array."""
         return self.coords[:, 0]
 
     @property
     def y(self):
+        """y-coordinates of all points as a 1-D array."""
         return self.coords[:, 1]
 
     @property
     def z(self):
+        """z-coordinates of all points as a 1-D array."""
         return self.coords[:, 2]
 
     @property
     def ckd_tree(self):
+        """Build and return a ``cKDTree`` for fast nearest-neighbour queries."""
         return self.maketree(treeType='ckdtree')
 
     def squared_distances_to_point(self, point):
+        """Return squared Euclidean distances from all points to ``point``."""
         point = val_point_and_get_coord(point, return_type='coord',
                                         safe_exit=False)
         return (self.x-point[0])**2 + (self.y-point[1])**2 + (self.z-point[2])**2
 
     def distances_to_point(self, point):
+        """Return Euclidean distances from all points to ``point``."""
         return np.sqrt(self.squared_distances_to_point(point))
 
     def squared_distance_to_centroid(self, points,
@@ -554,7 +567,8 @@ class MPoint3d():
                                                          points_type=points_type))
 
     def convex_hull(self):
-        pass
+        """Compute the convex hull of the 3D point set. Not yet implemented."""
+        raise NotImplementedError("convex_hull is not yet implemented.")
 
     def maketree(self, treeType='ckdtree', saa=False,
                  throw=False, balance=True):
@@ -754,14 +768,14 @@ class MPoint3d():
         Find all the voxels which intersect with the given upxo line 3d
         within a distance specified by cod (cut off distance).
         '''
-        pass
+        raise NotImplementedError("find_intersection_voxels_with_line is not yet implemented.")
 
     def find_intersection_voxels_with_plane(self, plane, cod):
         '''
         Find all the voxels which intersect with the given upxo plane 3d
         within a distance specified by cod (cut off distance).
         '''
-        pass
+        raise NotImplementedError("find_intersection_voxels_with_plane is not yet implemented.")
 
     def plot(self,
              points=None,

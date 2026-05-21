@@ -276,6 +276,7 @@ def bridson_uniform_density_old(width=1.0,
                             height=1.0,
                             radius=0.01,
                             k=10):
+    """Bridson uniform density old."""
     # Credit: https://www.labri.fr/perso/nrougier/from-python-to-numpy/code/Bridson_sampling.py
     # -----------------------------------------------------------------------------
     # From Numpy to Python
@@ -285,8 +286,10 @@ def bridson_uniform_density_old(width=1.0,
     # References: Fast Poisson Disk Sampling in Arbitrary Dimensions
     #             Robert Bridson, SIGGRAPH, 2007
     def squared_distance(p0, p1):
+        """Squared distance."""
         return (p0[0]-p1[0])**2 + (p0[1]-p1[1])**2
     def random_point_around(p, k=1):
+        """Random point around."""
         # WARNING: This is not uniform around p but we can live with it
         R = np.random.uniform(radius, 2*radius, k)
         T = np.random.uniform(0, 2*np.pi, k)
@@ -295,8 +298,10 @@ def bridson_uniform_density_old(width=1.0,
         P[:, 1] = p[1]+R*np.cos(T)
         return P
     def in_limits(p):
+        """In limits."""
         return 0 <= p[0] < width and 0 <= p[1] < height
     def neighborhood(shape, index, n=2):
+        """Neighborhood."""
         row, col = index
         row0, row1 = max(row-n, 0), min(row+n+1, shape[0])
         col0, col1 = max(col-n, 0), min(col+n+1, shape[1])
@@ -305,6 +310,7 @@ def bridson_uniform_density_old(width=1.0,
         I.remove([row, col])
         return I
     def in_neighborhood(p):
+        """In neighborhood."""
         i, j = int(p[0]/cellsize), int(p[1]/cellsize)
         if M[i, j]:
             return True
@@ -313,6 +319,7 @@ def bridson_uniform_density_old(width=1.0,
                 return True
         return False
     def add_point(p):
+        """Add or insert point."""
         points.append(p)
         i, j = int(p[0]/cellsize), int(p[1]/cellsize)
         P[i, j], M[i, j] = p, True
@@ -355,8 +362,9 @@ def bridson_uniform_density_old(width=1.0,
 # =============================================================================
 ###############################################################################
 def bridson_variable_density():
+    """Bridson variable density."""
     # https://pypi.org/project/poissonDiskSampling/
-    pass
+    raise NotImplementedError("bridson_variable_density is not yet implemented.")
 ###############################################################################
 @njit
 def dart(width=1.0, height=1.0, radius=0.025, k=30):
@@ -466,6 +474,7 @@ def dart_old1(width=1.0, height=1.0, radius=0.025, k=30):
     return points
 
 def dart_old(width = 1.0, height = 1.0, radius = 0.025, k = 30):
+    """Dart old."""
     # -----------------------------------------------------------------------------
     # Credit: https://www.labri.fr/perso/nrougier/from-python-to-numpy/code/DART_sampling_numpy.py
     # -----------------------------------------------------------------------------

@@ -281,6 +281,7 @@ def mask_featIDImg_at_coords(featIDImg, coordData,
     return featIDImg_new
 
 def pad_with(vector, pad_width, iaxis, kwargs):
+    """Pad with."""
     # Taken verbattim from the bwloe reference
     # REF: https://numpy.org/doc/stable/reference/generated/numpy.pad.html
     pad_value = kwargs.get('padder', 10)
@@ -459,6 +460,7 @@ def method1(coords):
 
 
 def method2(coords):
+    """Method2."""
     # Step 1: Find the leftmost (and then topmost) point
     leftmost_point = coords[np.lexsort((coords[:, 1],
                                         coords[:, 0]))][0]
@@ -521,6 +523,7 @@ def method3_2d(coords=None,
 
     # Function to calculate angle and distance from centroid
     def angle_and_distance(point, centroid, clockwise=False):
+        """Angle and distance."""
         angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
         if clockwise:
             # To sort clockwise, we can invert the angle
@@ -530,6 +533,7 @@ def method3_2d(coords=None,
 
     # Function to sort points with an option for direction
     def sort_points(points, clockwise=False):
+        """Sort points."""
         # Sorting indices based on angles (and distances for collinear points)
         sorted_indices = sorted(range(len(points)), key=lambda i: angle_and_distance(points[i], centroid, clockwise))
         # Sorted points using the sorted indices

@@ -39,6 +39,7 @@ def unique_with_counts(arr):
 
 @njit
 def mcloop_alg201(cbp, sbp, S, AIA0, AIA1, NLM, rsfso):
+    """Mcloop alg201."""
     # rsfso = 2
     for s0 in list(range(S.shape[0])):  # along axis 0
         s00, s01, s02 = s0+0, s0+1, s0+2
@@ -96,6 +97,7 @@ def mcloop_alg201(cbp, sbp, S, AIA0, AIA1, NLM, rsfso):
 
 def run(uisim, uiint, uidata, uigrid, rsfso, xgr, ygr, zgr, px_size,
         _a, _b, _c, S, AIA0, AIA1, display_messages):
+    """Run."""
     # ---------------------------------------------
     print("Using ALG-200: SA's NL-1 weighted Q-Pott's model:")
     print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG201' + 15*'-' + '|')

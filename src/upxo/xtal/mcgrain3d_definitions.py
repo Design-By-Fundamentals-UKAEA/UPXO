@@ -22,6 +22,7 @@ class Grain3d():
                  )
 
     def __init__(self):
+        """Initialise the instance."""
         self.loc, self.position = None, None
         self.coords, self.gbloc = None, None
         # set bounds related
@@ -63,11 +64,13 @@ class Grain3d():
 
     @classmethod
     def from_mask(cls, oris=None, **kwargs):
-        pass
+        """Construct this instance from mask."""
+        raise NotImplementedError("from_mask is not yet implemented.")
 
     @classmethod
     def from_shape(cls, grid=None, ref_loc=None, shape=None, size_def=None):
-        pass
+        """Construct this instance from shape."""
+        raise NotImplementedError("from_shape is not yet implemented.")
 
     @classmethod
     def from_partition(cls,
@@ -75,90 +78,113 @@ class Grain3d():
                        ref_loc=None,
                        normal=None,
                        ):
-        pass
+        """Construct this instance from partition."""
+        raise NotImplementedError("from_partition is not yet implemented.")
 
     @classmethod
     def from_surfaces(cls, slist=None, sconnectivity=None):
-        pass
+        """Construct this instance from surfaces."""
+        raise NotImplementedError("from_surfaces is not yet implemented.")
 
     @classmethod
     def from_point_cloud(cls, point_cloud=None):
-        pass
+        """Construct this instance from point cloud."""
+        raise NotImplementedError("from_point_cloud is not yet implemented.")
 
     @classmethod
     def from_convex_hull(cls, ch=None):
-        pass
+        """Construct this instance from convex hull."""
+        raise NotImplementedError("from_convex_hull is not yet implemented.")
 
     @classmethod
     def from_vef(cls, vertices=None, edges=None, faces=None):
+        """Construct this instance from vef."""
         # From vertices, edges and faces
-        pass
+        raise NotImplementedError("from_vef is not yet implemented.")
 
     @property
     def centroid(self):
-        pass
+        """Centroid."""
+        raise NotImplementedError("centroid is not yet implemented.")
 
     @property
     def volume(self):
+        """Volume."""
         # GRain volume
-        pass
+        raise NotImplementedError("volume is not yet implemented.")
 
     @property
     def gbsarea(self):
+        """Gbsarea."""
         # Grain boundary surface area
-        pass
+        raise NotImplementedError("gbsarea is not yet implemented.")
 
     @property
     def meanori(self):
-        pass
+        """Meanori."""
+        raise NotImplementedError("meanori is not yet implemented.")
 
     @property
     def bbox(self):
-        pass
+        """Bbox."""
+        raise NotImplementedError("bbox is not yet implemented.")
 
     @property
     def eqd(self):
+        """Eqd."""
         # Equivalent diameter
-        pass
+        raise NotImplementedError("eqd is not yet implemented.")
 
     @property
     def abc(self):
+        """Abc."""
         # Ellipsoid fit axers lengths
-        pass
+        raise NotImplementedError("abc is not yet implemented.")
 
     @property
     def surface_area_to_volume_ratio(self):
+        """Surface area to volume ratio."""
         # Surface area to volume fratio
-        pass
+        raise NotImplementedError("surface_area_to_volume_ratio is not yet implemented.")
 
     def extract_boundary_voxels(self):
-        pass
+        """Extract boundary voxels."""
+        raise NotImplementedError("extract_boundary_voxels is not yet implemented.")
 
     def identify_boundary_surface_segments(self):
-        pass
+        """Identify boundary surface segments."""
+        raise NotImplementedError("identify_boundary_surface_segments is not yet implemented.")
 
     def identify_boundary_surface_vertices(self):
-        pass
+        """Identify boundary surface vertices."""
+        raise NotImplementedError("identify_boundary_surface_vertices is not yet implemented.")
 
     def identify_boundary_surface_junction_points(self):
-        pass
+        """Identify boundary surface junction points."""
+        raise NotImplementedError("identify_boundary_surface_junction_points is not yet implemented.")
 
     def identify_boundary_surface_segment_edges(self):
-        pass
+        """Identify boundary surface segment edges."""
+        raise NotImplementedError("identify_boundary_surface_segment_edges is not yet implemented.")
 
     def deflate_boundary_surface(self, np=1):
-        pass
+        """Deflate boundary surface."""
+        raise NotImplementedError("deflate_boundary_surface is not yet implemented.")
 
     def make_boundary_zone(self, np=2):
+        """Build and return boundary zone."""
         self.deflate_boundary_surface(np=np)
         # Make point cloud of boundary zone
         bz = Grain3d.from_point_cloud(point_cloud=None)
 
     def characterize_boundary_zone_inner_surface(self):
-        pass
+        """Characterize boundary zone inner surface."""
+        raise NotImplementedError("characterize_boundary_zone_inner_surface is not yet implemented.")
 
     def distirbute_grain_boundary_precipitates(self, shape=None, size=None):
-        pass
+        """Distirbute grain boundary precipitates."""
+        raise NotImplementedError("distirbute_grain_boundary_precipitates is not yet implemented.")
 
     def distribute_precipitates(self, shape=None, size=None):
-        pass
+        """Distribute precipitates."""
+        raise NotImplementedError("distribute_precipitates is not yet implemented.")

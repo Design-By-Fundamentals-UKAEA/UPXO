@@ -1,4 +1,5 @@
 def att(obj):
+    """Att."""
     import inspect
     methods = []
     slotvariables = []
@@ -22,6 +23,7 @@ def att(obj):
 
 
 def slots(obj):
+    """Slots."""
     import inspect
     slotvariables = []
     for name, member in inspect.getmembers(obj):
@@ -37,6 +39,7 @@ def slots(obj):
 
 
 def methods(obj):
+    """Methods."""
     import inspect
     methods = []
     for name, member in inspect.getmembers(obj):
@@ -53,6 +56,7 @@ def methods(obj):
 
 
 def dunders(obj):
+    """Dunders."""
     import inspect
     dunders = []
     for name, member in inspect.getmembers(obj):

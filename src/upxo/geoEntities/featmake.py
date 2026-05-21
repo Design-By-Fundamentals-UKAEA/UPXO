@@ -1,7 +1,23 @@
 """
+Factory functions for creating and converting UPXO geometric entities.
+
 Import
 ------
-from upxo.geoEntities.featmake import make_p2d, make_p3d
+    from upxo.geoEntities.featmake import make_p2d, make_p3d
+    from upxo.geoEntities.featmake import intersect_slines2d
+
+Functions
+---------
+make_p2d                          : Convert any point representation to a 2D UPXO point.
+make_p3d                          : Convert any point representation to a 3D UPXO point.
+intersect_slines2d                : Find intersection points between two Sline2d objects.
+intersect_slines2d_collinear_one_way : One-directional collinear intersection helper.
+
+Notes
+-----
+``make_p2d`` and ``make_p3d`` dispatch on the type string returned by
+``find_spec_of_points`` and support many input formats: scalar coordinates,
+coordinate lists, NumPy arrays, UPXO lean and full point objects.
 """
 import math
 import numpy as np
@@ -19,68 +35,45 @@ from upxo._sup.validation_values import find_spec_of_points
 
 def make_p2d(points, return_type=None, plane='xy'):
     """
-    Convert point to a UPXO point object.
+    Convert any point representation into a list of UPXO 2D point objects.
 
-    Development targets and progress
-    --------------------------------
-    PHASE - 1: Leanest and point2d
+    Handles single points, lists of points, and NumPy arrays. The input may
+    be 2D or 3D; the ``plane`` argument selects which two axes to project
+    onto when the source is 3D.
+
+    Parameters
+    ----------
+    points : object
+        Input point(s) in any supported format: ``Point2d``, ``Point3d``,
+        ``p2d_leanest``, ``p3d_leanest``, coordinate list ``[x, y]`` or
+        ``[x, y, z]``, list of the above, or NumPy array with shape
+        ``(n, 2)`` or ``(n, 3)``.
+    return_type : str, optional
+        Target output type. ``'leanest'`` / ``'p2dlean'`` → ``p2d_leanest``;
+        ``'Point2d'`` / ``'p2d'`` or None → ``Point2d``. Default is None.
+    plane : str, optional
+        Which plane to project 3D coordinates onto. One of
+        ``'xy'``, ``'yz'``, ``'xz'``, ``'yx'``, ``'zy'``, ``'zx'``.
+        Default is ``'xy'``.
+
+    Returns
+    -------
+    list of Point2d or p2d_leanest
+        One element per input point in the requested type.
+
+    Raises
+    ------
+    ValueError
+        When the input point specification is not recognised.
 
     Examples
     --------
-    from upxo.geoEntities.point2d import Point2d as p2d
-    from upxo.geoEntities.point2d import p2d_leanest
-    from upxo.geoEntities.point3d import Point3d as p3d
-    from upxo.geoEntities.point3d import p3d_leanest
-
-    make_p2d(p2d(1,2), return_type='leanest')
-    make_p2d(p2d(1,2), return_type='p2d')
-    make_p2d([p2d(1,2)], return_type='p2d')
-    make_p2d([p2d(1,2), p2d(3,3)], return_type='leanest')
-    make_p2d(p2d_leanest(1,3), return_type='leanest')
-    make_p2d([p2d_leanest(1,2), p2d_leanest(1,2)], return_type='leanest')
-
-    make_p2d(p2d(1,2), return_type='Point2d')
-    make_p2d(p2d(1,2))
-    make_p2d(p2d(1,2), return_type='leanest')
-    make_p2d([p2d(1,2), p2d(3,3)], return_type='leanest')
-    make_p2d(p2d_leanest(1,3), return_type='leanest')
-    make_p2d([p2d_leanest(1,2), p2d_leanest(1,2)], return_type='leanest')
-
-    make_p2d(p3d(1,2,3), return_type='Point2d')
-    make_p2d([p3d(1,2,3), p3d(3,3,3)], return_type='Point2d')
-    make_p2d(p3d_leanest(1,2,3), return_type='p2dlean')
-    make_p2d(p3d_leanest(1,2,3))
-    make_p2d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p2dlean')
-    make_p2d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p2d')
-    make_p2d([1,2,3], return_type='p2dlean')
-    make_p2d([[1,2,3]], return_type='p2dlean')
-    make_p2d([[1,2,3],[4,5,6],[7,8,9]], return_type='p2dlean')
-    make_p2d([[1,2,3],[4,5,6],[7,8,9]], return_type='Point2d')
-
-    make_p2d([[1,2,3,4],[2,3,4,5],[3,4,5,6]], return_type='leanest')
-    make_p2d([[1,2,3,4],[1,2,3,4],[1,2,3,4]], return_type='p2d')
-
-    coords = np.random.random((10,3))
-    make_p2d(coords, return_type='p2d')
-
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='xy')
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='yz')
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='xz')
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='yx')
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='zy')
-    make_p2d(p3d(1,2,3), return_type='Point2d', plane='zx')
-
-    make_p2d([p3d(1,2,3), p3d(3,3,3)], return_type='Point2d')
-    make_p2d(p3d_leanest(1,2,3), return_type='p2dlean')
-    make_p2d(p3d_leanest(1,2,3))
-    make_p2d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p2dlean')
-    make_p2d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p2d')
-    make_p2d([1,2,3], return_type='p2dlean')
-    make_p2d([[1,2,3]], return_type='p2dlean')
-    make_p2d([[1,2,3],[4,5,6],[7,8,9]], return_type='p2dlean')
-    make_p2d([[1,2,3],[4,5,6],[7,8,9]], return_type='Point2d')
-
-    make_p2d([1,2,3,4], return_type='p2dlean')  # Invalid. Must not work.
+    >>> from upxo.geoEntities.point2d import Point2d as p2d
+    >>> from upxo.geoEntities.featmake import make_p2d
+    >>> make_p2d(p2d(1, 2), return_type='Point2d')
+    >>> make_p2d([p2d(1, 2), p2d(3, 3)], return_type='leanest')
+    >>> import numpy as np
+    >>> make_p2d(np.random.random((10, 3)), return_type='p2d')
     """
     DEVMODE = False
     # -------------------------------------
@@ -278,51 +271,39 @@ def make_p2d(points, return_type=None, plane='xy'):
 
 def make_p3d(points, return_type=None, zloc=0.0):
     """
-    Convert point to a UPXO point object.
+    Convert any point representation into a list of UPXO 3D point objects.
 
-    Development targets and progress
-    --------------------------------
-    PHASE - 1: LEANEST. DONE
-    PHASE - 2: 3D ALTERNATIVE. DONE
+    Parameters
+    ----------
+    points : object
+        Input point(s) in any supported format: ``Point2d``, ``Point3d``,
+        ``p2d_leanest``, ``p3d_leanest``, coordinate list ``[x, y, z]``,
+        list of the above, or NumPy array with shape ``(n, 3)``.
+    return_type : str, optional
+        Target output type. ``'p3dlean'`` / ``'leanest'`` → ``p3d_leanest``;
+        ``'Point3d'`` / ``'p3d'`` or None → ``Point3d``. Default is None.
+    zloc : float, optional
+        Z-coordinate to assign when promoting 2D points to 3D.
+        Default is 0.0.
+
+    Returns
+    -------
+    list of Point3d or p3d_leanest
+        One element per input point in the requested type.
+
+    Raises
+    ------
+    ValueError
+        When the input point specification is not recognised.
 
     Examples
     --------
-    from upxo.geoEntities.point2d import Point2d as p2d
-    from upxo.geoEntities.point2d import p2d_leanest
-    from upxo.geoEntities.point3d import Point3d as p3d
-    from upxo.geoEntities.point3d import p3d_leanest
-
-    make_p3d(p2d(1,2), return_type='leanest')
-    make_p3d(p2d(1,2), return_type='leanest', zloc=1.12345)
-    make_p3d([p2d(1,2), p2d(3,3)], return_type='leanest')
-    make_p3d(p2d_leanest(1,3), return_type='leanest')
-    make_p3d([p2d_leanest(1,2), p2d_leanest(1,2)], return_type='leanest')
-
-    make_p3d(p2d(1,2), return_type='Point3d')
-    make_p3d(p2d(1,2))
-    make_p3d(p2d(1,2), return_type='leanest', zloc=1.12345)
-    make_p3d([p2d(1,2), p2d(3,3)], return_type='leanest')
-    make_p3d(p2d_leanest(1,3), return_type='leanest')
-    make_p3d([p2d_leanest(1,2), p2d_leanest(1,2)], return_type='leanest')
-
-    make_p3d(p3d(1,2,3), return_type='Point3d')
-    make_p3d([p3d(1,2,3), p3d(3,3,3)], return_type='Point3d')
-    make_p3d(p3d_leanest(1,2,3), return_type='p3dlean')
-    make_p3d(p3d_leanest(1,2,3))
-
-    make_p3d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p3dlean')
-    make_p3d([p3d_leanest(1,2,3), p3d_leanest(1,2,3)], return_type='p3d')
-
-    make_p3d([1,2,3], return_type='p3dlean')
-    make_p3d([1,2,3,4], return_type='p3dlean')  # Invalid: Produces no output !
-    make_p3d([[1,2,3]], return_type='p3dlean')
-    make_p3d([[1,2,3],[4,5,6],[7,8,9]], return_type='p3dlean')
-    make_p3d([[1,2,3],[4,5,6],[7,8,9]], return_type='Point3d')
-
-    make_p3d([[1,2,3,4],[1,2,3,4],[1,2,3,4]], return_type='leanest')
-    make_p3d([[1,2,3,4],[1,2,3,4],[1,2,3,4]], return_type='p3d')
-
-    make_p3d(np.random.random((10,3)), return_type='p3d')
+    >>> from upxo.geoEntities.point2d import Point2d as p2d
+    >>> from upxo.geoEntities.featmake import make_p3d
+    >>> make_p3d(p2d(1, 2), return_type='Point3d', zloc=1.0)
+    >>> make_p3d([p2d(1, 2), p2d(3, 3)], return_type='leanest')
+    >>> import numpy as np
+    >>> make_p3d(np.random.random((10, 3)), return_type='p3d')
     """
     DEVMODE = False
     # -------------------------------------
@@ -423,91 +404,40 @@ def make_p3d(points, return_type=None, zloc=0.0):
 
 def intersect_slines2d(la, lb, p2d, return_type='upxo'):
     """
-    Find points of intersection between two UPXO stringht 2D lines.
+    Find all intersection points between two UPXO 2D straight lines.
 
-    First checks intersection of la with lb.
-    Then checks intersection of lb with la.
-    Combines the two results and returns the unique set of points.
+    Checks both directions (``la`` with ``lb`` and ``lb`` with ``la``) to
+    handle collinear overlaps, deduplicates the result, then falls back to
+    the standard algebraic line–line intersection formula for non-parallel
+    lines.
 
-    Alternatively, if you want to check only the intewrsection of la with lb,
-    then use the definition intersect_slines2d_one_way(la, lb).
+    Parameters
+    ----------
+    la : Sline2d
+        First straight line.
+    lb : Sline2d
+        Second straight line.
+    p2d : type
+        The ``Point2d`` class used to construct output points.
+    return_type : str, optional
+        ``'upxo'`` returns ``Point2d`` objects; ``'coord'`` returns
+        ``[x, y]`` pairs. Default is ``'upxo'``.
 
-    from upxo.geoEntities.sline2d import Sline2d as sl2d
-    from upxo.geoEntities.point2d import Point2d as p2d
+    Returns
+    -------
+    list
+        List of intersection points in the format requested by
+        ``return_type``.  Empty list when lines do not intersect.
 
-    Import and suggested use
-    ------------------------
-    import upxo.geoEntities.featmake as fmake
-    from upxo.geoEntities.sline2d import Sline2d
-    # fmake.intersect_slines2d(...)
-
-    # Example-1: Collinear lines Case 1
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0.1, 0.1], [1.8, 1.8])
-    fmake.intersect_slines2d(la, lb, p2d)
-    fmake.intersect_slines2d(la, lb, p2d, return_type='upxo')
-    fmake.intersect_slines2d(la, lb, p2d, return_type='coord')
-
-    # Example-2: Collinear lines Case 2
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0.1, 0.1], [0.8, 0.8])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-3: Collinear lines Case 3
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([-0.1, -0.1], [1.8, 1.8])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-4: Collinear lines Case 4
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([1.8, 1.8], [0.1, 0.1])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-5: non-collinear lines Case 5
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0, 1], [1, 0])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-6: Collinear lines Case 6
-    # ----------------------------------
-    la = sl2d.by_coord([0.1, 0.1], [0.8, 0.8])
-    lb = sl2d.by_coord([0, 0], [1, 1])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-7: Non-Collinear lines Case 7a
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0, 0], [1, 0])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-8: Non-Collinear lines Case 7b
-    # ----------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([-0,-0], [1, 0])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-9: Collinear lines Case 8
-    # ----------------------------------
-    la = sl2d.by_coord([0,0], [1,1])
-    lb = sl2d.by_coord([0,0], [1,1])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-10: Collinear lines Case 9
-    # ----------------------------------
-    la = sl2d.by_coord([0,0], [1,1])
-    lb = sl2d.by_coord([0,0], [-1,-1])
-    fmake.intersect_slines2d(la, lb, p2d)
-
-    # Example-11: Collinear lines Case 10
-    # -----------------------------------
-    la = sl2d.by_coord([0,0], [1,0])
-    lb = sl2d.by_coord([0,1], [1,1])
-    fmake.intersect_slines2d(la, lb, p2d)
+    Examples
+    --------
+    >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+    >>> from upxo.geoEntities.point2d import Point2d as p2d
+    >>> import upxo.geoEntities.featmake as fmake
+    >>> la = sl2d.by_coord([0, 0], [1, 1])
+    >>> lb = sl2d.by_coord([0, 1], [1, 0])
+    >>> fmake.intersect_slines2d(la, lb, p2d)
+    >>> fmake.intersect_slines2d(la, lb, p2d, return_type='coord')
     """
     lbpnts_inside_la = intersect_slines2d_collinear_one_way(la, lb, p2d)
     lapnts_inside_lb = intersect_slines2d_collinear_one_way(lb, la, p2d)
@@ -565,81 +495,34 @@ def intersect_slines2d(la, lb, p2d, return_type='upxo'):
 
 def intersect_slines2d_collinear_one_way(la, lb, p2d):
     """
-    The lines la and lb must be upxo sline2d type.
+    Find endpoints of ``lb`` that lie on ``la`` (one-directional collinear check).
 
-    from upxo.geoEntities.sline2d import Sline2d as sl2d
-    from upxo.geoEntities.point2d import Point2d as p2d
+    Tests whether each endpoint of ``lb`` is within the perpendicular distance
+    tolerance of ``la`` and also within the chord length of ``la``.  Intended
+    to be called from :func:`intersect_slines2d` for each direction.
 
-    Import and suggested use
-    ------------------------
-    import upxo.geoEntities.featmake as fmake
-    # fmake.intersect_slines2d_collinear_one_way(...)
+    Parameters
+    ----------
+    la : Sline2d
+        Reference line.
+    lb : Sline2d
+        Line whose endpoints are tested against ``la``.
+    p2d : type
+        The ``Point2d`` class used to build point objects for distance checks.
 
-    # Example-1: Collinear lines Case 1
-    # ---------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0.1, 0.1], [1.8, 1.8])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
+    Returns
+    -------
+    list of Point2d
+        Endpoints of ``lb`` that lie on ``la``.  Empty list if none qualify.
 
-    # Example-2: Collinear lines Case 2
-    # ---------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0.1, 0.1], [0.8, 0.8])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-3: Collinear lines Case 3
-    # ---------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([-0.1, -0.1], [1.8, 1.8])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-4: Collinear lines Case 4
-    # ---------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([1.8, 1.8], [0.1, 0.1])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-5: non-collinear lines Case 5
-    # -------------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0, 1], [1, 0])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-6: Collinear lines Case 6
-    # ---------------------------------
-    la = sl2d.by_coord([0.1, 0.1], [0.8, 0.8])
-    lb = sl2d.by_coord([0, 0], [1, 1])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-7: Non-Collinear lines Case 7a
-    # --------------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0, 0], [1, 0])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-8: Non-Collinear lines Case 7b
-    # --------------------------------------
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([-0,-0], [1, 0])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-9: Collinear lines Case 8
-    # ---------------------------------
-    la = sl2d.by_coord([0,0], [1,1])
-    lb = sl2d.by_coord([0,0], [1,1])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-10: Collinear lines Case 9
-    # ----------------------------------
-    la = sl2d.by_coord([0,0], [1,1])
-    lb = sl2d.by_coord([0,0], [-1,-1])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
-
-    # Example-11: Collinear lines Case 10
-    # -----------------------------------
-    la = sl2d.by_coord([0,0], [1,0])
-    lb = sl2d.by_coord([0,1], [1,1])
-    fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
+    Examples
+    --------
+    >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+    >>> from upxo.geoEntities.point2d import Point2d as p2d
+    >>> import upxo.geoEntities.featmake as fmake
+    >>> la = sl2d.by_coord([0, 0], [1, 1])
+    >>> lb = sl2d.by_coord([0.1, 0.1], [1.8, 1.8])
+    >>> fmake.intersect_slines2d_collinear_one_way(la, lb, p2d)
     """
     la_p0 = p2d(la.x0, la.y0)
     la_p1 = p2d(la.x1, la.y1)

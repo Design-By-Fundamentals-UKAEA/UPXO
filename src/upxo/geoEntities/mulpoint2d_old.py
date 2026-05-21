@@ -89,6 +89,7 @@ class mulpoint2d():
                  vis: bool = False,
                  print_summary: bool = True
                  ):
+        """Initialise the instance."""
         self.lean = lean
         self.xbound = xbound
         self.ybound = ybound
@@ -225,6 +226,7 @@ class mulpoint2d():
     # -----------------------------------------------
 
     def __repr__(self, recompute_flag=False):
+        """Return a string representation of this instance."""
         if recompute_flag:
             if self.lean in ('no', 'low', 'medium'):
                 self.recompute_from_mids()
@@ -286,6 +288,7 @@ class mulpoint2d():
         pass
 
     def pop(self, remove_indices):
+        """Pop."""
         self.points = [i for j, i in enumerate(self.points)
                        if j not in remove_indices]
         self.recompute_basics(npoints_flag=True,
@@ -329,6 +332,7 @@ class mulpoint2d():
                  bridson_sampling_k=30,
                  vis=True
                  ):
+        """Makegrid."""
         if method == 'recgrid':
             self.__grid_rec(xbound,
                             ybound,
@@ -400,6 +404,7 @@ class mulpoint2d():
                    char_length,
                    space,
                    throw):
+        """  grid rec."""
         _x = np.linspace(xbound[0],
                          xbound[1],
                          int(abs(xbound[1]-xbound[0])/char_length[0]))
@@ -494,6 +499,7 @@ class mulpoint2d():
                    sampling_radius=0.025,
                    sampling_k=30,
                    throw=False):
+        """  grid rnd."""
         if sampling_technique == 'uniform':
             # initiate the numpy>random>uniform method
             npruni = np.random.uniform
@@ -610,6 +616,7 @@ class mulpoint2d():
                   percentage: float = 10.0,
                   method: str = '-+',
                   ):
+        """Check or validate is within."""
         factor = percentage/100
         if method == '-+':
             lowerbound = reference_value*(1-factor)
@@ -650,6 +657,7 @@ class mulpoint2d():
             pass
 
     def build_global_rid(self):
+        """Build and return  global rid."""
         try:
             _ = self.rid
         except AttributeError:
@@ -834,6 +842,7 @@ class mulpoint2d():
                      return_length=False,
                      vis=True
                      ):
+        """Neigh points."""
         if method in ('coord', 'point'):
             try:
                 _ = self.tree
@@ -931,6 +940,7 @@ class mulpoint2d():
             coord_list=[],
             cut_off_radius=0.0,
             vf=0.05):
+        """Rem."""
         codist = 0.0
         if method == 'bynumber':
             if torem == 'points':
@@ -969,9 +979,11 @@ class mulpoint2d():
             self.__state_change = False
 
     def distance(self, x, y):
+        """Distance."""
         return np.sqrt((np.array(self.locx)-x)**2+(np.array(self.locy)-y)**2)
 
     def angles(self, x, y):
+        """Angles."""
         return np.arctan2(np.array(self.locy)-y, np.array(self.locx)-x)
 
     def translate(self, delx, dely):
@@ -998,6 +1010,7 @@ class mulpoint2d():
                                   centroid_flag=True)
 
     def moveto(self, newx, newy):
+        """Moveto."""
         self.translate(newx - self.centroid[0], newy - self.centroid[1])
 
     def DG(self,
@@ -1168,6 +1181,7 @@ class mulpoint2d():
               ground=None,
               height=None,
               perturb_mag=None):
+        """Noise."""
         if perturb_type == 'dgh':
             # Depth, Ground and Height are lengths
             depth, ground, height = -abs(depth), abs(ground), abs(height)
@@ -1564,6 +1578,7 @@ class mulpoint2d():
                        make_ckdtree=False,
                        sep_n=10,
                        sep_string='-X'):
+        """ print summary."""
         if print_summary:
             from colorama import init as colorama_init
             from colorama import Fore
@@ -1622,6 +1637,7 @@ class mulpoint2d():
         return ax
 
     def perthist(self):
+        """Perthist."""
         fig = plt.figure(figsize=(1.6, 1.6),
                          dpi=100)
         ax = fig.add_axes([0, 0, 1, 1])

@@ -34,6 +34,7 @@ class IMAGE_3D:
                  'srep'
                  )
     def __init__(self, image3d):
+        """Initialise the instance."""
         self.ctrl = {}
         self.base = image3d
         # ------------------------
@@ -53,8 +54,10 @@ class IMAGE_3D:
         self.sops = self.sops_CLS(fx=self.sprops_CLS())
         self.rops = self.rops_CLS(fx=self.rprops_CLS())
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"IMAGE_3D: shape={self.img.shape}, n_features={self.ids.c}"
     def build_coords(self):
+        """Build and return  coords."""
         self.coords = np.indices((self.rve.zn, self.rve.yn,
                                   self.rve.xn)).reshape(3, -1).T
         self.ids.v = np.arange(1, self.coords.shape[0]+1)
@@ -72,6 +75,7 @@ class IMAGE_3D:
         """Morphological operations"""
         __slots__ = ('fx', 'ctrl')
         def __init__(self, ctrl, fx):
+            """Initialise the instance."""
             self.ctrl = ctrl
             self.fx = fx
         def part(self, img):
@@ -85,6 +89,7 @@ class IMAGE_3D:
             fdb, N = spndimg_label(img, structure=self.cntr.bstruct)
             return fdb, N
         def find_CLS_mprops(self):
+            """Find CLS mprops."""
             pass
     class tops_CLS:
         """Topological operations
@@ -96,14 +101,19 @@ class IMAGE_3D:
             '''def_cls_inst: Definitions class instance.'''
             self.DCI = def_cls_inst
         def find_on_neighs(self, on, prob):
+            """Find on neighs."""
             pass
         def find_onth_neighs(self, on, prob):
+            """Find onth neighs."""
             pass
         def cluster(self, clustering_stats):
+            """Cluster."""
             pass
         def make_graph(self):
+            """Build and return graph."""
             pass
         def partition(self):
+            """Partition."""
             pass
         def crop_neigh_gid(self, neigh_gid='O(1)', gids_to_crop=None):
             """
@@ -155,71 +165,91 @@ class IMAGE_3D:
         """Spatial operations"""
         __slots__ = ('fx', )
         def __init__(self, fx):
+            """Initialise the instance."""
             self.fx = fx
         def find_loc(self):
+            """Find loc."""
             pass
     class mprops_CLS:
         """Class to find morphological propertues"""
         def __init__(self):
+            """Initialise the instance."""
             pass
     class tprops_CLS:
         """Class to find topological properties"""
         def __init__(self):
+            """Initialise the instance."""
             pass
         def G_max_ind_set(self, G):
+            """G max ind set."""
             return networkx.maximal_independent_set(G)
         def G_conn_comp(self, G):
+            """G conn comp."""
             return [set(c) for c in networkx.connected_components(G)]        
     class sprops_CLS:
         """Class to find spatial properties"""
         def __init__(self):
+            """Initialise the instance."""
             pass
     class rprops_CLS:
         """Class to find representativeness properties"""
         def __init__(self):
+            """Initialise the instance."""
             pass       
 
     class mviz_CLS:
         def __init__(self, outer):
+            """Initialise the instance."""
             pass
         
     class tviz_CLS:
         def __init__(self, outer):
+            """Initialise the instance."""
             pass
         
     class mpviz_CLS:
         def __init__(self):
+            """Initialise the instance."""
             pass
         
     class meta_ops_CLS:
         def __init__(self):
+            """Initialise the instance."""
             pass
         def subdomain(self):
+            """Subdomain."""
             pass
         def coarse(self, k):
+            """Coarse."""
             pass
         def fine(self, k):
+            """Fine."""
             pass
     class cell_CLS:
         __slots__ = ('type')
         def __init__(self):
+            """Initialise the instance."""
             pass
     class xtal_CLS(cell_CLS):
         __slots__ = ("a")
         def __init__(self):
+            """Initialise the instance."""
             pass
     class xb_CLS(cell_CLS):
         """xtal_boundary"""
         __slots__= ("a")
         def __init__(self):
+            """Initialise the instance."""
             pass
     class xbseg_CLS(cell_CLS):
         """xtal_boundary segment"""
         __slots__ = ("a")
         def __init__(self):
+            """Initialise the instance."""
             pass
     class xjv_CLS(cell_CLS):
         """xtal_junction_voxels"""
         __slots__ = ("a")
         def __init__(self):
+            """Initialise the instance."""
             pass

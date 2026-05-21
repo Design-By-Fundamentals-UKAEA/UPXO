@@ -1,5 +1,7 @@
 def print_incrementally(func):
+    """Print or display incrementally."""
     def wrapper(self, *args, **kwargs):
+        """Wrapper."""
         self.print_interval_bool = [False] * len(self.gid)
         for idx, _gid_ in enumerate(self.gid):
             if _gid_ <= 100 and _gid_ % 4 == 0:

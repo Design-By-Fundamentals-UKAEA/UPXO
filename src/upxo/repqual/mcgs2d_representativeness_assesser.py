@@ -148,11 +148,13 @@ class mc2repr():
     def load_target(self,
                     target=None,
                     target_type=None):
+        """Load or import target."""
         self.target = target
         self.target_type = target_type
 
     def load_samples(self,
                      samples=None):
+        """Load or import samples."""
         if type(samples) in dth.dt.ITERABLES:
             self.samples = samples
         else:
@@ -160,26 +162,31 @@ class mc2repr():
 
     def add_sample(self,
                    sample=None):
+        """Add or insert sample."""
         if sample:
             self.samples.append(sample)
 
     def set_stests(self,
                    tests):
+        """Set or update stests."""
         self.stest['tests'] = tests
 
     def set_cor_thresh(self,
                        cor_threshold):
+        """Set or update cor thresh."""
         while cor_threshold < 0 or cor_threshold > 1:
             self.stest['cor_threshold'] = float(input("cor_threshold [0, 1]: "))
 
     def set_kldiv_thresh(self,
                          kldiv_thresh):
+        """Set or update kldiv thresh."""
         while kldiv_thresh < 0 or kldiv_thresh > 1:
             self.stest['kldiv_thresh'] = float(input("kldiv_thresh [0, 1]: "))
 
     def set_ks_thresh(self,
                       ks_thresh_D,
                       ks_thresh_P):
+        """Set or update ks thresh."""
         while ks_thresh_D < 0 or ks_thresh_D > 1:
             self.stest['ks_thresh_D'] = float(input("ks_thresh_D [0, 1]: "))
         while ks_thresh_P < 0 or ks_thresh_P > 1:
@@ -187,12 +194,14 @@ class mc2repr():
 
     def set_jsdiv_thresh(self,
                          jsdiv_thresh):
+        """Set or update jsdiv thresh."""
         while jsdiv_thresh < 0 or jsdiv_thresh > 1:
             self.stest['jsdiv_thresh'] = float(input("jsdiv_thresh [0, 1]: "))
 
     def prop_to_excel(self,
                       filename="pxtal_properties",
                       ):
+        """Prop to excel."""
         with pd.ExcelWriter(f"{filename}.xlsx") as writer:
             self.target.prop.to_excel(writer,
                                       sheet_name='target',
@@ -204,6 +213,7 @@ class mc2repr():
                                      )
 
     def build_distribution_dataset(self):
+        """Build and return  distribution dataset."""
         self.distr_type = {'target': {}}
         for sample_name in self.samples.keys():
             self.distr_type[sample_name] = {}
@@ -219,6 +229,7 @@ class mc2repr():
                                                    }
 
     def determine_distr_type(self):
+        """Determine distr type."""
         self.build_distribution_dataset()
         for parameter_name in self.parameters:
             target_skewness = skew(self.target.prop[parameter_name])

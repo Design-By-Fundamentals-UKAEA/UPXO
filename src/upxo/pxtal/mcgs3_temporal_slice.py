@@ -446,6 +446,7 @@ class mcgs3_grain_structure():
                  uigrid=None, uimesh=None, ndimg_label_pck=None,
                  iroute='regular',
                  udata=None, udata_name='s'):
+        """Initialise the instance."""
         # Dictionary to contain controls.
         self.ctrls = {}
         self.ctrls['iroute'] = iroute
@@ -569,13 +570,16 @@ class mcgs3_grain_structure():
         self.tc_info = {}
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         self.__gi__ = 1
         return self
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f'UPXO. gs-tslice.3d. {id(self)}'
 
     def __next1__(self):
+        """__next1__ special method."""
         if self.n:
             if self.__gi__ <= self.n:
                 grain_pixel_indices = np.argwhere(self.lgi == self.__gi__)
@@ -585,6 +589,7 @@ class mcgs3_grain_structure():
                 raise StopIteration
 
     def __next__(self):
+        """Return the next item from this iterator."""
         if self.n:
             if self.__gi__ <= self.n:
                 thisgrain = self.g[self.__gi__]['grain']
@@ -594,6 +599,7 @@ class mcgs3_grain_structure():
                 raise StopIteration
 
     def __att__(self):
+        """Return a string listing of all attributes."""
         return att(self)
 
     @property
@@ -605,7 +611,8 @@ class mcgs3_grain_structure():
     def by_parameters(cls, xmin=0.0, xinc=1.0, xmax=100.0,
                       ymin=0.0, yinc=1.0, ymax=100.0, zmin=0.0, zinc=1.0,
                       zmax=100.0, S_total=-1, MCsteps=10, alg='300b'):
-        pass
+        """By parameters."""
+        raise NotImplementedError("by_parameters is not yet implemented.")
 
     @classmethod
     def by_data(cls, sf_data, sf_name='s', dim=3, m=0,
@@ -868,6 +875,7 @@ class mcgs3_grain_structure():
 
     @property
     def lfi(self):
+        """Lfi."""
         return self.lgi
 
     def set__s_n(self,
@@ -908,9 +916,11 @@ class mcgs3_grain_structure():
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
+        """Set or update  gid s."""
         self.gid_s = []
 
     def set__spart_flag(self, S_total,):
+        """Set or update  spart flag."""
         if not isinstance(S_total, int):
             raise ValueError("S_total must be an integer.")
         self.spart_flag = {_s_: False for _s_ in range(1, S_total+1)}
@@ -1319,6 +1329,7 @@ class mcgs3_grain_structure():
                                           verbosity=sanv_verbosity)
 
     def plot_mprop_correlations(self):
+        """Visualise mprop correlations using Matplotlib or PyVista."""
         # VALIDATIONS
         # -----------------------------
         g = sns.jointplot(x=tgt_npixels, y=tgt_nneigh_field, kind='hex', gridsize=25, cmap='viridis',
@@ -1397,12 +1408,13 @@ class mcgs3_grain_structure():
         print(f'No. of grains detected = {self.n}')
 
     def find_grains_lgi(self):
+        """Find grains lgi."""
         # Call find_grains_img
-        pass
+        raise NotImplementedError("find_grains_lgi is not yet implemented.")
 
     def find_grains_img(self, img=None):
-        for i in np.unique(img):
-            pass
+        """Find grains img."""
+        raise NotImplementedError("find_grains_img is not yet implemented.")
 
     def _check_lgi_dtype_uint8(self,
                                lgi,
@@ -1430,6 +1442,7 @@ class mcgs3_grain_structure():
             self.lgi = None
 
     def set_gid(self):
+        """Set or update gid."""
         self.gid = list(range(1, np.unique(self.lgi).size+1))
 
     def calc_num_grains(self, throw=False):
@@ -1570,6 +1583,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def find_neigh_gid_core_numba(lgi, gid, dxdydz):
+        """Find neigh gid core numba."""
         shape_x, shape_y, shape_z = lgi.shape
         max_neighbors = 26  # Maximum possible neighbors in a 3D grid
 
@@ -2231,6 +2245,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def _count_labels(lgi_flat, gid_to_idx):
+        """ count labels."""
         counts = np.zeros(gid_to_idx.max()+1, dtype=np.int64)
         for t in range(lgi_flat.size):
             g = lgi_flat[t]
@@ -2242,6 +2257,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def _fill_coords(lgi, gid_to_idx, counts):
+        """ fill coords."""
         nx, ny, nz = lgi.shape
         out_i = [np.empty(c, dtype=np.uint16) for c in counts]
         out_j = [np.empty(c, dtype=np.uint16) for c in counts]
@@ -2790,6 +2806,7 @@ class mcgs3_grain_structure():
         return ngidsbfld
 
     def remove_gid_from_neigh_gid(self, neigh_gid):
+        """Remove gid from neigh gid."""
         for gid, neigh in neigh_gid.items():
             if gid in neigh:
                 neigh.remove(gid)
@@ -3145,6 +3162,7 @@ class mcgs3_grain_structure():
             True, if successfully merged, else False.
         """
         def MergeGrains():
+            """Mergegrains."""
             if simple_merge:
                 self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
                 merge_success = True
@@ -3607,6 +3625,7 @@ class mcgs3_grain_structure():
             pvp.add_mesh(self.pvgrid.outline())
         # -------------------------------------
         def create_mesh(gid):
+            """Build and return e mesh."""
             gid = int(gid)
             pvp.add_mesh(self.pvgrid.threshold([gid, gid],
                                                scalars='lgi'),
@@ -4225,13 +4244,15 @@ class mcgs3_grain_structure():
         """
         Find the vector representing doiagonal of the bounding box.
         """
-        pass
+        raise NotImplementedError("get_bbox_diagonal_vectors is not yet implemented.")
 
     def get_bbox_aspect_ratio(self, gid):
-        pass
+        """Return the bbox aspect ratio."""
+        raise NotImplementedError("get_bbox_aspect_ratio is not yet implemented.")
 
     def get_bbox_volume(self, gid):
-        pass
+        """Return the bbox volume."""
+        raise NotImplementedError("get_bbox_volume is not yet implemented.")
 
     def set_mprop_volnv_old(self):
         """
@@ -5218,7 +5239,8 @@ class mcgs3_grain_structure():
                                                             'start_shift': 0,
                                                             'end_shift': 0},
                                              plot=True):
-        pass
+        """Return the igs along lines multiple samples."""
+        raise NotImplementedError("igs_along_lines_multiple_samples is not yet implemented.")
 
     def igs_sed_ratio(self, metric='mean', lines_gen_method=1,
                       reset_grain_size=True, base_size_spec='volnv',
@@ -5332,10 +5354,12 @@ class mcgs3_grain_structure():
 
     @property
     def nvoxels(self):
+        """Nvoxels."""
         return self.mprop['volnv']
 
     @property
     def nvoxels_values(self):
+        """Nvoxels values."""
         return np.array(list(self.mprop['volnv'].values()))
 
     def get_largest_gids(self):
@@ -5359,18 +5383,22 @@ class mcgs3_grain_structure():
         return np.where(self.nvoxels_values == self.nvoxels_values.min())[0]+1
 
     def get_s_gids(self, s):
+        """Return the s gids."""
         return self.s_gid[s]
 
     @property
     def single_voxel_grains(self):
+        """Single voxel grains."""
         return np.where(self.nvoxels_values == 1)[0]+1
 
     @property
     def smallest_volume(self):
+        """Smallest volume."""
         return self.nvoxels_values.min()
 
     @property
     def largest_volume(self):
+        """Largest volume."""
         return self.nvoxels_values.max()
 
     def small_grains(self, vth=2):
@@ -5381,12 +5409,15 @@ class mcgs3_grain_structure():
         return np.where(self.nvoxels_values <= vth)[0]+1
 
     def large_grains(self, vth=2):
+        """Large grains."""
         return np.where(self.nvoxels_values >= vth)[0]+1
 
     def find_grains_by_nvoxels(self, nvoxels=2):
+        """Find grains by nvoxels."""
         return np.where(self.nvoxels_values == nvoxels)[0]+1
 
     def get_volnv_gids(self, gids):
+        """Return the volnv gids."""
         # Validations
         return [floor(self.mprop['volnv'][gid]) for gid in gids]
 
@@ -5482,15 +5513,18 @@ class mcgs3_grain_structure():
         return gids
 
     def plot_single_voxel_grains(self):
+        """Visualise single voxel grains using Matplotlib or PyVista."""
         self.plot_grains_gids(self.single_voxel_grains)
 
     def get_lgi_subset_around_location(self, loc):
+        """Return the lgi subset around location."""
         # Validations
         if any(loc_ < 0 or loc_ > mxsz-1
                for loc_, mxsz in zip(loc, self.lgi.shape)):
             raise ValueError('Invalid location specirfication.')
         # ------------------------------
         def get_slice(i, imax):
+            """Return the slice."""
             if i == 0:
                 return slice(0, 2)
             elif i == imax-1:
@@ -5504,6 +5538,7 @@ class mcgs3_grain_structure():
         return lgi_subset
 
     def get_neigh_grains_next_to_location(self, loc):
+        """Return the neigh grains next to location."""
         lgi_subset = self.get_lgi_subset_around_location(loc)
         return set(np.unique(lgi_subset)) - set([self.lgi[loc[0]][loc[1]][loc[2]]])
 
@@ -6350,32 +6385,37 @@ class mcgs3_grain_structure():
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        pass
+        """Load or import t ctf."""
+        raise NotImplementedError("import_ctf is not yet implemented.")
 
     def import_crc(self,
                    filePath,
                    fileName,
                    convertUPXOgs=True):
+        """Load or import t crc."""
         # Use DefDAP to get the job done here
-        pass
+        raise NotImplementedError("import_crc is not yet implemented.")
 
     def clean_exp_gs(self,
                      minGrainSize=10
                      ):
+        """Clean exp gs."""
         # Use DefDAP to get the job done here
-        pass
+        raise NotImplementedError("clean_exp_gs is not yet implemented.")
 
     def import_dream3d(self,
                        filePath,
                        fileName,
                        convertUPXOgs=True):
-        pass
+        """Load or import t dream3d."""
+        raise NotImplementedError("import_dream3d is not yet implemented.")
 
     def import_vtk(self,
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        pass
+        """Load or import t vtk."""
+        raise NotImplementedError("import_vtk is not yet implemented.")
 
     def update_dream3d_ABQ_file(self):
         """
@@ -6395,7 +6435,7 @@ class mcgs3_grain_structure():
         None.
 
         """
-        pass
+        raise NotImplementedError("update_dream3d_ABQ_file is not yet implemented.")
 
     def set_grain_positions(self, verbose=False):
         """
@@ -7136,9 +7176,10 @@ class mcgs3_grain_structure():
         ------
         Dr. Sunil Anandatheertha: developed and implemented the technique.
         """
-        pass
+        raise NotImplementedError("clean_gs_GMD_by_source_erosion_v2 is not yet implemented.")
 
     def initiate_gbp(self):
+        """Initiate gbp."""
         self.Lgbp_all = {gid: None for gid in self.gid}
         self.Ggbp_all = {gid: None for gid in self.gid}
 
@@ -7217,6 +7258,7 @@ class mcgs3_grain_structure():
                          for gid in self.gid}
 
     def create_neigh_gid_pair_ids(self):
+        """Build and return e neigh gid pair ids."""
         print('\nCreating neigh_gid_pair_ids.')
         self.gid_pair_ids = {}
         pair_id = 1
@@ -7240,7 +7282,9 @@ class mcgs3_grain_structure():
         print(f'.... a total of {len(self.gid_pair_ids_unique_lr)} unique gid pairs exit.')
 
     def is_gid_pair_in_lr_or_rl(self, gid_pair):
+        """Check or validate is gid pair in lr or rl."""
         def is_a_in_b(a, b):
+            """Check or validate is a in b."""
             return any((b[:, 0] == a[0]) & (b[:, 1] == a[1]))
         if is_a_in_b(gid_pair, self.gid_pair_ids_unique_lr):
             return 'lr'
@@ -7269,6 +7313,7 @@ class mcgs3_grain_structure():
         self.gbpstack = np.unique(self.gbpstack, axis=0)
 
     def build_gbpids(self):
+        """Build and return  gbpids."""
         self.gbpids = [i for i in range(self.gbpstack.shape[0])]
 
     def build_gbp(self, verbose=False):
@@ -7376,6 +7421,7 @@ class mcgs3_grain_structure():
         # self.gbpstack[list(gbsurf_pids_vox[1])]
 
     def setup_gid_pair_gbp_IDs_DS(self):
+        """Setup gid pair gbp ids ds."""
         print(40*'-', '\nSetting up {gid pair id: gbp ID list} data structure')
         self.gid_pair_gbp_IDs = {k: None for k, v in self.gid_pair_ids.items()}
 
@@ -7675,6 +7721,7 @@ class mcgs3_grain_structure():
             gb_segments_gbp_IDs[t] = common_gbp_ids
 
         def get_triples_of_gid(triples, gid):
+            """Return the triples of gid."""
             #gid = gstslice.get_largest_gids()[0]
             triples_of_gid = []
             for triple in triples:
@@ -7725,7 +7772,7 @@ class mcgs3_grain_structure():
         """
         # gstslice.gid_pair_ids: gpair ID  --  neigh gid pairs
         # gstslice.gid_gpid:   gid  --  gid-pair-IDs
-        pass
+        raise NotImplementedError("setup_gid_set__gbsegs is not yet implemented.")
 
     def mesh(self, morpho_clean=True, smoother='zmesh', mesher='tetgen'):
         """
@@ -7747,7 +7794,7 @@ class mcgs3_grain_structure():
         Explanations
         ------------
         """
-        pass
+        raise NotImplementedError("mesh is not yet implemented.")
 
     def get_bbox_gid_mask(self, gid):
         '''Get the bounding box lgi of this grain'''
@@ -7786,6 +7833,7 @@ class mcgs3_grain_structure():
                                  reset_sanv=False,
                                  N=26,
                                  verbosity=100):
+        """Set or update mprop rat sanv volnv."""
         # --------------------------------
         print('\nCalculating mprop metric: rat_sanv_volnv')
         if reset_volnv or self.mprop['volnv'] == None:
@@ -7816,6 +7864,7 @@ class mcgs3_grain_structure():
         return boundary_coords
 
     def sep_gbzcore_from_bbgidmask(self, boundary_coords, BBLGI_mask):
+        """Sep gbzcore from bbgidmask."""
         # Update the mask to a new variable and seperate the grain boundary
         # from core
         BBLGI_mask_ = BBLGI_mask.astype(int)
@@ -7834,12 +7883,15 @@ class mcgs3_grain_structure():
         return masks, CORE_coords
 
     def get_grain_coords(self, gid):
+        """Return the grain coords."""
         return self.grain_locs[gid]
 
     def get_mp3d_ofcoords(self, coords):
+        """Return the mp3d ofcoords."""
         return self._upxo_mp3d_.from_coords(coords)
 
     def get_grain_mp3d(self, gid):
+        """Return the grain mp3d."""
         return self.get_mp3d_ofcoords(self.get_grain_coords(gid))
 
     def get_points_in_feature_coord(self, feature_type='gb',
@@ -7915,9 +7967,11 @@ class mcgs3_grain_structure():
         return close_coords_core
 
     def setup_gid_twin(self, GIDS):
+        """Setup gid twin."""
         self.gid_twin = {gid: None for gid in GIDS}
 
     def copy_lgi_1(self):
+        """Copy lgi 1."""
         self.lgi1 = deepcopy(self.lgi)
 
     def add_fdb(self, *, fname, dnames, datas, info):
@@ -7967,6 +8021,7 @@ class mcgs3_grain_structure():
         self.fdb[fname]['info'] = info
 
     def reset_fdb(self, fname, data, info, retain_info=False):
+        """Reset or clear fdb."""
         if fname in self.fdb.keys():
             pass
         else:
@@ -8125,6 +8180,7 @@ class mcgs3_grain_structure():
         # -----------------------------------------------
 
     def get_local_global_coord_offset(self, gid):
+        """Return the local global coord offset."""
         gloffset = np.array([self.spbound['zmins'][gid-1],
                              self.spbound['ymins'][gid-1],
                              self.spbound['xmins'][gid-1]])
@@ -8136,6 +8192,7 @@ class mcgs3_grain_structure():
         return local_coord + self.get_local_global_coord_offset(gid)
 
     def get_cutoff_twvol(self, gid, cutoff_twin_vf):
+        """Return the cutoff twvol."""
         return NPA(cutoff_twin_vf)*self.mprop['volnv'][gid]
 
     def identify_twins_gid(self, gid,
@@ -9187,10 +9244,12 @@ class mcgs3_grain_structure():
         return pc_rem
 
     def extract_representative_voxel(self, instance_name='base', featname='grains',):
-        pass
+        """Extract representative voxel."""
+        raise NotImplementedError("extract_representative_voxel is not yet implemented.")
 
     def break_disjoint_twins(self):
-        pass
+        """Break disjoint twins."""
+        raise NotImplementedError("break_disjoint_twins is not yet implemented.")
 
     def extract_feat_coords(self,
                             instance_name='twin.0',
@@ -9456,6 +9515,7 @@ class mcgs3_grain_structure():
         return pvgss
 
     def validate_instance_name(self, instance_name):
+        """Check or validate validate instance name."""
         validated = False
         if instance_name in ('base', 'lgi'):
             validated = True
@@ -9465,6 +9525,7 @@ class mcgs3_grain_structure():
 
     def validate_fids(self, instance_name='twin.0',
                       feature_name='twin', fids=None):
+        """Check or validate validate fids."""
         validated = False
         if type(fids) not in dth.dt.ITERABLES:
             if type(fids) not in dth.dt.NUMBERS:
@@ -9495,34 +9556,42 @@ class mcgs3_grain_structure():
 
     @property
     def gridx(self):
+        """Gridx."""
         return np.arange(self.uigrid.xmin, self.uigrid.xmax, self.uigrid.xinc)
 
     @property
     def gridy(self):
+        """Gridy."""
         return np.arange(self.uigrid.ymin, self.uigrid.ymax, self.uigrid.yinc)
 
     @property
     def gridz(self):
+        """Gridz."""
         return np.arange(self.uigrid.zmin, self.uigrid.zmax, self.uigrid.zinc)
 
     @property
     def domsizex(self):
+        """Domsizex."""
         return self.gridx.size
 
     @property
     def domsizey(self):
+        """Domsizey."""
         return self.gridy.size
 
     @property
     def domsizez(self):
+        """Domsizez."""
         return self.gridz.size
 
     @property
     def domvol(self):
+        """Domvol."""
         return self.domsizex*self.domsizey*self.domsizez
 
     @property
     def domsa(self):
+        """Domsa."""
         front = self.domainx*self.domainz
         right = self.domainy*self.domainz
         top = self.domainx*self.domainy
@@ -9556,6 +9625,7 @@ class mcgs3_grain_structure():
                          lighting=True,
                          show_scalar_bar=True,
                          ):
+        """Visualise gs instance using Matplotlib or PyVista."""
         if not check:
             pvgrid = self.get_gs_instance_pvgrid(instance_name=instance_name)
             pvgrid.plot(cmap=cmap,
@@ -9689,6 +9759,7 @@ class mcgs3_grain_structure():
                                  write_to_disk=False,
                                  write_sparse=True,
                                  throw=True):
+        """Mask fid and make pvgrid."""
         _data_ = self.mask_fid(feature=feature,
                                instance_name=instance_name,
                                fid_mask_value=fid_mask_value,
@@ -9925,6 +9996,7 @@ class mcgs3_grain_structure():
                 pvp.show()
 
     def get_np_from_dict(self, udata):
+        """Return the np from dict."""
         return np.array(list(udata.values()))
 
     def extract_subdomains_random(self, p=5, q=5, r=5, n=2,
@@ -10041,6 +10113,7 @@ class mcgs3_grain_structure():
     def make_pvgrid_v1(self, feature_name='base', instance_name='lgi',
                        user_fid=None, scalar_name='lgi', pvgrid_origin=(0,0,0),
                        pvgrid_spacing=(1,1,1), perform_checks=True):
+        """Build and return pvgrid v1."""
         if perform_checks:
             if feature_name == 'base':
                 if instance_name == 'lgi':
@@ -10207,10 +10280,11 @@ class mcgs3_grain_structure():
             User input value of 3D image to be used. This will only be used
             when feature_name is 'user'.
         """
-        pass
+        raise NotImplementedError("deform_ortho is not yet implemented.")
 
     @staticmethod
     def cubic_Rz(a):
+        """Cubic rz."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[ c,-s, 0],
                          [ s, c, 0],
@@ -10218,6 +10292,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def cubic_Rx(a):
+        """Cubic rx."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[1, 0, 0],
                          [0, c,-s],
@@ -10844,6 +10919,7 @@ class mcgs3_grain_structure():
         print(4)
         # Precompute rotation matrices
         def R_of_euler(e):
+            """R of euler."""
             return self.cubic_euler_bunge_to_matrix(*e, degrees=True)
         RP  = [R_of_euler(e) for e in poolP]
         RS3 = [R_of_euler(e) for e in poolS3]
@@ -10856,6 +10932,7 @@ class mcgs3_grain_structure():
 
         # Helper: best parent index for a given host based on how many twins it can satisfy
         def score_parent_for_host(pidx, gid):
+            """Score parent for host."""
             if pidx is None: return -1e9
             gA = RP[pidx]
             # count Σ3 matches
@@ -10899,6 +10976,7 @@ class mcgs3_grain_structure():
 
         # Assign twins for each host using the chosen parent, picking closest angles first
         def take_best_matching_children(gid, child_pool, child_rotmats, target_list_deg, twin_ids_here):
+            """Take best matching children."""
             assigned = {}
             if gid not in host_parent_idx: return assigned, []
             pidx = host_parent_idx[gid]
@@ -10961,6 +11039,7 @@ class mcgs3_grain_structure():
 
         # Quick validation counts
         def count_pass_s3():
+            """Count pass s3."""
             ok = 0
             for tid in twin_id_s3:
                 gid = next((g for g, lst in twin_map_g_t.items() if tid in lst), None)
@@ -10974,6 +11053,7 @@ class mcgs3_grain_structure():
             return ok
 
         def count_pass_s5():
+            """Count pass s5."""
             ok = 0
             for tid in twin_id_s5:
                 gid = next((g for g, lst in twin_map_g_t.items() if tid in lst), None)
@@ -11071,6 +11151,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def _proj_to_so3(R):
+        """ proj to so3."""
         # project to nearest proper rotation via SVD
         U, _, Vt = np.linalg.svd(R)
         Rn = U @ Vt
@@ -11967,6 +12048,7 @@ class mcgs3_grain_structure():
                             id_dict={'copper': [], 'brass': [], 's': [],
                                      'goss': [], 'cube': [], 'random': []},
                             invert_ids=True):
+        """Tc ori stack subset."""
         if invert_ids:
             for tc in id_dict:
                 if tc.lower() in ori_stack.keys():
@@ -13421,6 +13503,7 @@ class mcgs3_grain_structure():
                                       tcs=[1, 3, 4, 6, 7],
                                       tcp=[0.05, 0.25, 0.50, 0.15, 0.05],
                                       ninstances=1):
+        """Generate neigh clid instances."""
         cluster_sets = {clsid+1: None for clsid in range(ninstances)}
         for clsid in range(ninstances):
             clusters, neigh_clid = self.generate_neigh_clid(neigh_gid, tcs=tcs, tcp=tcp)
@@ -14989,6 +15072,7 @@ class mcgs3_grain_structure():
     def plot_pvgrid(self, pvgrid, scalar,
                     show_edges=False, alpha=1.0, title='',
                     cmap='nipy_spectral', _xname_='', _yname_='', _zname_=''):
+        """Visualise pvgrid using Matplotlib or PyVista."""
         pvp = pv.Plotter()
         pvp.add_mesh(pvgrid,
                      scalars=scalar,
@@ -15042,6 +15126,7 @@ class mcgs3_grain_structure():
         ])
 
         def get_node_id(i, j, k):
+            """Return the node id."""
             return k * (N1 * N2) + j * N1 + i + 1
 
         for k in range(D3):
@@ -15422,6 +15507,7 @@ class mcgs3_grain_structure():
         block_elset_map = defaultdict(list)
 
         def get_node_id(i, j, k):
+            """Return the node id."""
             return k * (N1 * N2) + j * N1 + i + 1
 
         for k_el in range(D3):
@@ -15489,6 +15575,7 @@ class mcgs3_grain_structure():
         block_elset_map = defaultdict(list)
 
         def get_node_id(i, j, k):
+            """Return the node id."""
             return k * (N1 * N2) + j * N1 + i + 1
 
         for k_el in range(D3):

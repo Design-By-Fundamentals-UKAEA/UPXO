@@ -1,6 +1,7 @@
 from openpyxl import Workbook, load_workbook
 
 def write_to_excel(wb, dictionary, filename):
+    """Export or convert to te to excel."""
 
     for i, (sheet_name, variable) in enumerate(dictionary.items()):
         if i == 0:
@@ -22,6 +23,7 @@ def write_to_excel(wb, dictionary, filename):
     wb.save(filename)
 
 def read_from_excel(filename, sheet_names):
+    """Load or import from excel."""
     wb = load_workbook(filename)
     data_from_sheets = {}
     for sheet_name in sheet_names:

@@ -3,6 +3,7 @@ L = grain_boundaries[370]
 
 
 def find_extreme_points(points, loc):
+    """Find extreme points."""
     if loc == 'tl':  # Top-Left Point
         point = points[np.lexsort((points[:, 0], points[:, 1]))][0]
     elif loc == 'tr':  # Top-Right Point

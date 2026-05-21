@@ -74,9 +74,11 @@ class _validation():
     # ------------------------------------------------
 
     def __init__(self):
+        """Initialise the instance."""
         pass
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return 'UPXO.Validations'
 
     def ensure_ndarr_depth2(self, array, var_name='VARIABLE'):
@@ -158,10 +160,12 @@ class _validation():
         return obj.__class__.__name__ == expected_type
 
     def isiter(self, _iter):
+        """Isiter."""
         if not isinstance(_iter, Iterable):
             raise TypeError('INput not iterable.')
 
     def valstrs(self, strings):
+        """Valstrs."""
         if not isinstance(strings, Iterable):
             strings = (strings,)
         for string in strings:
@@ -172,6 +176,7 @@ class _validation():
                                 f' Receieved: {type(string)}')
 
     def valnums(self, numbers):
+        """Valnums."""
         if not isinstance(numbers, Iterable):
             numbers = (numbers,)
         if not all([type(_) in dth.NUMBERS for _ in numbers]):
@@ -179,6 +184,7 @@ class _validation():
                             f'Expected: type in {dth.Numbers}')
 
     def val_data_exist(self, *args, **kwargs):
+        """Val data exist."""
         if args:
             for arg in args:
                 if arg is None:
@@ -277,6 +283,7 @@ class _validation():
         '''
 
         def wrapper(self, samples=None, *args, **kwargs):
+            """Wrapper."""
             samples = dth.inlist(samples)
             _ = set(type(_) for _ in samples)
             if len(_) != 1:
@@ -352,6 +359,7 @@ class _validation():
         return containment
 
     def val_path_exists(self, path, throw_path=True):
+        """Val path exists."""
         if not path:
             raise ValueError('Path cannot be empty')
         self.valstrs(path)
@@ -363,12 +371,14 @@ class _validation():
             raise FileNotFoundError(f"Path: {path} does not exist.")
 
     def val_filename_has_ext(self, file_name):
+        """Val filename has ext."""
         self.valstrs(file_name)
         root, ext = os.path.splitext(file_name)
         if not ext:
             raise ValueError(f"{file_name} has no extention.")
 
     def val_file_exists(self, path, file_name_with_ext):
+        """Val file exists."""
         path = self.val_path_exists(path, throw_path=True)
         self.valstrs(file_name_with_ext)
         if path.__class__.__name__ != 'WindowsPath':
@@ -378,6 +388,7 @@ class _validation():
                                     f'exist at Path: {path}')
 
     def val_filename_ext_permitted(self, ext):
+        """Val filename ext permitted."""
         self.valstrs(ext)
         if ext not in self.valid_extensions:
             raise ValueError(f'{ext} is not a permitted extensions')

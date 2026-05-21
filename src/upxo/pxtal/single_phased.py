@@ -33,6 +33,7 @@ class OFHC_Cu_vox():
         
     class FDB:
         def __init__(self):
+            """Initialise an empty feature data base container."""
             pass
 
     @dataclass
@@ -42,6 +43,7 @@ class OFHC_Cu_vox():
 
     
     def __init__(self, lgi=None, ea=None):
+        """Initialise OFHC Cu voxel grain structure from a grain label image ``lgi`` and Euler angles ``ea``."""
         super().__init__()
         # -----------------------------------
         _fid_ = np.unique(lgi)
@@ -90,6 +92,7 @@ class OFHC_Cu_vox():
                 KeyError("Value dictionary has no lgi key or no valid lgi key")
         
     def add_data_to_fdb(self, name, value, calc_flag):
+        """Add or update a named field in the feature data base."""
         if name == "lgi":
             self.fdb['base']['lgi'] = value
         elif name == "ea":
@@ -112,7 +115,8 @@ class OFHC_Cu_vox():
         elif name == "neigh_gid":
             self.fdb['base']['lgi'] = value
 
-    def setup_twins:
+    def setup_twins(self):
+        """Alias for ``setup_for_twins``; defers to ``add_to_fdb``."""
         add_to_fdb
 
     def setup_for_twins(self, nprops=2, mprops=None, instance_name='twin.0',
@@ -137,6 +141,7 @@ class OFHC_Cu_vox():
                            'vf_min': None, 'vf_max': None, 'vf_actual': None})
         
     def setup_gid_twin(self, GIDS):
+        """Initialise ``self.gid_twin`` as a dict mapping each host grain id to ``None``."""
         self.gid_twin = {gid: None for gid in GIDS}
         
     def add_fdb(self, *, fname, dnames, datas, info):
@@ -190,6 +195,7 @@ class OFHC_Cu_vox():
                                 'rat_sanv_volnv': {'use': True, 'reset': False,
                                                    'k': [.1, .8], 'sanv_N': 26,}, },
                         viz_grains=False, opacity=1.0):
+        """Identify grains eligible to host annealing twins based on morphological properties."""
         if self._common_mprops_:
             mprops = self.twin_setup['mprops']
         # ---------------------------------------------------------------------
@@ -290,6 +296,7 @@ class OFHC_Cu_vox():
                                  reset_sanv=False,
                                  N=26,
                                  verbosity=100):
+        """Compute surface-area-to-volume ratio metric ``rat_sanv_volnv`` for each grain."""
         # --------------------------------
         print('\nCalculating mprop metric: rat_sanv_volnv')
         if reset_volnv or self.mprop['volnv'] == None:

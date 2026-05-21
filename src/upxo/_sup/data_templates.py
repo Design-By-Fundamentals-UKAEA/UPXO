@@ -12,9 +12,11 @@ class dict_templates():
     '''
 
     def __init__(self):
+        """Initialise the instance."""
         pass
 
     def mulpnt_gs2d(self):
+        """Mulpnt gs2d."""
         return {'gc': None,
                 'gcpos': {'in': None, 'boundary': None,
                           'corner': None,
@@ -25,6 +27,7 @@ class dict_templates():
                 'rp': None, 'jp2': None, 'jp3': None, }
 
     def mulpnt_gs3d(self):
+        """Mulpnt gs3d."""
         return {'gc': None,
                 'gcpos': {'in': None, 'boundary': None,
                           'corner': None,
@@ -42,6 +45,7 @@ class dict_templates():
                 'rp': None, 'jp2': None, 'jp3': None, }
 
     def vizstyles_mcgs(self):
+        """Vizstyles mcgs."""
         return {'hist_colors_fill': "#4CC9F0",
                 'hist_colors_edge': 'black',
                 'hist_colors_fill_alpha': 0.5,
@@ -62,6 +66,7 @@ class dict_templates():
 class pd_templates():
 
     def __init__(self):
+        """Initialise the instance."""
         pass
 
     def make_prop2d_df(self, bbox=True, bbox_ex=True, npixels=True,
@@ -172,6 +177,7 @@ class pd_templates():
         return prop_flag, prop, prop_stat
 
     def make_prop3d_df(self, npixels=True):
+        """Build and return prop3d df."""
         # Make new Pandas dataframe
         prop_flag = {'npixels': npixels}
         _columns = [key for key in prop_flag.keys()

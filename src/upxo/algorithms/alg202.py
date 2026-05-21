@@ -8,6 +8,7 @@ from numba import njit
 
 @njit
 def mcloop_alg202(cbp, sbp, S, AIA0, AIA1):
+    """Mcloop alg202."""
     for s0 in range(S.shape[0]):  # along axis 0
         s00, s01, s02 = s0+0, s0+1, s0+2
         for s1 in range(S.shape[1]):  # along axis 1
@@ -47,6 +48,7 @@ def run(uisim, uiint, uidata, uigrid,
         _a, _b, _c, 
         user_LIWM, LIWM,
         S, AIA0, AIA1, display_messages):
+    """Run."""
     # ---------------------------------------------
     print("Using ALG-200: SA's SL NL-1 TP1 C2 unweighted Q-Pott's model:")
     print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG200' + 15*'-' + '|')

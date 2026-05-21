@@ -36,6 +36,7 @@ class tops:
         }
 
     def __init__(self):
+        """Initialise the instance."""
         self.sym_ops = self.cubic_symmetry_operators()
 
     @classmethod
@@ -48,30 +49,30 @@ class tops:
                   n_tex_instances=2,
                   n_sampling_instances=50):
         """
-        Example
-        -------
-        from upxo.xtalphy.texops import tops
-        tex = tops.synth_fcc(N=500,
-                      tc_info={"cube": [0.05, [0.0, 0.0, 0.0]],
-                               "rotated_cube": [0.05, [45.0, 0.0, 0.0]],
-                               "brass": [0.25, [35.0, 45.0, 0.0]],
-                               "goss": [0.10, [0.0, 45.0, 0.0]],
-                               "copper": [0.35, [90.0, 35.0, 45.0]],
-                               "s": [0.2, [59.0, 37.0, 63.0]]
-                               },
-                      n_tex_instances=1,
-                      n_sampling_instances=5)
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops
+        >>> tex = tops.synth_fcc(N=500,
+        >>> tc_info={"cube": [0.05, [0.0, 0.0, 0.0]],
+        >>> "rotated_cube": [0.05, [45.0, 0.0, 0.0]],
+        >>> "brass": [0.25, [35.0, 45.0, 0.0]],
+        >>> "goss": [0.10, [0.0, 45.0, 0.0]],
+        >>> "copper": [0.35, [90.0, 35.0, 45.0]],
+        >>> "s": [0.2, [59.0, 37.0, 63.0]]
+        >>> },
+        >>> n_tex_instances=1,
+        >>> n_sampling_instances=5)
 
-        b = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['tc_ori_stacks']
-        ea = np.vstack(list(b.values()))
-        tex.plot_pole_figure(ea, pole_family='111', title="")
+        >>> b = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['tc_ori_stacks']
+        >>> ea = np.vstack(list(b.values()))
+        >>> tex.plot_pole_figure(ea, pole_family='111', title="")
 
-        b1 = [tex.tex['tex_instance.1']['sampling_instances'][k]['tc_ori_stacks']
-             for k in tex.tex['tex_instance.1']['sampling_instances'].keys() if k[:5] == 'ossi.']
-        b2 = [np.vstack(list(_b1_.values())) for _b1_ in b1]
-        b3 = np.vstack(b2)
-        b3.shape
-        tex.plot_pole_figure(b3, pole_family='111')
+        >>> b1 = [tex.tex['tex_instance.1']['sampling_instances'][k]['tc_ori_stacks']
+        >>> for k in tex.tex['tex_instance.1']['sampling_instances'].keys() if k[:5] == 'ossi.']
+        >>> b2 = [np.vstack(list(_b1_.values())) for _b1_ in b1]
+        >>> b3 = np.vstack(b2)
+        >>> b3.shape
+        >>> tex.plot_pole_figure(b3, pole_family='111')
         """
         tex = cls()
         tex.set_tc_info(tc_info)
@@ -169,30 +170,34 @@ class tops:
         plt.show()
 
     def cubic_Rz(self, a):
+        """Cubic rz."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[ c,-s, 0], [ s, c, 0], [ 0, 0, 1]])
 
     def cubic_Rx(self, a):
+        """Cubic rx."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[1, 0, 0], [0, c,-s], [0, s, c]])
 
     def cubic_euler_bunge_to_matrix(self, phi1, Phi, phi2, degrees=True):
         """
-        Bunge (ZXZ): R = Rz(phi1) * Rx(Phi) * Rz(phi2).
+        Bunge ZXZ rotation matrix: ``R = Rz(phi1) @ Rx(Phi) @ Rz(phi2)``.
 
-        EXAMPLE - 1
-        -----------
-        from upxo.xtalphy.texops import tops as TO
-        ea = np.array([10, 20, 30])
-        tex = TO()
-        R = tex.cubic_euler_bunge_to_matrix(*ea)
-        print(R)
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> import numpy as np
+        >>> ea = np.array([10, 20, 30])
+        >>> tex = TO()
+        >>> R = tex.cubic_euler_bunge_to_matrix(*ea)
+        >>> print(R)
         """
         if degrees:
             phi1, Phi, phi2 = np.deg2rad([phi1, Phi, phi2])
         return self.cubic_Rz(phi1) @ self.cubic_Rx(Phi) @ self.cubic_Rz(phi2)
 
     def cubic_euler_bunge_to_matrix_v1(self, phi1, Phi, phi2, degrees=True):
+        """Cubic euler bunge to matrix v1."""
         if degrees:
             phi1, Phi, phi2 = np.deg2rad([phi1, Phi, phi2])
 
@@ -238,12 +243,12 @@ class tops:
         """
         24 proper rotations for m-3m as signed permutation matrices with det=+1.
 
-        Example
-        -------
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        # ----------
-        tex.cubic_symmetry_operators()
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> # ----------
+        >>> tex.cubic_symmetry_operators()
         """
         ops = []
         for p in permutations(range(3)):  # 6 permutations
@@ -263,13 +268,13 @@ class tops:
         """
         Generate symmetric equivalents of an orientation.
 
-        Example
-        -------
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        # ----------
-        ea_bunge = np.array([10, 20, 30])
-        tex.fcc_symmetrise_ori(ea_bunge, dtype=np.float32)
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> # ----------
+        >>> ea_bunge = np.array([10, 20, 30])
+        >>> tex.fcc_symmetrise_ori(ea_bunge, dtype=np.float32)
         """
         g = self.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
         # sym_ops = self.cubic_symmetry_operators()
@@ -283,36 +288,36 @@ class tops:
         """
         Generate symmetric equivalents of an orientation inside Fund. Zone.
 
-        Example
-        -------
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        # ----------
-        fcc_tc_std = {"copper": (90.0, 35.0, 45.0),  # {112}<111> Rolling
-                      "brass": (35.0, 45.0, 0.0),  # {110}<112> Rolling
-                      "s": (59.0, 37.0, 63.0),  # {123}<634> Rolling
-                      "goss": (0.0, 45.0, 0.0),  # {110}<001> Rolling
-                      "cube": (0.0, 0.0, 0.0),  # {001}<100> Annealing / RX
-                      "rotated_cube": (45.0, 0.0, 0.0),  # {001}<110> Annealing / RX
-                      "P": (90.0, 45.0, 0.0),   # {011}<122> Annealing / RX
-                      "A1": (35.0, 45.0, 90.0),  # {111}<110> Shear
-                      "A2": (55.0, 90.0, 45.0),  # {111}<112> Shear
-                      "B": (45.0, 90.0, 45.0),  # {112}<110> Shear
-                      "C": (0.0, 90.0, 45.0),  # {001}<110> Shear
-                      "Q": (35.0, 55.0, 45.0),  # {013}<231> transitional
-                      "D": (59.0, 37.0, 26.0),  # {4411}<1118> approx. transitional
-                      }
-        EA_fund_zone = {}
-        for tc, tcea in fcc_tc_std.items():
-            ea_bunge = np.array(tcea)
-            tex.fcc_symmetrise_ori(ea_bunge, dtype=np.float32)
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> # ----------
+        >>> fcc_tc_std = {"copper": (90.0, 35.0, 45.0),  # {112}<111> Rolling
+        >>> "brass": (35.0, 45.0, 0.0),  # {110}<112> Rolling
+        >>> "s": (59.0, 37.0, 63.0),  # {123}<634> Rolling
+        >>> "goss": (0.0, 45.0, 0.0),  # {110}<001> Rolling
+        >>> "cube": (0.0, 0.0, 0.0),  # {001}<100> Annealing / RX
+        >>> "rotated_cube": (45.0, 0.0, 0.0),  # {001}<110> Annealing / RX
+        >>> "P": (90.0, 45.0, 0.0),   # {011}<122> Annealing / RX
+        >>> "A1": (35.0, 45.0, 90.0),  # {111}<110> Shear
+        >>> "A2": (55.0, 90.0, 45.0),  # {111}<112> Shear
+        >>> "B": (45.0, 90.0, 45.0),  # {112}<110> Shear
+        >>> "C": (0.0, 90.0, 45.0),  # {001}<110> Shear
+        >>> "Q": (35.0, 55.0, 45.0),  # {013}<231> transitional
+        >>> "D": (59.0, 37.0, 26.0),  # {4411}<1118> approx. transitional
+        >>> }
+        >>> EA_fund_zone = {}
+        >>> for tc, tcea in fcc_tc_std.items():
+        >>> ea_bunge = np.array(tcea)
+        >>> tex.fcc_symmetrise_ori(ea_bunge, dtype=np.float32)
 
-            g = tex.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
-            eq_mats = [tex._proj_to_so3(S @ g) for S in tex.sym_ops]
-            eq_mats = tex._unique_rotations(eq_mats, tol=1E-8)
-            symm_eq = np.array([list(tex._matrix_to_euler_bunge(R, degrees=True))
-                                for R in eq_mats], dtype=np.float32)
-            EA_fund_zone[tc] = symm_eq[np.where(np.prod(symm_eq <= 90, axis=1))[0]]
+        >>> g = tex.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
+        >>> eq_mats = [tex._proj_to_so3(S @ g) for S in tex.sym_ops]
+        >>> eq_mats = tex._unique_rotations(eq_mats, tol=1E-8)
+        >>> symm_eq = np.array([list(tex._matrix_to_euler_bunge(R, degrees=True))
+        >>> for R in eq_mats], dtype=np.float32)
+        >>> EA_fund_zone[tc] = symm_eq[np.where(np.prod(symm_eq <= 90, axis=1))[0]]
         """
         g = self.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
         # sym_ops = self.cubic_symmetry_operators()
@@ -392,6 +397,7 @@ class tops:
 
     @staticmethod
     def _proj_to_so3(R):
+        """ proj to so3."""
         # project to nearest proper rotation via SVD
         U, _, Vt = np.linalg.svd(R)
         Rn = U @ Vt
@@ -487,18 +493,22 @@ class tops:
     def cubic_misorientation_V1(self, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
         Vectorized fast misorientation (cubic, m-3m).
-        Inputs: Euler triplet (phi1,Phi,phi2) OR 3x3 rotation matrix.
-        Returns:
-          angle_deg_min : float
-          axis_min      : (3,) unit vector (sample frame)
-          top3_angles_deg : list of up to 3 smallest UNIQUE angles (deg), ascending
 
-         Example
-         -------
-         from upxo.xtalphy.texops import tops as TO
-         tex = TO()
-         # ----------
-         tex.cubic_misorientation_V1([0, 0, 0], [35, 45, 90])
+        Accepts Euler triplet (phi1, Phi, phi2) or 3×3 rotation matrix.
+
+        Returns
+        -------
+        angle_deg_min : float
+        axis_min : ndarray, shape (3,)
+            Unit vector in sample frame.
+        top3_angles_deg : list of float
+            Up to 3 smallest unique angles (deg), ascending.
+
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> tex.cubic_misorientation_V1([0, 0, 0], [35, 45, 90])
         """
         # Normalize inputs to rotation matrices
         gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
@@ -557,18 +567,20 @@ class tops:
     def cubic_misorientation_V2(self, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
         Vectorized fast misorientation (cubic, m-3m).
-        Inputs: Euler triplet (phi1,Phi,phi2) OR 3x3 rotation matrix.
-        Returns:
-          angle_deg_min : float
-          axis_min      : (3,) unit vector (sample frame)
-          top3_angles_deg : list of up to 3 smallest UNIQUE angles (deg), ascending
 
-         Example
-         -------
-         from upxo.xtalphy.texops import tops as TO
-         tex = TO()
-         # ----------
-         tex.cubic_misorientation_V2([0, 0, 0], [35, 45, 90])
+        Accepts Euler triplet (phi1, Phi, phi2) or 3×3 rotation matrix.
+
+        Returns
+        -------
+        angle_deg_min : float
+        axis_min : ndarray, shape (3,)
+            Unit vector in sample frame.
+
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> tex.cubic_misorientation_V2([0, 0, 0], [35, 45, 90])
         """
         # Normalize inputs to rotation matrices
         gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
@@ -618,18 +630,20 @@ class tops:
     def cubic_misorientation_V3(self, EA1, EA2, degrees=True):
         """
         Vectorized fast misorientation (cubic, m-3m).
-        Inputs: Euler triplet (phi1,Phi,phi2) OR 3x3 rotation matrix.
-        Returns:
-          angle_deg_min : float
-          axis_min      : (3,) unit vector (sample frame)
-          top3_angles_deg : list of up to 3 smallest UNIQUE angles (deg), ascending
 
-         Example
-         -------
-         from upxo.xtalphy.texops import tops as TO
-         tex = TO()
-         # ----------
-         tex.cubic_misorientation_V2([0, 0, 0], [35, 45, 90])
+        Accepts Euler triplet (phi1, Phi, phi2) or 3×3 rotation matrix.
+
+        Returns
+        -------
+        angle_deg_min : float
+        axis_min : ndarray, shape (3,)
+            Unit vector in sample frame.
+
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> tex.cubic_misorientation_V3([0, 0, 0], [35, 45, 90])
         """
         # Normalize inputs to rotation matrices
         gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
@@ -672,76 +686,82 @@ class tops:
                               'perctol_Phi': 5,
                               'perctol_phi2': 5}):
         """
-        Standardizes a dictionary of texture component information to a consistent format.
+        Standardize a dictionary of texture component information to a consistent format.
 
-        Parameters:
-        - tc_info (dict): The input dictionary containing texture components.
-                          Each value can be a scalar or a list of varying length.
+        Parameters
+        ----------
+        tc_info : dict
+            Texture components. Each value is a list whose first two elements are
+            ``[percentage, [phi1, Phi, phi2]]``; optional further elements are
+            spread, std-k, and percentage-tolerance per Euler angle.
 
-        Returns:
-        - dict: A new dictionary with all values standardized to the most complete format:
-                [percentage, [ang1, ang2, ang3], [std1, std2, std3], [k1, k2, k3]].
-                Default values are used to fill in missing information.
+        Returns
+        -------
+        None
+            Updates ``self.tc_info`` in place with all values normalised to
+            ``[percentage, [ang1, ang2, ang3], [std1, std2, std3], [k1, k2, k3], [perctol]]``.
 
         Examples
         --------
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        # ----------
-        # Possible input for gstslice.tc_info: 1
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0]],
-                         "goss": [0.20, [90.0, 90.0, 45.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0]]
-                         })
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> # ----------
+        >>> # Possible input for gstslice.tc_info: 1
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
+        >>> "brass": [0.30, [35.0, 45.0, 0.0]],
+        >>> "goss": [0.20, [90.0, 90.0, 45.0]],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0]]
+        >>> })
 
-        # Possible input for gstslice.tc_info: 2
-        tex.set_tc_info({"copper": [0.45, [90.0, 35,.0 45.0], 8.0],
-                         "s": [0.15, [59.0, 37.0, 63.0], 7.0],
-                         "goss": [0.20, [90.0, 90.0, 45.0], 5.5],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0], 9.8]
-                         })
+        >>> # Possible input for gstslice.tc_info: 2
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35,.0 45.0], 8.0],
+        >>> "s": [0.15, [59.0, 37.0, 63.0], 7.0],
+        >>> "goss": [0.20, [90.0, 90.0, 45.0], 5.5],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0], 9.8]
+        >>> })
 
-        # Possible input for gstslice.tc_info: 3
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0]],
-                         "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0], [6.0, 6.0, 6.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0]]
-                         })
+        >>> # Possible input for gstslice.tc_info: 3
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0]],
+        >>> "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0]],
+        >>> "brass": [0.30, [35.0, 45.0, 0.0], [6.0, 6.0, 6.0]],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0]]
+        >>> })
 
-        # Possible input for gstslice.tc_info: 4
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0], [10.0, 10.0, 10.0], [3.0, 3.0, 3.0]],
-                         "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0], [3.0, 3.0, 3.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0]]
-                         })
+        >>> # Possible input for gstslice.tc_info: 4
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0]],
+        >>> "brass": [0.30, [35.0, 45.0, 0.0], [10.0, 10.0, 10.0], [3.0, 3.0, 3.0]],
+        >>> "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0], [3.0, 3.0, 3.0]],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0]]
+        >>> })
 
-        # Possible input for gstslice.tc_info: 5
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
-                         "s": [0.15, [59.0, 37.0, 63.0], [7.0, 7.0, 7.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0], [10.0, 10.0, 10.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
-                         "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]]
-                         })
+        >>> # Possible input for gstslice.tc_info: 5
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
+        >>> "s": [0.15, [59.0, 37.0, 63.0], [7.0, 7.0, 7.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
+        >>> "brass": [0.30, [35.0, 45.0, 0.0], [10.0, 10.0, 10.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
+        >>> "goss": [0.05, [90.0, 90.0, 45.0], [6.0, 6.0, 6.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0], [8.0, 8.0, 8.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]]
+        >>> })
 
-        print(tex.tc_info)
+        >>> print(tex.tc_info)
 
-        NOTE
-        ----
-        fcc_tc = {"copper": (90.0, 35.0, 45.0),  # {112}<111> # Rolling texture
-                  "brass": (35.0, 45.0, 0.0),  # {110}<112> # Rolling texture
-                  "s": (59.0, 37.0, 63.0),  # {123}<634> # Rolling texture
-                  "goss": (90.0, 90.0, 45.0),  # {110}<001> # Rolling texture
-                  "cube": (0.0, 0.0, 0.0),  # {001}<100> # Annealing / RX
-                  "rotated_cube": (45.0, 0.0, 0.0),  # {001}<110> # Annealing / RX
-                  "P": (90.0, 45.0, 0.0),   # {011}<122> # Annealing / RX
-                  "A1": (35.0, 45.0, 90.0),  # {111}<110> # Shear texture
-                  "A2": (55.0, 90.0, 45.0),  # {111}<112> # Shear texture
-                  "B": (45.0, 90.0, 45.0),  # {112}<110> # Shear texture
-                  "C": (0.0, 90.0, 45.0),  # {001}<110> # Shear texture
-                  "Q": (35.0, 55.0, 45.0),  # {013}<231> # Minor / transitional
-                  "D": (59.0, 37.0, 26.0),  # {4411}<1118> approx. # Minor / transitional
-                  }
+        Notes
+        -----
+        Standard FCC texture-component reference orientations (Bunge Euler angles)::
+
+            fcc_tc = {"copper": (90.0, 35.0, 45.0),  # {112}<111>  Rolling
+                      "brass":  (35.0, 45.0, 0.0),   # {110}<112>  Rolling
+                      "s":      (59.0, 37.0, 63.0),  # {123}<634>  Rolling
+                      "goss":   (90.0, 90.0, 45.0),  # {110}<001>  Rolling
+                      "cube":   (0.0,  0.0,  0.0),   # {001}<100>  Annealing/RX
+                      "rotated_cube": (45.0, 0.0, 0.0),  # {001}<110>  Annealing/RX
+                      "P":  (90.0, 45.0, 0.0),   # {011}<122>  Annealing/RX
+                      "A1": (35.0, 45.0, 90.0),  # {111}<110>  Shear
+                      "A2": (55.0, 90.0, 45.0),  # {111}<112>  Shear
+                      "B":  (45.0, 90.0, 45.0),  # {112}<110>  Shear
+                      "C":  (0.0,  90.0, 45.0),  # {001}<110>  Shear
+                      "Q":  (35.0, 55.0, 45.0),  # {013}<231>  transitional
+                      "D":  (59.0, 37.0, 26.0),  # {4411}<1118> transitional
+                      }
         """
         print(".. User texture information standardisation.")
         standardized_info = {}
@@ -790,15 +810,15 @@ class tops:
         """
         Examples
         --------
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        # ----------
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0]],
-                         "goss": [0.20, [90.0, 90.0, 45.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0]]
-                         })
-        VF, HW, SK, PT, ori_means = tex.get_tcinfo()
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> # ----------
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
+        >>> "brass": [0.30, [35.0, 45.0, 0.0]],
+        >>> "goss": [0.20, [90.0, 90.0, 45.0]],
+        >>> "rotated_cube": [0.01, [45.0, 0.0, 0.0]]
+        >>> })
+        >>> VF, HW, SK, PT, ori_means = tex.get_tcinfo()
         """
         # =============================================================
         '''Volume fraction'''
@@ -817,15 +837,18 @@ class tops:
 
     def alloc_ori_counts_to_tc(self, N):
         """
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0]],
-                         "goss": [0.20, [90.0, 90.0, 45.0]],
-                         "rotated_cube": [0.01, [45.0, 0.0, 0.0]]
-                         })
-        ori_count = tex.alloc_ori_counts_to_tc(100)
-        print(ori_count)
+        Allocate orientation counts to texture components proportionally.
+
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
+        ...                  "brass": [0.30, [35.0, 45.0, 0.0]],
+        ...                  "goss": [0.20, [90.0, 90.0, 45.0]],
+        ...                  "rotated_cube": [0.01, [45.0, 0.0, 0.0]]})
+        >>> ori_count = tex.alloc_ori_counts_to_tc(100)
+        >>> print(ori_count)
         """
         tc_comps = set(self.tc_info.keys())
         # fractions (allow sum<1 -> fill with random)
@@ -862,6 +885,7 @@ class tops:
         self.ori_count = ori_count
 
     def build_tex_dict_template(self):
+        """Build and return  tex dict template."""
         print("Building TEX dictionary template")
         self.tex = {f"tex_instance.{i}": {}
                for i in np.arange(1, self.n_texture_instances+1, 1)}
@@ -877,48 +901,23 @@ class tops:
                               rand_ori_gen_rule='relaxed',
                               ):
         """
-        from upxo.xtalphy.texops import tops as TO
-        tex = TO()
-        tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
-                         "brass": [0.30, [35.0, 45.0, 0.0]],
-                         "goss": [0.10, [90.0, 90.0, 45.0]],
-                         "rotated_cube": [0.15, [45.0, 0.0, 0.0]]
-                         })
-        tex.gen_tex_fcc_synthetic(N=500, n_tex_instances=2,
-                                  n_sampling_instances=500)
+        Generate synthetic FCC texture for all texture and sampling instances.
 
-        tex.tex.keys()
-        tex.n_texture_instances
-        tex.n_sampling_instances
-        tex.tex['tc_info']
-        tex.tex['fcc_tc_std']
-        tex.tex['N']
-
-        tex.tex['tex_instance.1'].keys()
-        >> dict_keys(['symeq_full', 'sampling_instances'])
-
-        tex.tex['tex_instance.1']['symeq_full']['goss'].keys()
-        >> dict_keys(['loc_symm_eq', 'BEA_SYMEQ', 'BEA_shuffled',
-                      'shuffle_ids', 'BEA_SYMEQ_MO_TC', 'BEA_SYMEQ_MO_TC_ids',
-                      'BEA_MO_STACK', 'BEA_MO_IDS_STACK'])
-
-        len(tex.tex['tex_instance.1']['symeq_full']['goss']['BEA_SYMEQ'])
-        >> 24
-
-        tex.tex['tex_instance.1']['sampling_instances'].keys()
-        >> dict_keys(['ossi.1', 'metadata'])
-
-        tex.tex['tex_instance.1']['sampling_instances']['ossi.1'].keys()
-        >> dict_keys(['nsamples', 'tc_ori', 'tc_ori_sample_ids', 'tc_ori_stacks'])
-
-        a = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['nsamples']
-        a
-        >> {'copper': 45, 'brass': 30, 'goss': 10, 'rotated_cube': 15}
-        sum(list(a.values()))
-
-        b = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['tc_ori_stacks']
-        b.keys()
-        sum([_b_.shape[0] for _b_ in b.values()])
+        Examples
+        --------
+        >>> from upxo.xtalphy.texops import tops as TO
+        >>> tex = TO()
+        >>> tex.set_tc_info({"copper": [0.45, [90.0, 35.0, 45.0]],
+        ...                  "brass": [0.30, [35.0, 45.0, 0.0]],
+        ...                  "goss": [0.10, [90.0, 90.0, 45.0]],
+        ...                  "rotated_cube": [0.15, [45.0, 0.0, 0.0]]})
+        >>> tex.gen_tex_fcc_synthetic(N=500, n_tex_instances=2,
+        ...                           n_sampling_instances=500)
+        >>> tex.tex.keys()
+        >>> tex.n_texture_instances
+        >>> a = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['nsamples']
+        >>> b = tex.tex['tex_instance.1']['sampling_instances']['ossi.1']['tc_ori_stacks']
+        >>> sum([_b_.shape[0] for _b_ in b.values()])
         """
         # FUNCTION LEVEL (FL) | 2 (i.e. number of tabs at start). In concoise,
         # This wil be written as in below line. These are markers / flags to
@@ -954,6 +953,7 @@ class tops:
 
     def gen_tex_fcc_synthetic_single_instance(self, VF, HW, SK, PT,
                                               ori_means, tiname):
+        """Gen tex fcc synthetic single instance."""
         tc_comps = set(self.ori_count.keys())
         # (FL | 2) > (TEX INST | 3)
         print('.. Generating ori. clusters around mean texture components')
@@ -982,6 +982,7 @@ class tops:
 
     def gen_tex_fcc_sampling_instances(self, tiname, sampling_instances_ids,
                                        tc_comps, rand_ori_gen_rule='relaxed'):
+        """Gen tex fcc sampling instances."""
         print('\n')
         print(f".. Generating {len(sampling_instances_ids)} SAMPLING INSTANCES\n")
         SI = {f"ossi.{si}": {} for si in sampling_instances_ids}
@@ -1265,6 +1266,7 @@ class tops:
         return symeq
 
     def cubic_Ry(self, a):
+        """Cubic ry."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[ c, 0, s],
                          [ 0, 1, 0],
@@ -1300,6 +1302,7 @@ class tops:
         phi1, Phi, phi2 = map(float, ea)
 
         def wrap90(x):
+            """Wrap90."""
             y = x % 90.0
             # map nearly-90 back to 0 for half-open
             if abs(y - 90.0) < eps:
@@ -1412,6 +1415,7 @@ class tops:
         return out
 
     def _unique_rows_ea(self, ea_list, tol=1e-8):
+        """ unique rows ea."""
         if not ea_list:
             return np.empty((0,3), float)
         A = np.asarray(ea_list, float)
