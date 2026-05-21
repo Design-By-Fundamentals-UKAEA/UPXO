@@ -118,11 +118,26 @@ class kmodel():
                     print("Skipping distance metrics: Graph is not connected.")
 
     def load_mprop(self, mprop_df):
-        """Load or import mprop."""
+        """Load a morphological property DataFrame into the model.
+
+        Parameters
+        ----------
+        mprop_df : pandas.DataFrame
+            DataFrame whose rows correspond to grains and columns to morphological
+            properties (e.g. area, aspect_ratio, eccentricity).  Stored as
+            ``self.mprop`` for downstream correlation and PCA methods.
+        """
         self.mprop = mprop_df
 
     def summary(self):
-        """Summary."""
+        """Print a one-line description of the graph topology and return key flags.
+
+        Returns
+        -------
+        dict
+            ``{'directed': bool, 'multigraph': bool}`` indicating whether
+            ``self.G`` is directed and/or a multigraph.
+        """
         D = self.G.is_directed()
         M = self.G.is_multigraph()
         Dflag = 'directed' if D else 'undirected'
@@ -132,7 +147,27 @@ class kmodel():
         return {'directed': D, 'multigraph': M,}
          
     def shortest_path_length(self, see_distribution=True, figsize=(3, 2), kde=True):
-        """Shortest path length."""
+        """Compute all-pairs shortest path lengths and optionally plot their distribution.
+
+        Iterates over every source node and records the shortest-path distance
+        to every reachable node.  Results are stored in ``self.pathlengths``.
+
+        Parameters
+        ----------
+        see_distribution : bool, default True
+            If True, displays a histogram (with optional KDE) of path lengths.
+        figsize : tuple of float, default (3, 2)
+            Width and height of the matplotlib figure in inches.
+        kde : bool, default True
+            Overlay a kernel density estimate on the histogram when
+            ``see_distribution`` is True.
+
+        Returns
+        -------
+        list of int
+            Flat list of all pairwise shortest path lengths collected across
+            every source node.
+        """
         pathlengths = []
         for v in self.G.nodes():
             spl = nx.shortest_path_length(self.G, source=v)
@@ -150,20 +185,52 @@ class kmodel():
         return pathlengths
     
     def shortest_path_between_two_nodes(self, source_node, target_node, weight='weight'):
-        """
-        Given two grain IDs, gid1( target) and gid2 (source), this function 
-        calculates the shortest path between these across the grain boundaries 
-        of all connected componenents
+        """Return the shortest path between two nodes (grain IDs) in the graph.
+
+        Uses Dijkstra's algorithm via NetworkX, traversing grain-boundary edges
+        weighted by ``weight``.
+
+        Parameters
+        ----------
+        source_node : int
+            Starting grain ID (node) in ``self.G``.
+        target_node : int
+            Destination grain ID (node) in ``self.G``.
+        weight : str, default ``'weight'``
+            Edge attribute to use as the path cost.  Pass ``None`` to treat all
+            edges as having unit weight.
+
+        Returns
+        -------
+        list of int
+            Ordered list of node IDs forming the shortest path from
+            ``source_node`` to ``target_node``, inclusive.
+
         Example
         -------
-        path = kmod.shortest_path_between_two_gids(gid1=1, gid2=10)
+        >>> path = kmod.shortest_path_between_two_nodes(source_node=1, target_node=10)
         """
         gids_shortest_path = nx.shortest_path(self.G, source=source_node, target=target_node, 
                                               weight=weight)
         return gids_shortest_path
 
     def average_shortest_path_length(self, recalulate=False):
-        """Average shortest path length."""
+        """Return the mean of all pairwise shortest path lengths.
+
+        Re-uses ``self.pathlengths`` if already computed, unless ``recalulate``
+        is True.
+
+        Parameters
+        ----------
+        recalulate : bool, default False
+            Force recomputation of path lengths even if ``self.pathlengths``
+            already exists.
+
+        Returns
+        -------
+        float
+            Mean shortest path length across all node pairs.
+        """
         if hasattr(self, 'pathlengths') and not recalulate:
             pathlengths = self.pathlengths
         else:
@@ -173,7 +240,26 @@ class kmodel():
         return average_path_length
 
     def see_pathlength_distribution(self, recalulate=False, figsize=(3, 2), kde=True, throw_hist=False):
-        """See pathlength distribution."""
+        """Plot the distribution of all-pairs shortest path lengths.
+
+        Parameters
+        ----------
+        recalulate : bool, default False
+            Force recomputation of path lengths even if ``self.pathlengths``
+            already exists.
+        figsize : tuple of float, default (3, 2)
+            Width and height of the matplotlib figure in inches.
+        kde : bool, default True
+            Overlay a kernel density estimate on the histogram.
+        throw_hist : bool, default False
+            If True, return the seaborn ``AxesSubplot`` object for further
+            customisation; otherwise return ``None``.
+
+        Returns
+        -------
+        seaborn.axisgrid.FacetGrid or None
+            The histogram axes object when ``throw_hist`` is True, else None.
+        """
         if hasattr(self, 'pathlengths') and not recalulate:
             pathlengths = self.pathlengths
         else:
@@ -194,7 +280,52 @@ class kmodel():
                           treat_undirected=True, validate=True,
                           see_on_map=False, upxo_gs_object=None,
                           figsize=(6, 6), dpi=100, throw_plt_object=False):
-        """Extract subgraphs."""
+        """Extract one or more subgraphs from ``self.G`` using the chosen strategy.
+
+        Parameters
+        ----------
+        method : {'connected_neighbors', 'largest_connected_component'}, default 'connected_neighbors'
+            Extraction strategy.
+
+            * ``'connected_neighbors'`` — ego-graph extraction: returns a
+              neighbourhood subgraph of radius ``r`` centred on each node in
+              ``nids``.
+            * ``'largest_connected_component'`` — returns the single largest
+              connected component of ``self.G``.
+        nids : int or list of int, default 1
+            Central node ID(s) for ``'connected_neighbors'``.  Scalars are
+            wrapped in a list automatically.
+        radii : int or list of int, default 5
+            Neighbourhood radius for each entry in ``nids``.  A scalar is
+            broadcast to all nodes.
+        include_central_node : bool, default True
+            Whether to include the centre node in each ego subgraph.
+        treat_undirected : bool, default True
+            Treat ``self.G`` as undirected during ego-graph extraction even if
+            it is directed.
+        validate : bool, default True
+            Raise ``ValueError`` for unrecognised ``method`` strings.
+        see_on_map : bool, default False
+            Visualise each subgraph overlaid on the grain structure.  Requires
+            ``upxo_gs_object`` to be provided.
+        upxo_gs_object : upxo grain-structure object or None
+            UPXO grain-structure instance used for map visualisation when
+            ``see_on_map`` is True.
+        figsize : tuple of float, default (6, 6)
+            Figure size for map visualisation.
+        dpi : int, default 100
+            DPI for map visualisation.
+        throw_plt_object : bool, default False
+            Return matplotlib figure objects alongside subgraphs.
+
+        Returns
+        -------
+        sg : dict
+            Mapping of subgraph index → ``networkx.Graph`` subgraph.
+        plt_objects : dict or None
+            Mapping of subgraph index → matplotlib figure when
+            ``see_on_map`` and ``throw_plt_object`` are both True; else None.
+        """
         if validate:
             if method not in ('connected_neighbors',
                               'maximal_independent_set',
@@ -255,7 +386,27 @@ class kmodel():
             return sg, None
         
     def extract_subgraph_connected_neighbors(self, **kwargs):
-            """Extract subgraph connected neighbors."""
+            """Build ego-graph subgraphs centred on specified nodes.
+
+            Accepts keyword arguments forwarded from :meth:`extract_subgraphs`:
+
+            Parameters (via kwargs)
+            -----------------------
+            nids : list of int
+                Centre node IDs.
+            radii : list of int
+                Neighbourhood radius for each centre node.
+            include_central_node : bool
+                Include the centre node in the returned subgraph.
+            treat_undirected : bool
+                Ignore edge direction during traversal.
+
+            Returns
+            -------
+            dict
+                Mapping of sequential index (0-based) → ``networkx.Graph``
+                ego subgraph.
+            """
             sg = {}
             for nid_count, (nid, r) in enumerate(zip(kwargs['nids'], kwargs['radii']), start=0):
                 sg[nid_count] = nx.ego_graph(self.G, nid, radius=r,
@@ -268,21 +419,70 @@ class kmodel():
             return sg
 
     def extract_largest_connected_component(self):
-        """Extract largest connected component."""
+        """Return a copy of the largest connected component of ``self.G``.
+
+        Returns
+        -------
+        networkx.Graph
+            Subgraph induced by the node set that forms the largest connected
+            component.  Isolated nodes and smaller components are excluded.
+        """
         largest_cc = max(nx.connected_components(self.G), key=len)
         lcc_subgraph = self.G.subgraph(largest_cc).copy()
         return lcc_subgraph
     
     def GET_connected_components(self, G):
-        """Return the connected components."""
+        """Return all connected components of ``G`` as a list of subgraphs.
+
+        Parameters
+        ----------
+        G : networkx.Graph
+            Graph to decompose.
+
+        Returns
+        -------
+        list of networkx.Graph
+            One frozen subgraph per connected component, ordered arbitrarily.
+        """
         return [G.subgraph(c).copy() for c in nx.connected_components(G)]
 
     def GET_maximal_independent_set(self, G):
-        """Return the maximal independent set."""
+        """Return a maximal independent set of nodes from ``G``.
+
+        A maximal independent set (MIS) is a set of nodes such that no two are
+        adjacent, and no additional node can be added without violating that
+        property.  The result is non-deterministic because NetworkX uses a
+        random greedy algorithm.
+
+        Parameters
+        ----------
+        G : networkx.Graph
+            Graph from which to compute the MIS.
+
+        Returns
+        -------
+        list of int
+            Node IDs forming a maximal independent set.
+        """
         return nx.maximal_independent_set(G)
 
     def PRUNE_connected_component(self, cc, mis_nodes):
-        """Prune connected component."""
+        """Remove a set of nodes from a connected component and return the result.
+
+        Parameters
+        ----------
+        cc : networkx.Graph
+            Connected-component subgraph to prune (copied internally; the
+            original is not modified).
+        mis_nodes : iterable of int
+            Node IDs to remove.  Typically the MIS returned by
+            :meth:`GET_maximal_independent_set`.
+
+        Returns
+        -------
+        networkx.Graph
+            Copy of ``cc`` with ``mis_nodes`` removed.
+        """
         cc_pruned = cc.copy()
         cc_pruned.remove_nodes_from(mis_nodes)
         return cc_pruned
@@ -340,7 +540,15 @@ class kmodel():
         return decomposition_layers
     
     def see_nnodes_vs_peeldepth(self, decomposition_layers):
-        """See nnodes vs peeldepth."""
+        """Plot the number of MIS nodes removed at each decomposition round (peel depth).
+
+        Parameters
+        ----------
+        decomposition_layers : dict
+            Mapping of round index (1-based int) → sorted list of node IDs
+            removed in that round, as returned by
+            :meth:`partition_into_nonconnected_sets_mis`.
+        """
         nnodes = [len(r) for r in decomposition_layers.values()]
         plt.figure(figsize=(6,4), dpi=120)
         plt.plot(list(range(1, len(nnodes)+1)), nnodes, marker='o', linestyle='-', color='b', markersize=6, 
@@ -349,7 +557,7 @@ class kmodel():
         plt.ylabel('Number of cells in MIS')
         plt.title('MIS Size per Decomposition Round')
 
-    def partition_into_nonconnected_sets_mis_nrealizations(self, n, throw_pd=False, 
+    def partition_into_nonconnected_sets_mis_nrealizations(self, n, throw_pd=False,
                                                            see_results=True,
                                                            see_types=['heatmap', 'mean_std'],
                                                            _disp_n_decimals=1,
@@ -358,7 +566,50 @@ class kmodel():
                                                            normalize_ng=False,
                                                            vmax=0.5
                                                            ):
-        """Partition into nonconnected sets mis nrealizations."""
+        """Run MIS-based graph peeling ``n`` times and summarise the statistics.
+
+        Because :meth:`GET_maximal_independent_set` is non-deterministic, each
+        realisation may yield a different peel-depth profile.  This method
+        aggregates ``n`` independent runs into a DataFrame and optionally
+        visualises the spread.
+
+        Parameters
+        ----------
+        n : int
+            Number of independent decomposition realisations to run.
+        throw_pd : bool, default False
+            If True, return the pandas DataFrame of per-run node counts.
+        see_results : bool, default True
+            Display plots if True.
+        see_types : list of str, default ['heatmap', 'mean_std']
+            Which plots to show.  Recognised values:
+            ``'boxplot'``, ``'violinplot'``, ``'heatmap'``, ``'mean_std'``.
+        _disp_n_decimals : int, default 1
+            Decimal places used when printing the descriptive statistics table.
+        figsize : tuple of float, default (6, 4)
+            Width and height of each figure in inches.
+        dpi : int, default 120
+            Resolution of each figure.
+        save_partitions : bool, default False
+            Store a deep copy of every realisation's decomposition dict.
+        normalize_ng : bool, default False
+            Divide node counts by the total number of graph nodes so that
+            values are fractions rather than absolute counts.
+        vmax : float, default 0.5
+            Colour-scale maximum for the heatmap when ``normalize_ng`` is True.
+
+        Returns
+        -------
+        n_decomposition_layers_np : numpy.ndarray, shape (n, max_depth)
+            Node counts (or fractions) per realisation and peel depth.
+            Shorter realisations are zero-padded on the right.
+        n_decomposition_layers_pd : pandas.DataFrame or None
+            Same data as a DataFrame with columns ``PD1, PD2, …``.
+            ``None`` when ``throw_pd`` is False.
+        partitions : list of dict or None
+            Deep copies of each realisation's decomposition dict when
+            ``save_partitions`` is True; else None.
+        """
         # Run decomposition 100 times and collect results
         num_runs, n_decomposition_layers = n, []
         if save_partitions:
@@ -440,7 +691,32 @@ class kmodel():
         return n_decomposition_layers_np, n_decomposition_layers_pd, partitions
     
     def fit_regr_lin_mis_partitions(self, n_decomposition_layers_np):
-        """Fit regr lin mis partitions."""
+        """Fit a linear regression to each MIS decomposition realisation.
+
+        For each row in ``n_decomposition_layers_np`` a degree-1 polynomial is
+        fitted over the peel-depth axis.  Trailing zeros (shorter realisations)
+        are stripped before fitting.  The 95 % confidence interval on each
+        coefficient is computed from the covariance matrix returned by
+        ``numpy.polyfit``.
+
+        Parameters
+        ----------
+        n_decomposition_layers_np : numpy.ndarray, shape (n_runs, max_depth)
+            Array of node counts per realisation and peel depth, as returned by
+            :meth:`partition_into_nonconnected_sets_mis_nrealizations`.
+
+        Returns
+        -------
+        regression_coeffs : numpy.ndarray, shape (n_runs, 2)
+            ``[slope, intercept]`` for each realisation.
+        confidence_bounds : numpy.ndarray, shape (n_runs, 2, 2)
+            95 % CI lower/upper bounds on ``[slope, intercept]`` for each run.
+            Rows with fewer than 2 valid data points are filled with NaN.
+        gradients : numpy.ndarray of object
+            Array of 1-D arrays, one per realisation, containing the
+            element-wise finite differences (``numpy.diff``) of the node-count
+            profile.
+        """
         data = np.array(n_decomposition_layers_np, dtype=float)
         regression_coeffs = []
         confidence_bounds = []
@@ -473,10 +749,29 @@ class kmodel():
         return regression_coeffs, confidence_bounds, gradients
 
     def community(self, method='louvain', comprops=['modularity']):
-        """
-        Detect communities in the graph using specified method.
+        """Detect communities in the graph and compute community properties.
 
-        Add more methdos provide in this link:
+        Parameters
+        ----------
+        method : {'louvain', 'girvan_newman', 'label_propagation', 'greedy_modularity'}, default 'louvain'
+            Community detection algorithm to apply.  Note that ``'louvain'`` is
+            currently a placeholder (``pass``) and does not yet produce a result.
+        comprops : list of str, default ['modularity']
+            Community properties to compute after detection.  Currently
+            ``'modularity'`` is the only supported value; it measures the
+            strength of the community partition.
+
+        Returns
+        -------
+        comm : community partition object
+            The raw partition returned by the chosen NetworkX algorithm.
+        modularity : pandas.DataFrame
+            DataFrame with columns ``['k', 'modularity']`` giving the modularity
+            of each community ``k`` when ``'modularity'`` is in ``comprops``.
+
+        Notes
+        -----
+        Additional algorithms are listed at
         https://networkx.org/documentation/stable/reference/algorithms/community.html
         """
         if method == 'girvan_newman':
@@ -503,7 +798,21 @@ class kmodel():
         return comm, modularity
     
     def _create_community_node_colors_(self, communities):
-        """ create community node colors ."""
+        """Map each node in ``self.G`` to a colour determined by its community.
+
+        Parameters
+        ----------
+        communities : list of set
+            Each element is a set of node IDs belonging to one community, as
+            returned by a NetworkX community detection algorithm.
+
+        Returns
+        -------
+        list of str
+            Hex colour string for every node in ``self.G``, in the same
+            iteration order as ``self.G``.  Up to five distinct colours are
+            cycled across communities.
+        """
         # function to create node colour list
         number_of_colors = len(communities)
         colors = ["#D4FCB1", "#CDC5FC", "#FFC2C4", "#F2D140", "#BCC6C8"][:number_of_colors]
@@ -545,7 +854,20 @@ class kmodel():
                 with_labels=True, font_size=20, font_color="black",)
         
     def see_graph(self, plot_type='edges', seed=1):
-        """See graph."""
+        """Draw ``self.G`` using a spring layout.
+
+        Parameters
+        ----------
+        plot_type : {'edges', 'nodes', 'numbered nodes'}, default 'edges'
+            What to render.
+
+            * ``'edges'`` — draw edges only (no node markers or labels).
+            * ``'nodes'`` — draw nodes only (no edges or labels).
+            * ``'numbered nodes'`` — draw the full graph with node-ID labels.
+        seed : int, default 1
+            Random seed passed to ``networkx.spring_layout`` for reproducible
+            node positioning.
+        """
         pos = nx.spring_layout(self.G, seed=seed)  # Seed layout for reproducibility
         if plot_type == 'numbered nodes':
             plt.figure(figsize=(4, 4))
