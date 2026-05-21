@@ -37,6 +37,7 @@ setup(
         "colorama>=0.4.6",
         "pyvoro>=1.3.2",
         "tetgen>=0.8.2",
+        "connected-components-3d>=3.26.1",
     ],
     python_requires=">=3.13",
     classifiers=classifiers,
