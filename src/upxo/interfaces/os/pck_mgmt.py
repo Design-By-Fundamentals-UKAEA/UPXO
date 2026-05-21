@@ -1,6 +1,5 @@
-import importlib
+import importlib.metadata
 import sys
-import pkg_resources
 
 def check_and_install_packages(required_packages, confirmation_message):
     """
@@ -10,19 +9,20 @@ def check_and_install_packages(required_packages, confirmation_message):
         required_packages (list): A list of tuples with package names and versions.
         confirmation_message (str): A message to ask for user confirmation.
     """
-    for package, version in required_packages:
+    from packaging.specifiers import SpecifierSet
+    for package, version_spec in required_packages:
         try:
-            # Check if the package and version are already installed
-            pkg_resources.require(f"{package}{version}")
-            print(f"Package '{package}' with version '{version}' is already installed.")
-        except pkg_resources.DistributionNotFound:
+            installed_version = importlib.metadata.version(package)
+            if version_spec and installed_version not in SpecifierSet(version_spec):
+                print(f"Package '{package}' version '{installed_version}' does not meet '{version_spec}'.")
+                if input(f"{confirmation_message} to meet version requirement (y/n): ").lower() == 'y':
+                    install_package(f"{package}{version_spec}")
+            else:
+                print(f"Package '{package}' version '{installed_version}' is already installed.")
+        except importlib.metadata.PackageNotFoundError:
             print(f"Package '{package}' not found.")
             if input(f"{confirmation_message} (y/n): ").lower() == 'y':
-                install_package(f"{package}{version}")
-        except pkg_resources.VersionConflict as e:
-            print(f"Package '{package}' is installed but does not meet the version requirement: {e}")
-            if input(f"{confirmation_message} to meet version requirement (y/n): ").lower() == 'y':
-                install_package(f"{package}{version}")
+                install_package(f"{package}{version_spec}")
 
 def install_package(package_spec):
     """
