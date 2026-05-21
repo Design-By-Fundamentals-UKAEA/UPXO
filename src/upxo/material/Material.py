@@ -21,15 +21,15 @@ def build():
     >>> matdata = build()
     >>> matdata.data.keys()
     """
-    from ODDict import ObjectDataDictionary
+    from upxo._sup.ODDict import ObjectDataDictionary
     matdata = ObjectDataDictionary()
-    
-    from Material import MaterialIdentity, ProcessingCondition, IrradiationCondition
-    from Material import CrystalFamily, Phases, PhysicalProperty
-    from Material import ElasticProperty, TensileStressStrain, PlasticProperty
-    from Material import ExpDataAvailability, GrainEqDiaEbsd, TexCompVolFracFCC
-    from Material import TexFibreVolFracFCC, TexCompWidth, EBSDParameters
-    from Material import TensileTestParameters
+
+    from upxo.material.Material import MaterialIdentity, ProcessingCondition, IrradiationCondition
+    from upxo.material.Material import CrystalFamily, Phases, PhysicalProperty
+    from upxo.material.Material import ElasticProperty, TensileStressStrain, PlasticProperty
+    from upxo.material.Material import ExpDataAvailability, GrainEqDiaEbsd, TexCompVolFracFCC
+    from upxo.material.Material import TexFibreVolFracFCC, TexCompWidth, EBSDParameters
+    from upxo.material.Material import TensileTestParameters
     
     # Append for the first time
     matdata.append(MaterialIdentity())
