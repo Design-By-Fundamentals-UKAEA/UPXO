@@ -64,6 +64,9 @@ src/upxo/geoEntities/edge2d_old.py
 src/upxo/geoEntities/point2d_old.py
 src/upxo/geoEntities/point2d_old_important.py
 src/upxo/meshing/mesher2d_ChrisHardie.py
+src/upxo/meshing/mesher_2d_BU1.24012026.py
+src/upxo/meshing/mesher_2d_BU2.25012026.py
+src/upxo/meshing/nonConformalMesher - Copy.py
 src/upxo/ggrowth/mcgs_bu.py
 src/upxo/pxtal/mcgs3_temporal_slice - bu18102025.py
 src/upxo/pxtal/mcgs3_temporal_slice - Copy.py

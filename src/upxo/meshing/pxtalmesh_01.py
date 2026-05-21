@@ -8,8 +8,18 @@ __version__ = ["0.1:@ upto.171122",
                ]
 __license__ = "GPL v3"
 # //////////////////////////////////////////////////////////////////////////////
-import meshio
-import pygmsh
+try:
+    import meshio
+    _MESHIO_AVAILABLE = True
+except ImportError:
+    _MESHIO_AVAILABLE = False
+
+try:
+    import pygmsh
+    _PYGMSH_AVAILABLE = True
+except ImportError:
+    _PYGMSH_AVAILABLE = False
+
 import numpy as np
 import pyvista as pv
 # //////////////////////////////////////////////////////////////////////////////
@@ -128,6 +138,7 @@ class geo_pxtal_mesh():
                  ff = ['vtk', 'inp'],
                  throw = False
                  ):
+        """Initialise the instance."""
         # ----------------------------------
         self.pxtal = pxtal
         self.mesher = mesher
@@ -168,6 +179,7 @@ class geo_pxtal_mesh():
                     wtf = True,
                     throw = False,
                     ):
+        """Mesh pygmsh."""
         # ---------------------------------------------------
         import pygmsh
         # ---------------------------------------------------
@@ -221,8 +233,7 @@ class geo_pxtal_mesh():
         '''
         Assign element sets for each xtal in the pxtal
         '''
-        print('Assigning element sets')
-        pass
+        raise NotImplementedError("assign_pygmsh_elsets is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def map_pygmsh_cell_colours(self,
                                 mesh = None,
@@ -281,6 +292,7 @@ class geo_pxtal_mesh():
                                                          [0.04, 0.04, 0.0],
                                                          ]
                                     ):
+        """Return the pygmsh cells along line."""
         index = grid.find_cells_along_line(line_points[0], line_points[1])
         subset = grid.extract_cells(index)
         print('Mesh cells identified along given line segments')
@@ -399,24 +411,30 @@ class geo_pxtal_mesh():
         #---------------------------------------------------
     #//////////////////////////////////////////////////////////////////////////////
     def read_pygmsh_mesh(self):
-        pass
+        """Load or import pygmsh mesh."""
+        raise NotImplementedError("read_pygmsh_mesh is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def write_pygmsh_mesh(self):
-        pass
+        """Export or convert to te pygmsh mesh."""
+        raise NotImplementedError("write_pygmsh_mesh is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def mesh_abaqus(self):
-        pass
+        """Mesh abaqus."""
+        raise NotImplementedError("mesh_abaqus is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def read_abaqus_mesh(self):
-        pass
+        """Load or import abaqus mesh."""
+        raise NotImplementedError("read_abaqus_mesh is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def write_abaqus_mesh(self,
                           inputmesh_format = 'pygmsh'
                           ):
-        pass
+        """Export or convert to te abaqus mesh."""
+        raise NotImplementedError("write_abaqus_mesh is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def assess_abaqus_mesh(self):
-        pass
+        """Assess abaqus mesh."""
+        raise NotImplementedError("assess_abaqus_mesh is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////////
     def vis_pyvista(self,
                     data_to_vis = 'mesh > mesh > all',
@@ -657,6 +675,7 @@ class geo_pxtal_mesh():
                 band_widths = None,
                 colors = None
                 ):
+        """Visualise de using Matplotlib or PyVista."""
         import seaborn as sns
         from matplotlib import pyplot as plt
 
