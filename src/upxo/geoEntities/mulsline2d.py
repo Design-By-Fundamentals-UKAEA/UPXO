@@ -31,27 +31,11 @@ Applications
 - General geometry operations and polyline manipulation.
 - Boundary and edge representation in meshing and simulation.
 
-Imports (Core/Runtime)
----------------------
-**Core imports** (module-level):
-  - numpy (np): Array operations, coordinate manipulation.
-  - math: Geometric calculations.
-  - copy.deepcopy: Object cloning.
+Usage
+-----
+::
 
-**Lazy imports** (loaded on demand):
-  - numpy.matlib: For specialized matrix operations.
-  - scipy.spatial.cKDTree: For spatial tree indexing.
-  - matplotlib.pyplot: For plotting/visualization.
-  - vtk: For VTK-based geometry operations.
-  - shapely.geometry: For Shapely polygon/point conversions.
-
-**UPXO imports** (module-level):
-  - upxo._sup.dataTypeHandlers: Type checking, constants.
-  - upxo.geoEntities.bases: UPXO base classes.
-  - upxo.geoEntities.point2d: Point2d, p2d_leanest.
-  - upxo.geoEntities.sline2d: Sline2d (straight line in 2D).
-  - upxo._sup.validation_values: Point validation utilities.
-  - upxo._sup.data_ops: Data manipulation utilities.
+    from upxo.geoEntities.mulsline2d import MSline2d
 
 Coordinate System
 -----------------
@@ -70,17 +54,9 @@ Standard 2D Cartesian with notation (X+, Y+) = (right, up):
                      |
                      Y-
 
-Metadata
---------
-* Module: upxo.geoEntities.mulsline2d
-* Author: Dr. Sunil Anandatheertha
-* Email: vaasu.anandatheertha@ukaea.uk
-* Status: Active (MSline2d: full-featured, ring2d/mulring2d: in development)
-* Created: 2024-04-20
-* Last updated: 2026-03-11
-* Version: 1.1
+@author: Dr. Sunil Anandatheertha
 
-Usage Examples
+Examples
 --------------
 **Construct from line objects:**
     >>> from upxo.geoEntities.mulsline2d import MSline2d
@@ -145,19 +121,24 @@ ITERABLES = dth.dt.ITERABLES
 
 class MSline2d():
     """
-    UPXO code class.
+    Multi-straight-line (polyline) entity in 2D for UPXO.
+
+    A connected chain of :class:`~upxo.geoEntities.sline2d.Sline2d` line
+    segments sharing end-nodes. Supports open and closed topologies.
 
     Examples
     --------
-    from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-    from upxo.geoEntities.sline2d import Sline2d as sl2d
-    e0 = sl2d(0.0,0.0, 1.0,1.0)
-    e1 = sl2d(1.0,1.0, 1.5,1.5)
-    e2 = sl2d(1.5,1.5, 2.5,2.5)
-    e3 = sl2d(2.5,2.5, 4.0,4.0)
-    e4 = sl2d(4.0,4.0, 4.0,6.0)
+    .. code-block:: python
 
-    me = msl2d([e0, e1, e2, e3, e4])
+        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+        from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+        e0 = sl2d(0.0, 0.0, 1.0, 1.0)
+        e1 = sl2d(1.0, 1.0, 1.5, 1.5)
+        e2 = sl2d(1.5, 1.5, 2.5, 2.5)
+        e3 = sl2d(2.5, 2.5, 4.0, 4.0)
+        e4 = sl2d(4.0, 4.0, 4.0, 6.0)
+        me = msl2d.from_lines([e0, e1, e2, e3, e4], close=False)
     """
     __slots__ = ('lines', 'nodes', 'features', 'closed')
 
@@ -195,35 +176,55 @@ class MSline2d():
 
     def __iter__(self):
         """
-        Return an iterable of point coordsinates in self.
+        Return an iterable of the line segments in self.
 
-        Example
-        -------
-        from upxo.geoEntities.mulsline2d import MSline2d
-        from upxo.geoEntities.sline2d import Sline2d
-        lines = [Sline2d(0.0,0.0, 1.0,1.0), Sline2d(1.0,1.0, 1.5,1.5),
-                 Sline2d(1.5,1.5, 2.5,2.5), Sline2d(2.5,2.5, 4.0,4.0),
-                 Sline2d(4.0,4.0, 4.0,6.0)]
-        MULLINE = MSline2d.from_lines(lines, close=True)
-        lines = [line for line in MULLINE.lines]
-        print(lines)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d
+            from upxo.geoEntities.sline2d import Sline2d
+
+            lines = [Sline2d(0.0,0.0, 1.0,1.0), Sline2d(1.0,1.0, 1.5,1.5),
+                     Sline2d(1.5,1.5, 2.5,2.5), Sline2d(2.5,2.5, 4.0,4.0),
+                     Sline2d(4.0,4.0, 4.0,6.0)]
+            MULLINE = MSline2d.from_lines(lines, close=True)
+            lines = [line for line in MULLINE.lines]
+            print(lines)
         """
         return iter(self.lines)
 
     def __getitem__(self, i):
         """
-        Make self indexable. i: index location.
+        Return the line at index ``i``.
 
-        Example
+        Parameters
+        ----------
+        i : int
+            Zero-based index into ``self.lines``.
+
+        Returns
         -------
-        from upxo.geoEntities.mulsline2d import MSline2d
-        from upxo.geoEntities.sline2d import Sline2d
-        lines = [Sline2d(0.0,0.0, 1.0,1.0), Sline2d(1.0,1.0, 1.5,1.5),
-                 Sline2d(1.5,1.5, 2.5,2.5), Sline2d(2.5,2.5, 4.0,4.0),
-                 Sline2d(4.0,4.0, 4.0,6.0)]
-        MULLINE = MSline2d.from_lines(lines, close=True)
-        MULLINE[4]
-        MULLINE[5]
+        Sline2d
+            Line segment at position ``i``.
+
+        Raises
+        ------
+        ValueError
+            If ``i`` exceeds the number of lines.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d
+            from upxo.geoEntities.sline2d import Sline2d
+
+            lines = [Sline2d(0.0,0.0, 1.0,1.0), Sline2d(1.0,1.0, 1.5,1.5),
+                     Sline2d(1.5,1.5, 2.5,2.5), Sline2d(2.5,2.5, 4.0,4.0),
+                     Sline2d(4.0,4.0, 4.0,6.0)]
+            MULLINE = MSline2d.from_lines(lines, close=True)
+            MULLINE[4]
         """
         if i >= self.nlines:
             raise ValueError('Index exceeds maximum number of lines.')
@@ -232,34 +233,36 @@ class MSline2d():
     @classmethod
     def from_lines(cls, llist, close=True):
         """
-        Make a multi-straight line in 2d.
+        Construct a multi-straight-line 2D from a list of Sline2d objects.
 
-        Make mul-straight-line-2d using multiple lines, strt and connectvity
-        specification. Recommended way to make the msl2d.
+        Parameters
+        ----------
+        llist : list of Sline2d
+            Ordered line segments forming the polyline chain.
+        close : bool, optional
+            If True, append a closing segment from the last node back to the
+            first node.
 
-        Development phases
-        ------------------
-        Phase-1: Basic working codes with basic validations. DONE
-        Phase-2: Include additional validations.
+        Returns
+        -------
+        MSline2d
+            Assembled polyline.
 
         Examples
         --------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        e0 = sl2d(0.0,0.0, 1.0,1.0)
-        e1 = sl2d(1.0,1.0, 1.5,1.5)
-        e2 = sl2d(1.5,1.5, 2.5,2.5)
-        e3 = sl2d(2.5,2.5, 4.0,4.0)
-        e4 = sl2d(4.0,4.0, 4.0,6.0)
+        .. code-block:: python
 
-        lines = [e0,e1,e2,e3,e4]
-        me = msl2d.from_lines(lines, close=True)
-        me.lines
-        me.nodes
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
 
-        lines = [e0,e1,e2,e3,e4]
-        me = msl2d.from_lines(lines, close=False)
-        me.lines
+            e0 = sl2d(0.0, 0.0, 1.0, 1.0)
+            e1 = sl2d(1.0, 1.0, 1.5, 1.5)
+            e2 = sl2d(1.5, 1.5, 2.5, 2.5)
+            e3 = sl2d(2.5, 2.5, 4.0, 4.0)
+            e4 = sl2d(4.0, 4.0, 4.0, 6.0)
+
+            me_closed = msl2d.from_lines([e0, e1, e2, e3, e4], close=True)
+            me_open   = msl2d.from_lines([e0, e1, e2, e3, e4], close=False)
         """
         llist, closed = llist, False
         nodes = [line.pnta for line in llist]
@@ -275,16 +278,30 @@ class MSline2d():
     @classmethod
     def by_nodes(cls, nodes, close=True):
         """
-        Example
-        -------
-        from upxo.geoEntities.mulsline2d import MSline2d
-        from upxo.geoEntities.point2d import Point2d
-        nodes = [Point2d(0,0), Point2d(1,1), Point2d(2,2), Point2d(3,3), Point2d(5,5)]
-        MSline2d.by_nodes(nodes).lines
+        Construct a multi-straight-line 2D from a list of Point2d nodes.
 
-        Import
-        ------
-        from upxo.geoEntities.mulsline2d import MSline2d
+        Parameters
+        ----------
+        nodes : list of Point2d
+            Ordered nodes of the polyline.
+        close : bool, optional
+            If True, append a closing segment.
+
+        Returns
+        -------
+        MSline2d
+            Assembled polyline.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d
+            from upxo.geoEntities.point2d import Point2d
+
+            nodes = [Point2d(0, 0), Point2d(1, 1), Point2d(2, 2),
+                     Point2d(3, 3), Point2d(5, 5)]
+            MSline2d.by_nodes(nodes).lines
         """
         if type(nodes) not in ITERABLES:
             raise ValueError('Invalid nodes input.')
@@ -307,15 +324,32 @@ class MSline2d():
 
     @classmethod
     def by_coords(cls, coords, close=True):
-        # from upxo.geoEntities.mulsline2d import MSline2d
         """
-        Example
+        Construct a multi-straight-line 2D from a sequence of (x, y) coordinates.
+
+        Parameters
+        ----------
+        coords : array-like of shape (n, 2)
+            Ordered (x, y) coordinate pairs.
+        close : bool, optional
+            If True, append a closing segment.
+
+        Returns
         -------
-        from upxo.geoEntities.mulsline2d import MSline2d
-        from upxo.geoEntities.point2d import Point2d
-        coords = np.array([(0,0), (1,1), (2,2), (3,3), (5,5)])
-        MSline2d.by_coords(coords).lines
-        MSline2d.by_coords(coords).nodes
+        MSline2d
+            Assembled polyline.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d
+            import numpy as np
+
+            coords = np.array([(0,0), (1,1), (2,2), (3,3), (5,5)])
+            msl = MSline2d.by_coords(coords)
+            msl.lines
+            msl.nodes
         """
         if type(coords) not in ITERABLES:
             raise ValueError('Invalid nodes input.')
@@ -440,37 +474,16 @@ class MSline2d():
         return cKDTree(self.coords)
 
     @property
-    def lengths(self):
-        """
-        Rerturns lgnths of individual lines in regular order.
-
-        Example
-        -------
-        me.lengths
-        """
-        return [line.length for line in self.lines]
-
-    @property
-    def length(self):
-        """
-        Rerturns total lgnth of all lines.
-
-        Example
-        -------
-        me.lengths
-        """
-        return sum(self.lengths)
-
-    @property
     def length_mean(self):
         """
-        Rerturns mean length.
+        Return mean length of all line segments.
 
-        Example
+        Returns
         -------
-        me.lengths
+        float
+            Total length divided by number of lines.
         """
-        return self.length/self.n
+        return self.length/self.nlines
 
     @property
     def gradients(self):
@@ -500,18 +513,26 @@ class MSline2d():
     @property
     def mid_nodes(self):
         """
-        Return mid-sode nodes of all lines.
+        Return midpoint nodes of all lines.
 
-        Example
+        Returns
         -------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.mid_nodes
-        MULLINE.centroid_p2dl
+        list
+            Mid-point of each line segment in the polyline.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.mid_nodes
+            MULLINE.centroid_p2dl
         """
         return [line.mid_point for line in self.lines]
 
@@ -522,23 +543,35 @@ class MSline2d():
 
     def flip(self, saa=True, throw=False):
         """
-        Return mid-sode nodes of all lines.
+        Reverse the order of lines in the polyline.
 
-        Example
+        Parameters
+        ----------
+        saa : bool, optional
+            If True, modify self in place (save-and-apply). If False, operate
+            on a deep copy.
+        throw : bool, optional
+            If True, return the (possibly copied) result.
+
+        Returns
         -------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.mid_nodes
-        MULLINE.centroid_p2dl
-        MULLINE.lines
-        MULLINE.nodes
-        MULLINE.flip()
-        MULLINE.lines
-        MULLINE.nodes
+        MSline2d or None
+            Flipped polyline if ``throw`` is True, else ``None``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.flip()
+            MULLINE.lines
+            MULLINE.nodes
         """
         if saa:
             self.lines = list(np.flip(self.lines, axis=0))
@@ -560,19 +593,18 @@ class MSline2d():
         """
         Check if self spatially precedes the input multisline2d.
 
-        Return
-        ------
-        i_precede:
-            True if self is spatially immediately behind multisline2d.
-            False if self is spatially immediately bnehind multisline2d.
-        flip_needed:
-            False if i_precede is False
-            True if user supplied multisline2d needs to be flipped in order to
-            ensure nodal connectivity between node orderning in self and
-            multisline2d.
-            False if user supplied multisline2d is already in order to
-            ensure nodal connectivity between node orderning in self and
-            multisline2d.
+        Parameters
+        ----------
+        multisline2d : MSline2d
+            Candidate successor polyline.
+
+        Returns
+        -------
+        i_precede : bool
+            True if self immediately precedes ``multisline2d``.
+        flip_needed : bool
+            True if ``multisline2d`` must be flipped to achieve nodal
+            continuity with self.
         """
         condition_a = self.nodes[-1].eq_fast(multisline2d.nodes[0])[0]
         condition_b = self.nodes[-1].eq_fast(multisline2d.nodes[-1])[0]
@@ -588,19 +620,18 @@ class MSline2d():
         """
         Check if self spatially comes after the input multisline2d.
 
-        Return
-        ------
-        i_precede:
-            True if self is spatially immediately behind multisline2d.
-            False if self is spatially immediately bnehind multisline2d.
-        flip_needed:
-            False if i_precede is False
-            True if user supplied multisline2d needs to be flipped in order to
-            ensure nodal connectivity between node orderning in self and
-            multisline2d.
-            False if user supplied multisline2d is already in order to
-            ensure nodal connectivity between node orderning in self and
-            multisline2d.
+        Parameters
+        ----------
+        multisline2d : MSline2d
+            Candidate predecessor polyline.
+
+        Returns
+        -------
+        i_proceed : bool
+            True if self immediately succeeds ``multisline2d``.
+        flip_needed : bool
+            True if ``multisline2d`` must be flipped to achieve nodal
+            continuity with self.
         """
         condition_a = self.nodes[0].eq_fast(multisline2d.nodes[0])[0]
         condition_b = self.nodes[0].eq_fast(multisline2d.nodes[-1])[0]
@@ -747,22 +778,38 @@ class MSline2d():
 
     def distances_nodes(self, points):
         """
-        Find distances between all nodes to the goiven points.
+        Compute distances from every node to each given point.
 
         Parameters
         ----------
-        points: List of points
+        points : numpy.ndarray of shape (m, 2)
+            Query points.
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        points = np.random.random((2,2))
-        MULLINE.distances_nodes(points)
+        Returns
+        -------
+        numpy.ndarray of shape (n_nodes, m)
+            Euclidean distance from each node to each query point.
+
+        Notes
+        -----
+        Uses vectorised broadcasting: ``points[:, np.newaxis]`` is broadcast
+        against the node array so all pairwise distances are computed in one
+        operation.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+            import numpy as np
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            points = np.random.random((2, 2))
+            MULLINE.distances_nodes(points)
         """
         # Validation
         # -------------------------------------
@@ -790,31 +837,47 @@ class MSline2d():
 
     def find_closest_nodes(self, point):
         """
-        Find closest nodes to the given point.
+        Find the closest node index (or indices) to a query point.
 
         Parameters
         ----------
-        points: List of points
+        point : array-like of shape (2,)
+            Query point coordinates.
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        point = np.random.random(2)*np.random.randint(10)
-        MULLINE.find_closest_nodes(point)
+        Returns
+        -------
+        int or list of int
+            Index of the closest node, or a list of indices if multiple nodes
+            are equidistant.
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        point = lines[0].mid
-        MULLINE.find_closest_nodes(point)
+        Examples
+        --------
+        **Example 1** — random query point:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+            import numpy as np
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            point = np.random.random(2) * np.random.randint(10)
+            MULLINE.find_closest_nodes(point)
+
+        **Example 2** — midpoint of first line:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            point = lines[0].mid
+            MULLINE.find_closest_nodes(point)
         """
         # Validation
         # -------------------------------------
@@ -824,98 +887,51 @@ class MSline2d():
 
     def add_nodes(self, nodes):
         """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        from upxo.geoEntities.point2d import Point2d
-        e0 = sl2d(0.0,0.0, 1.0,1.0)
-        e1 = sl2d(1.0,1.0, 1.5,1.5)
-        e2 = sl2d(1.5,1.5, 2.5,2.5)
-        e3 = sl2d(2.5,2.5, 4.0,4.0)
-        e4 = sl2d(4.0,4.0, 4.0,6.0)
-        lines = [e0,e1,e2,e3,e4]
-        mulline = msl2d.from_lines(lines, close=True)
-        print(mulline)
-        nodes_to_add = [Point2d(0.5, 0.5), Point2d(2.0, 2.0)]
-        mulline.add_nodes(nodes_to_add)
-        print(mulline)
-        mulline.lines
-        mulline.nodes
-        mulline.closed
-        mulline.extract_nodes()
+        Insert new nodes into the polyline by splitting existing lines.
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        from upxo.geoEntities.point2d import Point2d
-        e0 = sl2d(0.0,0.0, 1.0,1.0)
-        e1 = sl2d(1.0,1.0, 1.5,1.5)
-        e2 = sl2d(1.5,1.5, 2.5,2.5)
-        e3 = sl2d(2.5,2.5, 4.0,4.0)
-        e4 = sl2d(4.0,4.0, 5.0,4.0)
-        e5 = sl2d(5.0,4.0, 5.0,0.0)
-        lines = [e0,e1,e2,e3,e4,e5]
-        mulline = msl2d.from_lines(lines, close=True)
-        print(mulline)
-        mulline.lines
-        nodes_to_add = [Point2d(0.5, 0.5), Point2d(2.0, 2.0), Point2d(1.75, 0)]
-        mulline.add_nodes(nodes_to_add)
-        print(mulline)
-        mulline.lines
-        mulline.nodes
-        mulline.closed
-        mulline.extract_nodes()
+        Parameters
+        ----------
+        nodes : list of Point2d
+            New nodes to insert. Each node is located on an existing line
+            segment and splits it.
 
-        @dev: raw codes used in development
-        -----------------------------------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        from upxo.geoEntities.point2d import Point2d
-        e0 = sl2d(0.0,0.0, 1.0,1.0)
-        e1 = sl2d(1.0,1.0, 1.5,1.5)
-        e2 = sl2d(1.5,1.5, 2.5,2.5)
-        e3 = sl2d(2.5,2.5, 4.0,4.0)
-        e4 = sl2d(4.0,4.0, 4.0,6.0)
+        Notes
+        -----
+        If a node does not lie on any line segment it is silently ignored.
+        The internal node list is updated after each insertion.
 
-        lines = [e0,e1,e2,e3,e4]
-        mulline = msl2d.from_lines(lines, close=False)
+        Examples
+        --------
+        **Example 1** — insert two nodes on a 5-segment polyline:
 
-        mulline.lines
-        mulline.nodes
-        mulline.closed
-        mulline.extract_nodes()
+        .. code-block:: python
 
-        nodes_to_add = [Point2d(0.5, 0.5), Point2d(2.0, 2.0)]
-        for node_to_add in nodes_to_add:
-            # node_to_add = nodes_to_add[1]
-            line_indices = []
-            for i, line in enumerate(mulline.lines, start=0):
-                if line.fully_contains_point(p2d=node_to_add, method='through'):
-                    line_indices.append(i)
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+            from upxo.geoEntities.point2d import Point2d
 
-            if len(line_indices) != 0:
-                line = mulline.lines[line_indices[0]]
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            mulline = msl2d.from_lines(lines, close=True)
+            mulline.add_nodes([Point2d(0.5, 0.5), Point2d(2.0, 2.0)])
+            mulline.lines
 
-                new_line = line.split(method='p2d', divider=node_to_add, saa=True, throw=True, update='pntb')[1]
-                mulline.lines.insert(line_indices[0]+1, new_line)
-                mulline.update_nodes()
+        **Example 2** — insert three nodes on a 6-segment polyline:
 
-        id(node_to_add)
+        .. code-block:: python
 
-        mulline.lines
-        mulline.nodes
-        mulline.extract_nodes()
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+            from upxo.geoEntities.point2d import Point2d
 
-        mulline.update_nodes()
-        mulline.nodes
-        mulline.extract_nodes()
-
-        [id(ml) for ml in mulline.nodes]
-        [id(ml) for ml in mulline.extract_nodes()]
-        [id(nta) for nta in nodes_to_add]
-        [id(line.pnta) for line in mulline.lines]
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,5.0,4.0), sl2d(5.0,4.0,5.0,0.0)]
+            mulline = msl2d.from_lines(lines, close=True)
+            mulline.add_nodes([Point2d(0.5, 0.5), Point2d(2.0, 2.0),
+                               Point2d(1.75, 0)])
+            mulline.lines
         """
         for node in nodes:
             line_indices = []
@@ -968,47 +984,34 @@ class MSline2d():
 
     def sub_divide(self, line_number=0, f=0.5):
         """
-        Sub-divide a single line in self.lines.
+        Sub-divide a single line in ``self.lines`` at a fractional position.
 
         Parameters
         ----------
-        line_numbers: indeix in self.lines. Starts from 0.
-        f: factor in (0, 1), indicating location where the line shall
-            be divided.
+        line_number : int, optional
+            Index in ``self.lines`` to subdivide (zero-based).
+        f : float, optional
+            Fractional position along the target line in ``(0, 1)`` where the
+            split is made.
 
         Examples
         --------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
+        .. code-block:: python
 
-        me = msl2d.from_lines(lines, close=True)
-        me.lines
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
 
-        me = msl2d.from_lines(lines, close=False)
-        me.lines
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            me = msl2d.from_lines(lines, close=False)
 
-        me.sub_divide(line_number=0, f=0.25)
-        me.lines
+            me.sub_divide(line_number=0, f=0.25)
+            me.sub_divide(line_number=3, f=0.50)
 
-        me.sub_divide(line_number=len(me.lines), f=0.25)
-        me.lines
-
-        me.sub_divide(line_number=3, f=0.50)
-        me.lines
-
-        me.sub_divide(line_number=0, f=0.50)
-        me.lines
-
-        for i in range(10):
-            me.sub_divide(line_number=0, f=0.50)
-        me.lines
-
-        for i in range(10):
-            me.sub_divide(line_number=i, f=0.50)
-        me.lines
+            for i in range(5):
+                me.sub_divide(line_number=i, f=0.50)
+            me.lines
         """
         if not isinstance(line_number, int):
             raise TypeError('Invalid line number type.')
@@ -1031,53 +1034,61 @@ class MSline2d():
 
     def remove_point_by_index(self, index=2, remove='previous_line'):
         """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
+        Remove a node at the given index by merging its adjacent line segments.
 
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='previous_line')
-        for line in MULLINE.lines: print(id(line))
+        Parameters
+        ----------
+        index : int, optional
+            Zero-based node index to remove.
+        remove : {'previous_line', 'next_line', 'both'}
+            Which adjacent line to delete:
+            ``'previous_line'`` — extend the next line backward;
+            ``'next_line'`` — extend the previous line forward;
+            ``'both'`` — replace both adjacent lines with a new direct line.
 
-        MULLINE.lines
+        Examples
+        --------
+        **Example 1** — remove via previous line:
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
+        .. code-block:: python
 
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='next_line')
-        for line in MULLINE.lines: print(id(line))
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
 
-        MULLINE.lines
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='previous_line')
+            MULLINE.lines
 
-        Example-3
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
+        **Example 2** — remove via next line:
 
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='both')
-        for line in MULLINE.lines: print(id(line))
+        .. code-block:: python
 
-        MULLINE.lines
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='next_line')
+            MULLINE.lines
+
+        **Example 3** — remove both adjacent lines:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='both')
+            MULLINE.lines
         """
         # Validations
         # -------------------------------------
@@ -1101,50 +1112,72 @@ class MSline2d():
         else:
             raise ValueError('Invalid update specirfication.')
 
-    def remove_point_by_location(self, location=(None,None,None),
+    def remove_point_by_location(self, location=(None, None, None),
                                  remove='previous_line'):
         """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
-        MULLINE.line_ids
-        MULLINE.remove_point_by_location(location=lines[0].coord_i, remove='previous_line')
-        MULLINE.lines
-        MULLINE.line_ids
+        Remove the node closest to a given location.
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
-        MULLINE.line_ids
-        MULLINE.remove_point_by_location(location=lines[0].mid, remove='previous_line')
-        MULLINE.lines
-        MULLINE.line_ids
+        Parameters
+        ----------
+        location : array-like of shape (2,)
+            Query coordinates used to find the closest node.
+        remove : {'previous_line', 'next_line', 'both'}
+            Passed through to :meth:`remove_point_by_index`.
 
-        Example-3
-        ---------
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
-                 sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
-                 sl2d(4.0,4.0,4.0,6.0)]
-        MULLINE = msl2d.from_lines(lines, close=True)
-        MULLINE.lines
-        MULLINE.plot()
-        location = np.random.random(2)*np.random.randint(10)
-        MULLINE.remove_point_by_location(location=location, remove='previous_line')
-        MULLINE.lines
+        Notes
+        -----
+        If multiple nodes tie for closest, all are removed recursively.
+        When only 2 lines remain and the closing line is redundant, the
+        closing line is automatically deleted.
+
+        Examples
+        --------
+        **Example 1** — remove by endpoint coordinate:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_location(location=lines[0].coord_i,
+                                             remove='previous_line')
+            MULLINE.lines
+
+        **Example 2** — remove by midpoint coordinate:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_location(location=lines[0].mid,
+                                             remove='previous_line')
+            MULLINE.lines
+
+        **Example 3** — remove by random location:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.sline2d import Sline2d as sl2d
+            import numpy as np
+
+            lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+                     sl2d(1.5,1.5,2.5,2.5), sl2d(2.5,2.5,4.0,4.0),
+                     sl2d(4.0,4.0,4.0,6.0)]
+            MULLINE = msl2d.from_lines(lines, close=True)
+            location = np.random.random(2) * np.random.randint(10)
+            MULLINE.remove_point_by_location(location=location,
+                                             remove='previous_line')
+            MULLINE.lines
         """
         # Validations
         # -------------------------------------
@@ -1257,36 +1290,34 @@ class MSline2d():
 
     def smooth(self, max_smooth_level=2):
         """
-        from upxo.geoEntities.mulsline2d import MSline2d as msl2d
-        nodes = [Point2d(0.0,0.0),
-                 Point2d(1.0,0.0),
-                 Point2d(1.0,1.0),
-                 Point2d(2.5,2.0),
-                 Point2d(4.0,2.0),
-                 Point2d(4.0,6.0),
-                 Point2d(4.0,8.0),
-                 Point2d(2.0,8.0)]
-        ml = msl2d.by_nodes(nodes, close=False)
-        ml.nodes
-        ml.lines
-        ax = ml.plot()
-        ml.smooth()
+        Smooth the polyline by replacing node coordinates with local means.
 
-        ml.nnodes
-        max_smooth_level = 3
-        coords = mean_coordinates(ml.coords, max_smooth_level)
-        new_nodes = [Point2d(c[0], c[1]) for c in coords[1:-1]]
-        new_nodes_full = [ml.nodes[0]] + new_nodes + [ml.nodes[-1]]
+        Parameters
+        ----------
+        max_smooth_level : int, optional
+            Number of smoothing passes applied via
+            :func:`~upxo._sup.data_ops.mean_coordinates`.
 
-        new_lines = [sl2d(new_nodes_full[i].x, new_nodes_full[i].y,
-                          new_nodes_full[i+1].x, new_nodes_full[i+1].y)
-                     for i in range(len(new_nodes_full)-1)]
+        Notes
+        -----
+        Terminal nodes (first and last) are preserved. If fewer than 3 nodes
+        are present, no smoothing is performed.
 
-        ml.lines = new_lines
-        ml.nodes = new_nodes_full
+        Examples
+        --------
+        .. code-block:: python
 
+            from upxo.geoEntities.mulsline2d import MSline2d as msl2d
+            from upxo.geoEntities.point2d import Point2d
 
-        ax.plot(coords[:, 0], coords[:, 1])
+            nodes = [Point2d(0.0, 0.0), Point2d(1.0, 0.0),
+                     Point2d(1.0, 1.0), Point2d(2.5, 2.0),
+                     Point2d(4.0, 2.0), Point2d(4.0, 6.0),
+                     Point2d(4.0, 8.0), Point2d(2.0, 8.0)]
+            ml = msl2d.by_nodes(nodes, close=False)
+            ax = ml.plot()
+            ml.smooth(max_smooth_level=3)
+            ax.plot(ml.coords[:, 0], ml.coords[:, 1])
         """
         # ---------------------------------------------------
         smoothing_carried_out = True
@@ -1336,58 +1367,30 @@ class ring2d():
     conn1 : dict
         Second-order connectivity status (inter-segment continuity).
 
-    Metadata
+    Notes
+    -----
+    ``ring2d`` is in active development. Closure enforcement, reordering, and
+    polygon generation are implemented; polygon meshing is not yet available.
+
+    Examples
     --------
-    * Class: ring2d
-    * Module: upxo.geoEntities.mulsline2d
-    * Author: Dr. Sunil Anandatheertha
-    * Status: In development
-    * Last updated: 2026-03-11
+    .. code-block:: python
 
-    Key Features
-    ------------
-    - Multi-segment ring assembly and closure detection.
-    - Automatic segment flipping to enforce spatial continuity.
-    - Polygon conversion and geometric calculations (area, perimeter).
-    - Spatial tree indexing for neighbor queries.
-    - Coordinate extraction and validation.
+        from upxo.geoEntities.mulsline2d import MSline2d, ring2d
+        from upxo.geoEntities.sline2d import Sline2d as sl2d
 
-    Import
-    ------
-    from upxo.geoEntities.mulsline2d import ring2d
+        msl1 = MSline2d.from_lines(
+            [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5),
+             sl2d(1.5,1.5,2.5,2.5)], close=False)
+        msl2 = MSline2d.from_lines(
+            [sl2d(2.5,2.5,4.0,4.0), sl2d(4.0,4.0,4.0,6.0)], close=False)
+        msl3 = MSline2d.from_lines(
+            [sl2d(4.0,6.0,4.0,8.0), sl2d(4.0,8.0,10.0,10.0)], close=False)
+        msl4 = MSline2d.from_lines(
+            [sl2d(0,0,20,10), sl2d(20,10,10,10)], close=False)
 
-    Example-1
-    ---------
-    from upxo.geoEntities.mulsline2d import MSline2d
-    from upxo.geoEntities.sline2d import Sline2d as sl2d
-    lines = [sl2d(0.0,0.0,1.0,1.0), sl2d(1.0,1.0,1.5,1.5), sl2d(1.5,1.5,2.5,2.5)]
-    msl1 = MSline2d.from_lines(lines, close=False)
-    lines = [sl2d(2.5,2.5,4.0,4.0), sl2d(4.0,4.0,4.0,6.0)]
-    msl2 = MSline2d.from_lines(lines, close=False)
-    lines = [sl2d(4.0,6.0,4.0,8.0), sl2d(4.0,8.0,10.0,10.0)]
-    msl3 = MSline2d.from_lines(lines, close=False)
-    lines = [sl2d(0,0,20,10), sl2d(20,10,10,10)]
-    msl4 = MSline2d.from_lines(lines, close=False)
-    # -----------------------------------------
-    segs = [msl1, msl2, msl3, msl4]
-    # -----------------------------------------
-    segs[0].get_node_coords(), segs[0].lines, segs[0].nodes, segs[0].closed
-    segs[1].get_node_coords(), segs[1].lines, segs[1].nodes, segs[1].closed
-    segs[2].get_node_coords(), segs[2].lines, segs[2].nodes, segs[2].closed
-    segs[3].get_node_coords(), segs[3].lines, segs[3].nodes, segs[3].closed
-    # -----------------------------------------
-    from upxo.geoEntities.mulsline2d import ring2d
-    # -----------------------------------------
-    R = ring2d(segs)
-    R.conn0
-    R.conn1
-    R.assess_spatial_continuity()
-
-
-    coords = R.segments[0].get_node_coords()
-    d = distance_matrix(coords, coords)
-    if np.argwhere(d<=1E-8).shape[0] > coords.shape[0]
-    # -----------------------------------------
+        R = ring2d([msl1, msl2, msl3, msl4])
+        R.assess_spatial_continuity()
     """
     __slots__ = ('segments', 'segids', 'segflips', 'nsegs',
                  'coords', 'closed', 'conn0', 'conn1')
