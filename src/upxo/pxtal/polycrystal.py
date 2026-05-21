@@ -2,7 +2,7 @@ import random
 import numpy as np
 import string
 
-from Material import *
+from upxo.material.Material import *
 
 class PolyXTAL():
     #**************************
@@ -41,6 +41,7 @@ class PolyXTAL():
     GGP2L    = None # Grain Geometric Parameter 2D Edge length
     #------------------------------------------------------------------
     def __init__(self):
+        """Initialise the instance."""
         self.ustrs = []
     #------------------------------------------------------------------
     @property
@@ -52,6 +53,7 @@ class PolyXTAL():
     #------------------------------------------------------------------
     @property
     def template_PXID(self):
+        """Template pxid."""
         # WORKING
         base       = {'gs_UID': None, 'ct_UID': None,}
         PolyXTAL.PXID = {instCount: base.copy() for instCount in range(PolyXTAL.GSD['N__lev0_i'])}
@@ -59,20 +61,24 @@ class PolyXTAL():
         #return PolyXTAL.PXID
     @property
     def setPXID(self):
+        """Setpxid."""
         self.template_PXID
         self.make_USTRs()
         self.set_gs_UID()
         self.set_ct_UID()
     def make_USTRs(self):
+        """Build and return USTRs."""
         for i0 in range(PolyXTAL.GSD['N__lev0_i']):
             #self.ustrs.append('{}'.format(''.join(random.choice(string.ascii_letters + string.digits+string.punctuation) for i in range(12))))
             self.ustrs.append('{}'.format(''.join(random.choice(string.ascii_letters) for i in range(12))))
 
     def set_gs_UID(self):
+        """Set or update gs UID."""
         for i0 in range(PolyXTAL.GSD['N__lev0_i']):
             PolyXTAL.PXID[i0]['gs_UID'] = 'gs_' + self.ustrs[i0]
 
     def set_ct_UID(self):
+        """Set or update ct UID."""
         for i0 in range(PolyXTAL.GSD['N__lev0_i']):
             PolyXTAL.PXID[i0]['ct_UID'] = 'ct_' + self.ustrs[i0]
 
@@ -124,6 +130,7 @@ class PolyXTAL():
 
     @property
     def template_flag_level1gs(self):
+        """Template flag level1gs."""
         PolyXTAL.flag_level1gs = {'gbz'     : None,
                                'twin'    : None,
                                'pap'     : None,
@@ -132,6 +139,7 @@ class PolyXTAL():
                                }
 
     def set_flag_level1gs(self):
+        """Set or update flag level1gs."""
         self.template_flag_level1gs
         PolyXTAL.flag_level1gs['gbz']      = True
         PolyXTAL.flag_level1gs['twin']     = True
@@ -141,6 +149,7 @@ class PolyXTAL():
 
     @property
     def templateGBZData(self):
+        """Templategbzdata."""
         PolyXTAL.gbzSpecs = {'gbzDistribution': None,
                           'gbzVfperGrain'  : None,
                           'gbzType'        : None,
@@ -148,6 +157,7 @@ class PolyXTAL():
                           }
 
     def setGBZData(self):
+        """Setgbzdata."""
         self.templateGBZData
         PolyXTAL.gbzSpecs['gbzDistribution'] = 'allGrains' # Options: allGrains, byGrainID, byGrainCount, byGrainPercentage
         PolyXTAL.gbzSpecs['gbzVfperGrain']   = 0.10 # 0 <= Vf < 0.5 (upper limit is assumed). If 0.10, then 10% of a GBZ hosting grain will be occupied by GBZ
@@ -156,6 +166,7 @@ class PolyXTAL():
         
     @property
     def templateTwinData(self):
+        """Templatetwindata."""
         #PolyXTAL.twinVolumeFrac = np.asfarray(input("Phase wise twin volume fraction array [TVfP1, TVfP2, etc]. default [0.05]") or [0.05])
 
         PolyXTAL.twinSpecs = {'twinVolumeFrac'         : None, # ACCESS: PolyXTAL.twinSpecs['twinVolumeFrac']
@@ -166,6 +177,7 @@ class PolyXTAL():
                            }
 
     def setTwinData(self):
+        """Settwindata."""
         self.templateTwinData
         if PolyXTAL.flag_level1gs['twin']:
             PolyXTAL.twinSpecs['twinVolumeFrac'] = input("Twin volume fraction (default: 0.05) >>>") or 0.05
@@ -179,6 +191,7 @@ class PolyXTAL():
         
     @property
     def templatePAPData(self):
+        """Templatepapdata."""
         PolyXTAL.papSpecs = {'n_min_PriorAustPockets' : None,
                           'n_mean_PriorAustPockets': None,
                           'n_max_PriorAustPockets' : None,
@@ -186,6 +199,7 @@ class PolyXTAL():
                           'jaggedLineTypeAngleDev'    : None,
                           }
     def setPAPData(self):
+        """Setpapdata."""
         self.templatePAPData
         PolyXTAL.papSpecs['n_min_PriorAustPockets' ] = input("Min num. of prior autenite pockets (default 3) >>> ")  or '3'
         PolyXTAL.papSpecs['n_mean_PriorAustPockets'] = input("Mean num. of prior autenite pockets (default 3) >>> ") or '3'
@@ -196,6 +210,7 @@ class PolyXTAL():
     #------------------------------------------------------------------
     @property
     def templateSubGrainData(self):
+        """Templatesubgraindata."""
         self.subgrainSpecs = {'NOTE': 'this should be done only after tex calculations has been finished',
                               'minMisAng'      : None,
                               'maxMisAng'      : None,
@@ -207,19 +222,19 @@ class PolyXTAL():
     def setupL2GS(self):
         """
         Set details of the Level 2 poly-xtal
-        Dev. history: 
-            09-05-2022 - Working
         """
         if int(PolyXTAL.GSD['gslevel']) >= 2:
             self.setLathData()
 
     @property
     def templateLathData(self):
+        """Templatelathdata."""
         PolyXTAL.lathSpecs = {'width_min_fraction' : None,
                            'width_mean_fraction': None,
                            'width_max_fraction' : None,
                            }
     def setLathData(self):
+        """Setlathdata."""
         self.templateLathData
         PolyXTAL.lathSpecs['width_min_fraction' ] = input("Min.  width of lathe as Frac. of host grain mean pocket edge length (default 0.05) >>> ") or '0.05'
         PolyXTAL.lathSpecs['width_mean_fraction'] = input("Mean. width of lathe as Frac. of host grain mean pocket edge length (default 0.20) >>> ") or '0.20'
@@ -227,6 +242,7 @@ class PolyXTAL():
         
     @property
     def templateParticleData(self):
+        """Templateparticledata."""
         PolyXTAL.ParticleSpecs = {'material': None,
                                'shape'   : None, # "circular" or "circulargn" (Gaussian noise) or "circularpn" (perlin noise)
                                'sizeType': None, # "value" or "fraction" # Value in um or fraction of grain size
@@ -235,6 +251,7 @@ class PolyXTAL():
                                'maxSize' : None, # if sizeType is fraction, then this value < grainSize/10
                                }
     def setParticleData(self):
+        """Setparticledata."""
         PolyXTAL.ParticleSpecs['material'] = input("Particle material name >>> ") or 'particleName'
         PolyXTAL.ParticleSpecs['shape']    = input("Particle shape >>> ")   or 'circular'
         PolyXTAL.ParticleSpecs['sizeType'] = input("Particle type of size specification (default: fraction) >>> ") or 'fraction'
@@ -244,11 +261,13 @@ class PolyXTAL():
     
     @property
     def templateParticleClusterData(self):
+        """Templateparticleclusterdata."""
         PolyXTAL.ParticleClusterSpecs = {'icvf'               : None, # Individual cluster volume fraction
                                       'distributionType'   : None, # Type of the distribution. Options: random, Gaussian
                                       'makeClusterEnvelope': None, # 
                                       }
     def setParticleClusterData(self):
+        """Setparticleclusterdata."""
         PolyXTAL.ParticleClusterSpecs['icvf']                = input("Particle cluster name >>> ") or 'clusterName'
         PolyXTAL.ParticleClusterSpecs['distributionType']    = input("Particle cluster distirbution type (random: default)>>> ") or 'random'
         PolyXTAL.ParticleClusterSpecs['makeClusterEnvelope'] = input("Make particle cluster envelope? (yes: default) >>> ") or 'yes'
@@ -257,8 +276,6 @@ class PolyXTAL():
     def template_ID0_base(self):
         """
         CALL: px.make_ID0_base
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'GRAIN'  : None, # List of ID numbers of all grains
                 'SURF'   : None, # List of ID numbers of all grain boundary surfaces
@@ -278,8 +295,6 @@ class PolyXTAL():
     def template_ID0_pair(self):
         """
         CALL: px.make_ID0_pair
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'GRAIN'       : None, # Parent Grain ID. Retain here for quick ref purposes.
                 'GRAIN_SURF'  : None, # List of parent grain IDs, each against an ID list of grain boundary surfaces attached to it
@@ -322,8 +337,6 @@ class PolyXTAL():
     def template_ID1_base(self):
         """
         CALL: px.make_ID1_base
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'GRAIN'     : None, # Parent Grain ID. Retain here for quick ref purposes
                 
@@ -383,8 +396,6 @@ class PolyXTAL():
     def template_ID1_pair(self):
         """
         CALL: px.make_ID1_pair
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'GRAIN'           : None, # Parent Grain ID. Retain here for quick ref purposes
                 'GC'              : None, # List of ID numbers of all grain cores. Retain here for quick ref purposes
@@ -475,8 +486,6 @@ class PolyXTAL():
     def template_ID_ctex(self):
         """
         CALL: px.make_ID_ctex
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'ORI_SAMPLING_TYPE'  : None, # Type of orientation sampling to employ
                 'ORI_SAMPLING_RULE'  : None, # Rule for sampling to be employed
@@ -517,8 +526,6 @@ class PolyXTAL():
     def template_GR_flags(self):
         """
         CALL: px.make_GR_flags
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'ID' : None, # 1D NP array: actual grain id list                         : INT : id0_grains
                 'f01': None, # 1D NP array: specifies grain location                     : STR : bgrain     OR igrain
@@ -542,8 +549,6 @@ class PolyXTAL():
         """
         Grain Geometry Parameter - area
         CALL: px.make_GGP2A
-        Dev. history: 
-            09-05-2022 - Working
         """
         base = {'full' : {'gID'   : None, 'values': None}, # DICTIONARY: id data and geometric area of level 0 grains
                 'gbz'  : {'gbzID' : None, 'values': None}, # DICTIONARY: id data and geometric area of grain boundary zones
@@ -559,30 +564,30 @@ class PolyXTAL():
     @property
     def template_GGP2L(self):
         """
-        Dev. history: 
-            09-05-2022 - Working
-        Grain geometry parameter - length (grain bounday length data)
-        Store all raw data related to grain boundary length in the format:
-                @all_ungrouped_l0  : Value pair: id-length pair of all edges in the L0 PolyXTAL
-                @all_ungrouped_l1  : Value pair: id-length pair of all edges in the L1 PolyXTAL
-                @all_ungrouped_l2  : Value pair: id-length pair of all edges in the L2 PolyXTAL
-                @all_ungrouped_l3  : Value pair: id-length pair of all edges in the L3 PolyXTAL << FOR FUTURE USE
-                @all_ungrouped_gbz : Value pair: id-length pair of both internal and external edge ids of grain boundary zones in the PolyXTAL
-                @all_ungrouped_twin: Value pair: id-length pair of edges of all twins in the PolyXTAL
-                @all_ungrouped_papa: Value pair: id-length pair of edges of all paps in the PolyXTAL
-                @all_ungrouped_lath: Value pair: id-length pair of edges of all laths in the PolyXTAL
-                @all_ungrouped_part: Value pair: id-length pair of edges of all particles in the PolyXTAL
-                @all_grouped_l0_g  : Value set : @l0GS: for each grainID, this provides: [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that grain
-                @all_grouped_l1_g  : Value set : @l1GS: for each grainID, this provides: [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that grain
-                @all_grouped_l2_g  : Value set : @l2GS: for each grainID, this provides: [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that grain
-                @all_grouped_gbz   : Value set : for each gbzID, this provides  : [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that grain
-                @all_grouped_gebz  : Value set : for each gbzID, this provides  : [[EXTedge1_ID, EXTedge1_length], [EXTedgeN_ID, EXTedgeN_length]], where, EXT: external & N: num. of EXT edges in that gbz
-                @all_grouped_gibz  : Value set : for each gbzID, this provides  : [[INTedge1_ID, INTedge1_length], [INTedgeN_ID, INTedgeN_length]], where, INT: internal & N: num. of INT edges in that gbz
-                @all_grouped_gc    : Value set : for each gcID , this provides  : [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that grain
-                @all_grouped_twin  : Value set : for each twinID, this providces: [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that twin
-                @all_grouped_pap   : Value set : for each papID, this providces : [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that twin
-                @all_grouped_lath  : Value set : for each lathID, this provides : [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that lath
-                @all_grouped_part  : Value set : for each featureID, this provides : [[edge1_ID, edge1_length], [edgeN_ID, edgeN_length]], where, N: num. of edges in that lath
+        Grain geometry parameter - length (grain boundary length data).
+
+        Stores all raw data related to grain boundary length. Dictionary key layout::
+
+            all_ungrouped_l0   : id-length pairs for all edges in L0 PolyXTAL
+            all_ungrouped_l1   : id-length pairs for all edges in L1 PolyXTAL
+            all_ungrouped_l2   : id-length pairs for all edges in L2 PolyXTAL
+            all_ungrouped_l3   : id-length pairs for all edges in L3 PolyXTAL (future)
+            all_ungrouped_gbz  : id-length pairs for grain-boundary-zone edges
+            all_ungrouped_twin : id-length pairs for twin edges
+            all_ungrouped_papa : id-length pairs for pap edges
+            all_ungrouped_lath : id-length pairs for lath edges
+            all_ungrouped_part : id-length pairs for particle edges
+            all_grouped_l0_g   : per grainID -> [[edge_ID, length], ...]  (L0)
+            all_grouped_l1_g   : per grainID -> [[edge_ID, length], ...]  (L1)
+            all_grouped_l2_g   : per grainID -> [[edge_ID, length], ...]  (L2)
+            all_grouped_gbz    : per gbzID   -> [[edge_ID, length], ...]
+            all_grouped_gebz   : per gbzID   -> [[EXT_edge_ID, length], ...]
+            all_grouped_gibz   : per gbzID   -> [[INT_edge_ID, length], ...]
+            all_grouped_gc     : per gcID    -> [[edge_ID, length], ...]
+            all_grouped_twin   : per twinID  -> [[edge_ID, length], ...]
+            all_grouped_pap    : per papID   -> [[edge_ID, length], ...]
+            all_grouped_lath   : per lathID  -> [[edge_ID, length], ...]
+
         CALL: px.make_GGP2L
         """
         base = {'all_ungrouped_l0'  : {'gbeID' : None, 'values': None}, # DICTIONARY: id data and geometric length data of level 0, all grain boundary edges
@@ -603,6 +608,7 @@ class PolyXTAL():
     #--------------------------------------------------------------------------------------------------------------------------------
     @property
     def setPolyXTAL(self):
+        """Setpolyxtal."""
         self.setMD
         self.setMPD
         self.setGSD
@@ -616,142 +622,250 @@ class PolyXTAL():
     #------------------------------------------------------------------------------------------------------------------------------------------
     # Setter definitions
     @property
-    def get_gsd(self):      return PolyXTAL.GSD
+    def get_gsd(self):      
+        """Return ``gsd``."""
+        return PolyXTAL.GSD
     @property
-    def get_id0_base(self): return PolyXTAL.ID0_base
+    def get_id0_base(self): 
+        """Return ``id0_base``."""
+        return PolyXTAL.ID0_base
     @property
-    def get_id0_pair(self): return PolyXTAL.ID0_pair
+    def get_id0_pair(self): 
+        """Return ``id0_pair``."""
+        return PolyXTAL.ID0_pair
     @property
-    def get_id1_base(self): return PolyXTAL.ID1_base
+    def get_id1_base(self): 
+        """Return ``id1_base``."""
+        return PolyXTAL.ID1_base
     @property
-    def get_id1_pair(self): return PolyXTAL.ID1_pair
+    def get_id1_pair(self): 
+        """Return ``id1_pair``."""
+        return PolyXTAL.ID1_pair
     @property
-    def get_id_ctex(self):  return PolyXTAL.ID_ctex
+    def get_id_ctex(self):  
+        """Return ``id_ctex``."""
+        return PolyXTAL.ID_ctex
     @property
-    def get_flags_px(self): return PolyXTAL.PX_flags
+    def get_flags_px(self): 
+        """Return ``flags_px``."""
+        return PolyXTAL.PX_flags
     @property
-    def get_flags_gr(self): return PolyXTAL.GR_flags
+    def get_flags_gr(self): 
+        """Return ``flags_gr``."""
+        return PolyXTAL.GR_flags
     @property
-    def get_ggp2a(self):    return PolyXTAL.GGP2A
+    def get_ggp2a(self):    
+        """Return ``ggp2a``."""
+        return PolyXTAL.GGP2A
     @property
-    def get_ggp2l(self):    return PolyXTAL.GGP2L
+    def get_ggp2l(self):    
+        """Return ``ggp2l``."""
+        return PolyXTAL.GGP2L
     #--------------------------------------------------------------------------
     # From PolyXTAL.GSD
     @property
-    def get_dimensionality(self): return PolyXTAL.GSD['dimen']
+    def get_dimensionality(self): 
+        """Return ``dimensionality``."""
+        return PolyXTAL.GSD['dimen']
     @property
-    def get_MorphGenTech(self): return PolyXTAL.GSD['GSMorph_gentech']
+    def get_MorphGenTech(self): 
+        """Return ``MorphGenTech``."""
+        return PolyXTAL.GSD['GSMorph_gentech']
     @property
-    def get_ni_level0(self): return PolyXTAL.GSD['N__lev0_i']
+    def get_ni_level0(self): 
+        """Return ``ni_level0``."""
+        return PolyXTAL.GSD['N__lev0_i']
     @property
-    def get_ni_level1(self): return PolyXTAL.GSD['N__lev1_i']
+    def get_ni_level1(self): 
+        """Return ``ni_level1``."""
+        return PolyXTAL.GSD['N__lev1_i']
     @property
-    def get_ni_level2(self): return PolyXTAL.GSD['N__lev2_i']
+    def get_ni_level2(self): 
+        """Return ``ni_level2``."""
+        return PolyXTAL.GSD['N__lev2_i']
     @property
-    def get_ni_texos(self): return PolyXTAL.GSD['N__tex_i_os']
+    def get_ni_texos(self): 
+        """Return ``ni_texos``."""
+        return PolyXTAL.GSD['N__tex_i_os']
     @property
-    def get_ni_texps(self): return PolyXTAL.GSD['N__tex_i_ps']
+    def get_ni_texps(self): 
+        """Return ``ni_texps``."""
+        return PolyXTAL.GSD['N__tex_i_ps']
     #--------------------------------------------------------------------------
     # From PolyXTAL.ID0_base
     # ni0: number of instances of level 0 grain structure
     @property
-    def get_id0_g(self, ni0): return PolyXTAL.ID0_base[ni0]['GRAIN']
+    def get_id0_g(self, ni0): 
+        """Return ``id0_g``."""
+        return PolyXTAL.ID0_base[ni0]['GRAIN']
     @property
-    def get_id0_s(self, ni0): return PolyXTAL.ID0_base[ni0]['SURF']
+    def get_id0_s(self, ni0): 
+        """Return ``id0_s``."""
+        return PolyXTAL.ID0_base[ni0]['SURF']
     @property
-    def get_id0_e(self, ni0): return PolyXTAL.ID0_base[ni0]['EDGE']
+    def get_id0_e(self, ni0): 
+        """Return ``id0_e``."""
+        return PolyXTAL.ID0_base[ni0]['EDGE']
     @property
-    def get_id0_j(self, ni0): return PolyXTAL.ID0_base[ni0]['JPOINT']
+    def get_id0_j(self, ni0): 
+        """Return ``id0_j``."""
+        return PolyXTAL.ID0_base[ni0]['JPOINT']
     #--------------------------------------------------------------------------
     # From: PolyXTAL.ID0_pair
     @property 
-    def get_id0_gs(self, ni0): return PolyXTAL.ID0_pair[ni0]['GRAIN_SURF']
+    def get_id0_gs(self, ni0): 
+        """Return ``id0_gs``."""
+        return PolyXTAL.ID0_pair[ni0]['GRAIN_SURF']
     @property 
-    def get_id0_ge(self, ni0): return PolyXTAL.ID0_pair[ni0]['GRAIN_EDGE']
+    def get_id0_ge(self, ni0): 
+        """Return ``id0_ge``."""
+        return PolyXTAL.ID0_pair[ni0]['GRAIN_EDGE']
     @property 
-    def get_id0_gj(self, ni0): return PolyXTAL.ID0_pair[ni0]['GRAIN_JPOINT']
+    def get_id0_gj(self, ni0): 
+        """Return ``id0_gj``."""
+        return PolyXTAL.ID0_pair[ni0]['GRAIN_JPOINT']
     @property 
-    def get_id0_sg(self, ni0): return PolyXTAL.ID0_pair[ni0]['SURF_GRAIN']
+    def get_id0_sg(self, ni0): 
+        """Return ``id0_sg``."""
+        return PolyXTAL.ID0_pair[ni0]['SURF_GRAIN']
     @property 
-    def get_id0_eg(self, ni0): return PolyXTAL.ID0_pair[ni0]['EDGE_GRAIN']
+    def get_id0_eg(self, ni0): 
+        """Return ``id0_eg``."""
+        return PolyXTAL.ID0_pair[ni0]['EDGE_GRAIN']
     @property 
-    def get_id0_jg(self, ni0): return PolyXTAL.ID0_pair[ni0]['JPOINT_GRAIN']
+    def get_id0_jg(self, ni0): 
+        """Return ``id0_jg``."""
+        return PolyXTAL.ID0_pair[ni0]['JPOINT_GRAIN']
     @property 
-    def get_id0_se(self, ni0): return PolyXTAL.ID0_pair[ni0]['SURF_EDGE']
+    def get_id0_se(self, ni0): 
+        """Return ``id0_se``."""
+        return PolyXTAL.ID0_pair[ni0]['SURF_EDGE']
     @property
-    def get_id0_sj(self, ni0): return PolyXTAL.ID0_pair[ni0]['SURF_JPOINT']
+    def get_id0_sj(self, ni0): 
+        """Return ``id0_sj``."""
+        return PolyXTAL.ID0_pair[ni0]['SURF_JPOINT']
     @property
-    def get_id0_es(self, ni0): return PolyXTAL.ID0_pair[ni0]['EDGE_SURF']
+    def get_id0_es(self, ni0): 
+        """Return ``id0_es``."""
+        return PolyXTAL.ID0_pair[ni0]['EDGE_SURF']
     @property
-    def get_id0_js(self, ni0): return PolyXTAL.ID0_pair[ni0]['JPOINT_SURF']
+    def get_id0_js(self, ni0): 
+        """Return ``id0_js``."""
+        return PolyXTAL.ID0_pair[ni0]['JPOINT_SURF']
     @property 
-    def get_id0_ej(self, ni0): return PolyXTAL.ID0_pair[ni0]['EDGE_JPOINT']
+    def get_id0_ej(self, ni0): 
+        """Return ``id0_ej``."""
+        return PolyXTAL.ID0_pair[ni0]['EDGE_JPOINT']
     @property 
-    def get_id0_je(self, ni0): return PolyXTAL.ID0_pair[ni0]['JPOINT_EDGE']
+    def get_id0_je(self, ni0): 
+        """Return ``id0_je``."""
+        return PolyXTAL.ID0_pair[ni0]['JPOINT_EDGE']
     #--------------------------------------------------------------------------
     # From PolyXTAL.ID1_base
     @property 
-    def get_gbz(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gbz']
+    def get_gbz(self, ni0, ni1): 
+        """Return ``gbz``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gbz']
     @property 
-    def get_gbz_ebe(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gbz_eb_ed']
+    def get_gbz_ebe(self, ni0, ni1): 
+        """Return ``gbz_ebe``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gbz_eb_ed']
     @property 
-    def get_gbz_ibe(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gbz_ib_ed']
+    def get_gbz_ibe(self, ni0, ni1): 
+        """Return ``gbz_ibe``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gbz_ib_ed']
     @property 
-    def get_gbz_ebj(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gbz_eb_jp']
+    def get_gbz_ebj(self, ni0, ni1): 
+        """Return ``gbz_ebj``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gbz_eb_jp']
     @property 
-    def get_gbz_ibj(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gbz_ib_jp']
+    def get_gbz_ibj(self, ni0, ni1): 
+        """Return ``gbz_ibj``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gbz_ib_jp']
     @property
-    def get_gc(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gc']
+    def get_gc(self, ni0, ni1): 
+        """Return ``gc``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gc']
     @property 
-    def get_gc_ebe(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gc_eb_ed']
+    def get_gc_ebe(self, ni0, ni1): 
+        """Return ``gc_ebe``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gc_eb_ed']
     @property 
-    def get_gc_ibe(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gc_ib_ed']
+    def get_gc_ibe(self, ni0, ni1): 
+        """Return ``gc_ibe``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gc_ib_ed']
     @property 
-    def get_gc_ebj(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gc_eb_jp']
+    def get_gc_ebj(self, ni0, ni1): 
+        """Return ``gc_ebj``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gc_eb_jp']
     @property
-    def get_gc_ibj(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['gc_ib_jp']
+    def get_gc_ibj(self, ni0, ni1): 
+        """Return ``gc_ibj``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['gc_ib_jp']
     @property
-    def get_twin(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['twin']
+    def get_twin(self, ni0, ni1): 
+        """Return ``twin``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['twin']
     @property
-    def get_twinbed(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['twin_bed']
+    def get_twinbed(self, ni0, ni1): 
+        """Return ``twinbed``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['twin_bed']
     @property 
-    def get_twinbjp(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['twin_bjp']
+    def get_twinbjp(self, ni0, ni1): 
+        """Return ``twinbjp``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['twin_bjp']
     @property 
-    def get_apckt(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['apckt']
+    def get_apckt(self, ni0, ni1): 
+        """Return ``apckt``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['apckt']
     @property 
-    def get_apcktbe(self, ni0, ni1): return PolyXTAL.ID1_base[ni0][ni1]['apckt_be']
+    def get_apcktbe(self, ni0, ni1): 
+        """Return ``apcktbe``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['apckt_be']
     @property 
-    def get_apcktbjp(self, ni0, ni1):  return PolyXTAL.ID1_base[ni0][ni1]['apckt_bjp']
+    def get_apcktbjp(self, ni0, ni1):  
+        """Return ``apcktbjp``."""
+        return PolyXTAL.ID1_base[ni0][ni1]['apckt_bjp']
     # From PolyXTAL.ID1_pair
     
     #---------------------------------------------------dir---------------------------------------------------------------------------------------
     def GSvisualise(self):
+        """Gsvisualise."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def pf(self):
+        """Pf."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def ipf(self):
+        """Ipf."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def odfSec(self):
+        """Odfsec."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def ipfMap(self):
+        """Ipfmap."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def makeFillerDataCTF(self):
+        """Makefillerdatactf."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def writeCTF(self):
+        """Writectf."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def genFEMesh(self):
+        """Genfemesh."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def writeINP(self):
+        """Writeinp."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------
     def schmidTensor(self):
+        """Schmidtensor."""
         pass
     #------------------------------------------------------------------------------------------------------------------------------------------

@@ -5,40 +5,22 @@ import numpy as np
 '''
 
 def build():
-    '''
-    Sumamry:
-        This def uses classes in this module to build the material data base
-    
-    User data input type:
-        Standard def input type supported
-        When no inputs are provided, defaults prescribed in class data is used
-        
-    Call:
-        > from Material import build
-        > matdata = build()
-    
-    Return:
-        matdata: Object Data Dictionary
-        
-    Access:
-        matdata.data
-        matdata.data.keys()
+    """
+    Build and return the material data base using classes in this module.
 
-    Suggestions:
-        instantiate with 'variable' name: "matdata"
-    
-    Data access:
-        > matdata.data # Displays the entire data structure
-        > matdata.data.keys() # Displays outermost keys
-        > matdata.data.values() # Displays values of outermost keys
-    
-    Developers:
-        > keys should be class names
-        > whilst importing classes, use three class names together
-            For examnple,
-            > from Material import class1, class2, class3
-            > from Material import class 4, class 5, class 6
-    '''
+    When no inputs are provided, defaults prescribed in the class data are used.
+
+    Returns
+    -------
+    ObjectDataDictionary
+        Material data dictionary accessible via ``matdata.data``.
+
+    Examples
+    --------
+    >>> from upxo.material.Material import build
+    >>> matdata = build()
+    >>> matdata.data.keys()
+    """
     from ODDict import ObjectDataDictionary
     matdata = ObjectDataDictionary()
     
@@ -120,8 +102,8 @@ class CrystalFamily:
 @dataclass(frozen = True, repr = True)
 class Phases:
     nphases: int = field(default = 2) # Number of phases
-    namesPhases: str = field(default = np.ndarray([], dtype = str))
-    phaseFractions: np.ndarray = field(default = np.ndarray([], dtype = float))
+    namesPhases: np.ndarray = field(default_factory=lambda: np.ndarray([], dtype=str))
+    phaseFractions: np.ndarray = field(default_factory=lambda: np.ndarray([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
 class PhysicalProperty:
@@ -133,8 +115,8 @@ class ElasticProperty:
 
 @dataclass(frozen = True, repr = True)
 class TensileStressStrain:
-    strain: np.ndarray= field(default = np.array([], dtype = float))
-    stress: np.ndarray= field(default = np.array([], dtype = float))
+    strain: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
+    stress: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
 class PlasticProperty:
@@ -159,9 +141,9 @@ class GrainEqDiaEbsd:
     modality: int   = field(default = 2)
     skewness: float = field(default = -1.02)
     kurtosis: float = field(default = 1.24)
-    dist_grain_size : np.ndarray = field(default = np.array([], dtype = float))
-    dist_grain_count: np.ndarray = field(default = np.array([], dtype = int))
-    dist_grain_prob : np.ndarray = field(default = np.array([], dtype = float))
+    dist_grain_size : np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
+    dist_grain_count: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
+    dist_grain_prob : np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
 class TexCompVolFracFCC:
@@ -212,6 +194,7 @@ class TensileTestParameters:
 #______________________________________________________________________________
 # HELPER METHODS:    
 def TempKelvin(temp_celcius):
+    """Tempkelvin."""
     # This is only to demonstrate a way of setting value in a dataclass.
     # Value could infact be taken directly in Kelvin, inside the "IrradiationCondition" class
     return 273.0 + temp_celcius
