@@ -1,25 +1,26 @@
 """
-Created on Sat Apr 20 20:07:35 2024
+Multi-straight-line 3D geometric entity module for UPXO.
 
-3D straight line.
+Provides ``MSline3d``, a collection of ordered ``Sline3d`` segments
+representing an open or closed 3-D polyline.  Supports construction from
+line lists, node/length queries, spatial distance calculations, subdivision,
+and node removal operations.
 
 Applications
 ------------
-* Non-conformal geometry to conformal geometry conversion
-* Heirarchical grain structure feature generation
-* General geometry use
+- Non-conformal to conformal geometry conversion.
+- Hierarchical grain structure feature generation.
+- General 3-D polyline geometry operations.
 
 Classes
 -------
-* Sline2d_leanest
-* Sline2d
-
-Definitions
------------
-None
+MSline3d
+    Ordered collection of ``Sline3d`` segments forming a 3-D polyline.
 
 Coordinate system
 -----------------
+::
+
                      Y+
                      |           Z-
                      |         /
@@ -36,6 +37,14 @@ Coordinate system
           /          |
         Z+           Y-
 
+Usage
+-----
+::
+
+    from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+    from upxo.geoEntities.sline3d import Sline3d as sl3d
+
+@author: Dr. Sunil Anandatheertha
 """
 
 import math
@@ -53,21 +62,38 @@ np.seterr(divide='ignore')
 from upxo._sup.validation_values import isinstance_many
 from upxo.geoEntities.sline3d import Sline3d as sl3d
 
+
 class MSline3d():
-    """
-    UPXO code class.
+    """Ordered collection of ``Sline3d`` segments forming a 3-D polyline.
+
+    Wraps a list of connected ``Sline3d`` objects and provides aggregate
+    geometric properties (total length, mean length, node positions) and
+    editing operations (subdivision, node removal).
+
+    Attributes
+    ----------
+    lines : list of Sline3d
+        Ordered sequence of 3-D line segments.
+
+    Import
+    ------
+    ::
+
+        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
 
     Examples
     --------
-    from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-    from upxo.geoEntities.sline3d import Sline3d as sl3d
-    e0 = sl3d(0.0,0.0,0.0, 1.0,1.0,1.0)
-    e1 = sl3d(1.0,1.0,1.0, 1.5,1.5,0.0)
-    e2 = sl3d(1.5,1.5,0.0, 2.5,2.5,3.0)
-    e3 = sl3d(2.5,2.5,3.0, 4.0,4.0,3.5)
-    e4 = sl3d(4.0,4.0,3.5, 4.0,6.0,3.5)
+    .. code-block:: python
 
-    me = msl3d([e0, e1, e2, e3, e4])
+        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+        from upxo.geoEntities.sline3d import Sline3d as sl3d
+        e0 = sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+        e1 = sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0)
+        e2 = sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)
+        e3 = sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5)
+        e4 = sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)
+        me = msl3d([e0, e1, e2, e3, e4])
+        print(me.n, me.length)
     """
     __slots__ = ('lines', 'x0', 'y0', 'z0', 'x1', 'y1', 'z1', 'f', 'closed')
 
@@ -81,242 +107,300 @@ class MSline3d():
 
     @classmethod
     def from_lines(cls, llist, close=True):
-        """
-        Construct a ``MSline3d`` from a list of ``Sline3d`` objects.
+        """Construct a ``MSline3d`` from a list of ``Sline3d`` objects.
 
         Parameters
         ----------
         llist : list of Sline3d
-            Ordered sequence of 3D line segments.
+            Ordered sequence of 3-D line segments.
         close : bool, optional
             If ``True``, append a closing segment from the last endpoint back
-            to the first. Default ``True``.
+            to the first.  Default is ``True``.
 
         Returns
         -------
         MSline3d
+            New multi-line with optional closing segment appended.
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        >>> from upxo.geoEntities.sline3d import Sline3d as sl3d
-        >>> lines = [sl3d(0,0,0, 1,1,1), sl3d(1,1,1, 2,2,2)]
-        >>> me = msl3d.from_lines(lines, close=True)
-        >>> me.n
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0, 0, 0, 1, 1, 1), sl3d(1, 1, 1, 2, 2, 2)]
+            me = msl3d.from_lines(lines, close=True)
+            print(me.n)
         """
         lines = llist
         if close:
-            fl = llist[0]  # First line
-            ll = llist[-1]  # Last line
+            fl = llist[0]
+            ll = llist[-1]
             lines.append(sl3d(ll.x1, ll.y1, ll.z1, fl.x0, fl.y0, fl.z0))
         return cls(lines)
 
     @classmethod
     def by_walk(self, var_l='constant', var_ang='constant',
-                specs = {'n': 5,
-                         'max_total_length': 10,
-                         'min_total_length': 8,
-                         'mean_length': 1,}
-                ):
-        """Construct a multi-line by random walk with specified length/angle variation. Not yet implemented."""
+                specs={'n': 5,
+                       'max_total_length': 10,
+                       'min_total_length': 8,
+                       'mean_length': 1}):
+        """Construct a multi-line by random walk with length/angle variation. Not yet implemented."""
         raise NotImplementedError("by_walk is not yet implemented.")
 
     @property
     def n(self):
-        """Return number of lines."""
+        """Number of line segments in the collection."""
         return len(self.lines)
 
     @property
     def lengths(self):
-        """
-        Rerturns lgnths of individual lines in regular order.
+        """Lengths of individual segments in order.
 
-        Example
+        Returns
         -------
-        me.lengths
+        list of float
+            Length of each ``Sline3d`` in ``self.lines``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            me.lengths
         """
         return [line.length for line in self.lines]
 
     @property
     def length(self):
-        """
-        Rerturns total lgnth of all lines.
+        """Total length of all segments combined.
 
-        Example
+        Returns
         -------
-        me.lengths
+        float
+            Sum of all individual segment lengths.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            me.length
         """
         return sum(self.lengths)
 
     @property
     def length_mean(self):
-        """
-        Rerturns mean length.
+        """Mean segment length.
 
-        Example
+        Returns
         -------
-        me.lengths
+        float
+            ``total_length / n``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            me.length_mean
         """
         return self.length/self.n
 
     @property
     def gradients(self):
-        """
-        Return gradient of every line.
+        """Gradient ``[dx/dz, dy/dz]`` of every segment.
+
+        Returns
+        -------
+        list of list of float
+            Per-segment gradient pairs.
         """
         return [line.gradient for line in self.lines]
 
     @property
     def nodes(self):
-        """Return unique list of nodes in the multi-straight-line object."""
+        """Unique list of nodes (start and end points) across all segments.
+
+        Returns
+        -------
+        numpy.ndarray, shape (M, 3)
+            Unique ``[x, y, z]`` node coordinates.
+        """
         nodes = [[line.x0, line.y0, line.z0] for line in self.lines]
         nodes += [[line.x1, line.y1, line.z1] for line in self.lines]
         return np.unique(nodes, axis=0)
 
     @property
     def mid_nodes(self):
-        """
-        Return mid-sode nodes of all lines.
+        """Midpoint coordinates of all segments.
 
-        Example
+        Returns
         -------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0), sl3d(2.5,2.5,3.0,4.0,4.0,3.5),
-                 sl3d(4.0,4.0,3.5,4.0,6.0,3.5)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.mid_nodes
+        list of tuple
+            Midpoint ``(xmid, ymid, zmid)`` for each segment in order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0),
+                     sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5),
+                     sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            print(MULLINE.mid_nodes)
         """
         return [line.mid for line in self.lines]
 
     @property
     def line_ids(self):
-        """Return memory id of each line."""
+        """Memory id of each segment.
+
+        Returns
+        -------
+        list of int
+            ``id(line)`` for each segment in ``self.lines``.
+        """
         return [id(line) for line in self.lines]
 
     def unclose(self):
-        """Remove the closing line."""
+        """Remove the closing segment (last element of ``self.lines``) in place."""
         del self.lines[-1]
 
     def distances_nodes(self, points):
-        """
-        Find distances between all nodes to the goiven points.
+        """Compute distances from every node to each of the given points.
 
         Parameters
         ----------
-        points: List of points
+        points : numpy.ndarray, shape (M, 3)
+            Query points to measure distances from.
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0), sl3d(2.5,2.5,3.0,4.0,4.0,3.5),
-                 sl3d(4.0,4.0,3.5,4.0,6.0,3.5)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        points = np.random.random((2,3))
-        MULLINE.distances_nodes(points)
+        Returns
+        -------
+        numpy.ndarray, shape (N_nodes, M)
+            Distance from each node (row) to each query point (column).
+
+        Notes
+        -----
+        Uses vectorised broadcasting:
+        ``points[:, np.newaxis]`` shapes to ``(M, 1, 3)`` so that
+        subtraction with ``nodes`` (shape ``(N, 3)``) yields ``(M, N, 3)``
+        differences, squared-summed over axis 2, then transposed to
+        ``(N_nodes, M)``.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            import numpy as np
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0),
+                     sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5),
+                     sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            points = np.random.random((2, 3))
+            MULLINE.distances_nodes(points)
         """
-        # Validation
-        # -------------------------------------
         nodes = np.array(self.nodes)
-        """
-        points = np.random.random((10,3))
-        nodes = np.random.random((4, 3))
-        distances = np.sqrt(np.sum((points[:, np.newaxis] - nodes) ** 2,
-                                   axis=2))
-
-        points[:, np.newaxis] broadcasts the points array to have shape
-        (10, 1, 3), effectively creating a third dimension for broadcasting.
-
-        points[:, np.newaxis] - nodes broadcasts nodes to shape (10, 4, 3) and
-        subtracts each node from each point, resulting in an array of
-        differences.
-
-        np.sum(... ** 2, axis=2) squares each difference element-wise, sums
-        along the third axis (axis=2), and then takes the square root to get
-        the Euclidean distances.
-        """
         distances = np.sqrt(np.sum((points[:, np.newaxis] - nodes) ** 2,
                                    axis=2)).T
         return distances
 
     def find_closest_nodes(self, point):
-        """
-        Find closest nodes to the given point.
+        """Find the index (or indices) of the node(s) closest to ``point``.
 
         Parameters
         ----------
-        points: List of points
+        point : array-like, shape (3,)
+            Query coordinate ``[x, y, z]``.
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        point = np.random.random(3)*np.random.randint(10)
-        MULLINE.find_closest_nodes(point)
+        Returns
+        -------
+        int or list of int
+            Index (or indices) into ``self.nodes`` of the nearest node(s).
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        point = lines[0].mid
-        MULLINE.find_closest_nodes(point)
+        Examples
+        --------
+        **Example 1** — random query point:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            import numpy as np
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            point = np.random.random(3) * np.random.randint(10)
+            MULLINE.find_closest_nodes(point)
+
+        **Example 2** — midpoint of the first segment:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            point = lines[0].mid
+            MULLINE.find_closest_nodes(point)
         """
-        # Validation
-        # -------------------------------------
         distances = self.distances_nodes(np.array(point)[:, np.newaxis].T).T.squeeze()
         closest_points = np.argwhere(distances == distances.min()).T.squeeze().tolist()
         return closest_points
 
     def sub_divide(self, line_number=0, f=0.5):
-        """
-        Sub-divide a single line in self.lines.
+        """Sub-divide a single segment at a fractional position.
+
+        Replaces the segment at ``line_number`` with two shorter segments
+        split at the fractional position ``f``.
 
         Parameters
         ----------
-        line_numbers: indeix in self.lines. Starts from 0.
-        f: factor in (0, 1), indicating location where the line shall
-            be divided.
+        line_number : int, optional
+            Zero-based index of the segment to split.  Default is 0.
+        f : float, optional
+            Fractional split position in (0, 1).  Default is 0.5.
+
+        Returns
+        -------
+        None
+            Modifies ``self.lines`` in place.
+
+        Raises
+        ------
+        TypeError
+            If ``line_number`` is not an integer.
+        ValueError
+            If ``line_number`` exceeds the number of segments.
 
         Examples
         --------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        e0 = sl3d(0.0,0.0,0.0, 1.0,1.0,1.0)
-        e1 = sl3d(1.0,1.0,1.0, 1.5,1.5,0.0)
-        e2 = sl3d(1.5,1.5,0.0, 2.5,2.5,3.0)
-        e3 = sl3d(2.5,2.5,3.0, 4.0,4.0,3.5)
-        e4 = sl3d(4.0,4.0,3.5, 4.0,6.0,3.5)
+        .. code-block:: python
 
-        lines = [e0,e1,e2,e3,e4]
-
-        me = msl3d.from_lines(lines, close=True)
-        me.lines
-
-        me = msl3d.from_lines(lines, close=False)
-        me.lines
-
-        me.sub_divide(line_number=0, f=0.25)
-        me.lines
-
-        me.sub_divide(line_number=len(me.lines), f=0.25)
-        me.lines
-
-        me.sub_divide(line_number=3, f=0.50)
-        me.lines
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            e0 = sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            e1 = sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0)
+            e2 = sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)
+            e3 = sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5)
+            e4 = sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)
+            me = msl3d.from_lines([e0, e1, e2, e3, e4], close=False)
+            me.sub_divide(line_number=0, f=0.25)
+            me.sub_divide(line_number=len(me.lines), f=0.25)
+            me.sub_divide(line_number=3, f=0.50)
         """
         if not isinstance(line_number, int):
             raise TypeError('Invalid line number type.')
         if line_number > len(self.lines):
-            raise ValueError('Invalid line number spacification.')
+            raise ValueError('Invalid line number specification.')
         if line_number == 0:
             new_lines = self.lines[0].split(f=f, saa=False, throw=True)
             self.lines = new_lines + self.lines[1:]
@@ -324,164 +408,179 @@ class MSline3d():
             new_lines = self.lines[-1].split(f=f, saa=False, throw=True)
             self.lines = self.lines[:-1] + new_lines
         else:
-            # end result: left--line0--line1--right
             left = [line for line in self.lines[:line_number]]
-            # Divisiozn operation stzrts
             line01 = self.lines[line_number].split(f=f, saa=False, throw=True)
-            # Division operation ends
             right = [line for line in self.lines[line_number+1:]]
             self.lines = left + line01 + right
 
     def remove_point_by_index(self, index=2, remove='previous_line'):
+        """Remove a node by index, merging the adjacent segments.
+
+        Parameters
+        ----------
+        index : int, optional
+            Zero-based index of the node (shared endpoint) to remove.
+            Default is 2.
+        remove : {'previous_line', 'next_line', 'both'}, optional
+            How to handle the adjacent segments:
+
+            * ``'previous_line'`` — extend the next segment back to the
+              previous segment's start point and delete the previous segment.
+            * ``'next_line'`` — extend the previous segment forward to the
+              next segment's end point and delete the next segment.
+            * ``'both'`` — replace both adjacent segments with a single new
+              segment connecting the previous segment's start to the next
+              segment's end.
+
+            Default is ``'previous_line'``.
+
+        Returns
+        -------
+        None
+            Modifies ``self.lines`` in place.
+
+        Examples
+        --------
+        **Example 1** — remove previous segment:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0),
+                     sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5),
+                     sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='previous_line')
+            print(MULLINE.n)
+
+        **Example 2** — remove next segment:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0),
+                     sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5),
+                     sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='next_line')
+
+        **Example 3** — replace both adjacent segments with a single new segment:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0),
+                     sl3d(2.5, 2.5, 3.0, 4.0, 4.0, 3.5),
+                     sl3d(4.0, 4.0, 3.5, 4.0, 6.0, 3.5)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_index(index=2, remove='both')
         """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0), sl3d(2.5,2.5,3.0,4.0,4.0,3.5),
-                 sl3d(4.0,4.0,3.5,4.0,6.0,3.5)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='previous_line')
-        for line in MULLINE.lines: print(id(line))
-
-        MULLINE.lines
-
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0), sl3d(2.5,2.5,3.0,4.0,4.0,3.5),
-                 sl3d(4.0,4.0,3.5,4.0,6.0,3.5)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='next_line')
-        for line in MULLINE.lines: print(id(line))
-
-        MULLINE.lines
-
-        Example-3
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0), sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0), sl3d(2.5,2.5,3.0,4.0,4.0,3.5),
-                 sl3d(4.0,4.0,3.5,4.0,6.0,3.5)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-
-        for line in MULLINE.lines: print(id(line))
-        MULLINE.remove_point_by_index(index=2, remove='both')
-        for line in MULLINE.lines: print(id(line))
-
-        MULLINE.lines
-        """
-        # Validations
-        # -------------------------------------
         previous_line, next_line = index-1, index
-        # -------------------------------------
         if remove == 'previous_line':
-            # Next line will be updayed and previous line will be removed
             self.lines[next_line].move_i(self.lines[previous_line].coord_i)
             del self.lines[previous_line]
         elif remove == 'next_line':
-            # Next line will be removed and previous line will be updated
             self.lines[previous_line].move_j(self.lines[next_line].coord_j)
             del self.lines[next_line]
         elif remove == 'both':
-            # Next line and previous line will be removed and a new line will
-            # be made in its place
             x0, y0, z0 = self.lines[previous_line].coord_i
             x1, y1, z1 = self.lines[next_line].coord_j
             new_line = sl3d(x0, y0, z0, x1, y1, z1)
             self.lines = self.lines[:previous_line] + [new_line] + self.lines[next_line+1:]
         else:
-            raise ValueError('Invalid update specirfication.')
+            raise ValueError('Invalid update specification.')
 
-    def remove_point_by_location(self, location=(None,None,None),
+    def remove_point_by_location(self, location=(None, None, None),
                                  remove='previous_line'):
-        """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0),
-                 sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-        MULLINE.line_ids
-        MULLINE.remove_point_by_location(location=lines[0].coord_i, remove='previous_line')
-        MULLINE.lines
-        MULLINE.line_ids
+        """Remove a node nearest to ``location``, merging the adjacent segments.
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0),
-                 sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-        MULLINE.line_ids
-        MULLINE.remove_point_by_location(location=lines[0].mid, remove='previous_line')
-        MULLINE.lines
-        MULLINE.line_ids
+        Finds the closest node to ``location`` using :meth:`find_closest_nodes`
+        and delegates to :meth:`remove_point_by_index`.
 
-        Example-3
-        ---------
-        from upxo.geoEntities.mulsline3d import MSline3d as msl3d
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        lines = [sl3d(0.0,0.0,0.0,1.0,1.0,1.0),
-                 sl3d(1.0,1.0,1.0,1.5,1.5,0.0),
-                 sl3d(1.5,1.5,0.0,2.5,2.5,3.0)]
-        MULLINE = msl3d.from_lines(lines, close=True)
-        MULLINE.lines
-        location = np.random.random(3)*np.random.randint(10)
-        MULLINE.remove_point_by_location(location=location, remove='previous_line')
-        MULLINE.lines
+        Parameters
+        ----------
+        location : array-like, shape (3,), optional
+            Target ``[x, y, z]`` coordinate.  The nearest node is found and
+            removed.  Default is ``(None, None, None)``.
+        remove : {'previous_line', 'next_line', 'both'}, optional
+            See :meth:`remove_point_by_index`.  Default is
+            ``'previous_line'``.
+
+        Returns
+        -------
+        None
+            Modifies ``self.lines`` in place.
+
+        Notes
+        -----
+        When only 2 segments remain after removal and the second is a
+        redundant closing segment (same endpoints as the first but reversed),
+        the closing segment is automatically deleted.
+
+        Examples
+        --------
+        **Example 1** — remove by a known endpoint:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_location(location=lines[0].coord_i,
+                                             remove='previous_line')
+
+        **Example 2** — remove by a segment midpoint:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            MULLINE.remove_point_by_location(location=lines[0].mid,
+                                             remove='previous_line')
+
+        **Example 3** — remove by a random location:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulsline3d import MSline3d as msl3d
+            from upxo.geoEntities.sline3d import Sline3d as sl3d
+            import numpy as np
+            lines = [sl3d(0.0, 0.0, 0.0, 1.0, 1.0, 1.0),
+                     sl3d(1.0, 1.0, 1.0, 1.5, 1.5, 0.0),
+                     sl3d(1.5, 1.5, 0.0, 2.5, 2.5, 3.0)]
+            MULLINE = msl3d.from_lines(lines, close=True)
+            location = np.random.random(3) * np.random.randint(10)
+            MULLINE.remove_point_by_location(location=location,
+                                             remove='previous_line')
         """
-        # Validations
-        # -------------------------------------
         if self.n == 1:
-            """
-            When there is a single line in the multi-line, no point can
-            be removed. Function call will exit.
-            """
             return
-        # -------------------------------------
         indices = self.find_closest_nodes(location)
-        # -------------------------------------
         if isinstance(indices, int):
             self.remove_point_by_index(index=indices, remove=remove)
         elif isinstance(indices, list) and len(indices) > 1:
             self.remove_point_by_index(index=indices[0], remove=remove)
             for i, index in enumerate(indices[1:]):
                 self.remove_point_by_location(location=location, remove=remove)
-            # print('Multiple nodes were removed.')
-        # -------------------------------------
         if self.n == 2:
-            """
-            In some cases, only 2 lines remain, of which the second one will
-            usually be the closing line. So, its just the closing line sitting
-            on top of original lines. As the closing line, in this case, jhas
-            the same 'end'-points but is just flipped in direction, they both
-            are essentially the same lines. In this case, the closing line
-            will be removed after the chack has confirmed the existence of
-            such a closing line.
-            """
-            # Check for equal length
             point0, point1 = self.lines[1].coord_list
             same_endpoints = [self.lines[0].is_point_endpoint(point0),
-                              self.lines[0].is_point_endpoint(point1),
-                              ]
+                              self.lines[0].is_point_endpoint(point1)]
             if all(same_endpoints):
-                """Retain the original lines and trim the closing line."""
                 del self.lines[1]
