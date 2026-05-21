@@ -21,12 +21,14 @@ class geometryfi3d:
     n_plotTypes = FLAGS.n_plotType_3D_voxels
 
     def __init__(self, lfi):
+        """Initialise the instance."""
         self.lfi = lfi
         self.mprops = {}
         self.scaleHistory = {0: 1}
         self.bboxes = None
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"VOX.2.GEOM. MID.{id(self)}"
     
     # ================================================================================================
@@ -34,13 +36,16 @@ class geometryfi3d:
     # NEIGHBOUR OPERATIONS
 
     def find_neigh(self):
+        """Find neigh."""
         neigh_fids = gidOps.find_neighs3d(self.lfi, 6)
         return neigh_fids
 
     def get_feature_sizes(self):
+        """Return the feature sizes."""
         return mpropOps.get_feature_volumes(self.lfi)
     
     def find_mprops(self):
+        """Find mprops."""
         self.mprops['nvox'] = self.get_feature_sizes()
 
     # ================================================================================================
@@ -49,6 +54,7 @@ class geometryfi3d:
 
     def scale(self, scaleFactor, reindex=False, plotgs=True, alpha=1.0, cmap='nipy_spectral',
               quickPlot_kwargs={'scalar_name': 'lfi', 'alpha': 0.75, 'cmap': 'viridis'}):
+        """Scale."""
         self.lfi = gridOps.rescale_grid_3d(self.lfi, scaleFactor, method='nearest')
         if reindex:
             self.reindex(findMprops=False, plotgs=False, quickPlot_kwargs=quickPlot_kwargs)
@@ -59,6 +65,7 @@ class geometryfi3d:
     # COMMON INTERFACE BOUNDARY DETECTION
 
     def find_spb(self):
+        """Find spb."""
         from skimage.segmentation import find_boundaries
         spb = find_boundaries(self.lfi, connectivity=2, mode='subpixel', background=0)
 
@@ -82,6 +89,7 @@ class geometryfi3d:
     # VOXEL GRAIN BOUNDARY CLEANING OPERATIONS - GLOBAL MORPHOLOGICAL OPERATIONS
 
     def prepare(self, run_pre_cleaning_step=True):
+        """Prepare."""
         if run_pre_cleaning_step:
             self.prepare_pre_vox_cleaning(plotgs=False)
         self.cleanVoxMorph_DE_npass(niterations=2,
@@ -91,6 +99,7 @@ class geometryfi3d:
 
     def prepare_pre_vox_cleaning(self, plotgs=False,
                     quickPlot_kwargs={'scalar_name': 'lfi', 'alpha': 0.75, 'cmap': 'viridis'}):
+        """Prepare pre vox cleaning."""
         self.report(message="Pre-Initial cleaning report: \n")
         print("\nInitiating pre-cleaning")
         self.reindex(findMprops=False, plotgs=False)
@@ -102,15 +111,18 @@ class geometryfi3d:
     # ================================================================================================
 
     def detect_and_merge_islands(self):
+        """Detect and merge islands."""
         islands = self.detect_islands(self.neigh_fid)
         if len(islands) > 0:
             self.lfi = self.merge_islands(self.lfi, islands, self.neigh_fid)
             self.reindex(plotgs=False)
 
     def detect_islands(self, neigh_fids):
+        """Detect islands."""
         return gidOps.detect_islands(neigh_fids)
 
     def merge_islands(self, lfi, islands, neigh_fids):
+        """Merge islands."""
         for island in islands:
             lfi[lfi==island] = neigh_fids[island]
         return lfi
@@ -118,7 +130,8 @@ class geometryfi3d:
     # ================================================================================================
 
     def filter_small_inconsistant_features(self):
-        pass
+        """Filter small inconsistant features."""
+        raise NotImplementedError("filter_small_inconsistant_features is not yet implemented.")
 
     # ================================================================================================
 
@@ -127,6 +140,7 @@ class geometryfi3d:
                             'footprints': ['ball', 'ball'], 'removeEndVox': [True, True]},
                 reindex=False, plotgs=False, 
                 quickPlot_kwargs={'scalar_name': 'lfi', 'alpha': 0.75, 'cmap': 'viridis'}):
+        """Voxel smoother."""
         if addMajFilter:
             self.lfi = self.cleanVoxMorph_majority_filter_npass(lfi=self.lfi, plotgs=False,
                                     **majority_filter_kwargs)
@@ -156,6 +170,7 @@ class geometryfi3d:
                 ERSfpSizes=[4, 4], footprints=['ball', 'ball'],
                 removeEndVox=[True, True], plotgs=True, alpha=1.0, cmap='nipy_spectral',
                 quickPlot_kwargs={'scalar_name': 'lfi', 'alpha': 0.75, 'cmap': 'viridis'}):
+        """Cleanvoxmorph de npass."""
         self.lfi = gridOps.smooth_voxMorph_npass(self.lfi, niterations=niterations,
             DILfpSizes=DILfpSizes, ERSfpSizes=ERSfpSizes, footprints=footprints,
             removeEndVox=removeEndVox)
@@ -181,6 +196,7 @@ class geometryfi3d:
     # REPORTING
 
     def report(self, message='Report: \n'):
+        """Report."""
         opDisp.preManifold_clean_report(self.lfi, message=message)
 
     # ================================================================================================
@@ -189,6 +205,7 @@ class geometryfi3d:
 
     def quick_plot(self, scalar_name='lfi', alpha=0.9, cmap='nipy_spectral', show_edges=False,
                    title='', xname='', yname='', zname=''):
+        """Quick plot."""
         gsviz.plot_pvgrid(gsviz.make_pvgrid(self.lfi, scalar_name=scalar_name),
                             scalar_name=scalar_name, show_edges=show_edges, alpha=alpha, title=title,
                             cmap=cmap, _xname_=xname, _yname_=yname, _zname_=zname)

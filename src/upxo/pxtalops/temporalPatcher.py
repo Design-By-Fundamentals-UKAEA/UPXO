@@ -107,6 +107,7 @@ class patcher_pixvox():
                  'conn', 'dashboards', 'patchDomainShape', 'vizCtrls', 'a')
 
     def __init__(self, **kwargs):
+        """Initialise the instance."""
         self.gsbase = kwargs.get("base_grain_structure", None)
         self.gspatchers = kwargs.get("patch_grain_structures", None)
         self.lfib = kwargs.get("base_lfi", None)
@@ -126,11 +127,13 @@ class patcher_pixvox():
         self.neigh_fid_patched = kwargs.get("neigh_fid_patched", None)
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"UPXO-pxmod-mmgs-{self.dim}d {id(self)}"
 
     @classmethod
     def by_UPXO_mcgs(cls, base_grain_structure=None, patch_grain_structure=None,
             target_distribution=None, ninstances=None, constraints=None, dim=None):
+        """By upxo mcgs."""
         if base_grain_structure.lgi.shape != patch_grain_structure.lgi.shape:
             raise ValueError("Both grain structures must be the same shape")
         return cls(base_grain_structure=base_grain_structure,
@@ -142,6 +145,7 @@ class patcher_pixvox():
     @classmethod
     def by_lgi(cls, base_lfi=None, patch_lfi=None, target_distribution=None,
             ninstances=None, constraints=None, dim=None):
+        """By lgi."""
         if base_lfi.shape != patch_lfi.shape:
             raise ValueError("Both grain structures must be the same shape")
         return cls(base_grain_structure=None, patch_grain_structures=None,
@@ -232,6 +236,7 @@ class patcher_pixvox():
 
     def patch(self, lfib=None, lfip=None, patchDomain='rectangular', remove_small_features=False, 
               niterations=4, recharEveryMerge=False, recursionLimit=100, threshold=10, constraints={}):
+        """Patch."""
         if patchDomain == 'rectangular':
             self.patch_rectangular(lfib=lfib, lfip=lfip, constraints=constraints,
                     remove_small_features=remove_small_features, threshold=threshold,
@@ -261,10 +266,12 @@ class patcher_pixvox():
             self.patch_multiline1_3d(lfib=lfib, lfip=lfip, constraints=constraints)
 
     def find_small_fids(self, lfi, threshold):
+        """Find small fids."""
         small_fids = np.where(self.get_feature_sizes(lfi) <= threshold)[0]+1 
         return small_fids
 
     def _patch_rect_(self, lfib, lfip, xbound, ybound):
+        """ patch rect ."""
         xmin, xmax = xbound
         ymin, ymax = ybound
         lfiPatched = lfib.copy()
@@ -272,6 +279,7 @@ class patcher_pixvox():
         return lfiPatched
 
     def shuffleLFIIDs(self, lfi):
+        """Shufflelfiids."""
         unique_ids = np.unique(lfi)
         shuffled_ids = unique_ids.copy()
         np.random.shuffle(shuffled_ids)
@@ -280,15 +288,18 @@ class patcher_pixvox():
         return lfi
 
     def set_connectivity(self):
+        """Set or update connectivity."""
         self.conn = 4 if self.dim == 2 else 6
 
     def reindex_lfi(self, lfi):
+        """Reindex lfi."""
         self.set_connectivity()
         lfi = cc3d.connected_components(lfi, 
             connectivity=self.conn, out_dtype=np.uint32)
         return lfi.astype(np.int32)
 
     def find_neighs(self, lfi):
+        """Find neighs."""
         self.set_connectivity()
         edges = cc3d.region_graph(lfi, connectivity=self.conn)
         neigh_fids = defaultdict(set)
@@ -300,9 +311,11 @@ class patcher_pixvox():
         return neigh_fids
 
     def get_feature_sizes(self, lfi):
+        """Return the feature sizes."""
         return np.bincount(lfi.ravel())
 
     def detect_islands(self, neigh_fids):
+        """Detect islands."""
         islands = []
         for gid, neighs in neigh_fids.items():
             if neighs.size == 1:
@@ -310,11 +323,13 @@ class patcher_pixvox():
         return islands
 
     def merge_islands(self, lfi, islands, neigh_fids):
+        """Merge islands."""
         for island in islands:
             lfi[lfi==island] = neigh_fids[island]
         return lfi
 
     def find_grains_in_patch(self, lfi, patch_polygon):
+        """Find grains in patch."""
         xmin, ymin, xmax, ymax = patch_polygon.bounds
         xmin, ymin, xmax, ymax = int(xmin), int(ymin), int(xmax), int(ymax)
         patch_region = lfi[ymin:ymax, xmin:xmax]
@@ -322,6 +337,7 @@ class patcher_pixvox():
         return grains_in_patch
 
     def find_external_neighs(self, grains_in_patch, neigh_fids):
+        """Find external neighs."""
         # Find neighbors of grains in patch that do NOT belong to the patch
         grains_in_patch_set = set(grains_in_patch)
         external_neighs = {}
@@ -335,6 +351,7 @@ class patcher_pixvox():
         return external_neighs
 
     def find_largest_external_neighs(self, external_neighs, patchedLGI):
+        """Find largest external neighs."""
         # Find the largest external neighbor for each grain in the patch
         largest_external_neighs = {}
 
@@ -495,6 +512,7 @@ class patcher_pixvox():
         self.neigh_fid_patched = {1: neigh_fids}
 
     def _patch_circ_(self, lfib, lfip, xcenter, ycenter, radius):
+        """ patch circ ."""
         y, x = np.ogrid[:lfib.shape[0], :lfib.shape[1]]
         mask = (x - xcenter)**2 + (y - ycenter)**2 <= radius**2
         lfiPatched = lfib.copy()
@@ -559,6 +577,7 @@ class patcher_pixvox():
     def merge_small_features_with_largest_neigh(self, lfi,
                 threshold, neigh_fids, niterations=4, recharEveryMerge=False, 
                 recursionLimit=10):
+        """Merge small features with largest neigh."""
         small_fids = self.find_small_fids(lfi, threshold)
         if len(small_fids) == 0:
             return lfi, np.unique(lfi), neigh_fids
@@ -566,6 +585,7 @@ class patcher_pixvox():
         if recharEveryMerge:
             # Re-characterize after every merge oprtation. Could get costly.
             def _vaasu_(lfi, threshold, neigh_fids):
+                """ vaasu ."""
                 small_fids = self.find_small_fids(lfi, threshold)
                 for small_fid in small_fids:
                     if small_fid in neigh_fids:
@@ -607,13 +627,13 @@ class patcher_pixvox():
                         'cellPropagation': OPTIONS-1A, 'propagationProb': 0.5}
             OPTIONS-1A: OPTIONS-1A for 'rectangular'.
         '''
-        pass
+        raise NotImplementedError("patch_hexahedral is not yet implemented.")
 
     def patch_polygonal(self, lfib=None, lfip=None, constraints={}):
         '''constraints={'pol': None, 'polType': 'shapely', 'cellPropagation': OPTIONS-1A, 'propagationProb': 0.5}
             OPTIONS-1A: OPTIONS-1A for 'rectangular'.
         '''
-        pass
+        raise NotImplementedError("patch_polygonal is not yet implemented.")
 
     def patch_multiPolygonal(self, lfib=None, lfip=None, constraints={}):
         '''constraints={'mulpol': None, 'polType': 'shapely', 'cellPropagation': OPTIONS-1A, 'propagationProb': 0.5}
@@ -621,29 +641,33 @@ class patcher_pixvox():
             mulpol: A list of polygons, not a multi-polygon.
             OPTIONS-1: list of OPTIONS-1A for each polygon. Each OPTIONS-1A as previous.
         '''
-        pass
+        raise NotImplementedError("patch_multiPolygonal is not yet implemented.")
 
     def patch_mis(self, lfib=None, lfip=None, constraints={}):
+        """Patch mis."""
         # Minimal Independent Set base
-        pass
+        raise NotImplementedError("patch_mis is not yet implemented.")
 
     def patch_gidsNO(self, lfib=None, lfip=None, constraints={}):
+        """Patch gidsno."""
         # A bunch of GIDs and Neighbour orders for each.
-        pass
+        raise NotImplementedError("patch_gidsNO is not yet implemented.")
 
     def patch_simplified_weld_1(self, lfib=None, lfip=None, constraints={}):
-        pass
+        """Patch simplified weld 1."""
+        raise NotImplementedError("patch_simplified_weld_1 is not yet implemented.")
 
     def patch_weld_3D(self, lfib=None, lfip=None, constraints={}):
-        """H.L. Wei, J.W. Elmer, T. DebRoy, Crystal growth during keyhole mode laser 
+        """H.L. Wei, J.W. Elmer, T. DebRoy, Crystal growth during keyhole mode laser
         welding, Acta Materialia, Volume 133, 2017, Pages 10-20, ISSN 1359-6454,
         https://doi.org/10.1016/j.actamat.2017.04.074.
         (https://www.sciencedirect.com/science/article/pii/S1359645417303634)
         """
-        pass
+        raise NotImplementedError("patch_weld_3D is not yet implemented.")
 
     def patch_multi_bead_weld_1(self, lfib=None, lfip=None, constraints={}):
-        pass
+        """Patch multi bead weld 1."""
+        raise NotImplementedError("patch_multi_bead_weld_1 is not yet implemented.")
 
     def patch_multiline1_2d(self, lfib=None, lfip=None, constraints={}):
         """constraints={'mullines': None,
@@ -666,15 +690,17 @@ class patcher_pixvox():
                     calls take place, to generate a buffer polygon using maxWidth and capradius.
             cellPropagation: OPTIONS-1: As for 'ractangular.
         """
-        pass
+        raise NotImplementedError("patch_multiline1_2d is not yet implemented.")
 
     def patch_multiline1_3d(self, lfib=None, lfip=None, constraints={}):
         """Similar to 'mulline-1.2d', but in 3D."""
-        pass
+        raise NotImplementedError("patch_multiline1_3d is not yet implemented.")
 
     def plot_lfi_2D(self, lfi, **kwargs):
+        """Visualise lfi 2D using Matplotlib or PyVista."""
         from upxo.viz.gsviz import see_map
         ax = see_map(lfi, **kwargs)
 
     def plotImage3D(self, im3d):
-        pass
+        """Plotimage3d."""
+        raise NotImplementedError("plotImage3D is not yet implemented.")
