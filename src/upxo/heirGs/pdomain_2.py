@@ -16,13 +16,11 @@ class pdomInstances():
         B: bounds of the physical domain
     '''
     count: int = -1
-    print(40*'*')
-    NPDI    = int(input('Number of Physical Domain instances:  '))
-    print(''.join(['\n', 40*'*']))
-    O       = [[i, 0] for i in range(NPDI)]
-    B       = copy.deepcopy(O)
-    GSSM    = copy.deepcopy(O)
-    matdata = copy.deepcopy(O)
+    NPDI: int = 0
+    O: list = field(default_factory=list)
+    B: list = field(default_factory=list)
+    GSSM: list = field(default_factory=list)
+    matdata: list = field(default_factory=list)
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __repr__(self):
         """Return a string representation of this instance."""
@@ -107,9 +105,9 @@ class pdomain_info():
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     vt_seed_01: str = field(default = 'hex')
     """ vt_seed_01_A: PERTURBATION FACTORS for x, y and z """
-    vt_seed_01_A: np.ndarray = field(default = np.array([0.1, 0.1, 0.1], dtype = int))
+    vt_seed_01_A: np.ndarray = field(default_factory=lambda: np.array([0.1, 0.1, 0.1], dtype=int))
     """ vt_seed_01_B: STRETCH FACTORS FOR x, y and z """
-    vt_seed_01_B: np.ndarray = field(default = np.array([1.0, 1.0, 1.0], dtype = int))
+    vt_seed_01_B: np.ndarray = field(default_factory=lambda: np.array([1.0, 1.0, 1.0], dtype=int))
     """ vt_seed_02: SEED POINT DISTRIBUTION OPTIMIZATION FLAG"""
     vt_seed_02: str = field(default = 'dont_optimize') # or: 'dont_optimize'
     """vt_seed_02_A: OPTIMIZATION TECNIQUE"""
@@ -200,10 +198,10 @@ class gstack():
         List holding counts of grain strucure instances
     '''
     # Grain Structure Stack Matrix: Linked ID list of grain structure instances
-    IDLevel0_GSSM: np.ndarray = field(default = np.array([], dtype = int))
-    IDLevel1_GSSM: np.ndarray = field(default = np.array([], dtype = int))
-    IDLevel2_GSSM: np.ndarray = field(default = np.array([], dtype = int))
-    IDLevel3_GSSM: np.ndarray = field(default = np.array([], dtype = int))
+    IDLevel0_GSSM: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
+    IDLevel1_GSSM: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
+    IDLevel2_GSSM: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
+    IDLevel3_GSSM: np.ndarray = field(default_factory=lambda: np.array([], dtype=int))
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __post_init__(self):
         """Post-initialisation hook for dataclass fields."""
