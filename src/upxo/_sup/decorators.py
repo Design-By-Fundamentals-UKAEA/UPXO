@@ -1,4 +1,4 @@
-import importlib
+﻿import importlib
 
 def port_doc(module_path, func_name):
     """
@@ -22,8 +22,8 @@ def port_doc(module_path, func_name):
     existing docstring. If the import fails, it leaves the target function's
     docstring unchanged.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo._sup.decorators as decorators
     """
     def decorator(target_func):

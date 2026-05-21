@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 
 def rebuild_elConnectivity(availableElTypes=None, availableFeatures=None,
                            filtered_mesh_cells=None):
@@ -33,8 +33,8 @@ def get_elCentroids_2d(nodes, elConn, availableElTypes):
 
 def compute_elementQuality_AR_2d(nodes, elConn):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.meshing.elemOps import compute_elementQuality_AR as compute_elq_AR
     """
     coords = nodes[:, :2]
@@ -81,8 +81,8 @@ def build_global_element_numbering(elConn, elID_ranges=None, start_id=1):
         global_to_local: dict[global_id] -> (eltype, local_id)
         local_to_global: dict[eltype] -> np.ndarray mapping local_id -> global_id
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.meshing.elemOps import build_global_element_numbering
     """
     global_ids_by_type = {}

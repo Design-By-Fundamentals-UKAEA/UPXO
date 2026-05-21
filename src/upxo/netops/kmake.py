@@ -10,8 +10,8 @@ def make_gid_net_from_neighlist(neighbor_dict):
     """
     Creates a networkx graph from the entire neighbor_dict.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kmake import make_gid_net_from_neighlist
     """
     G = nx.Graph()

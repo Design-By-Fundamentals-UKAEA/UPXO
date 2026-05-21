@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from copy import deepcopy
 from scipy.ndimage import binary_erosion
 
@@ -114,8 +114,8 @@ def introduce_boundary_zones(gs, fids=[], niterations=5, method='use_min_core_si
     introduce_bz__simple : Implementation of 'simple' method.
     introduce_bz__thresholded : Implementation of 'thresholded' method.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.pxtalops.grain_boundary_zones import introduce_boundary_zones
 
     Authors
@@ -203,8 +203,8 @@ def introduce_bz__use_min_core_size(gs, fids=[], niterations=5, min_core_size=50
     ValueError
         If the fids list is empty.
         
-    Import
-    -------
+    Usage
+    -----
     from pxtalops.grain_boundary_zones import introduce_bz__use_min_core_size
     """
     if reset_others:
@@ -281,8 +281,8 @@ def introduce_bz__simple(gs, fids=[], niterations=5,
     ValueError
         If the fids list is empty.
         
-    Import
-    -------
+    Usage
+    -----
     from pxtalops.grain_boundary_zones import introduce_bz__simple
     """
     if reset_others:
@@ -352,8 +352,8 @@ def introduce_bz__thresholded(gs, fids=[], niterations=5, threshold_bz_thickness
     ValueError
         If the fids list is empty.
         
-    Import
-    -------
+    Usage
+    -----
     from pxtalops.grain_boundary_zones import introduce_bz__thresholded
     """
     if reset_others:
@@ -496,8 +496,8 @@ def determine_buffer_geometric_GS(cell, min_cell_area=5, buffer_quality_factor=0
         The boundary zone region (original cell minus buffered cell). May be a MultiPolygon if holes were created.
         None if no valid buffer distance was found.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.pxtalops.grain_boundary_zones import determine_buffer_geometric_GS as find_buffer_geom
     """
     # Get the cell geometry
@@ -652,8 +652,8 @@ def process_grain_boundary_zones(smoothed_grains, ignoreFids=[], min_cell_area=8
     combined_multipolygon : shapely.geometry.MultiPolygon
         MultiPolygon containing all valid boundary zones and core zones for visualization
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.pxtalops.grain_boundary_zones import process_grain_boundary_zones
     """
     from shapely.geometry import MultiPolygon

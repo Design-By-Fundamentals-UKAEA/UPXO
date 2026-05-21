@@ -1,4 +1,4 @@
-"""
+﻿"""
 Module: grainBoundOps3d
 -----------------------
 Grain-boundary operations for 3D labelled voxel structures.
@@ -61,8 +61,8 @@ def compute_gb_boundary_mask_interiorVoxels(lfi):
     internally by :func:`compute_gb_boundary_mask`; direct use is only needed
     when the RVE outer faces should be excluded from the boundary mask.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         import upxo.gbops.grainBoundOps3d as gbOps
@@ -122,8 +122,8 @@ def compute_gb_boundary_mask(lfi):
     The dominant cost is the parallel interior scan in
     :func:`compute_gb_boundary_mask_interiorVoxels`.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         import upxo.gbops.grainBoundOps3d as gbOps
@@ -192,8 +192,8 @@ def identify_articulation_voxels(lfi):
     The connected-component labelling is performed by ``cc3d.connected_components``
     with ``connectivity=6``.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         import upxo.gbops.grainBoundOps3d as gbOps

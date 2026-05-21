@@ -14,8 +14,8 @@ from dataclasses import dataclass
            frozen=False)
 class twingen:
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.dclasses.features import twingen
 
     Example

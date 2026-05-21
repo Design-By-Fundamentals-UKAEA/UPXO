@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import matplotlib.pyplot as plt
 
 class transTemporalGSSLICEVoids:
@@ -13,8 +13,8 @@ class transTemporalGSSLICEVoids:
       size and shape distributions on the mechanical behaviour of the CPFEM
       model.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.imageOps.voids import transTemporalGSSLICEVoids as gsvoids
     """
     valid_imgCATEGORY = ('sources', 's', 'targets', 't')

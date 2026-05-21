@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import cc3d
 from upxo.viz import gsviz
 import upxo.gsdataops.gid_ops as gidOps
@@ -10,8 +10,8 @@ import upxo.flags_and_controls.flags as FLAGS
 
 class geometryfi3d:
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.pxtalops.vox2geom import geometryfi3d
     """
     __slots__ = ('lfi', 'fid', 'n', 'mprops', 'neigh_fid', 'spb', 'bboxes',

@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection, LineCollection
 import numpy as np
@@ -115,8 +115,8 @@ def see_femesh(points_2d, lines, triangles, quads, figsize=(8, 8), dpi=150,
     ax : matplotlib.axes.Axes
         Axes object
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz.meshviz import see_femesh
     
     Examples
@@ -288,8 +288,8 @@ def plot_elements_by_ids_geomMesh(element_ids, eltype, elConn, nodes, GBlines,
                          vmin=None, vmax=None, show_colorbar=True,
                          title='Selected elements'):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import meshviz
     """
     if fig is None or ax is None:
@@ -452,8 +452,8 @@ def plot_elements_by_elIDs(element_ids, eltype=None, elConn=None,
                          vmin=None, vmax=None, show_colorbar=True,
                          title='Selected elements'):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import meshviz
 
     """

@@ -1,9 +1,9 @@
-import numpy as np
+﻿import numpy as np
 
 def findJP(segments):
     """
-    Import
-    ------
+    Usage
+    -----
     import upxo.jpops as jpOps
     Use as: jpOps.findJP
     """
@@ -22,8 +22,8 @@ def findJP(segments):
 
 def separate_junctions_by_order(junctions, include_empty=True):
     """
-    Import
-    ------
+    Usage
+    -----
     import upxo.jpops as jpOps
     Use as: jpOps.separate_junctions_by_order
     """

@@ -1,8 +1,8 @@
-"""
+﻿"""
 Abstract base classes for UPXO geometric entities.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.bases import UPXO_Point, UPXO_Edge
 
 Classes

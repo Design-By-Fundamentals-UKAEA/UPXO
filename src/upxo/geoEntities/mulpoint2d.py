@@ -1,4 +1,4 @@
-"""
+﻿"""
 2D multi-point collection.
 
 This module provides a container class for managing ordered collections of
@@ -95,8 +95,8 @@ class MPoint2d():
     --------------------
     coords: np.array([[0, 0], [1, 1], [2, 3], [4, 5]])
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.geoEntities.mulpoint2d import MPoint2d
     from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
     """

@@ -1,4 +1,4 @@
-import pyvista as pv
+﻿import pyvista as pv
 import functools
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,8 +9,8 @@ from shapely.geometry import MultiPolygon
 """
 Visualization utilities for grain structure data.
 
-Import
-------
+Usage
+-----
 from upxo.viz import gsviz
 """
 
@@ -77,8 +77,8 @@ def see_map(lfi, fids=None, cmap='viridis',
     ax : matplotlib.axes.Axes
         The axis object for further customization
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz.gsviz import see_map
     
     Examples
@@ -296,8 +296,8 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
     ax : matplotlib.axes.Axes
         Axes object
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz.gsviz import plot_multipolygon_geometric
 
     Function signature
@@ -373,8 +373,8 @@ def plot_pvgrid(pvgrid, scalar_name='lfi', show_edges=False, alpha=1.0, title=''
     gsviz.plot_pvgrid(gsviz.make_pvgrid(lfi, scalar_name='lfi'),
                 scalar_name, show_edges=False, alpha=1.0, title='',
                 cmap='nipy_spectral', _xname_='', _yname_='', _zname_='')
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     """
     pvp = pv.Plotter()
@@ -401,8 +401,8 @@ def grain_viewer(lfi):
     -------
     None
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     Use as: gsviz.grain_viewer(lfi)
     """
@@ -477,8 +477,8 @@ def view_selected_grain_boundary_voxels(lfi, grain_ids, viewInternalOnly=True, s
         The PolyData object containing the boundary voxel points and their associated grain IDs. 
         Can be used for further analysis or custom visualization.
     
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     Example usage:
     >>> # Visualize boundary voxels for grain IDs 1, 2, and 3
@@ -578,8 +578,8 @@ def viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
         PyVista plotter object to plot over. If no pvp has been provided,
         new pvp shall be created. Default value is None.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     Use as: gsviz.viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
                    cmap='viridis', invert=True, crinkle=True,
@@ -640,8 +640,8 @@ def viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lgi',
         PyVista plotter object to plot over. If no pvp has been provided,
         new pvp shall be created. Default value is None.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     gsviz.viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalar='lgi',
                     cmap='viridis', normal_rotation=True, add_outline=False,
@@ -696,8 +696,8 @@ def viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='viridis',
         PyVista plotter object to plot over. If no pvp has been provided,
         new pvp shall be created. Default value is None.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     gsviz.viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='viridis',
                          style='surface', add_outline=False,
@@ -785,8 +785,8 @@ def plot_manifold_geom(cells_dict_list, figsize=(12, 6), dpi=100, inlude_legend=
     axes : ndarray of matplotlib.axes.Axes
         Array of axes objects
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     Use as: gsviz.plot_manifold_geom([cells_dict_1, cells_dict_2], figsize=(12, 6))
     """
@@ -873,8 +873,8 @@ def see_2dPoints(points, figsize=(6, 6), dpi=100, title='2D Points', xlabel='X-a
     ax : matplotlib.axes.Axes
         The axes object containing the plot.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz import gsviz
     Use as: gsviz.see_2dPoints(points_array)
     """

@@ -1,4 +1,4 @@
-"""UPXO: Validation & Conversion Utilities (NumPy Arrays)
+﻿"""UPXO: Validation & Conversion Utilities (NumPy Arrays)
 
 This module provides functions and a class for validating and manipulating
 NumPy arrays within the UPXO framework:
@@ -39,8 +39,8 @@ class _validation():
 
     Intended for internal use within the UPXO framework only.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.validation_values import validation
 
     Author
@@ -398,8 +398,8 @@ def isinstance_many(tocheck, dtype):
     """
     Check if all elements of tocheck belongs to a valid dtype.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.validation_values import isinstance_many
 
     Parameters
@@ -430,8 +430,8 @@ def find_spec_of_points(data):
     """
     Find coordinate point specification format. See examples for details.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.validation_values import find_spec_of_points
 
     Examples
@@ -596,8 +596,8 @@ def find_spec_points_mixed_datatypes(points):
     """
     Return specifications of all in a list of coordinate points.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.validation_values import find_spec_points_mixed_datatypes
 
     Examples

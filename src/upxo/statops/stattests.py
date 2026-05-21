@@ -1,4 +1,4 @@
-"""
+﻿"""
 Created on Fri May 31 13:32:03 2024
 
 @author: Dr. Sunil Anandatheertha
@@ -87,8 +87,8 @@ def test_rand_distr_autocorr(ARRAY,
                              _min_array_size_=10,
                              plot_acf=False, print_msg=False):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.statops.stattests import test_rand_distr_autocorr
 
     Example
@@ -158,8 +158,8 @@ def test_rand_distr_autocorr(ARRAY,
 
 def test_rand_distr_runs(ARRAY, alpha=0.05, print_msg=False):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.statops.stattests import test_rand_distr_runs
 
     Example
@@ -205,8 +205,8 @@ def test_rand_distr_runs(ARRAY, alpha=0.05, print_msg=False):
 
 def test_rand_distr_chisquare(ARRAY, alpha=0.05, print_msg=False):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.statops.stattests import test_rand_distr_chisquare
 
     Example
@@ -250,8 +250,8 @@ def test_rand_distr_chisquare(ARRAY, alpha=0.05, print_msg=False):
 
 def test_rand_distr_kolmogorovsmirnov(ARRAY, alpha=0.05, print_msg=False):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.statops.stattests import test_rand_distr_kolmogorovsmirnov
 
     Example
@@ -319,8 +319,8 @@ def test_rand_distr_kullbackleibler(ARRAY, bin_method='auto', alpha=0.5,
           below reference.
     https://numpy.org/doc/stable/reference/generated/numpy.histogram_bin_edges
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.statops.stattests import test_rand_distr_kullbackleibler
 
     Example

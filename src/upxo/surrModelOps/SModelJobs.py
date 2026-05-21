@@ -1,11 +1,11 @@
-from upxo.ggrowth.mcgs import mcgs
+﻿from upxo.ggrowth.mcgs import mcgs
 from upxo.interfaces.io.expop import ArrExp2d as arex2
 import os
 
 class mcgs2d_Surrogate():
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.surrModelOps.SModelJobs import mcgs2d_Surrogate as smod2d
     """
 

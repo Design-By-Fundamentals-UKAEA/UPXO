@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import cc3d
 import upxo.gsdataops.gid_ops as gidOps
 # import upxo.gsdataops.grid_ops as gridOps
@@ -18,8 +18,8 @@ def preManifold_clean_report(lfi, message='Report: \n'):
     lfi (numpy.ndarray): The labeled feature image to analyze.
     message (str): A custom message to include in the report.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.uiOps.outputDisplay as opDisp
     """
     print(40*'=', '\n', message)

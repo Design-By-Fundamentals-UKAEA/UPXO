@@ -18,8 +18,8 @@ def calculate_rkfield_js(G1, G2):
     """
     Calculate Jaccard similarity between the node sets of two graphs.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kcmp import calculate_rkfield_js
     """
     nodes1 = set(G1.nodes())
@@ -39,8 +39,8 @@ def calculate_rkfield_wd(kd_tgt, kd_smp):
     ------
     r
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kcmp import calculate_rkfield_wd
     """
     distance = wasserstein_distance(kd_tgt, kd_smp)
@@ -54,8 +54,8 @@ def calculate_rkfield_ksp(kd_tgt, kd_smp):
     """
     kd: Netowrk Degree
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kcmp import calculate_rkfield_ksp
     """
     # Higher p-value indicates more similar distributions
@@ -67,8 +67,8 @@ def calculate_rkfield_ed(kd_tgt, kd_smp):
     """
     kd: Netowrk Degree
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kcmp import calculate_rkfield_ed
     """
     # Energy Distance (a non-parametric measure of statistical distance)
@@ -89,8 +89,8 @@ def calculate_rkfield_nlsd(kd_tgt, kd_smp,
     Returns:
         float: The NetLSD distance (lower is more similar).
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.netops.kcmp import calculate_rkfield_nlsd
     """
     descriptor1 = netlsd.heat(kd_tgt, timescales=timescales)

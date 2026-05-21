@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from scipy import ndimage
 from skimage import morphology, measure
 import upxo.gsdataops.gid_ops as gidOps
@@ -9,8 +9,8 @@ Property Operations
 This module contains functions for calculating morphological properties of
 features in a labeled feature ID (LFI) array.
 
-Import
-------
+Usage
+-----
 import upxo.propOps.mpropOps as mpropOps
 """
 
@@ -38,8 +38,8 @@ def find_ratio_bfeat_intfeat_volumes(lfi):
     float
         The ratio of boundary feature volume to internal feature volume.
     
-    Import
-    ------
+    Usage
+    -----
     import upxo.propOps.mpropOps as mpropOps
     Use as: mpropOps.find_ratio_bfeat_intfeat_volumes
     """
@@ -54,8 +54,8 @@ def find_ratio_bfeat_intfeat_volumes(lfi):
 def fit_ellipsoid_jekel(points):
     """Source: Charles Jekel (2020) https://jekel.me/2020/Least-Squares-Ellipsoid-Fit/
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.propOps.mpropOps as mpropOps
     Use as: mpropOps.fit_ellipsoid_jekel
     """
@@ -74,8 +74,8 @@ def fit_ellipsoid_jekel(points):
 def get_neighborhood_signature(target_fid, neigh_fids, dna, n_order=1):
     """Retrieves metadata-based signature for a specific grain cluster.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.propOps.mpropOps as mpropOps
     Use as: mpropOps.get_neighborhood_signature
     """
@@ -90,8 +90,8 @@ def get_neighborhood_signature(target_fid, neigh_fids, dna, n_order=1):
 def analyze_grain_shapes(lfi, bboxes):
     """Tier 0: DNA pre-calc with ID-1 volume indexing for IDs starting at 1.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.propOps.mpropOps as mpropOps
     Use as: mpropOps.analyze_grain_shapes
     """

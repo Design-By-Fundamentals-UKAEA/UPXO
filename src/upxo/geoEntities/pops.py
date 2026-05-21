@@ -1,8 +1,8 @@
-"""
+﻿"""
 Pure point operations and point-to-entity comparison utilities for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities import pops
 
 Functions

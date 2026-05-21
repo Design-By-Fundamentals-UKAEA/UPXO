@@ -1,8 +1,8 @@
-"""
+﻿"""
 Geometric comparison utilities for UPXO entities.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.comparisions import cmp_edges, cmp_rings
 
 Functions

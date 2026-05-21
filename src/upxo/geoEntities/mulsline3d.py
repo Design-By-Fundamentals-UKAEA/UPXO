@@ -1,4 +1,4 @@
-"""
+﻿"""
 Multi-straight-line 3D geometric entity module for UPXO.
 
 Provides ``MSline3d``, a collection of ordered ``Sline3d`` segments
@@ -75,8 +75,8 @@ class MSline3d():
     lines : list of Sline3d
         Ordered sequence of 3-D line segments.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         from upxo.geoEntities.mulsline3d import MSline3d as msl3d

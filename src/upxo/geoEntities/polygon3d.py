@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 3D polygon geometric entity for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.polygon3d import Polygon3d
 
 Classes

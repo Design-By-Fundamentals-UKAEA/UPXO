@@ -1,4 +1,4 @@
-"""
+﻿"""
 3D straight line geometric entity module for UPXO.
 
 Provides two 3-D straight-line classes — a lean variant for minimal memory
@@ -69,8 +69,8 @@ class Sline3d_leanest():
     Provides a minimal footprint for high-frequency operations where only
     coordinate access, length, and iteration are required.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         from upxo.geoEntities.sline3d import Sline3d_leanest as sl3dl
@@ -121,8 +121,8 @@ class Sline3d():
     geometric queries (length, midpoint, direction cosines, angles),
     distance calculations, splitting, and iterative extension.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         from upxo.geoEntities.sline3d import Sline3d as sl3d

@@ -1,8 +1,8 @@
-"""
+﻿"""
 2D multi-edge collection entity for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.muledge2d import muledge2d
 
 Classes
@@ -37,8 +37,8 @@ class muledge2d():
     point objects) and exposes properties such as lengths, slopes, centroid,
     and roughness over the full chain.
 
-    Import
-    ------
+    Usage
+    -----
         from upxo.geoEntities.muledge2d import muledge2d
     """
     ROUND_ZERO_DEC_PLACE = 10

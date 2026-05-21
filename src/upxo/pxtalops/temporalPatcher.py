@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import cc3d
 from collections import defaultdict
 from shapely.geometry import box
@@ -24,8 +24,8 @@ class patcher_pixvox():
         (1.c) Multi-modla gs
         (1.d) Additively manufactured gs
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.pxtalops.temporalPatcher import patcher_pixvox
 
     Class methods

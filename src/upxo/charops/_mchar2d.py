@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 # import pandas as pd
 
 def detect_features(mcStateArray, connectivity=18, delta=0):
@@ -37,8 +37,8 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
     This function wraps the underlying _mchar3d.detect_features implementation
     for 3D morphological character analysis.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.charops._mchar2d as mchar2d
     
     Examples

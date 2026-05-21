@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 
 def create_grid_points_in_polygon(polygon, grid_spacing=1.0, padding=0.0,
                                    return_classification=True):
@@ -40,8 +40,8 @@ def create_grid_points_in_polygon(polygon, grid_spacing=1.0, padding=0.0,
     >>> grid_pts, interior_pts, boundary_pts = create_grid_points_in_polygon(bz, 
     ...                                                                       grid_spacing=0.5)
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.xtalops.xtalops import create_grid_points_in_polygon
     """
     from shapely.geometry import Point
@@ -90,8 +90,8 @@ def create_grid_points_in_polygon(polygon, grid_spacing=1.0, padding=0.0,
 
 def skeletonize_polygon(polygon, method='medial_axis', grid_spacing=0.5, padding=0.1):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo.xtalops.xtalops import skeletonize_polygon as skpol
     """
 
