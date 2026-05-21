@@ -119,16 +119,15 @@ def load_file(valobj,
     loadas:
         Specifies how the data is to be loaded or read.
         Options include:
-            * line_by_line: Data will be read line by line and each line would
-            be an element of a list.
+
+        * ``line_by_line`` — data is read line by line; each line becomes an element of a list.
     datatype_return:
         Specifies if thw read data is to be converted into any other format
         before being returned to the calling function scope. Options:
-            * 'default': No conversion happens
-            * 'np': Read data will be validated for numerical type and
-            converted to a numpy array.
-            * 'numlist': Read data will be validated foe numerical type and
-            converted to a list
+
+        * ``'default'`` — no conversion.
+        * ``'np'`` — validated as numeric and converted to a numpy array.
+        * ``'numlist'`` — validated as numeric and converted to a list.
     isCTFheader:
         Specifies whether the file being read is a CTF header file
     isCTF:
@@ -166,7 +165,7 @@ def load_file(valobj,
               seperator_inline='default',
               validate_before=True)
     """
-    pass
+    raise NotImplementedError("load_file is not yet implemented.")
 
 
 def load_files(folder_path=None,
@@ -181,17 +180,17 @@ def load_files(folder_path=None,
                encoding='utf-8',
                readMode='line_by_line'):
     """
-    Loads loadable un-encrypted files. Loadable files include:
-        1. .txt, .dat, .ctf, .crc
-        2. .h5df, .dream3d
+    Load un-encrypted text, data, and HDF5 files.
+
+    Supports ``.txt``, ``.dat``, ``.ctf``, ``.crc``, ``.h5df``, ``.dream3d``.
 
     Examples
-    --------------
-    LOAD A CTF FILE HEADER
-    data = load_files(locinfo='defloc',
-                      fileContent='ctf_header',
-                      filename_full='_ctf_header_CuCrZr_1.txt',
-                      )
+    --------
+    Load a CTF file header::
+
+        data = load_files(locinfo='defloc',
+                          fileContent='ctf_header',
+                          filename_full='_ctf_header_CuCrZr_1.txt')
     """
     valobj = _validation()
 
@@ -289,22 +288,29 @@ def __load_file_1(__folder_path=None,
 
 def find_n_to_targetDIR(cwd: Path, target_dir_name: str) -> int:
     """
-    Finds the depth (n) to reach a specified target directory from the current
-    working directory (cwd).
+    Find the depth to reach ``target_dir_name`` from ``cwd``.
 
-    Parameters:
-    - cwd (Path): The current working directory as a Path object.
-    - target_dir_name (str): The name of the target directory to reach.
+    Parameters
+    ----------
+    cwd : Path
+        Current working directory as a ``Path`` object.
+    target_dir_name : str
+        Name of the target directory to locate.
 
-    # Example usage
-    cwd = Path('C:/Development/M2MatMod/upxo_packaged/upxo_private/src/upxo/meshing')
-    target_dir_name = 'src'
-    n = find_n_to_targetDIR(cwd, target_dir_name)
+    Returns
+    -------
+    int
+        Number of ``cwd.parents`` steps needed to reach the target.
 
-    # Accessing the src directory if found
-    if n != -1:
-        src_dir = cwd.parents[n]
-        print(f"The 'src' directory path: {src_dir}")
+    Raises
+    ------
+    ValueError
+        If ``target_dir_name`` is not a parent of ``cwd``.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> n = find_n_to_targetDIR(Path('C:/proj/src/upxo/meshing'), 'src')
     """
     for n, parent in enumerate(cwd.parents):
         if parent.name == target_dir_name:
