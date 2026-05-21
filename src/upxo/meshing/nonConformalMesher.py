@@ -65,6 +65,7 @@ class nonConformalMesher():
                  plane_stress=True, reduced_integration=False,
                  modifiedFormulation=False, axiSymmElements=False
                  ):
+        """Initialise the instance."""
         self.dim = dim
         self.etype = etype
         self.lfi = lfi
@@ -98,12 +99,14 @@ class nonConformalMesher():
         self._threshold_nel_for_large_mesh_elEdgePlot_ = 100
 
     def set_gids(self, gids=None):
+        """Set or update gids."""
         if gids is None:
             self.gids = np.unique(self.lfi)
         else:
             self.gids = np.array(gids, dtype=self.lfi.dtype)
 
     def ignore_gids(self, gids_to_ignore):
+        """Ignore gids."""
         # Capability under development
         gids_to_ignore = np.array(gids_to_ignore, dtype=self.lfi.dtype)
         self.ignored_gids = gids_to_ignore
@@ -202,10 +205,12 @@ class nonConformalMesher():
                 self._mesh_quad4_quad8_ABQ_(elsetNamePrefixBasic=elsetNamePrefixBasic)
 
     def set_element_name(self, elname: str = None):
+        """Set or update element name."""
         if not elname and self.analysis_package == 'abaqus':
             self._set_element_names_ABQ_()
 
     def _set_element_names_ABQ_(self):
+        """ set element names abq ."""
         etype_map = {"tri3": 3, "tri6": 6, "quad4": 4, "quad8": 8,
                      "tet4": 4, "tet10": 10, "hex8": 8, "hex20": 20,}
         nn = etype_map[self.etype]
@@ -227,6 +232,7 @@ class nonConformalMesher():
 
 
     def set_analysis_package(self, analysis_package: str):
+        """Set or update analysis package."""
         if analysis_package in self._valid_analysis_packages:
             self.analysis_package = analysis_package
             self.nidStart, self.elifStart = 1, 1
@@ -234,6 +240,7 @@ class nonConformalMesher():
             raise ValueError("Invalid analysis package name..")
 
     def _mesh_quad4_quad8_ABQ_(self, makeELSetsBasic=True, elsetNamePrefixBasic='gid_'):
+        """ mesh quad4 quad8 abq ."""
         self.make_base_coordinates_ABQ()
         self.cross_check_nel()
         self.define_nodeNumbers_ABQ()
@@ -249,6 +256,7 @@ class nonConformalMesher():
             self.make_elsets_quad4_ABQ_basic(elsetNamePrefixBasic=elsetNamePrefixBasic)
 
     def set_pxtal_orientations(self, xori=None, xoriType='bunge', xoriUnits='degree'):
+        """Set or update pxtal orientations."""
         if not isinstance(xori, np.ndarray):
             xori = np.array(xori)  # retain the dtype of the incoming data
         if xori.shape[0] != len(self.gids):
@@ -276,9 +284,11 @@ class nonConformalMesher():
         self.xoriUnits = xoriUnits
 
     def map_pxtal_orientations_to_elements(self):
-        pass
+        """Map pxtal orientations to elements."""
+        raise NotImplementedError("map_pxtal_orientations_to_elements is not yet implemented.")
 
     def make_base_coordinates_ABQ(self, **kwargs):
+        """Build and return base coordinates ABQ."""
         if self.etype == 'quad4':
             self._make_base_coordinates_quad4_ABQ_(**kwargs)
         elif self.etype == 'quad8':
@@ -291,6 +301,7 @@ class nonConformalMesher():
         self.xndgrid, self.yndgrid = np.meshgrid(self.ybase, self.xbase)
     
     def cross_check_nel(self):
+        """Cross check nel."""
         if self.etype in ('quad4', 'quad8'):
             expected_nelx = self.lfi.shape[1]
             expected_nely = self.lfi.shape[0]
@@ -330,18 +341,21 @@ class nonConformalMesher():
             self._define_nodeNumbers_quad8_ABQ_(**kwargs)
     
     def define_nodes_ABQ(self, **kwargs):
+        """Define nodes abq."""
         if self.etype == 'quad4':
             self._define_nodes_quad4_ABQ_(**kwargs)
         elif self.etype == 'quad8':
             self._define_nodes_quad8_ABQ_(**kwargs)
 
     def define_elementNumbers_ABQ(self, **kwargs):
+        """Define elementnumbers abq."""
         if self.etype == 'quad4':
             self._define_elementNumbers_quad4_ABQ_(**kwargs)
         elif self.etype == 'quad8':
             self._define_elementNumbers_quad8_ABQ_(**kwargs)
 
     def define_element_locations_ABQ(self, **kwargs):
+        """Define element locations abq."""
         if self.etype == 'quad4':
             self._define_element_locations_quad4_ABQ_(**kwargs)
         elif self.etype == 'quad8':
@@ -385,6 +399,7 @@ class nonConformalMesher():
                                 np.vstack(list(self.ELEMENTS.values()))))
 
     def make_elsets_quad4_ABQ_basic(self, elsetNamePrefixBasic='gid_'):
+        """Build and return elsets quad4 ABQ basic."""
         elsets = {f'{elsetNamePrefixBasic}{gid}': [] for gid in self.gids}
         for elloc in self.elLoc:
             gid = self.lfi[elloc[1], elloc[2]]
@@ -394,21 +409,25 @@ class nonConformalMesher():
         self.elsets = dict(basic = elsets)
 
     def _make_base_coordinates_quad4_ABQ_(self, **kwargs):
+        """ make base coordinates quad4 abq ."""
         self.xbase = np.linspace(start=self.xstart, stop=self.xstart+self.ellx*self.nelx,
                     num=self.nelx+1).astype(self.floatDType)
         self.ybase = np.linspace(start=self.ystart, stop=self.ystart+self.elly*self.nely,
                     num=self.nely+1).astype(self.floatDType)
 
     def _make_base_coordinates_quad8_ABQ_(self, **kwargs):
+        """ make base coordinates quad8 abq ."""
         self.xbase = np.linspace(start=self.xstart, stop=self.xstart+self.ellx*self.nelx,
                     num=2*self.nelx+1).astype(self.floatDType)
         self.ybase = np.linspace(start=self.ystart, stop=self.ystart+self.elly*self.nely,
                     num=2*self.nely+1).astype(self.floatDType)
 
     def _define_nodeNumbers_quad4_ABQ_(self, **kwargs):
+        """ define nodenumbers quad4 abq ."""
         self.nnum = np.reshape(np.arange(0, self.xndgrid.size), self.xndgrid.shape).T
 
     def _define_nodeNumbers_quad8_ABQ_(self, **kwargs):
+        """ define nodenumbers quad8 abq ."""
         # Create grid indices (0, 1, 2...) to identify Odd vs Even rows/cols
         # We use the same shape as xndgrid
         i_grid, j_grid = np.meshgrid(np.arange(self.ybase.size),
@@ -430,11 +449,13 @@ class nonConformalMesher():
         self.temp_container['valid_mask_T'] = valid_mask_T
 
     def _define_nodes_quad4_ABQ_(self, **kwargs):
+        """ define nodes quad4 abq ."""
         self.NODES = np.vstack((self.nnum.ravel(order='F'),
                         self.yndgrid.T.ravel(order='F'),
                         self.xndgrid.T.ravel(order='F'))).T.astype(self.floatDType)
 
     def _define_nodes_quad8_ABQ_(self, **kwargs):
+        """ define nodes quad8 abq ."""
         x_coords = self.xndgrid.T[self.temp_container['valid_mask_T']]
         y_coords = self.yndgrid.T[self.temp_container['valid_mask_T']]
         node_ids = np.arange(self.temp_container['num_valid_nodes'])
@@ -443,18 +464,22 @@ class nonConformalMesher():
                                       x_coords)).astype(self.floatDType)
 
     def _define_elementNumbers_quad4_ABQ_(self, **kwargs):
+        """ define elementnumbers quad4 abq ."""
         self.enum = np.reshape(np.arange(0, self.nelx*self.nely), (self.nelx, self.nely)).T
 
     def _define_elementNumbers_quad8_ABQ_(self, **kwargs):
+        """ define elementnumbers quad8 abq ."""
         self.enum = np.reshape(np.arange(0, self.nelx*self.nely), (self.nelx, self.nely)).T
 
     def _define_element_locations_quad4_ABQ_(self, **kwargs):
+        """ define element locations quad4 abq ."""
         elLoc = np.meshgrid(np.arange(0, self.enum.shape[1]),
                     np.arange(0, self.enum.shape[0]))
         self.elLoc = np.vstack((self.enum.ravel(order='F'),
                     elLoc[1].ravel(), elLoc[0].ravel())).T
 
     def _define_element_locations_quad8_ABQ_(self, **kwargs):
+        """ define element locations quad8 abq ."""
         elLoc = np.meshgrid(np.arange(0, self.enum.shape[1]),
                     np.arange(0, self.enum.shape[0]))
         self.elLoc = np.vstack((self.enum.ravel(order='F'),
@@ -480,6 +505,7 @@ class nonConformalMesher():
         self.connectivity = np.column_stack((n_tl, n_tr, n_br, n_bl))
 
     def _define_connectivity_quad8_ABQ_(self):
+        """ define connectivity quad8 abq ."""
         self.el_ids = self.elLoc[:, 0].astype(int)
         rows = self.elLoc[:, 1].astype(int)
         cols = self.elLoc[:, 2].astype(int)
@@ -502,18 +528,23 @@ class nonConformalMesher():
         self.connectivity = np.column_stack((n1, n2, n3, n4, n5, n6, n7, n8))
 
     def _get_element_node_coordinates_quad4_ABQ_(self, **kwargs):
+        """ get element node coordinates quad4 abq ."""
         self.el_node_coords = self.NODES[self.connectivity, 1:]
 
     def _get_element_node_coordinates_quad8_ABQ_(self, **kwargs):
+        """ get element node coordinates quad8 abq ."""
         self.el_node_coords = self.NODES[self.connectivity, 1:]
 
     def _calculate_element_centroids_quad4_ABQ_(self, **kwargs):
+        """ calculate element centroids quad4 abq ."""
         self.elCentroids = self.el_node_coords.mean(axis=1)
 
     def _calculate_element_centroids_quad8_ABQ_(self, **kwargs):
+        """ calculate element centroids quad8 abq ."""
         self.elCentroids = self.el_node_coords.mean(axis=1)
 
     def set_threshold_nel_for_large_mesh_elEdgePlot_(self, value: int):
+        """Set or update threshold nel for large mesh elEdgePlot ."""
         self._threshold_nel_for_large_mesh_elEdgePlot_ = value
 
     def see_mesh(self, figsize=(10, 5), dpi=150,
@@ -538,6 +569,7 @@ class nonConformalMesher():
                  xlabelTextFontWeight='normal', ylabelTextFontWeight='normal', 
                  includeTitle=False, titleText='', 
                  titleTextFontSize=14, titleTextFontWeight='normal'):
+        """See mesh."""
 
         import matplotlib.pyplot as plt
         
@@ -638,6 +670,7 @@ class nonConformalMesher():
             return fig, ax
         
     def find_element_ids_to_remove(self, lfi_locs_to_remove):
+        """Find element ids to remove."""
         el_ids_remove = np.zeros(lfi_locs_to_remove.shape[0], dtype=np.int32)
         for i, remLoc in enumerate(lfi_locs_to_remove):
             remLoc = np.expand_dims(remLoc, axis=0)
@@ -645,6 +678,7 @@ class nonConformalMesher():
         return el_ids_remove
 
     def find_boundary_features(self, boundary_offsets):
+        """Find boundary features."""
         fxm = np.unique(self.lfi[:, :boundary_offsets[0]])  # Features at x-
         fxp = np.unique(self.lfi[:, -boundary_offsets[1]:])  # Features at x+
         fym = np.unique(self.lfi[:boundary_offsets[2], :])  # Features at y-
@@ -661,6 +695,7 @@ class nonConformalMesher():
                             exclude_boundary_features=True,
                             boundary_offsets=[1, 1, 1, 1]
                             ):
+        """Find pruning locations."""
         if method == 'cellSize':
             valueDistribution = np.bincount(self.lfi.ravel())
             if measure in ('npixels', 'npix', 'nvoxels', 'nvox'):
@@ -720,6 +755,7 @@ class nonConformalMesher():
         return fidsToPrune, lfi_locs_to_remove
 
     def prune(self, lfi_locs_to_remove):
+        """Prune."""
         print('Determining elements to prune and retain.')
         el_ids_remove = self.find_element_ids_to_remove(lfi_locs_to_remove)
         EltoRemove = {int(i): self.ELEMENTS[i] for i in el_ids_remove}
