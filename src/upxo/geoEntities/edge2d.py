@@ -2142,7 +2142,7 @@ class edge2d():
 
         Parameters
         ----------
-        xyincr : list/tuple
+        xyincr : list or tuple of float
 
         Returns
         -------
@@ -4277,7 +4277,7 @@ class edge2d():
 
     def calc_center_from_m(self):
         """
-        Update the centre of m, the mulpoint object representatopn of the
+        Update the centre of m, the mulpoint object representation of the
         edge's point objects
 
         Returns
@@ -4345,7 +4345,7 @@ class edge2d():
 
     def update_end_points_from_x_and_y(self):
         """
-        Using the coordinate values,update the endpoint objects
+        Using the coordinate values, update the endpoint objects
 
         Returns
         -------
