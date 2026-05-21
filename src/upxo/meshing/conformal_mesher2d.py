@@ -20,6 +20,7 @@ class confMesh2d():
                  'availableFeatures', 'availableElTypes', 'availableElTypeID',
                  'elsets_eltype', 'elsets', 'elID_ranges')
     def __init__(self, gtess=None):
+        """Initialise the instance."""
         self.gtess = gtess
 
     @classmethod
@@ -39,6 +40,7 @@ class confMesh2d():
     def femesh_pygmsh(self, elementShape='tri', elementOrder=1, 
                     meshingAlgorithmID=4, elsize_global=[1.0],
                     intermediateFilename='femesh', intermediateFileformat='vtk'):
+        """Femesh pygmsh."""
         self.mesherTool = 'pygmsh'
         self.elementShape = elementShape
         self.elementOrder = elementOrder
@@ -77,6 +79,7 @@ class confMesh2d():
         self.fids = np.arange(1, len(self.gtess.L0.pxtal.geoms)+1)
 
     def filter_mesh(self):
+        """Filter mesh."""
         import meshio
         gmsh_mesh = meshio.read(self._intermediate_mesh_filename_)
         supported_cell_types = ["line", "triangle", "quad"]
@@ -88,6 +91,7 @@ class confMesh2d():
                     cell_data=gmsh_mesh.cell_data, field_data=gmsh_mesh.field_data,)
         
     def get_mesh_geometry(self):
+        """Return the mesh geometry."""
         cellTypes = [c.type for c in self.filtered_mesh.cells]
         cellTypeLoc = {cellType: i for i, cellType in enumerate(cellTypes)}
 
@@ -98,6 +102,7 @@ class confMesh2d():
         return points, lines, triangles, quads
 
     def _write_intermediate_mesh_file_(self, fileName=None):
+        """ write intermediate mesh file ."""
         if fileName == None:
             self.gtess.mesh.write(self._intermediate_mesh_filename_)
         else:
@@ -105,6 +110,7 @@ class confMesh2d():
                 self.gtess.mesh.write(fileName)
 
     def _read_intermediate_mesh_file_(self, fileName=None):
+        """ read intermediate mesh file ."""
         if fileName == None:
             self.grid = pv.read(self._intermediate_mesh_filename_)
         else:
@@ -112,6 +118,7 @@ class confMesh2d():
                 self.grid = pv.read(fileName)
 
     def assess_quality(self, qualityMeasures=['aspect_ratio', 'skew', 'min_angle', 'area']):
+        """Assess quality."""
         mqm_data, mqm_dataframe = self.pxtal_mesh.assess_pygmsh(grid=self.grid,
                     mesh_quality_measures=qualityMeasures, elshape=self.elementShape,
                     elorder=self.elementOrder, algorithm=self.meshingAlgorithmID)
@@ -119,6 +126,7 @@ class confMesh2d():
         
     def see_mesh_quality(self, mqm_data, mqm_dataframe, data_to_vis='mesh > quality > field',
                          qualityMeasures=['aspect_ratio', 'skew', 'min_angle', 'area'] ):
+        """See mesh quality."""
         # DEPRECATED
         clims = [[1.0, 2.5], [-1.0, 1.0], [0.0, 90.0],
                  [0.0*mqm_dataframe['area'].max(), mqm_dataframe['area'].max()]]
@@ -131,37 +139,47 @@ class confMesh2d():
                             'above_color': 'black', } )
         
     def see_femesh(self, *args, **kwargs):
+        """See femesh."""
         from upxo.viz.meshviz import see_femesh
         fig, ax = see_femesh(*args, **kwargs)
         return fig, ax
     
     def find_meshCellFeatTypes(self):
+        """Find meshCellFeatTypes."""
         self.meshCellFeatTypes = list(self.filtered_mesh.cells_dict.keys())
 
     def find_lineFeatLocation(self):
+        """Find lineFeatLocation."""
         self.lineFeatLocation = int(np.argwhere([ft == 'line' for ft in self.meshCellFeatTypes])[0][0]) 
 
     def find_GBlines(self):
+        """Find GBlines."""
         self.GBlines = self.filtered_mesh.cells[self.lineFeatLocation].data
 
     def find_availableFeatures(self):
+        """Find availableFeatures."""
         self.availableFeatures = list(self.filtered_cells.keys())
 
     def find_availableElTypes(self):
+        """Find availableElTypes."""
         self.availableElTypes = [eltype for eltype in self.availableFeatures if eltype in self.ValidElTypesOptions]
 
     def find_availableElTypeID(self):
+        """Find availableElTypeID."""
         self.availableElTypeID = {eltype: int(np.argwhere(np.array(self.availableFeatures) == eltype)[0][0]) 
                                   for eltype in self.availableElTypes}
 
     def build_nodes(self):
+        """Build and return  nodes."""
         self.nodes = self.filtered_mesh.points
 
     def rebuild_elConnectivity(self):
+        """Rebuild elconnectivity."""
         self.elConn = elemOps.rebuild_elConnectivity(availableElTypes=self.availableElTypes,
                         availableFeatures=self.availableFeatures, filtered_mesh_cells=self.filtered_mesh.cells)
 
     def get_elCentroids_singleElType(self, nodes, elConn):
+        """Return the elCentroids singleElType."""
         from shapely.geometry import Point
         from shapely.strtree import STRtree
         elCentroids_coords = nodes[elConn].mean(axis=1)[:, :2]
@@ -170,12 +188,14 @@ class confMesh2d():
         return elCentroids_coords, elCentroids_shPoints, elCentroids_Tree
 
     def _form_elset_(self, cell, elCentroids, elCentroidsTree):
+        """ form elset ."""
         #polygon = gsConfMesh.gtess.L0.pxtal.geoms[cid]
         candidates = elCentroidsTree.query(cell)
         containedElIds = np.array([int(pt) for pt in candidates if elCentroids[pt].within(cell)])
         return containedElIds
 
     def _form_elsets_elType_(self, fids, nodes, elConn_eTypeSubSet, prefix='grain.'):
+        """ form elsets eltype ."""
         centroids_coords, elCentroids, elCentroidsTree = self.get_elCentroids_singleElType(nodes, elConn_eTypeSubSet)
         elsets = {}
         for fid in fids:
@@ -184,6 +204,7 @@ class confMesh2d():
         return elsets
 
     def form_elsets_elType(self):
+        """Form elsets eltype."""
         fids = np.arange(1, len(self.gtess.L0.pxtal.geoms)+1)
         self.elsets_eltype = {}
         for eltype in self.availableElTypes:
@@ -192,9 +213,11 @@ class confMesh2d():
             self.elsets_eltype[eltype] = self._form_elsets_elType_(fids, self.nodes, elConn_eTypeSubSet, prefix='grain.')
 
     def get_elCentroids(self):
+        """Return the elCentroids."""
         return elemOps.get_elCentroids_2d(self.nodes, self.elConn, self.availableElTypes)
     
     def find_elID_ranges(self):
+        """Find elID ranges."""
         self.elID_ranges = {}
         for i, eltype in enumerate(self.availableElTypes):
             self.elID_ranges[eltype] = [1, self.filtered_mesh.cells[self.availableElTypeID[eltype]].data.shape[0]]
@@ -224,6 +247,7 @@ class confMesh2d():
             self.elsets[elsetName] = np.array(self.elsets[elsetName], dtype=np.int32)
 
     def extract_gblines_for_grain(self, grain_name):
+        """Extract gblines for grain."""
         grain_nodes = np.array([], dtype=int)
 
         for eltype, conn in self.elConn.items():
@@ -241,6 +265,7 @@ class confMesh2d():
         return self.GBlines[mask]
 
     def extract_gblines_grains(self):
+        """Extract gblines grains."""
         firstKey = list(self.elsets_eltype.keys())[0]
         gblines_by_grain = {}
         for grain_name in self.elsets_eltype[firstKey].keys():
@@ -248,20 +273,24 @@ class confMesh2d():
         return gblines_by_grain
     
     def extract_gbnodes_grains(self):
+        """Extract gbnodes grains."""
         nodeIDs = {gname: np.unique(gblines) for gname, gblines in self.extract_gblines_grains().items()}
         return nodeIDs
     
     def extract_gbnodeCoords_grains(self):
+        """Extract gbnodecoords grains."""
         nodeIDs= self.extract_gbnodes_grains()
         return {gname: self.nodes[nodeIDs] for gname, nodeIDs in nodeIDs.items()}
 
     def extract_gbCoords_ckdTrees(self, preserve_ZDim=False):
+        """Extract gbcoords ckdtrees."""
         gbCoords = self.extract_gbnodeCoords_grains()
         from scipy.spatial import cKDTree
         gbCoords_ckdTrees = {gname: cKDTree(coords[:, :2] if not preserve_ZDim else coords) for gname, coords in gbCoords.items()}
         return gbCoords_ckdTrees
     
     def calc_element_qualities(self, ar=True, saa=False, throw=False):
+        """Return the  element qualities."""
         elQual = {}
         if ar:
             elQual['ar'] = elemOps.compute_elementQuality_AR_2d(self.nodes, self.elConn)
@@ -271,18 +300,23 @@ class confMesh2d():
             return elQual
 
     def find_elIDs_by_quality(self, **kwargs):
+        """Find elIDs by quality."""
         return elemOps.find_elIDs_by_quality(**kwargs)
 
     def plot_elements_geometric_grain(self, grain_name, **kwargs):
+        """Visualise elements geometric grain using Matplotlib or PyVista."""
         meshviz.plot_elements_geometric_grain(grain_name, **kwargs)
 
     def plot_elements_by_elIDs(self, element_ids, **kwargs):
+        """Visualise elements by elIDs using Matplotlib or PyVista."""
         meshviz.plot_elements_by_elIDs(element_ids, **kwargs)
     
     def plot_elements_geometric_grains(self, **kwargs):
+        """Visualise elements geometric grains using Matplotlib or PyVista."""
         meshviz.plot_elements_geometric_grains(**kwargs)
 
     def extract_gb_elements_for_grain(self, grain_name):
+        """Extract gb elements for grain."""
         gb_nodes = np.unique(self.GBlines)
         gb_elements = {}
         for eltype, conn in self.elConn.items():
@@ -316,44 +350,54 @@ class confMesh2d():
         return gb_elements_by_grain
     
     def see_gbElements_grains(self, grain_name, **kwargs):
+        """See gbelements grains."""
         gb_elements_grain = self.extract_gb_elements_for_grain(grain_name)
         meshviz.see_gbElements_grains(gb_elements_grain, **kwargs)
 
     def build_global_element_numbering(self):
+        """Build and return  global element numbering."""
         glb_elm_num = elemOps.build_global_element_numbering(self.elConn, elID_ranges=self.elID_ranges)
         return glb_elm_num
     
     def find_el_neigh(self, element_ids, n_order=1, eltype=None, include_self=False):
+        """Find el neigh."""
         return elemOps.find_el_neigh(element_ids, self.elConn, n_order=n_order, 
                                     eltype=eltype, include_self=include_self)
 
     def find_nthOrderNeigh(self, n_order, el_subset, include_self=False):
+        """Find nthOrderNeigh."""
         return elemOps.find_nthOrderNeigh(n_order, el_subset, self.availableElTypes, self.elConn, include_self=include_self)
 
     def resolve_eltypes(self, grain_name, grainElements, grainCoordinates, eltypes=None):
+        """Resolve eltypes."""
         return elemOps.resolve_eltypes(
             grain_name, grainElements, grainCoordinates, eltypes=eltypes
         )
 
     def build_element_ids_by_band(self, grain_name, bands, eltypes, grainElements, nearest_dist_by_type):
+        """Build and return  element ids by band."""
         return elemOps.build_element_ids_by_band(
             grain_name, bands, eltypes, grainElements, nearest_dist_by_type
         )
 
     def pick_contrasting_colours_from_cmap(self, n_colours, cmap_name='nipy_spectral'):
+        """Pick contrasting colours from cmap."""
         return meshviz.pick_contrasting_colours_from_cmap(n_colours, cmap_name=cmap_name)
 
     def resolve_band_colours(self, bands, band_colours=None, auto_cmap='nipy_spectral'):
+        """Resolve band colours."""
         return meshviz.resolve_band_colours(
             bands, band_colours=band_colours, auto_cmap=auto_cmap
         )
 
     def resolve_plot_eltype(self, eltypes, plot_eltype=None):
+        """Resolve plot eltype."""
         return meshviz.resolve_plot_eltype(eltypes, plot_eltype=plot_eltype)
 
     def plot_band_elements(self, element_ids_by_band, bands, plot_eltype, gbcoords,
                            gblines_by_grain=None, colours_to_use=None,
                            title='Selected elements by band', band_facecolors=False):
+        """Visualise band elements using Matplotlib or PyVista."""
         return meshviz.plot_band_elements(
             element_ids_by_band, bands, plot_eltype, gbcoords,
             self, gblines_by_grain=gblines_by_grain,
@@ -367,6 +411,7 @@ class confMesh2d():
                                  plot=True, band_colours=None,
                                  auto_cmap='nipy_spectral',
                                  band_facecolors=False):
+        """Select elements in bands."""
         element_ids_by_band, nearest_dist_by_type, selected_eltypes = elemOps.select_elements_in_bands(
             grain_name, bands, gbnodeCoords, grainCoordinates, grainElements, eltypes=eltypes
         )
@@ -448,6 +493,7 @@ class confMesh2dGMSH():
     )
 
     def __init__(self):
+        """Initialise the instance."""
         self.gtess = None
         self.fids = None
         self.gid_map = None
@@ -565,6 +611,7 @@ class confMesh2dGMSH():
         round_digits = 10
 
         def _get_or_add_point(x, y):
+            """ get or add point."""
             key = (round(x, round_digits), round(y, round_digits))
             if key not in self.point_registry:
                 tag = gmsh.model.geo.addPoint(x, y, 0.0, mesh_size_gb)
@@ -720,6 +767,7 @@ class confMesh2dGMSH():
             self.GBlines = np.empty((0, 2), dtype=int)
 
     def _detect_available_eltypes(self):
+        """ detect available eltypes."""
         self.availableElTypes = [et for et in ('triangle', 'quad') if et in self.elConn]
         self.availableElTypeID = {et: i for i, et in enumerate(self.availableElTypes)}
         self.availableFeatures = self.availableElTypes.copy()
@@ -729,6 +777,7 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def get_elCentroids_singleElType(self, nodes, elConn):
+        """Return the elCentroids singleElType."""
         from shapely.geometry import Point
         from shapely.strtree import STRtree
         elCentroids_coords = nodes[elConn].mean(axis=1)[:, :2]
@@ -737,11 +786,13 @@ class confMesh2dGMSH():
         return elCentroids_coords, elCentroids_shPoints, elCentroids_Tree
 
     def _form_elset_(self, cell, elCentroids, elCentroidsTree):
+        """ form elset ."""
         candidates = elCentroidsTree.query(cell)
         containedElIds = np.array([int(pt) for pt in candidates if elCentroids[pt].within(cell)])
         return containedElIds
 
     def _form_elsets_elType_(self, flat_cells, nodes, elConn_eTypeSubSet, prefix='grain.'):
+        """ form elsets eltype ."""
         centroids_coords, elCentroids, elCentroidsTree = self.get_elCentroids_singleElType(nodes, elConn_eTypeSubSet)
         elsets = {}
         for flat_id, polygon in flat_cells.items():
@@ -786,6 +837,7 @@ class confMesh2dGMSH():
             self.elsets[name] = np.array(self.elsets[name], dtype=np.int32)
 
     def find_elID_ranges(self):
+        """Find elID ranges."""
         self.elID_ranges = {}
         for i, eltype in enumerate(self.availableElTypes):
             n = self.elConn[eltype].shape[0]
@@ -796,6 +848,7 @@ class confMesh2dGMSH():
                 self.elID_ranges[eltype] = [prev + 1, prev + n]
 
     def get_elCentroids(self):
+        """Return the elCentroids."""
         return elemOps.get_elCentroids_2d(self.nodes, self.elConn, self.availableElTypes)
 
     # ------------------------------------------------------------------
@@ -820,6 +873,7 @@ class confMesh2dGMSH():
         ymin, ymax = xy[:, 1].min(), xy[:, 1].max()
 
         def _ids(mask):
+            """ ids."""
             return node_ids[mask]
 
         left   = _ids(np.abs(xy[:, 0] - xmin) < tol)
@@ -867,6 +921,7 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def extract_gblines_for_grain(self, grain_name):
+        """Extract gblines for grain."""
         grain_nodes = np.array([], dtype=int)
         for eltype, conn in self.elConn.items():
             if eltype not in self.elsets_eltype:
@@ -881,6 +936,7 @@ class confMesh2dGMSH():
         return self.GBlines[mask]
 
     def extract_gblines_grains(self):
+        """Extract gblines grains."""
         first_key = self.availableElTypes[0]
         gblines_by_grain = {}
         for grain_name in self.elsets_eltype[first_key]:
@@ -888,20 +944,24 @@ class confMesh2dGMSH():
         return gblines_by_grain
 
     def extract_gbnodes_grains(self):
+        """Extract gbnodes grains."""
         return {gname: np.unique(gblines)
                 for gname, gblines in self.extract_gblines_grains().items()}
 
     def extract_gbnodeCoords_grains(self):
+        """Extract gbnodecoords grains."""
         nodeIDs = self.extract_gbnodes_grains()
         return {gname: self.nodes[ids] for gname, ids in nodeIDs.items()}
 
     def extract_gbCoords_ckdTrees(self, preserve_ZDim=False):
+        """Extract gbcoords ckdtrees."""
         from scipy.spatial import cKDTree
         gbCoords = self.extract_gbnodeCoords_grains()
         return {gname: cKDTree(coords[:, :2] if not preserve_ZDim else coords)
                 for gname, coords in gbCoords.items()}
 
     def extract_gb_elements_for_grain(self, grain_name):
+        """Extract gb elements for grain."""
         gb_nodes = np.unique(self.GBlines)
         gb_elements = {}
         for eltype, conn in self.elConn.items():
@@ -919,6 +979,7 @@ class confMesh2dGMSH():
         return gb_elements
 
     def collect_gb_elements_for_grains(self, grain_ids=None, grain_names=None, prefix="grain"):
+        """Collect gb elements for grains."""
         if grain_ids is None and grain_names is None:
             raise ValueError("Provide grain_ids or grain_names.")
         if grain_names is None:
@@ -938,10 +999,12 @@ class confMesh2dGMSH():
         return pts, lines, triangles, quads
 
     def see_femesh(self, *args, **kwargs):
+        """See femesh."""
         from upxo.viz.meshviz import see_femesh
         return see_femesh(*args, **kwargs)
 
     def see_gbElements_grains(self, grain_name, **kwargs):
+        """See gbelements grains."""
         gb_elements_grain = self.extract_gb_elements_for_grain(grain_name)
         meshviz.see_gbElements_grains(gb_elements_grain, **kwargs)
 
@@ -950,6 +1013,7 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def calc_element_qualities(self, ar=True, saa=False, throw=False):
+        """Return the  element qualities."""
         elQual = {}
         if ar:
             elQual['ar'] = elemOps.compute_elementQuality_AR_2d(self.nodes, self.elConn)
@@ -959,6 +1023,7 @@ class confMesh2dGMSH():
             return elQual
 
     def find_elIDs_by_quality(self, **kwargs):
+        """Find elIDs by quality."""
         return elemOps.find_elIDs_by_quality(**kwargs)
 
     # ------------------------------------------------------------------
@@ -966,25 +1031,30 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def find_el_neigh(self, element_ids, n_order=1, eltype=None, include_self=False):
+        """Find el neigh."""
         return elemOps.find_el_neigh(element_ids, self.elConn,
                                      n_order=n_order, eltype=eltype,
                                      include_self=include_self)
 
     def find_nthOrderNeigh(self, n_order, el_subset, include_self=False):
+        """Find nthOrderNeigh."""
         return elemOps.find_nthOrderNeigh(n_order, el_subset,
                                           self.availableElTypes, self.elConn,
                                           include_self=include_self)
 
     def build_global_element_numbering(self):
+        """Build and return  global element numbering."""
         return elemOps.build_global_element_numbering(self.elConn,
                                                       elID_ranges=self.elID_ranges)
 
     def resolve_eltypes(self, grain_name, grainElements, grainCoordinates, eltypes=None):
+        """Resolve eltypes."""
         return elemOps.resolve_eltypes(grain_name, grainElements,
                                        grainCoordinates, eltypes=eltypes)
 
     def build_element_ids_by_band(self, grain_name, bands, eltypes,
                                   grainElements, nearest_dist_by_type):
+        """Build and return  element ids by band."""
         return elemOps.build_element_ids_by_band(grain_name, bands, eltypes,
                                                   grainElements, nearest_dist_by_type)
 
@@ -993,27 +1063,34 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def pick_contrasting_colours_from_cmap(self, n_colours, cmap_name='nipy_spectral'):
+        """Pick contrasting colours from cmap."""
         return meshviz.pick_contrasting_colours_from_cmap(n_colours, cmap_name=cmap_name)
 
     def resolve_band_colours(self, bands, band_colours=None, auto_cmap='nipy_spectral'):
+        """Resolve band colours."""
         return meshviz.resolve_band_colours(bands, band_colours=band_colours,
                                             auto_cmap=auto_cmap)
 
     def resolve_plot_eltype(self, eltypes, plot_eltype=None):
+        """Resolve plot eltype."""
         return meshviz.resolve_plot_eltype(eltypes, plot_eltype=plot_eltype)
 
     def plot_elements_geometric_grain(self, grain_name, **kwargs):
+        """Visualise elements geometric grain using Matplotlib or PyVista."""
         meshviz.plot_elements_geometric_grain(grain_name, **kwargs)
 
     def plot_elements_by_elIDs(self, element_ids, **kwargs):
+        """Visualise elements by elIDs using Matplotlib or PyVista."""
         meshviz.plot_elements_by_elIDs(element_ids, **kwargs)
 
     def plot_elements_geometric_grains(self, **kwargs):
+        """Visualise elements geometric grains using Matplotlib or PyVista."""
         meshviz.plot_elements_geometric_grains(**kwargs)
 
     def plot_band_elements(self, element_ids_by_band, bands, plot_eltype, gbcoords,
                            gblines_by_grain=None, colours_to_use=None,
                            title='Selected elements by band', band_facecolors=False):
+        """Visualise band elements using Matplotlib or PyVista."""
         return meshviz.plot_band_elements(
             element_ids_by_band, bands, plot_eltype, gbcoords, self,
             gblines_by_grain=gblines_by_grain, colours_to_use=colours_to_use,
@@ -1025,6 +1102,7 @@ class confMesh2dGMSH():
                                  plot_eltype='quad', gblines_by_grain=None,
                                  plot=True, band_colours=None,
                                  auto_cmap='nipy_spectral', band_facecolors=False):
+        """Select elements in bands."""
         element_ids_by_band, nearest_dist_by_type, selected_eltypes = elemOps.select_elements_in_bands(
             grain_name, bands, gbnodeCoords, grainCoordinates, grainElements, eltypes=eltypes
         )

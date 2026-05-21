@@ -56,6 +56,7 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
     return lfi, N, connectivity
 
 def get_voxel_counts_bbox_centroids(lfi_array):
+    """Return the voxel counts bbox centroids."""
     import cc3d
     return cc3d.statistics(lfi_array)
 
@@ -63,6 +64,7 @@ def get_feature_contact_surface_areas(lfi, connectivity=18,
                                       ignore_junction_edges=False,
                                       voxx=1.0, voxy=1.0, voxz=1.0
                                       ):
+    """Return the feature contact surface areas."""
     import cc3d
     # Compute the contact surface area between all labels.
     # Only face contacts are counted as edges and corners

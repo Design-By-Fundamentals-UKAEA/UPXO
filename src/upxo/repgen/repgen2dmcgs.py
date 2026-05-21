@@ -25,6 +25,7 @@ class repgen2d:
                  'mc_host_orientations',
                  'mc_twin_geom',
                  'mc_smooth_geom',
+                 'mc_smooth_geom_r2',
                  'mc_smooth_quats',
                  'mc_smooth_mesh')
     '''
@@ -903,6 +904,7 @@ class repgen2d:
                 raw_map[twin_gid] = parent_gid
 
         def _resolve(gid, mapping, depth=0):
+            """ resolve."""
             if depth > 200 or gid not in mapping:
                 return gid
             return _resolve(mapping[gid], mapping, depth + 1)
@@ -1579,6 +1581,7 @@ class repgen2d:
         info = ext[csl_label]
 
         def _area(gids):
+            """ area."""
             return sum(self.prop_ebsd[g]['area']
                        for g in gids if g in self.prop_ebsd)
 
@@ -3077,6 +3080,277 @@ class repgen2d:
         self.mc_smooth_geom = results
         return self.mc_smooth_geom
 
+    def smooth_parent_and_twin_geometric(
+            self,
+            cntr,
+            mc_host_orientations: dict,
+            twin_thickness: dict,
+            tvf: dict,
+            slice_keys: list | None = None,
+            # ── smoothing params (forwarded to smooth_gs_slice) ───────────────
+            area_threshold: int = 1,
+            smooth_iter: int = 10,
+            smooth_lambda: float = 0.5,
+            smooth_mu: float = -0.53,
+            trim_bounds=(5, 5, 95, 95),
+            coord_decimals: int = 6,
+            method: str = 'taubin',
+            ma_window: int = 3,
+            corner_angle_deg: float = 30.0,
+            upscale_factor: int = 1,
+            thin_grain_px: float = 0.0,
+            fix_diagonal: bool = True,
+            merge_enclosed: bool = True,
+            close_staircase: bool = True,
+            # ── twin geometry params ──────────────────────────────────────────
+            n_twins_per_parent: int = 1,
+            twin_orient_scatter_deg: float = 1.5,
+            verbose: bool = True,
+            rng_seed: int | None = None,
+            **seed_kwargs,
+    ) -> dict:
+        """
+        Route 2 pipeline — geometric twin introduction in Shapely polygon space.
+
+        Steps
+        -----
+        A  Smooth the PARENT-ONLY MC grain structure (``gs.lgi`` before twin
+           introduction via ``introduce_mc_twin_lamellae``).
+        B  Map parent quaternions from ``mc_host_orientations`` onto smooth
+           polygon GIDs using a ``cKDTree`` of pixel centres.
+        C  Introduce S3 twin lamellae geometrically: each host polygon is
+           intersected with an oriented Shapely rectangle whose angle comes from
+           ``compute_s3_lamella_angle_2d`` and whose half-width is sampled from
+           ``twin_thickness['thick_px']``.
+        D  Rebuild topology (GID renumbering, neighbour graph, interfaces,
+           junction points) using the same Steps 5–11 logic as
+           ``smooth_gs_slice``.
+
+        The result is stored in ``self.mc_smooth_geom_r2``.
+
+        .. important::
+           This method **must** be called BEFORE ``introduce_mc_twin_lamellae``
+           (§32 in the demo notebook), because that method overwrites ``gs.lgi``
+           in-place.  After §32, the parent-only LFI is gone.
+
+        Parameters
+        ----------
+        cntr : MC_GS_Container2d
+            Container with ``.gsset {sk: gs}``.
+        mc_host_orientations : dict
+            ``{sk: {'all_quats': {orig_gid: quaternion}}}`` — output of
+            ``assign_mc_parent_orientations``.
+        twin_thickness : dict
+            Output of ``compute_mc_twin_thickness``.  Must contain key
+            ``'thick_px'`` (1-D array of half-widths in px) and optionally
+            ``'abrupt_frac_ebsd'``.
+        tvf : dict
+            Twin volume fraction dict.  ``tvf.get('secondary_twin_frac', 0.0)``
+            controls secondary twinning (currently reserved).
+        slice_keys : list or None
+            Keys to process.  ``None`` processes all keys in ``cntr.gsset``.
+        area_threshold, smooth_iter, smooth_lambda, smooth_mu, trim_bounds,
+        coord_decimals, method, ma_window, corner_angle_deg, upscale_factor,
+        thin_grain_px, fix_diagonal, merge_enclosed, close_staircase
+            Forwarded to ``smooth_gs_slice`` (same semantics as
+            ``smooth_mc_slices``).
+        n_twins_per_parent : int
+            Number of twin strips to cut per host grain.
+        twin_orient_scatter_deg : float
+            Gaussian angular scatter on twin quaternion (degrees).
+        verbose : bool
+            Print per-slice progress.
+        rng_seed : int or None
+            Seed for the random generator used in twin placement.
+        **seed_kwargs
+            Forwarded to ``generate_constrained_hybrid_seeds``.
+
+        Returns
+        -------
+        dict
+            ``{sk: result_dict}`` — also stored in ``self.mc_smooth_geom_r2``.
+            Each result dict contains:
+            ``cells``, ``polygon_neighbors``, ``validity_report``,
+            ``cell_pairs_list``, ``cell_pair_interfaces``, ``junction_points``,
+            ``jp_dict``, ``old_to_new_gid``, ``n_grains``, ``n_invalid``,
+            ``smooth_quats``, ``twin_gids_map``.
+        """
+        from upxo.pxtalops.gssmooth2d import (
+            smooth_gs_slice,
+            introduce_twins_in_shapely,
+            _compute_polygon_neighbors,
+        )
+        from scipy.spatial import cKDTree
+        from collections import defaultdict
+        from shapely.geometry import Point, Polygon, MultiPolygon
+
+        rng = np.random.default_rng(rng_seed)
+        if slice_keys is None:
+            slice_keys = list(cntr.gsset.keys())
+
+        bounds_map = (trim_bounds if isinstance(trim_bounds, dict)
+                      else {sk: trim_bounds for sk in slice_keys})
+
+        results: dict = {}
+        for sk in slice_keys:
+            if verbose:
+                print(f'[smooth_parent_and_twin_geometric] slice {sk}')
+            gs = cntr.gsset[sk]
+            ny, nx = gs.lgi.shape
+            pct = bounds_map[sk]
+            trim_px = (
+                round(pct[0] / 100 * nx),
+                round(pct[1] / 100 * ny),
+                round(pct[2] / 100 * nx),
+                round(pct[3] / 100 * ny),
+            )
+
+            # ── Step A: smooth parent-only LFI ───────────────────────────────
+            r = smooth_gs_slice(
+                gs.lgi,
+                area_threshold=area_threshold,
+                smooth_iter=smooth_iter,
+                smooth_lambda=smooth_lambda,
+                smooth_mu=smooth_mu,
+                trim_bounds=trim_px,
+                coord_decimals=coord_decimals,
+                method=method,
+                ma_window=ma_window,
+                corner_angle_deg=corner_angle_deg,
+                upscale_factor=upscale_factor,
+                thin_grain_px=thin_grain_px,
+                fix_diagonal=fix_diagonal,
+                merge_enclosed=merge_enclosed,
+                close_staircase=close_staircase,
+                verbose=verbose,
+                **seed_kwargs,
+            )
+            cells = r['cells']
+
+            # ── Step B: map parent quaternions to smooth polygon GIDs ─────────
+            all_quats = mc_host_orientations.get(sk, {}).get('host_quats', {})
+            lfi = gs.lgi  # still parent-only at this point
+            rows, cols = np.nonzero(lfi > 0)
+            pixel_coords = np.column_stack([cols, rows])  # (x, y)
+            pixel_gids = lfi[rows, cols]
+            tree = cKDTree(pixel_coords)
+
+            smooth_quats: dict = {}
+            for gid, poly in cells.items():
+                rp = poly.representative_point()
+                _, idx = tree.query([rp.x, rp.y])
+                orig_gid = int(pixel_gids[idx])
+                q = all_quats.get(orig_gid)
+                if q is not None:
+                    smooth_quats[gid] = np.asarray(q, dtype=np.float64)
+
+            # ── Step C: geometric twin introduction ───────────────────────────
+            host_gids = list(smooth_quats.keys())
+            twin_result = introduce_twins_in_shapely(
+                cells=cells,
+                smooth_quats=smooth_quats,
+                host_gids=host_gids,
+                twin_thickness=twin_thickness,
+                abrupt_frac=float(twin_thickness.get('abrupt_frac_ebsd', 0.7)),
+                rng=rng,
+                n_twins_per_parent=n_twins_per_parent,
+                secondary_host_frac=float(tvf.get('secondary_twin_frac', 0.0)),
+                twin_orient_scatter_deg=twin_orient_scatter_deg,
+            )
+            cells = twin_result['cells']
+            twin_quats = twin_result['twin_quats']
+
+            # ── Step D: rebuild topology ──────────────────────────────────────
+            # renumber GIDs contiguously 1 → N
+            old_to_new_gid: dict = {}
+            new_cells: dict = {}
+            for new_gid, old_gid in enumerate(sorted(cells.keys()), start=1):
+                old_to_new_gid[old_gid] = new_gid
+                new_cells[new_gid] = cells[old_gid]
+            cells = new_cells
+            twin_quats = {old_to_new_gid[g]: q
+                          for g, q in twin_quats.items() if g in old_to_new_gid}
+
+            # neighbour graph
+            polygon_neighbors = _compute_polygon_neighbors(cells)
+            polygon_neighbors = {
+                old_to_new_gid[og]: [old_to_new_gid[n] for n in nbrs
+                                      if n in old_to_new_gid]
+                for og, nbrs in polygon_neighbors.items()
+                if og in old_to_new_gid
+            }
+
+            # validation
+            validity_report: dict = {
+                gid: {
+                    'is_valid': geom.is_valid,
+                    'has_area': geom.area > 0,
+                    'area':     geom.area,
+                }
+                for gid, geom in cells.items()
+            }
+            n_invalid = sum(1 for v in validity_report.values() if not v['is_valid'])
+
+            # symmetric pair list
+            cell_pairs: set = set()
+            for gid1, nbrs in polygon_neighbors.items():
+                for gid2 in nbrs:
+                    cell_pairs.add(tuple(sorted((gid1, gid2))))
+            cell_pairs_list = sorted(cell_pairs)
+
+            # shared-boundary interfaces
+            cell_pair_interfaces: dict = {
+                pair: cells[pair[0]].boundary.intersection(cells[pair[1]].boundary)
+                for pair in cell_pairs_list
+            }
+
+            # junction points
+            vertex_to_gids: dict = defaultdict(set)
+            for gid, geom in cells.items():
+                if geom is None or geom.is_empty:
+                    continue
+                polys = ([geom] if isinstance(geom, Polygon)
+                         else list(geom.geoms) if isinstance(geom, MultiPolygon)
+                         else [])
+                for poly in polys:
+                    for x, y in list(poly.exterior.coords)[:-1]:
+                        key = (round(float(x), coord_decimals),
+                               round(float(y), coord_decimals))
+                        vertex_to_gids[key].add(int(gid))
+            junction_items = sorted(
+                [(coord, tuple(sorted(gids)))
+                 for coord, gids in vertex_to_gids.items() if len(gids) >= 3],
+                key=lambda t: (t[0][0], t[0][1]),
+            )
+            junction_points = [Point(x, y) for (x, y), _ in junction_items]
+            jp_dict = {
+                jp_id: [len(gids), gids]
+                for jp_id, (_, gids) in enumerate(junction_items, start=1)
+            }
+
+            if verbose:
+                print(f'[smooth_parent_and_twin_geometric] slice {sk} done — '
+                      f'{len(cells)} grains ({len(twin_result["twin_gids"])} twinned), '
+                      f'{n_invalid} invalid, {len(junction_points)} junction points')
+
+            results[sk] = {
+                'cells':                cells,
+                'polygon_neighbors':    polygon_neighbors,
+                'validity_report':      validity_report,
+                'cell_pairs_list':      cell_pairs_list,
+                'cell_pair_interfaces': cell_pair_interfaces,
+                'junction_points':      junction_points,
+                'jp_dict':              jp_dict,
+                'old_to_new_gid':       old_to_new_gid,
+                'n_grains':             len(cells),
+                'n_invalid':            n_invalid,
+                'smooth_quats':         twin_quats,
+                'twin_gids_map':        twin_result['twin_gids'],
+            }
+
+        self.mc_smooth_geom_r2 = results
+        return results
+
     def assign_smooth_orientations(
             self,
             cntr,
@@ -3818,11 +4092,13 @@ class repgen2d:
                       for p in props}
 
         def _norm_by_ebsd(series, p):
+            """ norm by ebsd."""
             mu = ebsd_means[p]
             vals = series.dropna().values
             return vals / mu if mu != 0 else vals
 
         def _norm_by_own(series):
+            """ norm by own."""
             vals = series.dropna().values
             mu = vals.mean()
             return vals / mu if mu != 0 else vals
@@ -3853,6 +4129,7 @@ class repgen2d:
 
         # Step E — build, store, return
         def _to_df(rows):
+            """ to df."""
             df = pd.DataFrame.from_dict(rows, orient='index')
             df.index.name = 'mc_time_slice'
             return df.sort_values('aggregate')
@@ -4033,6 +4310,7 @@ class repgen2d:
                      if p in mc_cols and p in self.prop_ebsd_merged_df.columns]
 
         def _norm(series):
+            """ norm."""
             vals = series.dropna().values
             mu = vals.mean()
             return vals / mu if mu != 0 else vals
@@ -4103,6 +4381,7 @@ class repgen2d:
                      if p in mc_cols and p in self.prop_ebsd_merged_df.columns]
 
         def _norm(series):
+            """ norm."""
             vals = series.dropna().values
             mu = vals.mean()
             return vals / mu if mu != 0 else vals

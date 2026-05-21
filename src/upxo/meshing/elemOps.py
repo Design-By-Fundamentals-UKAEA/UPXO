@@ -2,6 +2,7 @@ import numpy as np
 
 def rebuild_elConnectivity(availableElTypes=None, availableFeatures=None,
                            filtered_mesh_cells=None):
+    """Rebuild elconnectivity."""
     elConn = {}
     for eltype in availableElTypes:
         elTypeID = np.where(np.array(availableFeatures, dtype=str) == eltype)[0][0]
@@ -9,6 +10,7 @@ def rebuild_elConnectivity(availableElTypes=None, availableFeatures=None,
     return elConn
 
 def get_elCentroids_2d(nodes, elConn, availableElTypes):
+    """Return the elCentroids 2d."""
     from shapely.geometry import Point
     from shapely.strtree import STRtree
     from upxo.geoEntities.mulpoint2d import MPoint2d as mulpoint2d
@@ -162,6 +164,7 @@ def find_el_neigh(element_ids, elConn, n_order=1, eltype=None, include_self=Fals
     return np.array(sorted(visited), dtype=int)
 
 def find_nthOrderNeigh(n_order, el_subset, availableElTypes, elConn, include_self=False):
+    """Find nthOrderNeigh."""
 
     neighbor_ids_by_type = {et: [] for et in availableElTypes}
     elem_ids_by_type = {et: [] for et in availableElTypes}
@@ -215,6 +218,7 @@ def extract_elements_within_distance_to_gb(grain_name=None, gb_lines=None,
     denom = np.where(denom > 0, denom, np.finfo(float).eps)
 
     def min_dist_to_segments(points):
+        """Min dist to segments."""
         min_dist = np.full(points.shape[0], np.inf, dtype=float)
         for start in range(0, points.shape[0], chunk_size):
             p = points[start:start + chunk_size]
@@ -247,6 +251,7 @@ def extract_elements_within_distance_to_gb(grain_name=None, gb_lines=None,
 
 
 def resolve_eltypes(grain_name, grainElements, grainCoordinates, eltypes=None):
+    """Resolve eltypes."""
     if eltypes is not None:
         return list(eltypes)
 
@@ -261,6 +266,7 @@ def resolve_eltypes(grain_name, grainElements, grainCoordinates, eltypes=None):
 
 
 def _compute_nearest_distances_to_gb(grain_name, eltypes, gbnodeCoords, grainCoordinates):
+    """ compute nearest distances to gb."""
     from scipy.spatial import cKDTree
 
     gbcoords = gbnodeCoords[grain_name][:, :2]
@@ -281,6 +287,7 @@ def _compute_nearest_distances_to_gb(grain_name, eltypes, gbnodeCoords, grainCoo
 
 
 def build_element_ids_by_band(grain_name, bands, eltypes, grainElements, nearest_dist_by_type):
+    """Build and return  element ids by band."""
     element_ids_by_band = {}
     for band in bands:
         band_min = min(band)
@@ -305,6 +312,7 @@ def build_element_ids_by_band(grain_name, bands, eltypes, grainElements, nearest
 
 def select_elements_in_bands(grain_name, bands, gbnodeCoords, grainCoordinates,
                              grainElements, eltypes=None):
+    """Select elements in bands."""
     selected_eltypes = resolve_eltypes(
         grain_name, grainElements, grainCoordinates, eltypes=eltypes
     )
