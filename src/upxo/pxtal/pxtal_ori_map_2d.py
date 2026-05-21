@@ -3,7 +3,6 @@ Created on Fri Jun 28 09:32:49 2024
 
 @author: Dr. Sunil Anandatheertha
 """
-import cv2
 import math
 import random
 from copy import deepcopy
@@ -31,6 +30,7 @@ class polyxtal2d():
     EPS = 1e-12
 
     def __init__(self):
+        """Initialise the instance."""
         self.mprop = {'npixels': None,
                       'perimeter': None,
                       'solidity': None,
@@ -69,10 +69,12 @@ class polyxtal2d():
                              }
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         self.__gi__ = 1
         return self
 
     def __next__(self):
+        """Return the next item from this iterator."""
         if self.n:
             if self.__gi__ <= self.n:
                 thisgrain = self.g[self.__gi__]['grain']
@@ -82,9 +84,11 @@ class polyxtal2d():
                 raise StopIteration
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"UPXO.MCGS2D.PXTAL_map {id(self)}"
 
     def __att__(self):
+        """Return a string listing of all attributes."""
         return att(self)
 
     def setup(self, map_type='ebsd',
@@ -105,9 +109,11 @@ class polyxtal2d():
             self.kuwahara_filter(misori=kuwahara_misori)
 
     def kuwahara_filter(self, misori=5):
+        """Kuwahara filter."""
         self.map.filterData(misOriTol=misori)
 
     def buildQuatArray(self):
+        """Buildquatarray."""
         self.map.buildQuatArray()
 
     def find_grains_gb(self, gb_misori=10, min_grain_size=1, print_msg=True):
@@ -150,6 +156,7 @@ class polyxtal2d():
         self.set_mprops()
 
     def set_mprops(self):
+        """Set or update mprops."""
         self.set_mprop_npixels()
         self.set_mprop_area()
         self.set_mprop_perimeter_crofton()
@@ -169,6 +176,7 @@ class polyxtal2d():
         self.set_mprop_inertia_tensor_eigvals()
 
     def get_data_template_giddict(self, ncopies):
+        """Return the data template giddict."""
         # Validation
         data_tmpt = {gid: None for gid in self.gid}
         if ncopies == 1:
@@ -177,31 +185,31 @@ class polyxtal2d():
             return [data_tmpt for _ in range(ncopies)]
 
     def set_bounding_boxes(self):
+        """Set or update bounding boxes."""
         self.bbox_bounds = {gid: None for gid in self.gid}
         self.bbox = {gid: None for gid in self.gid}
         self.bbox_ex_bounds = {gid: None for gid in self.gid}
         self.bbox_ex = {gid: None for gid in self.gid}
         # -------------------------------
         for gid in self.gid:
-            _, L = cv2.connectedComponents(np.array(self.lgi == gid,
-                                                    dtype=np.uint8))
+            mask = (self.lgi == gid).astype(np.uint8)
             # . . . . . . . . . . .
-            rmin = np.where(L == 1)[0].min()
-            rmax = np.where(L == 1)[0].max()+1
-            cmin = np.where(L == 1)[1].min()
-            cmax = np.where(L == 1)[1].max()+1
+            rmin = np.where(mask)[0].min()
+            rmax = np.where(mask)[0].max()+1
+            cmin = np.where(mask)[1].min()
+            cmax = np.where(mask)[1].max()+1
             # . . . . . . . . . . .
-            Rlab, Clab = L.shape
+            Rlab, Clab = mask.shape
             rmin_ex, rmax_ex = rmin - int(rmin != 0), rmax+int(rmin != Rlab)
             cmin_ex, cmax_ex = cmin - int(cmin != 0), cmax+int(cmax != Clab)
             # . . . . . . . . . . .
             self.bbox_bounds[gid] = [rmin, rmax, cmin, cmax]
-            self.bbox[gid] = np.array(L[rmin:rmax, cmin:cmax], dtype=np.uint8)
+            self.bbox[gid] = mask[rmin:rmax, cmin:cmax].copy()
             self.bbox_ex_bounds[gid] = [rmin_ex, rmax_ex, cmin_ex, cmax_ex]
-            self.bbox_ex[gid] = np.array(L[rmin_ex:rmax_ex, cmin_ex:cmax_ex],
-                                         dtype=np.uint8)
+            self.bbox_ex[gid] = mask[rmin_ex:rmax_ex, cmin_ex:cmax_ex].copy()
 
     def set_mprop_generator(self, use_extended_bbox=False):
+        """Set or update mprop generator."""
         from skimage.measure import regionprops
         if not use_extended_bbox:
             for gid in self.gid:
@@ -213,30 +221,37 @@ class polyxtal2d():
                                                           cache=False)[0]
 
     def set_mprop_npixels(self):
+        """Set or update mprop npixels."""
         self.mprop['npixels'] = np.array([self.g[gid]['grain'].skprop.num_pixels
                                           for gid in self.gid])
 
     def set_mprop_area(self):
+        """Set or update mprop area."""
         self.mprop['area'] = np.array([self.g[gid]['grain'].skprop.area
                                    for gid in self.gid])
 
     def set_mprop_perimeter(self):
+        """Set or update mprop perimeter."""
         self.mprop['perimeter'] = np.array([self.g[gid]['grain'].skprop.perimeter_crofton
                                    for gid in self.gid])
 
     def set_mprop_perimeter_crofton(self):
+        """Set or update mprop perimeter crofton."""
         self.mprop['perimeter_crofton'] = np.array([self.g[gid]['grain'].skprop.perimeter_crofton
                                            for gid in self.gid])
 
     def set_mprop_major_axis_length(self):
+        """Set or update mprop major axis length."""
         self.mprop['major_axis_length'] = np.array([self.g[gid]['grain'].skprop.major_axis_length
                                                     for gid in self.gid])
 
     def set_mprop_minor_axis_length(self):
+        """Set or update mprop minor axis length."""
         self.mprop['minor_axis_length'] = np.array([self.g[gid]['grain'].skprop.minor_axis_length
                                            for gid in self.gid])
 
     def set_mprop_ar(self):
+        """Set or update mprop ar."""
         aspect_ratio = []
         for gid in self.gid:
             skprop = self.g[gid]['grain'].skprop
@@ -249,46 +264,57 @@ class polyxtal2d():
         self.mprop['aspect_ratio'] = aspect_ratio
 
     def set_mprop_eccentricity(self):
+        """Set or update mprop eccentricity."""
         self.mprop['eccentricity'] = np.array([self.g[gid]['grain'].skprop.eccentricity
                                            for gid in self.gid])
 
     def set_mprop_area_bbox(self):
+        """Set or update mprop area bbox."""
         self.mprop['area_bbox'] = np.array([self.g[gid]['grain'].skprop.area_bbox
                                            for gid in self.gid])
 
     def set_mprop_area_convex(self):
+        """Set or update mprop area convex."""
         self.mprop['area_convex'] = np.array([self.g[gid]['grain'].skprop.area_convex
                                            for gid in self.gid])
 
     def set_mprop_equivalent_diameter_area(self):
+        """Set or update mprop equivalent diameter area."""
         self.mprop['equivalent_diameter_area'] = np.array([self.g[gid]['grain'].skprop.equivalent_diameter_area
                                            for gid in self.gid])
 
     def set_mprop_euler_number(self):
+        """Set or update mprop euler number."""
         self.mprop['euler_number'] = np.array([self.g[gid]['grain'].skprop.euler_number
                                            for gid in self.gid])
 
     def set_mprop_feret_diameter_max(self):
+        """Set or update mprop feret diameter max."""
         self.mprop['feret_diameter_max'] = np.array([self.g[gid]['grain'].skprop.feret_diameter_max
                                            for gid in self.gid])
 
     def set_mprop_moments(self):
+        """Set or update mprop moments."""
         self.mprop['moments'] = [self.g[gid]['grain'].skprop.moments
                                            for gid in self.gid]
 
     def set_mprop_solidity(self):
+        """Set or update mprop solidity."""
         self.mprop['solidity'] = np.array([self.g[gid]['grain'].skprop.solidity
                                            for gid in self.gid])
 
     def set_mprop_orientation(self):
+        """Set or update mprop orientation."""
         self.mprop['orientation'] = np.array([self.g[gid]['grain'].skprop.orientation
                                            for gid in self.gid])
 
     def set_mprop_inertia_tensor(self):
+        """Set or update mprop inertia tensor."""
         self.mprop['inertia_tensor'] = [self.g[gid]['grain'].skprop.inertia_tensor
                                            for gid in self.gid]
 
     def set_mprop_inertia_tensor_eigvals(self):
+        """Set or update mprop inertia tensor eigvals."""
         self.mprop['inertia_tensor_eigvals'] = [self.g[gid]['grain'].skprop.inertia_tensor_eigvals
                                            for gid in self.gid]
 
@@ -359,40 +385,20 @@ class polyxtal2d():
         Parameters ---------- Returns ------- Example ------- Explanations
         """
 
-        # Validations
-        binary_image = np.where(self.lgi == gid, 255, 0).astype(np.uint8)
-        # ----------------------------------------
-        if retrieval_method.lower() == 'external':
-            method = cv2.RETR_EXTERNAL
-        elif retrieval_method.lower() == 'list':
-            method = cv2.RETR_LIST
-        elif retrieval_method.lower() == 'ccomp':
-            method = cv2.RETR_CCOMP
-        elif retrieval_method.lower() == 'tree':
-            method = cv2.RETR_TREE
-        else:
-            raise ValueError(f'Invalid retrieval_method: {retrieval_method}')
+        from scipy.ndimage import binary_erosion
+        grain_mask = (self.lgi == gid)
+        boundary = grain_mask & ~binary_erosion(grain_mask)
+        gb = np.argwhere(boundary).T  # shape (2, N) in (row, col) format
         # ----------------------------------------
         if chain_approximation == 'none':
-            contours, heirarchy = cv2.findContours(binary_image, method,
-                                                   cv2.CHAIN_APPROX_NONE)
-            ch = {'all': (contours, heirarchy)}
-            gb_points = {'all': contours[0].T.squeeze()}
+            gb_points = {'all': gb}
+            ch = {'all': None}
         elif chain_approximation == 'simple':
-            contours, heirarchy = cv2.findContours(binary_image, method,
-                                                   cv2.CHAIN_APPROX_SIMPLE)
-            ch = {'simple': (contours, heirarchy)}
-            gb_points = {'simple': contours[0].T.squeeze()}
+            gb_points = {'simple': gb}
+            ch = {'simple': None}
         elif chain_approximation == 'both':
-            contours1, heirarchy1 = cv2.findContours(binary_image, method,
-                                                     cv2.CHAIN_APPROX_NONE)
-            contours2, heirarchy2 = cv2.findContours(binary_image, method,
-                                                     cv2.CHAIN_APPROX_SIMPLE)
-            ch = {'all': (contours1, heirarchy1),
-                  'simple': (contours2, heirarchy2)
-                  }
-            gb_points = {'all': contours1[0].T.squeeze(),
-                         'simple': contours2[0].T.squeeze()}
+            gb_points = {'all': gb, 'simple': gb}
+            ch = {'all': None, 'simple': None}
         else:
             raise ValueError(f'Invalid chain_approx.: {chain_approximation}')
         # ----------------------------------------
@@ -430,6 +436,7 @@ class polyxtal2d():
         self.lgi = lginew
 
     def rearrange_g_after_lgi_shuffle(self):
+        """Rearrange g after lgi shuffle."""
         self.flags['rearrange_g_after_lgi_shuffle'] = True
         g = {}
         for gid in self.gid:
@@ -454,10 +461,9 @@ class polyxtal2d():
         self.gid = np.unique(self.lgi)
 
     def set_grain_locations(self):
+        """Set or update grain locations."""
         for gid in self.gid:
-            _, L = cv2.connectedComponents(np.array(self.lgi == gid,
-                                                    dtype=np.uint8))
-            self.g[gid]['grain'].loc = np.argwhere(L == 1)
+            self.g[gid]['grain'].loc = np.argwhere(self.lgi == gid)
 
 
     def set_n(self):
@@ -542,6 +548,7 @@ class polyxtal2d():
             self.gb_discrete[gid]['ch'] = ch
 
     def set_geom(self):
+        """Set or update geom."""
         from upxo.pxtal.geometrification import polygonised_grain_structure
         self.geom = polygonised_grain_structure(self.lgi,
                                                 self.gid,
@@ -582,6 +589,7 @@ class polyxtal2d():
         return gid_neighbourhood
 
     def remove_single_pixel_grains(self):
+        """Remove single pixel grains."""
         spg_gids = self.single_pixel_grains
         if spg_gids:
             pass
@@ -590,6 +598,7 @@ class polyxtal2d():
 
     @property
     def single_pixel_grains(self):
+        """Single pixel grains."""
         locations = np.where(self.mprop['npixels'] == 1)[0]
         if locations.size > 0:
             return list(locations + 1)
@@ -598,6 +607,7 @@ class polyxtal2d():
 
     @property
     def plot_single_pixel_grains(self):
+        """Visualise single pixel grains using Matplotlib or PyVista."""
         self.plot_grains_gids(self.single_pixel_grains)
 
     def validate_propnames(self, mpnames, return_type='dict'):
@@ -634,6 +644,7 @@ class polyxtal2d():
             raise ValueError('Invalid return_type specification.')
 
     def check_mpnamevals_exists(self, mpnames, return_type='dict'):
+        """Check or validate check mpnamevals exists."""
         if return_type == 'dict':
             return {mpn: mpn in self.mprop.keys() for mpn in mpnames}
         elif return_type in ('list', 'tuple'):
@@ -1122,6 +1133,7 @@ class polyxtal2d():
             True, if successfully merged, else False.
         """
         def MergeGrains():
+            """Mergegrains."""
             if simple_merge:
                 self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
                 merge_success = True
@@ -1184,6 +1196,7 @@ class polyxtal2d():
         return np.argmax(self.npixels) + 1
 
     def __setup__positions__(self):
+        """__setup__positions__ special method."""
         self.positions = {'top_left': [], 'bottom_left': [],
                           'bottom_right': [], 'top_right': [],
                           'pure_right': [], 'pure_bottom': [],
@@ -1496,6 +1509,7 @@ class polyxtal2d():
     def get_bbox_bounds_gids(self, gids, plot=True, cmap_name='viridis',
                              plot_centroids=True, add_gid_text=True,
                              plot_gbseg=False,):
+        """Return the bbox bounds gids."""
         gids = gstslice.pxtal[1].neigh_gid[46]
         a = gstslice.pxtal[1].mask_lgi_with_gids(gids, masker=-10)
         yloc, xloc = np.argwhere(a[0] != -10).T

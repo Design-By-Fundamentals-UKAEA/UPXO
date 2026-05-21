@@ -129,19 +129,19 @@ def mcgs2d(library=None, gs_dict=None, msteps=None, kernel_order=2,
     if library == 'upxo':
         warnings.warn("upxo native grain detection is deprecated and"
                       " will be removed in a future version. Use options"
-                      " opencv or sckit-image instead",
+                      " sckit-image instead",
                       category=DeprecationWarning,
                       stacklevel=2)
     elif library in dth.opt.ocv_options:
-        import cv2
-        # Acceptable values for opencv: 4, 8
+        library = 'skimage'
         if kernel_order in (4, 8):
-            KO = kernel_order
+            KO = kernel_order // 4
         elif kernel_order in (1, 2):
-            KO = 4*kernel_order
+            KO = kernel_order
         else:
             raise ValueError("Input must be in (1, 2, 4, 8)."
                              f" Recieved {kernel_order}")
+        from skimage.measure import label as skim_label
     elif library in dth.opt.ski_options:
         from skimage.measure import label as skim_label
         # Acceptable values for opencv: 1, 2
@@ -174,11 +174,7 @@ def mcgs2d(library=None, gs_dict=None, msteps=None, kernel_order=2,
             # -----------------------------------------
             # Identify the grains belonging to this state
             BI = (_S_ == _s_).astype(np.uint8)  # Binary image
-            if library in dth.opt.ocv_options:
-                state_ng[m][i], labels = cv2.connectedComponents(BI*255,
-                                                    connectivity=KO)
-                gs_dict[m].pixConn = KO
-            elif library in dth.opt.ski_options:
+            if library in dth.opt.ski_options:
                 labels, state_ng[m][i] = skim_label(BI, return_num=True,
                                                     connectivity=KO)
                 gs_dict[m].pixConn = KO

@@ -7,7 +7,6 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import generic_filter
-import cv2
 import vtk
 import warnings
 # import vedo as vd
@@ -97,6 +96,7 @@ class repgen3d:
     def __init__(self,tdist=None, tstat=None, tgs=None,
                  sgs=None, tdim=2, iroute='tgs.sgs',
                  sgstype='upxo.mc3d', tgstype='upxo.mc3d'):
+        """Initialise the instance."""
 
         if iroute not in self.VALiroutes:
             raise ValueError('Invalid iroute')
@@ -289,6 +289,7 @@ class repgen3d:
                             arellfit_efit_regularize_data=arellfit_efit_regularize_data)
 
     def char_gs(self, find_spatial_bounds_of_grains=False):
+        """Char gs."""
         _fsb = find_spatial_bounds_of_grains
         self.sgs.char_morphology_of_grains(label_str_order=1,
                                     find_grain_voxel_locs=False,
@@ -336,6 +337,7 @@ class repgen3d:
                                 sol_inf_replacement=-1)
             
     def validate_mprops(self):
+        """Check or validate validate mprops."""
         vmp = [key for key in self.mpflags.keys() if self.mpflags[key] == True]
         if len(vmp) == 0:
             raise ValueError('No morphological properties selected for validation.')
@@ -344,9 +346,11 @@ class repgen3d:
             vmp_tgs = self.tgs.validate_mprops_l0(mprops=vmp)
 
     def rm0_setup(self, kld=False, ks2=False, mhd=True):
+        """Rm0 setup."""
         self.rm0tests = dict(lkd=kld, ks2=ks2, mhd=mhd)  
 
     def rm0_run(self):
+        """Rm0 run."""
         rm0={}
         if self.rm0tests['kld']:
             rm0['kld'] = self.sgs.rmtest_kld(self.tgs)
@@ -365,6 +369,7 @@ class repgen3d:
                          'btwcen': False, 'clscen': False, 
                          'egnvcen': False},
                   ):
+        """Rm1 setup."""
         if self.tdim == 2 and self.sdim == 2:
             kr = KREPR.from_gs(tgset={1: self.tgs}, 
                                sgset={1: self.sgs},
@@ -379,6 +384,7 @@ class repgen3d:
         self.rm1tests = dict(ed=ed, ordern=ordern)
 
     def rm1_run(self):
+        """Rm1 run."""
         rm1={}
         if self.rm1tests['ed']:
             rm1['ed'] = self.sgs.rmtest_ed(self.tgs, nO=self.rm1tests['nO'])
