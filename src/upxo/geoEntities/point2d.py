@@ -6,89 +6,86 @@ lightweight (leanest) and feature-rich implementations. It includes geometric
 operations (distance, translation, rotation), type conversions (UPXO, Shapely,
 VTK, PyVista, GMSH), and point array generation methods.
 
-Core Classes
+Import
+------
+    from upxo.geoEntities.point2d import p2d_leanest
+    from upxo.geoEntities.point2d import Point2d
+    from upxo.geoEntities.point2d import Point2d as p2d
+
+Classes
+-------
+p2d_leanest
+    Minimal 2D point container (private coordinates, no features).
+Point2d
+    Full-featured 2D point with attachable features and extensive
+    geometric operations.
+_coord_
+    Internal 3D coordinate storage used for z-level tracking.
+
+Dependencies
 ------------
-- ``p2d_leanest`` : Minimal 2D point container (private coordinates, no features).
-- ``Point2d`` : Full-featured 2D point with attachable features and extensive
-  geometric operations.
-- ``_coord_`` : Internal 3D coordinate storage (used for z-level tracking).
+Core (module-level):
+    numpy (np), math, copy.deepcopy,
+    upxo._sup.dataTypeHandlers,
+    upxo.geoEntities.bases,
+    upxo.geoEntities.featmake,
+    upxo._sup.validation_values,
+    upxo.geoEntities.point3d
 
-Key Features
-------------
-- Distance calculations (Euclidean, squared).
-- Geometric transformations (translation, rotation, reflection).
-- Point array generation (clustering, angles, grid patterns).
-- Type conversions to/from multiple formats (lists, arrays, Shapely, VTK).
-- Feature attachment and intersection detection.
-- Neighbor search (by distance, by count).
+Optional (loaded on demand):
+    numpy.matlib — used in ``array_by_angles()``.
+    shapely.geometry — used in ``make_shape()`` and ``rettype='shapely'`` clustering.
+    vtk — used in ``make_vtk_point()``.
+    pyvista — used in clustering with ``rettype='pyvista'``.
+    gmsh — used in clustering with ``rettype='gmsh'``.
 
-Imports (Core/Runtime)
----------------------
-**Core imports** (module-level):
-  - numpy (np): Array/numerical operations.
-  - math: Trigonometry, distance calculations.
-  - copy.deepcopy: Object cloning.
+Notes
+-----
+``p2d_leanest`` is stable and should not be extended further; use
+``Point2d`` for all new feature development.
 
-**Lazy imports** (loaded on demand):
-  - numpy.matlib: For ``repmat()`` in ``array_by_angles()``.
-  - shapely.geometry: For Shapely point/polygon conversions (``make_shape()``,
-    ``array_by_clustering()`` with 'shapely' return type).
-  - vtk: For VTK point object creation (``make_vtk_point()``).
-  - pyvista: For PyVista point cloud generation (``array_by_clustering()``
-    with 'pyvista' return type).
-  - gmsh: For GMSH point tagging (``array_by_clustering()`` with 'gmsh'
-    return type).
-
-**UPXO imports** (module-level):
-  - upxo._sup.dataTypeHandlers: Type checking, constants.
-  - upxo.geoEntities.bases: UPXO_Point, UPXO_Edge base classes.
-  - upxo.geoEntities.featmake: Point/edge construction utilities.
-  - upxo._sup.validation_values: Point validation/specification.
-  - upxo.geoEntities.point3d: 3D point for conversion operations.
-
-Metadata
---------
-* Module: upxo.geoEntities.point2d
-* Author: Dr. Sunil Anandatheertha
-* Email: vaasu.anandatheertha@ukaea.uk
-* Status: Active (p2d_leanest: stable, Point2d: full-featured)
-* Last updated: 2026-03-11
-* Version: 1.1
-
-A Few Usage Examples
---------------------
-**Leanest (minimal) point:**
-    >>> from upxo.geoEntities.point2d import p2d_leanest
-    >>> p = p2d_leanest(1.0, 2.0)
-    >>> p._x, p._y
-    (1.0, 2.0)
-
-**Full-featured point with distance:**
-    >>> from upxo.geoEntities.point2d import Point2d as p2d
-    >>> p1, p2 = p2d(0, 0), p2d(3, 4)
-    >>> p1.distance(p2)
-    5.0
-
-**Generate point array around centroid:**
-    >>> center = p2d(5, 5)
-    >>> points = center.array_by_clustering(n=10, r=2.0)
-    >>> len(points)
-    10
-
-**Rotate point around origin:**
-    >>> p = p2d(1, 0)
-    >>> rotated = p.rotate_about_point(p2d(0, 0), 90, degree=True)
-
-**Convert to Shapely:**
-    >>> p = p2d(1, 1)
-    >>> sp = p.make_shape()  # Returns Shapely Point
+Limitations
+-----------
+- Pydantic validation is intentionally excluded to keep instantiation fast.
+- ABC inheritance was removed to eliminate per-object overhead.
 
 See Also
 --------
-- ``upxo.geoEntities.sline2d`` : 2D line segments.
-- ``upxo.geoEntities.point3d`` : 3D points.
-- ``upxo.geoEntities.polygon2d`` : 2D polygon/crystal entities.
+upxo.geoEntities.sline2d : 2D line segments.
+upxo.geoEntities.point3d : 3D points.
 
+Examples
+--------
+Leanest (minimal) point:
+
+>>> from upxo.geoEntities.point2d import p2d_leanest
+>>> p = p2d_leanest(1.0, 2.0)
+>>> p._x, p._y
+(1.0, 2.0)
+
+Full-featured point with distance:
+
+>>> from upxo.geoEntities.point2d import Point2d as p2d
+>>> p1, p2 = p2d(0, 0), p2d(3, 4)
+>>> p1.distance(p2)
+5.0
+
+Generate a point array around a centroid:
+
+>>> center = p2d(5, 5)
+>>> points = center.array_by_clustering(n=10, r=2.0)
+>>> len(points)
+10
+
+Rotate a point 90 degrees about the origin:
+
+>>> p = p2d(1, 0)
+>>> rotated = p.rotate_about_point(p2d(0, 0), 90, degree=True)
+
+Convert to a Shapely Point:
+
+>>> p = p2d(1, 1)
+>>> sp = p.make_shape()
 """
 
 import math
@@ -112,50 +109,48 @@ NUMBERS, ITERABLES = dth.dt.NUMBERS, dth.dt.ITERABLES
 class _coord_():
     __slots__ = ('x', 'y', 'z')
     def __init__(self, x, y, z):
+        """Store raw 3D coordinate values in ``x``, ``y``, ``z``."""
         self.x, self.y, self.z = x, y, z
 
 class p2d_leanest():
     """
-    Leanest redefinition of 2D point class.
+    Minimal 2D point container for lightweight, high-frequency operations.
 
-    This class is a minimal coordinate container intended for lightweight,
-    high-frequency point operations where only core geometric checks are
-    needed. It stores coordinates as private attributes (`_x`, `_y`) and
-    provides compact distance/radius checks with minimal overhead.
-
-    Attributes
-    ----------
-    _x, _y : float
-        Point coordinates in 2D space.
-
-    Metadata
-    --------
-    * Class: p2d_leanest
-    * Module: upxo.geoEntities.point2d
-    * Author: Dr. Sunil Anandatheertha
-    * Email: vaasu.anandatheertha@ukaea.uk
-    * Status: Active
-    * Last updated: 2026-03-11
+    Stores coordinates as private attributes (``_x``, ``_y``) and provides
+    compact distance and radius-membership checks with minimal overhead.
+    Intended for inner-loop use where only core geometric predicates are
+    required; use ``Point2d`` when richer features are needed.
 
     Import
     ------
-    from upxo.geoEntities.point2d import p2d_leanest
+        from upxo.geoEntities.point2d import p2d_leanest
 
-    Author
-    ------
-    Dr. Sunil Anandatheertha
+    Parameters
+    ----------
+    x : float
+        X-coordinate of the point.
+    y : float
+        Y-coordinate of the point.
 
-    @dev
-    ----
-    Restrict any further development
+    Attributes
+    ----------
+    _x : float
+        X-coordinate (private).
+    _y : float
+        Y-coordinate (private).
+
+    Limitations
+    -----------
+    - This class is frozen: do not add new methods or attributes.
+    - No feature dictionary, plane tracking, or type-conversion methods.
+    - No tolerance-aware equality; use ``Point2d`` for that.
 
     Examples
     --------
-    from upxo.geoEntities.point2d import p2d_leanest
-    a = [p2d_leanest(1, 2), p2d_leanest(1, 2)]
-
-    # Extension: Check if all of the above list belong to the same type
-    all_isinstance(p2d_leanest, a)
+    >>> from upxo.geoEntities.point2d import p2d_leanest
+    >>> a = [p2d_leanest(1, 2), p2d_leanest(3, 4)]
+    >>> a[0]._x
+    1
     """
 
     __slots__ = ('_x', '_y')
@@ -280,65 +275,65 @@ class p2d_leanest():
 
 class Point2d():
     """
-    UPXO Point2d object, new version.
+    Full-featured 2D point for UPXO geometry workflows.
 
-    This is the primary 2D point representation in UPXO. It supports rich
-    geometric operations, distance and comparison utilities, feature handling,
-    and interoperability with other UPXO geometry entities.
-
-    Parameters
-    ----------
-    pln: Denotes plane which contains the self point.
-    x: 1st coordinate of the point.
-    y: 2nd coordinate of the point.
-    f: Feature dictionary containsing features attached to the point.
-    plane: Indicates whether the points is in xy/yx/yz/zy/xz/zx plane.
-        If zx for example, then x and y of Point2d should be / will be
-        interpreted as z and x.
-
-    Metadata
-    --------
-    * Class: Point2d
-    * Module: upxo.geoEntities.point2d
-    * Author: Dr. Sunil Anandatheertha
-    * Email: vaasu.anandatheertha@ukaea.uk
-    * Status: Active development
-    * Last updated: 2026-03-11
+    The primary 2D point representation in UPXO. Supports rich geometric
+    operations (distance, rotation, reflection, translation), equality and
+    comparison utilities with tolerance, feature-dictionary attachment, and
+    interoperability with Shapely, VTK, PyVista, and GMSH.
 
     Import
     ------
-    from upxo.geoEntities.point2d import Point2d
+        from upxo.geoEntities.point2d import Point2d
+        from upxo.geoEntities.point2d import Point2d as p2d
 
-    Recommended alias import:
-    from upxo.geoEntities.point2d import Point2d as p2d
+    Parameters
+    ----------
+    x : float
+        First coordinate of the point (interpreted according to ``plane``).
+    y : float
+        Second coordinate of the point (interpreted according to ``plane``).
+    plane : str, optional
+        Plane identifier — one of ``'xy'``, ``'yx'``, ``'yz'``, ``'zy'``,
+        ``'xz'``, ``'zx'``. Determines how ``x`` and ``y`` map to 3D axes
+        in mixed-plane workflows. Default is ``'xy'``.
 
-    Notes to users
-    --------------
-    @user: Please refer to examples and Jupyter notebook demos before use.
+    Raises
+    ------
+    ValueError
+        Raised by ``__eq__`` / ``__ne__`` when ``plist`` is empty or has an
+        unrecognised point specification.
 
-    Notes to developers and maintainers
-    -----------------------------------
-    @dev: Inherits from ABC: Point.: NOT ANYORE. Puts overhead cost in object
-        instantiation. Removed.
-    @dev: Lets not use pydantic in the interest of maintaining speed of
-        instantiation and reducing memory overhead.
+    Limitations
+    -----------
+    - ABC inheritance was removed to eliminate per-object overhead; subclassing
+      is possible but not recommended.
+    - Pydantic validation is excluded intentionally to keep instantiation fast.
+
+    Notes
+    -----
+    Refer to the Jupyter notebook demos in the repository for guided
+    usage examples covering clustering, meshing, and crystal workflows.
 
     Examples
     --------
-    from upxo.geoEntities.point2d import Point2d
-    Point2d(10, 12)
+    >>> from upxo.geoEntities.point2d import Point2d
+    >>> Point2d(10, 12)
+    uxpo-p2d (10,12)
 
-    from upxo.geoEntities.point2d import Point2d
-    from upxo.geoEntities.sline2d import Sline2d
-    la = sl2d.by_coord([0, 0], [1, 1])
-    lb = sl2d.by_coord([0.1, 0.1], [1.8, 1.8])
-    p2d.from_intersection_two_lines(la, lb, tool='upxo')
+    Intersection of two 2D lines:
 
-    from upxo.geoEntities.point2d import Point2d
-    from upxo.geoEntities.sline2d import Sline2d
-    Point2d.from_line_factor(Sline2d(-1,-1, 1,1), 0.25)
+    >>> from upxo.geoEntities.point2d import Point2d
+    >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+    >>> la = sl2d.by_coord([0, 0], [1, 1])
+    >>> lb = sl2d.by_coord([0.1, 0.1], [1.8, 1.8])
+    >>> Point2d.from_intersection_two_lines(la, lb, tool='upxo')
 
-    Refer to method docs for more examples.
+    Point at a parametric position along a line:
+
+    >>> from upxo.geoEntities.point2d import Point2d
+    >>> from upxo.geoEntities.sline2d import Sline2d
+    >>> Point2d.from_line_factor(Sline2d(-1, -1, 1, 1), 0.25)
     """
 
     ε = 1E-8
@@ -368,21 +363,34 @@ class Point2d():
 
     def __eq__(self, plist):
         """
-        Boolean inequality.
+        Element-wise equality between self and one or more point representations.
 
-        from upxo.geoEntities.point2d import Point2d as p2d
-        from upxo.geoEntities.point2d import p2d_leanest
+        Parameters
+        ----------
+        plist : Point2d, p2d_leanest, list, or tuple
+            Single point object, a list/tuple of point objects, or a nested
+            coordinate array. Accepted specification types are documented in
+            ``eq_fast``.
 
-        print(p2d(3, 4) == p2d_leanest(3, 4))
-        print(p2d(3, 4) == [p2d_leanest(1, 4), p2d_leanest(3, 4)])
-        print(p2d(3, 4) == p2d(3, 4))
-        print(p2d(3, 4) == [p2d(1, 2), p2d(3, 4)])
-        print(p2d(3, 4) == (p2d(1, 4), p2d(3, 4)))
+        Returns
+        -------
+        list of bool
+            One boolean per comparison pair.
 
-        print(p2d(3, 4) == [[1, 2], [3, 4], [5, 6]])
-        print(p2d(3, 4) == [[1, 3, 5], [2, 4, 6]])
-        print(p2d(3, 4) == [[3, 4]])
-        print(p2d(3, 4) == [[3], [4]])
+        Raises
+        ------
+        ValueError
+            If ``plist`` is empty or has an unrecognised point specification.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d, p2d_leanest
+        >>> p2d(3, 4) == p2d_leanest(3, 4)
+        [True]
+        >>> p2d(3, 4) == [p2d_leanest(1, 4), p2d_leanest(3, 4)]
+        [False, True]
+        >>> p2d(3, 4) == [[1, 2], [3, 4], [5, 6]]
+        [False, True, False]
         """
         if not plist:
             raise ValueError("plist is empty.")
@@ -441,20 +449,34 @@ class Point2d():
 
     def eq(self, plist, *, use_tol=False):
         """
-        Overloaded __eq__.
+        Named alias for ``__eq__``, with optional tolerance support.
 
-        from upxo.geoEntities.point2d import Point2d as p2d
-        from upxo.geoEntities.point2d import p2d_leanest
+        Parameters
+        ----------
+        plist : Point2d, p2d_leanest, list, or tuple
+            Point(s) to compare against self. See ``__eq__`` for accepted
+            specification types.
+        use_tol : bool, optional
+            If ``True``, apply tolerance-aware comparison. Default is
+            ``False`` (exact comparison via ``__eq__``).
 
-        print(p2d(3, 4).eq(p2d_leanest(3, 4)))
-        print(p2d(3, 4).eq([p2d_leanest(1, 4), p2d_leanest(3, 4)]))
-        print(p2d(3, 4).eq(p2d(3, 4)))
-        print(p2d(3, 4).eq([p2d(1, 2), p2d(3, 4)]))
-        print(p2d(3, 4).eq((p2d(1, 4), p2d(3, 4))))
-        print(p2d(3, 4).eq([[1, 2], [3, 4], [5, 6]]))
-        print(p2d(3, 4).eq([[1, 3, 5], [2, 4, 6]]))
-        print(p2d(3, 4).eq([[3, 4]]))
-        print(p2d(3, 4).eq([[3], [4]]))
+        Returns
+        -------
+        list of bool
+            One boolean per comparison pair.
+
+        Warnings
+        --------
+        Tolerance-aware comparison (``use_tol=True``) is not yet implemented
+        and will silently return ``None``.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d, p2d_leanest
+        >>> p2d(3, 4).eq(p2d_leanest(3, 4))
+        [True]
+        >>> p2d(3, 4).eq([p2d(1, 2), p2d(3, 4)])
+        [False, True]
         """
         if not use_tol:
             return self.__eq__(plist)
@@ -464,48 +486,57 @@ class Point2d():
 
     def eq_fast(self, plist, use_tol=False, point_spec=1):
         """
-        Fast equality check of point with list of point specifications.
+        Fast equality check skipping type detection — caller must supply spec.
 
-        Exaplanations
-        -------------
-        Overloaded eq. Note: User is responsible for valid type. No validations
-        will be carried out.
+        Unlike ``__eq__``, no runtime type detection is performed; the caller
+        declares the format of ``plist`` via ``point_spec``. This avoids the
+        overhead of ``find_spec_of_points()`` in tight loops.
 
         Parameters
         ----------
-        plist: List of point specificatrions.
-        point_spec: Thge specification ID of the point, from the following:
-            * ID = 1: Point2d
-            * ID = 2: [Point2d]
-            * ID = 3: p2d_leanest
-            * ID = 4: [p2d_leanest]
-            * ID = 5: type-[1,2]
-            * ID = 6: type-[[1,2]]
-            * ID = 7: type-[[1,2],[3,4],[5,6]]
-            * ID = 8: type-[[1,2,3,4],[5,6,7,8]]
-            * ID = 9: shapely
-            * ID = 10: [shapely]
-            * ID = 11: gmsh
-            * ID = 12: [gmsh]
-            * ID = 13: vtk
-            * ID = 14: [vtk]
-            * ID = 15: pyvista
-            * ID = 16: [pyvista]
+        plist : various
+            Point(s) to compare. Format must match ``point_spec``.
+        use_tol : bool, optional
+            Reserved for future tolerance-aware comparison. Default ``False``.
+        point_spec : int, optional
+            Integer ID declaring the type/format of ``plist``:
 
-        from upxo.geoEntities.point2d import Point2d as p2d
-        from upxo.geoEntities.point2d import p2d_leanest
+            =====  ==================================
+            ID     Format
+            =====  ==================================
+            1      ``Point2d``
+            2      ``[Point2d]`` or ``(Point2d, …)``
+            3      ``p2d_leanest``
+            4      ``[p2d_leanest]``
+            5      ``[x, y]`` (flat, two numbers)
+            6      ``[[x, y]]``
+            7      ``[[x1,y1], [x2,y2], …]``
+            8      ``[[x1,x2,…], [y1,y2,…]]``
+            9–16   Shapely/GMSH/VTK/PyVista variants
+            =====  ==================================
 
-        print(p2d(3,4).eq_fast(p2d(3,4), point_spec=1))
-        print(p2d(3,4).eq_fast([p2d(1,2), p2d(3,4)], point_spec=2))
-        print(p2d(3,4).eq_fast((p2d(1,4), p2d(3,4)), point_spec=2))
-        print(p2d(3,4).eq_fast(p2d_leanest(3,4), point_spec=3))
-        print(p2d(3,4).eq_fast([p2d_leanest(1,4), p2d_leanest(3, 4)], point_spec=4))
-        print(p2d(3,4).eq_fast([1,2], point_spec=5))
-        print(p2d(3,4).eq_fast([[1,2]], point_spec=6))
-        print(p2d(3,4).eq_fast([[1,2],[3,4],[5,6]], point_spec=7))
-        print(p2d(3,4).eq_fast([[1,3,5],[2,4,6]]))  # INvalid comparison
-        print(p2d(3,4).eq_fast([[3],[4],[5]], point_spec=8))
-        print(p2d(3,4).eq_fast([[3,3,4],[4,4,4],[5,5,5]], point_spec=8))
+            Default is ``1``.
+
+        Returns
+        -------
+        list of bool or None
+            Comparison result(s), or ``None`` for unimplemented spec IDs.
+
+        Warnings
+        --------
+        No input validation is performed. Passing a ``plist`` whose format
+        does not match ``point_spec`` will raise an ``AttributeError`` or
+        return a wrong answer silently.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d, p2d_leanest
+        >>> p2d(3, 4).eq_fast(p2d(3, 4), point_spec=1)
+        [True]
+        >>> p2d(3, 4).eq_fast([p2d(1, 2), p2d(3, 4)], point_spec=2)
+        [False, True]
+        >>> p2d(3, 4).eq_fast([3, 4], point_spec=5)
+        [True]
         """
         cmp = None
         if point_spec == 1:
@@ -564,37 +595,53 @@ class Point2d():
 
     def __ne__(self, plist):
         """
-        Boolean inequality.
+        Element-wise inequality between self and one or more point representations.
 
-        from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        Parameters
+        ----------
+        plist : Point2d, p2d_leanest, list, or tuple
+            Point(s) to compare. See ``__eq__`` for accepted formats.
 
-        print(Point2d(3, 4) != p2d_leanest(3, 4))
-        print(Point2d(3, 4) != [p2d_leanest(1, 4), p2d_leanest(3, 4)])
-        print(Point2d(3, 4) != Point2d(3, 4))
-        print(Point2d(3, 4) != [Point2d(1, 2), Point2d(3, 4)])
-        print(Point2d(3, 4) != (Point2d(1, 4), Point2d(3, 4)))
-        print(Point2d(3, 4) != [[1, 2], [3, 4], [5, 6]])
-        print(Point2d(3, 4) != [[1, 3, 5], [2, 4, 6]])
-        print(Point2d(3, 4) != [[3, 4]])
-        print(Point2d(3, 4) != [[3], [4]])
+        Returns
+        -------
+        list of bool
+            Logical negation of the result of ``__eq__``.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        >>> Point2d(3, 4) != p2d_leanest(3, 4)
+        [False]
+        >>> Point2d(3, 4) != [Point2d(1, 2), Point2d(3, 4)]
+        [True, False]
         """
         return [not eq for eq in self.__eq__(plist)]
 
     def ne(self, plist, *, use_tol=False):
         """
-        Overloaded __ne__.
+        Named alias for ``__ne__``, with optional tolerance support.
 
-        from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        Parameters
+        ----------
+        plist : Point2d, p2d_leanest, list, or tuple
+            Point(s) to compare. See ``__eq__`` for accepted formats.
+        use_tol : bool, optional
+            If ``True``, apply tolerance-aware comparison. Default ``False``.
 
-        print(Point2d(3, 4).ne(p2d_leanest(3, 4)))
-        print(Point2d(3, 4).ne([p2d_leanest(1, 4), p2d_leanest(3, 4)]))
-        print(Point2d(3, 4).ne(Point2d(3, 4)))
-        print(Point2d(3, 4).ne([Point2d(1, 2), Point2d(3, 4)]))
-        print(Point2d(3, 4).ne((Point2d(1, 4), Point2d(3, 4))))
-        print(Point2d(3, 4).ne([[1, 2], [3, 4], [5, 6]]))
-        print(Point2d(3, 4).ne([[1, 3, 5], [2, 4, 6]]))
-        print(Point2d(3, 4).ne([[3, 4]]))
-        print(Point2d(3, 4).ne([[3], [4]]))
+        Returns
+        -------
+        list of bool
+            Inequality results.
+
+        Warnings
+        --------
+        Tolerance-aware comparison (``use_tol=True``) is not yet implemented.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        >>> Point2d(3, 4).ne(p2d_leanest(3, 4))
+        [False]
         """
         if not use_tol:
             return self.__ne__(plist)
@@ -603,41 +650,62 @@ class Point2d():
 
     def add(self, d, update=True, throw=False, mydecatlen2NUM='b'):
         """
-        Add distances to point coord & update self or return new point objects.
-
-        All descriptions in parameters below, naturally extend to 3D.
+        Translate self by distance(s) ``d``, in-place and/or returning new point(s).
 
         Parameters
         ----------
-        d: list of distances. Depending on distances, functionaliy changes as
-        below.
-            * [1, 2, 3, 4]: Each entry is added to both x and y. 4 new point
-            objects gets created.
-            * [[1, 2], [3, 4]]: [1, 2] denote first set of x and y distances.
-            They get added with self.x and self.y to make a new point. Similar
-            operation extewnds to [3, 4]. Two new points are created.
-            * [[1, 2, 3, 4], [5, 6, 7, 8]]: These are X and Y arrays. Each x
-            and y in X and Y, gets added with self.x and self.y to make n
-            points, where n = len(distances[0]).
-            * [po1, po2, po3]: List of point objects. Point objects could be
-            2D or 3D. UPXO, GMSH, VTK, PyVista, Shapely types are allowed.
+        d : float, list of float, list of list, or list of point objects
+            Displacement to apply. Accepted forms:
 
-        update: If True and if distances is either K or Iterable(P, Q), where,
-            K, P and Q are dth.dt.NUMBERS, self will be updated as self.x+K and
-            self.y+K or self.x+P and self.y+P.
+            - ``scalar`` — added to both ``x`` and ``y``.
+            - ``[dx]`` — added to both ``x`` and ``y``.
+            - ``[dx, dy]`` — interpretation depends on ``mydecatlen2NUM``.
+            - ``[[dx, dy], …]`` — one new point per sub-list.
+            - ``[[x1,x2,…], [y1,y2,…]]`` — column-wise displacement arrays.
+            - ``[point_obj, …]`` — list of UPXO/Shapely/VTK/PyVista/GMSH
+              2D or 3D point objects.
 
-        throw: If True and if additional conditions provided in update are
-            atisfied, then the deepcopy of the point will be returned. If,
-            however, update is False, a new point with coordiates self.x+K and
-            self.y+K or self.x+P and self.y*Q, shall be created and returned.
+        update : bool, optional
+            If ``True`` and ``d`` is a single scalar or ``(dx, dy)`` pair,
+            update ``self.x`` and ``self.y`` in-place. Default ``True``.
+        throw : bool, optional
+            If ``True``, return a new ``Point2d`` (or ``deepcopy`` of self
+            when ``update=True``). Default ``False``.
+        mydecatlen2NUM : {'b', 'atxy', 'a', 'ta2sd'}, optional
+            Disambiguation rule when ``d`` is a length-2 list of numbers:
 
-        mydecatlen2NUM: My Decision At len(d)=2 when all in d are NUMBERS.
-        Options include the following:
-            * 'a' OR 'ta2sd': Treat as two seperate distances. In this case,
-            d[0] and d[1] will be added seperately and two pint objects shall
-            be made.
-            * 'b' OR 'atxy': Add d[0] to x and d[1] to y. Self point may
-            update and/or new point may be returned.
+            - ``'b'`` / ``'atxy'`` — treat as ``[dx, dy]`` (add to x and y
+              separately). Default.
+            - ``'a'`` / ``'ta2sd'`` — treat as two separate scalar
+              displacements; returns two new points.
+
+        Returns
+        -------
+        Point2d or list of Point2d or None
+            When ``throw=True`` returns the translated point(s). When
+            ``update=True, throw=False`` returns ``None`` (side-effect only).
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> A = p2d(10, 12)
+        >>> A.add(5)
+        >>> A
+        uxpo-p2d (15,17)
+
+        Translate by separate dx/dy:
+
+        >>> A = p2d(10, 12)
+        >>> A.add([3, 4], mydecatlen2NUM='b')
+        >>> A
+        uxpo-p2d (13,16)
+
+        Return a new point without mutating self:
+
+        >>> A = p2d(10, 12)
+        >>> B = A.add(5, update=False, throw=True)
+        >>> B
+        uxpo-p2d (15,17)
         """
         NUMBERS, ITERABLES = dth.dt.NUMBERS, dth.dt.ITERABLES
         if type(d) in NUMBERS:
@@ -1054,27 +1122,37 @@ class Point2d():
 
     def __mul__(self, f=1.0):
         """
-        Multiply point by factor. Use it to scale/translate self point.
+        Scale self point in-place by scalar or per-axis factor.
 
         Parameters
         ----------
-        f: factor: int/float/Iterable
+        f : float or list of float
+            Scalar: multiply both ``x`` and ``y`` by ``f``.
+            Length-2 list ``[fx, fy]``: multiply ``x`` by ``fx`` and
+            ``y`` by ``fy`` independently.
 
-        Return
-        ------
+        Returns
+        -------
         None
+            Modifies self in-place.
+
+        Raises
+        ------
+        TypeError
+            If ``f`` is neither a number nor a length-2 iterable.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        a = Point2d(-10, -12)
-        a*2
-        print(a)
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> a = Point2d(-10, -12)
+        >>> a * 2
+        >>> a
+        uxpo-p2d (-20,-24)
 
-        from upxo.geoEntities.point2d import Point2d
-        a = Point2d(-10, -12)
-        a*[2, 4]
-        print(a)
+        >>> a = Point2d(-10, -12)
+        >>> a * [2, 4]
+        >>> a
+        uxpo-p2d (-20,-48)
         """
         if type(f) in NUMBERS:
             self.x *= f
@@ -1087,24 +1165,36 @@ class Point2d():
 
     def mul(self, f=1.0, update=True, throw=False):
         """
-        Overloaded __mul__ with update and throw options.
+        Named alias for ``__mul__`` with optional mutation and return control.
 
         Parameters
         ----------
-        f: factor: int/float/Iterable
-        update: If True, self point gets updated to new coordinates.
-        throw: If True, new point will be created and returned.
+        f : float or list of float
+            Scaling factor. Scalar applies to both axes; an iterable of
+            scalars applies each element as a separate scalar (one result
+            per element).
+        update : bool, optional
+            If ``True``, scale self in-place. Default ``True``.
+        throw : bool, optional
+            If ``True``, return the scaled point or a ``deepcopy`` of self.
+            Default ``False``.
 
-        Return
-        ------
-        If throw is True, point object(s) will be returned, else inactive.
+        Returns
+        -------
+        Point2d or list of Point2d or None
+            Returns scaled point(s) when ``throw=True``, else ``None``.
 
-        Import
+        Raises
         ------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        point = p2d(-10, -12)
-        point.mul(f=-2.5, update=False, throw=True)
-        point.mul(f=[-2.5], update=False, throw=True)
+        TypeError
+            If ``f`` is not a number or iterable.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> point = p2d(-10, -12)
+        >>> point.mul(f=-2.5, update=False, throw=True)
+        uxpo-p2d (25.0,30.0)
         """
         valid = False
         # --------------------------------
@@ -1130,93 +1220,47 @@ class Point2d():
     def from_intersection_two_lines(cls, la, lb, tool='upxo',
                                     return_type='upxo'):
         """
-        Create point from intersection of two lines. Overloaded return.
+        Construct a point at the intersection of two 2D lines.
 
-        The return is overloaded and is a list containing the intersection
-        point(s). In the strictest sense, this is not a classmethod by design.
+        The return value is a list so callers handle collinear cases (multiple
+        points or infinitely many) uniformly.
 
         Parameters
         ----------
-        lineA: 1st line.
-        lineB: 2nd line.
-        tool: Tool to use. UPXO preferred.
+        la : Sline2d
+            First 2D straight-line segment.
+        lb : Sline2d
+            Second 2D straight-line segment.
+        tool : {'upxo', 'shapely'}, optional
+            Backend to use for the intersection calculation. Default
+            ``'upxo'``.
+        return_type : str, optional
+            Format of returned point(s). Default ``'upxo'``.
 
-        Return
-        ------
-        List of points of intersection. If no points of intersection are
-        found, then empty list is created.
+        Returns
+        -------
+        list of Point2d
+            Intersection point(s). Empty list if lines do not intersect.
+
+        Notes
+        -----
+        Collinear lines (same direction) return an empty list even when they
+        overlap, as no unique intersection point exists.
 
         Examples
         --------
-        from upxo.geoEntities.sline2d import Sline2d
-        from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.sline2d import Sline2d
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> la = Sline2d.by_coord([0, 0], [1, 1])
+        >>> lb = Sline2d.by_coord([0, 1], [1, 0])
+        >>> Point2d.from_intersection_two_lines(la, lb, tool='upxo')
 
-        # Example-1: Collinear lines Case 1
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([0.1, 0.1], [1.8, 1.8])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
+        Collinear lines (no unique intersection):
 
-        # Example-2: Collinear lines Case 2
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([0.1, 0.1], [0.8, 0.8])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-3: Collinear lines Case 3
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([-0.1, -0.1], [1.8, 1.8])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-4: Collinear lines Case 4
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([1.8, 1.8], [0.1, 0.1])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-5: non-collinear lines Case 5
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([0, 1], [1, 0])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-6: Collinear lines Case 6
-        # ----------------------------------
-        la = Sline2d.by_coord([0.1, 0.1], [0.8, 0.8])
-        lb = Sline2d.by_coord([0, 0], [1, 1])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-7: Non-Collinear lines Case 7a
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([0, 0], [1, 0])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-8: Non-Collinear lines Case 7b
-        # ----------------------------------
-        la = Sline2d.by_coord([0, 0], [1, 1])
-        lb = Sline2d.by_coord([-0,-0], [1, 0])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-9: Collinear lines Case 8
-        # ----------------------------------
-        la = Sline2d.by_coord([0,0], [1,1])
-        lb = Sline2d.by_coord([0,0], [1,1])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-10: Collinear lines Case 9
-        # ----------------------------------
-        la = Sline2d.by_coord([0,0], [1,1])
-        lb = Sline2d.by_coord([0,0], [-1,-1])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-
-        # Example-11: Collinear lines Case 10
-        # ----------------------------------
-        la = Sline2d.by_coord([0,0], [1,0])
-        lb = Sline2d.by_coord([0,1], [1,1])
-        Point2d.from_intersection_two_lines(la, lb, tool='upxo')
-        la.plot(sl2d=lb)
+        >>> la = Sline2d.by_coord([0, 0], [1, 1])
+        >>> lb = Sline2d.by_coord([0.1, 0.1], [1.8, 1.8])
+        >>> Point2d.from_intersection_two_lines(la, lb, tool='upxo')
+        []
         """
         if tool == 'upxo':
             return fmake.intersect_slines2d(la, lb, Point2d,
@@ -1232,23 +1276,31 @@ class Point2d():
     @classmethod
     def from_line_factor(cls, line, factor):
         """
-        Instantiate Point2d using line and factor the point divides the line.
+        Construct a point at a parametric position along a line.
+
+        Computes ``(x0 + factor*dx, y0 + factor*dy)`` where ``(x0, y0)``
+        is the line start and ``(dx, dy)`` is its direction vector.
 
         Parameters
         ----------
-        line: UPXO 2D straight line, Sline2d.
-        factor: NUmerical value.
+        line : Sline2d
+            UPXO 2D straight-line segment.
+        factor : float
+            Parametric factor. ``0`` → start point; ``1`` → end point;
+            values outside ``[0, 1]`` extrapolate beyond the segment.
 
-        Return
-        ------
-        Point2d object.
+        Returns
+        -------
+        Point2d
+            Point at position ``start + factor * direction``.
 
         Examples
         --------
-        from upxo.geoEntities.sline2d import Sline2d
-        Point2d.from_line_factor(Sline2d(-1,-1, 1,1), +0.25)
-        Point2d.from_line_factor(Sline2d(-1,-1, 1,1), -0.25)
-        Point2d.from_line_factor(Sline2d(-1,-1, 1,1), +1.25)
+        >>> from upxo.geoEntities.sline2d import Sline2d
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> Point2d.from_line_factor(Sline2d(-1, -1, 1, 1), 0.25)
+        >>> Point2d.from_line_factor(Sline2d(-1, -1, 1, 1), -0.25)
+        >>> Point2d.from_line_factor(Sline2d(-1, -1, 1, 1), 1.25)
         """
         # Validations
         return Point2d(line.x0 + factor*line.dx,
@@ -1275,43 +1327,38 @@ class Point2d():
     @property
     def coords(self):
         """
-        Returns x and y coordinates of the point.
+        X and Y coordinates as a NumPy array.
 
-        Parameters
-        ----------
-        None
-
-        Return
-        ------
-        numpy array of coordinates
+        Returns
+        -------
+        numpy.ndarray, shape (2,)
+            ``[x, y]``.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        A = Point2d(1.125, 0.456)
-        A.coords
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> A = Point2d(1.125, 0.456)
+        >>> A.coords
+        array([1.125, 0.456])
         """
         return np.array([self.x, self.y])
 
     @property
     def shapely(self):
         """
-        Returns a shapely point object.
+        Shapely Point representation of self.
 
-        Pareameters
-        -----------
-        None
-
-        Return
-        ------
-        Shapely point representation of self.
+        Returns
+        -------
+        shapely.geometry.Point
+            Point at ``(self.x, self.y)``.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        A = Point2d(1.125, 0.456)
-        A.shapely
-        A.x, A.y
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> A = Point2d(1.125, 0.456)
+        >>> A.shapely
+        <POINT (1.125 0.456)>
         """
         from shapely.geometry import Point as ShPnt
         return ShPnt(self.x, self.y)
@@ -1319,28 +1366,42 @@ class Point2d():
     def inside_line(self, line, consider_ends=True,
                     consider_tol=False, tol=0.0):
         """
-        Return True if a point lies inside the line else return False.
+        Test whether self lies on (within) a 2D line segment.
 
         Parameters
         ----------
-        line: Single UPXO Sline2d object.
-        consider_ends: If True, point being on the end points of the line
-            will also be considered to be inside the line, and True will be
-            returned. If False, even if the point is one of the end points of
-            the line, False will be returned.
+        line : Sline2d
+            UPXO 2D straight-line segment to test against.
+        consider_ends : bool, optional
+            If ``True``, points coinciding with the segment endpoints count
+            as inside (``<=`` comparison). If ``False``, endpoints are
+            excluded (``<`` comparison). Default ``True``.
+        consider_tol : bool, optional
+            Reserved for tolerance-aware testing. Not yet implemented.
+        tol : float, optional
+            Tolerance value for future use. Default ``0.0``.
 
-        Return
-        ------
-        inside_line: True if point inside line, False if not.
+        Returns
+        -------
+        bool
+            ``True`` if self lies on the segment, ``False`` otherwise.
+
+        Warnings
+        --------
+        Tolerance-aware testing (``consider_tol=True``) is not yet
+        implemented and will have no effect.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        from upxo.geoEntities.sline2d import Sline2d
-        Point2d(-0.5,-0.5).inside_line(Sline2d.by_coord([0, 0], [1, 1]))
-        Point2d(0.5,0.5).inside_line(Sline2d.by_coord([0, 0], [1, 1]))
-        Point2d(0,0).inside_line(Sline2d.by_coord([0, 0], [1, 1]), consider_ends=False)
-        Point2d(0,0).inside_line(Sline2d.by_coord([0, 0], [1, 1]), consider_ends=True)
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.sline2d import Sline2d
+        >>> line = Sline2d.by_coord([0, 0], [1, 1])
+        >>> Point2d(0.5, 0.5).inside_line(line)
+        True
+        >>> Point2d(-0.5, -0.5).inside_line(line)
+        False
+        >>> Point2d(0, 0).inside_line(line, consider_ends=False)
+        False
         """
         # Validations
         # TODO: Include tolerance consideratiopns
@@ -1356,50 +1417,40 @@ class Point2d():
 
     def squared_distance(self, plist=None):
         """
-        Calculate the squared distances between self point and plist.
+        Compute squared Euclidean distances from self to one or more points.
 
         Parameters
         ----------
-        plist: List of valid point specifications.
+        plist : point spec or list of point specs
+            Accepted formats match those of ``__eq__``: single or list of
+            ``Point2d``, ``p2d_leanest``, ``[x, y]``, ``[[x, y], …]``,
+            or column arrays ``[[x1,…], [y1,…]]``.
 
-        Return
+        Returns
+        -------
+        numpy.ndarray
+            Squared distances ``(self.x - X)² + (self.y - Y)²`` for each
+            target point.
+
+        Raises
         ------
-        numpy array of computed distances.
+        ValueError
+            If ``plist`` is empty.
 
-        Code development phases
-        -----------------------
-        Phase 1: basic working code. DONE
-        Phase 2: include option to point_type. This will speed up process. This
-            would mean to bypass/remove the make_2d
-
-        Feature inclusion phases
-        ------------------------
-        Phase 1: 2D case: basic. DONE
-        Phase 2: 3D case: # TODO. Include squared_distance claculation
-            with 3D points as well!!
-        Phase 3: shapely: # TODO. INclude squared_distance calcualtion with
-            shapely point objects as well.
-        Phase 4: gmsh: # TODO. Include squared_distance cauclation with gmsh
-            point objects as well.
-        Phase 5: VTK: # TODO. Include squared_distance cauclation with VTK
-            point objects as well.
-        Phase 6: include distance computation to 3D points.
+        Limitations
+        -----------
+        - Only 2D point targets are supported; 3D, Shapely, GMSH, and VTK
+          targets are not yet implemented.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d, p2d_leanest
-
-        Point2d(0, 0).squared_distance(p2d_leanest(3, 4))
-        Point2d(0, 0).squared_distance([p2d_leanest(1, 4), p2d_leanest(3, 4)])
-        Point2d(0, 0).squared_distance(Point2d(3, 4))
-        Point2d(0, 0).squared_distance([Point2d(1, 2), Point2d(3, 4)])
-        Point2d(0, 0).squared_distance((Point2d(1, 4), Point2d(3, 4)))
-
-        Point2d(0, 0).squared_distance( [1, 2] )
-        Point2d(0, 0).squared_distance( [[1, 2]] )
-        Point2d(0, 0).squared_distance( [[1, 2], [10, 12]] )
-        Point2d(0, 0).squared_distance( [[1, 2], [10, 12], [0, -5]] )
-        Point2d(0, 0).squared_distance( [[1, 2, -1, -3], [4, 5, 5, 6]] )
+        >>> from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        >>> Point2d(0, 0).squared_distance(p2d_leanest(3, 4))
+        array([25.])
+        >>> Point2d(0, 0).squared_distance([Point2d(1, 2), Point2d(3, 4)])
+        array([ 5., 25.])
+        >>> Point2d(0, 0).squared_distance([[1, 2, -1, -3], [4, 5, 5, 6]])
+        array([17., 29., 26., 45.])
         """
         if type(plist) not in ITERABLES:
             plist = [plist]
@@ -1412,114 +1463,74 @@ class Point2d():
 
     def distance(self, plist=None):
         """
-        Calculate the distances between self point and plist.
+        Compute Euclidean distances from self to one or more points.
 
         Parameters
         ----------
-        plist: List of valid point specifications.
+        plist : point spec or list of point specs
+            Same accepted formats as ``squared_distance``.
 
-        Return
-        ------
-        numpy array of computed distances.
+        Returns
+        -------
+        numpy.ndarray
+            Euclidean distances ``sqrt((self.x-X)² + (self.y-Y)²)``.
 
-        Code development phases
-        -----------------------
-        Phase 1: basic working code. DONE
-        Phase 2: include option to point_type. This will speed up process. This
-            would mean to bypass/remove the make_2d
-
-        Feature inclusion phases
-        ------------------------
-        Phase 1: 2D case: basic. DONE
-        Phase 2: 3D case: # TODO. Include squared_distance claculation
-            with 3D points as well!!
-        Phase 3: shapely: # TODO. INclude squared_distance calcualtion with
-            shapely point objects as well.
-        Phase 4: gmsh: # TODO. Include squared_distance cauclation with gmsh
-            point objects as well.
-        Phase 5: VTK: # TODO. Include squared_distance cauclation with VTK
-            point objects as well.
-        Phase 6: include distance computation to 3D points.
+        Limitations
+        -----------
+        - Only 2D point targets are supported currently.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d, p2d_leanest
-
-        Point2d(0, 0).distance(p2d_leanest(3, 4))
-        Point2d(0, 0).distance([p2d_leanest(1, 4), p2d_leanest(3, 4)])
-        Point2d(0, 0).distance(Point2d(3, 4))
-        Point2d(0, 0).distance([Point2d(1, 2), Point2d(3, 4)])
-        Point2d(0, 0).distance((Point2d(1, 4), Point2d(3, 4)))
-
-        Point2d(0, 0).distance( [1, 2] )
-        Point2d(0, 0).distance( [[1, 2]] )
-        Point2d(0, 0).distance( [[1, 2], [10, 12]] )
-        Point2d(0, 0).distance( [[1, 2], [10, 12], [0, -5]] )
-        Point2d(0, 0).distance( [[1, 2, -1, -3], [4, 5, 5, 6]] )
+        >>> from upxo.geoEntities.point2d import Point2d, p2d_leanest
+        >>> Point2d(0, 0).distance(p2d_leanest(3, 4))
+        array([5.])
+        >>> Point2d(0, 0).distance([Point2d(1, 2), Point2d(3, 4)])
+        array([2.23606798, 5.        ])
         """
         return np.sqrt(self.squared_distance(plist))
 
     def translate(self, *, vector=None, dist=None, update=False,
                   throw=True, make3d=False, zloc=0):
         """
-        Translate the self along the vector by dist.
+        Translate self along ``vector`` by scalar distance ``dist``.
 
-        Explanations
-        ------------
-        Please look at all examples to understand the behaviours.
+        The displacement applied is ``(vector / |vector|) * dist``.
 
         Parameters
         ----------
-        vector: translation vector specification.
-        dist: distance.
-        update: If True, self gets updated.
-        throw: If True, either self or new point will be returned.
-        make3d: If True, a 3D point will be created and thrown.
+        vector : list of float
+            Direction vector; length 2 for 2D translation, length 3 when
+            ``make3d=True`` and a Z-component is needed.
+        dist : float
+            Distance to translate along ``vector``.
+        update : bool, optional
+            If ``True``, update self's coordinates in-place. Default ``False``.
+        throw : bool, optional
+            If ``True``, return a point object. Default ``True``.
+        make3d : bool, optional
+            If ``True``, return a ``Point3d`` instead of ``Point2d``.
+            Default ``False``.
+        zloc : float, optional
+            Z-coordinate for the returned ``Point3d`` when ``make3d=True``
+            and ``vector`` has length 2. Default ``0``.
 
-        Return
-        ------
-        Either return nothing or return Point2d or Point3d depending on
-        throw.
+        Returns
+        -------
+        Point2d or Point3d or None
+            Translated point when ``throw=True``; ``None`` otherwise.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        A = Point2d(0, 0)
-        A.translate(vector=[1, 1], dist=5, update=True, throw=True)
-        print(A)
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> A = Point2d(0, 0)
+        >>> A.translate(vector=[1, 0], dist=5, update=True, throw=True)
+        uxpo-p2d (5.0,0.0)
 
-        A = Point2d(0, 0)
-        A.translate(vector=[1, 0], dist=5, update=True, throw=True)
-        print(A)
+        Translate and return a 3D point:
 
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1], dist=5, update=True, throw=True)
-        print(A)
-
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1], dist=5, update=True, throw=True,
-                    make3d=True, zloc=10)
-        print(A)
-
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1], dist=5, update=True, throw=True,
-                    make3d=False, zloc=10)
-        print(A)
-
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1], dist=5, update=False, throw=True,
-                    make3d=False, zloc=10)
-        print(A)
-
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1, 3], dist=5, update=True, throw=True,
-                    make3d=True, zloc=0)
-        print(A)
-
-        A = Point2d(0, 0)
-        A.translate(vector=[-1, -1, 3], dist=5, update=True, throw=True,
-                    make3d=True, zloc=20)
-        print(A)
+        >>> A = Point2d(0, 0)
+        >>> A.translate(vector=[-1, -1], dist=5, throw=True,
+        ...             make3d=True, zloc=10)
         """
         distances = (np.array(vector) / np.linalg.norm(vector)) * dist
         if update:
@@ -1554,7 +1565,7 @@ class Point2d():
 
     @staticmethod
     def val_point_and_get_coord(point):
-        """Docstring."""
+        """Validate a single point specification and return its (x, y) coordinates."""
         _ = False
         if not point:
             raise ValueError('Point OR coord not provided.')
@@ -1579,7 +1590,7 @@ class Point2d():
 
     @staticmethod
     def val_points_and_get_coords(points):
-        """Docstring."""
+        """Validate a collection of point specifications and return coordinate arrays (x, y)."""
         if not points:
             raise ValueError('Points OR coords not provided.')
         if type(points) in dth.dt.ITERABLES:
@@ -1609,50 +1620,35 @@ class Point2d():
 
     def translate_to(self, *, point=None, update=False, throw=True):
         """
-        Translate the self to another point.
+        Move self to an absolute target position.
+
+        Unlike ``translate``, which applies a displacement, this method sets
+        self's coordinates to those of ``point`` directly.
 
         Parameters
         ----------
-        point:
-        update:
-        throw:
+        point : Point2d, p2d_leanest, tuple, or list
+            Target position. Any valid UPXO 2D point specification.
+        update : bool, optional
+            If ``True``, overwrite ``self.x`` and ``self.y``. Default ``False``.
+        throw : bool, optional
+            If ``True``, return the moved point. Default ``True``.
 
-        Return
-        ------
-        Either update self or make new point object deending on throw.
+        Returns
+        -------
+        Point2d or Point3d or None
+            Moved point when ``throw=True``, else ``None``.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        from upxo.geoEntities.point2d import p2d_leanest as p2dl
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> A = p2d(0, 0)
+        >>> A.translate_to(point=p2d(1, 1), update=True, throw=True)
+        uxpo-p2d (1,1)
 
-        A = p2d(0,0)
-        A.translate_to(point=p2d(1,1), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=(p2d(1,1),), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=p2dl(1,1), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=(p2dl(1,1),), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=(1,1), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=((1,1),), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=((1,1,2),), update=True, throw=True)
-
-        A = p2d(0,0)
-        A.translate_to(point=((1,1,2),), update=False, throw=False)
-
-        A = p2d(0,0)
-        A.translate_to(point=((1,1,2),), update=True, throw=False)
-
+        >>> A = p2d(0, 0)
+        >>> A.translate_to(point=(1, 1), update=True, throw=True)
+        uxpo-p2d (1,1)
         """
         coord = val_point_and_get_coord(point,
                                         return_type='coord',
@@ -1676,42 +1672,44 @@ class Point2d():
     def rotate_about_point(self, point=None, angle=0, *, degree=True,
                            update=False, throw=True, dec=8):
         """
-        Rotate self point about another point.
+        Rotate self about an arbitrary pivot point by a given angle.
 
         Parameters
         ----------
-        point
-        angle
-        degree
-        update
-        throw
-        dec
+        point : Point2d, p2d_leanest, tuple, or list
+            Pivot point to rotate about.
+        angle : float
+            Rotation angle. Interpreted as degrees when ``degree=True``,
+            radians otherwise.
+        degree : bool, optional
+            If ``True``, treat ``angle`` as degrees. Default ``True``.
+        update : bool, optional
+            If ``True``, update self's coordinates in-place. Default ``False``.
+        throw : bool, optional
+            If ``True``, return the rotated point. Default ``True``.
+        dec : int, optional
+            Decimal places for rounding the output coordinates. Default ``8``.
 
-        4.30 to 6
-        12 to 2
-        4 to time of sunset
+        Returns
+        -------
+        Point2d or None
+            Rotated point when ``throw=True``. A ``deepcopy`` of self is
+            returned when ``update=True, throw=True``; a new ``Point2d``
+            when ``update=False, throw=True``.
 
-        Return
+        Raises
         ------
-        deepcopy of self or Point2d depending on update and throw
-        specifications. No return action if throw is False.
+        ValueError
+            If ``point`` is empty or ``angle`` is not a number.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        dut = {'degree': True, 'update': True, 'throw': True}
-
-        p2d(1, 0).rotate_about_point(p2d(0, 0), -45, **dut)
-        p2d(1, 0).rotate_about_point(p2d(0, 0), +45, **dut)
-        p2d(0, 0).rotate_about_point(p2d(-1, 0), 45, **dut)
-        p2d(0, 0).rotate_about_point(p2d(-1, 0), -45, **dut)
-        p2d(0, 0).rotate_about_point(p2d(-1, 0), 45, **dut)
-        p2d(0.70710678,0.70710678).rotate_about_point(p2d(0, 0), 45, **dut)
-        p2d(0.70710678,0.70710678).rotate_about_point(p2d(0, 0), -45, **dut)
-        p2d(-0.70710678,0.70710678).rotate_about_point(p2d(0, 0), -45, **dut)
-
-        p2d(1, 0).rotate_about_point((0, 0), 45, **dut)
-        p2d(1, 0).rotate_about_point(([0], [0]), 45, **dut)
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(1, 0).rotate_about_point(p2d(0, 0), 90,
+        ...                              degree=True, update=True, throw=True)
+        uxpo-p2d (0.0,1.0)
+        >>> p2d(1, 0).rotate_about_point((0, 0), 45,
+        ...                              degree=True, update=True, throw=True)
         """
         if not point:
             raise ValueError('Must provide point object. Could also be coord.')
@@ -1737,38 +1735,39 @@ class Point2d():
     def rotate_points(self, points=None, angles=0.0, *, degree=True, dec=8,
                       return_type='p2d'):
         """
-        Rotate self point about another point.
+        Rotate one or more target points about self as the pivot.
 
         Parameters
         ----------
-        point
-        angle
-        degree
-        update
-        throw
-        dec
+        points : Point2d, p2d_leanest, tuple, list, or column-array tuple
+            Target point(s) to rotate. Accepted forms include single point
+            objects, lists of point objects, ``(x, y)`` tuples, and
+            column-array tuples ``([x1, x2, …], [y1, y2, …])``.
+        angles : float or array-like of float
+            Rotation angle(s). Single scalar applied to all points; array
+            must match the number of target points.
+        degree : bool, optional
+            If ``True``, treat ``angles`` as degrees. Default ``True``.
+        dec : int, optional
+            Decimal places for rounding output coordinates. Default ``8``.
+        return_type : str, optional
+            Reserved for future return-format control. Default ``'p2d'``.
 
-        Return
+        Returns
+        -------
+        numpy.ndarray, shape (N, 2)
+            Rotated coordinates ``[[x1, y1], [x2, y2], …]``.
+
+        Raises
         ------
+        ValueError
+            If ``points`` is empty or ``angles`` length mismatches points.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        dd = {'degree': True, 'dec': 8}
-
-        p2d(0, 0).rotate_points(p2d(1, 0), 45, **dd)
-        p2d(1, 0).rotate_points(p2d(0, 0), +45, **dd)
-        p2d(0, 0).rotate_points(p2d(-1, 0), 45, **dd)
-        p2d(0, 0).rotate_points(p2d(-1, 0), -45, **dd)
-        p2d(0, 0).rotate_points(p2d(-1, 0), 45, **dd)
-        p2d(0.70710678, 0.70710678).rotate_points(p2d(0, 0), 45, **dd)
-        p2d(0.70710678, 0.70710678).rotate_points(p2d(0, 0), -45, **dd)
-        p2d(-0.70710678, 0.70710678).rotate_points(p2d(0, 0), -45, **dd)
-
-        p2d(0, 0).rotate_points((1, 0), 45, **dd)
-        p2d(0, 0).rotate_points(([1], [0]), 45, **dd)
-        p2d(0, 0).rotate_points(([1, 0], [2, 0], [3, 0]), 45, **dd)
-        p2d(0, 0).rotate_points(([1, 0], [2, 0], [3, 0]), -45, **dd)
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(0, 0).rotate_points(p2d(1, 0), 45, degree=True)
+        >>> p2d(0, 0).rotate_points(([1, 2, 3], [0, 0, 0]), 45, degree=True)
         """
         _ITER, _NUMB = dth.dt.ITERABLES, dth.dt.NUMBERS
         # ----------------------------------------------------
@@ -1832,36 +1831,32 @@ class Point2d():
 
     def find_closest_points(self, plist=None, *, plane='xy', on_boundary=True):
         """
-        Find index/indices of closest point(s) from input point collection.
+        Return indices of the point(s) in ``plist`` closest to self.
+
+        Delegates to ``find_neigh_points_by_distance`` with ``r=0``.
 
         Parameters
         ----------
-        plist : iterable
-            Input points/coordinates.
+        plist : list of Point2d, p2d_leanest, or coordinate arrays
+            Collection of candidate points.
         plane : str, optional
-            Plane specifier. Defaults to `xy`.
+            Plane specifier. Default ``'xy'``.
         on_boundary : bool, optional
-            If True, include points exactly on search radius when delegated
-            neighbor query is radius-based.
+            Passed through to ``find_neigh_points_by_distance``.
+            Default ``True``.
 
         Returns
         -------
-        numpy.ndarray
-            Index/indices of closest points.
+        numpy.ndarray of int
+            Indices of the closest point(s) in ``plist``.
 
         Examples
         --------
-
-        Example-1
-        from upxo.geoEntities.point2d import Point2d as p2d
-
-        p2d(0, 0).find_closest_point( [p2d(0, 0), p2d(0, 1), p2d(0, 0)])
-        Expected >> array([0, 2], dtype=int64)
-
-        Example-2
-        p2d(0, 0).find_closest_point( [[1, 2], [2, 3], [10, 12], [0, -5],
-                                       [1, 2], [1, 2]] )
-        Expected >> array([0, 4, 5], dtype=int64)
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(0, 0).find_closest_points([p2d(0, 0), p2d(0, 1), p2d(0, 0)])
+        array([0, 2])
+        >>> p2d(0, 0).find_closest_points([[1, 2], [2, 3], [0, -5],
+        ...                                [1, 2], [1, 2]])
         """
         return self.find_neigh_points_by_distance(plist=plist, plane='xy', r=0,
                                                   on_boundary=True)
@@ -1869,8 +1864,35 @@ class Point2d():
     def find_neigh_points_by_distance(self, plist=None, plane='xy', r=0,
                                       on_boundary=True):
         """
-        from upxo.geoEntities.point2d import Point2d as p2d
-        p2d(0, 0).find_neigh_points_by_distance( [[1, 2], [10, 12], [0, -5]] )
+        Return indices of points in ``plist`` within radius ``r`` of self.
+
+        Parameters
+        ----------
+        plist : list or array-like
+            Candidate points.
+        plane : str, optional
+            Plane specifier. Default ``'xy'``.
+        r : float, optional
+            Search radius. When ``r <= ε`` (≈ 0), returns the index/indices
+            of the globally closest point(s). Default ``0``.
+        on_boundary : bool, optional
+            If ``True``, include points at exactly ``r``. Default ``True``.
+
+        Returns
+        -------
+        numpy.ndarray of int
+            Indices of neighbouring points.
+
+        Raises
+        ------
+        TypeError
+            If ``r`` is not a number.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(0, 0).find_neigh_points_by_distance([[1, 2], [10, 12], [0, 0]])
+        array([2])
         """
         plist = np.array(plist)
         if type(r) not in dth.dt.NUMBERS:
@@ -1886,8 +1908,34 @@ class Point2d():
 
     def find_neigh_points_by_count(self, plist=None, n=None, plane='xy'):
         """
-        from upxo.geoEntities.point2d import Point2d as p2d
-        p2d(0, 0).find_neigh_points_by_count( [[1, 2], [10, 12], [0, -5], [0, 0]], 2)
+        Return indices of the ``n`` nearest points in ``plist`` to self.
+
+        Parameters
+        ----------
+        plist : list or array-like
+            Candidate points.
+        n : int
+            Number of nearest neighbours to return.
+        plane : str, optional
+            Plane specifier. Default ``'xy'``.
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            Indices of the ``n`` closest points (from ``numpy.where``).
+
+        Raises
+        ------
+        TypeError
+            If ``n`` is not a non-zero integer.
+        ValueError
+            If ``n`` exceeds the length of ``plist``.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(0, 0).find_neigh_points_by_count(
+        ...     [[1, 2], [10, 12], [0, -5], [0, 0]], n=2)
         """
         # Validate plist
         # Validate n
@@ -2072,50 +2120,61 @@ class Point2d():
                             return_type='coord_list', zloc=0.0,
                             gmsh_model_name='Model-1'):
         """
-        Make an array of points with self as centroid (approx).
+        Generate a random cluster of ``n`` points within radius ``r`` of self.
+
+        Self acts as the approximate centroid of the cluster. The larger ``n``
+        is, the closer the actual centroid converges to self.
 
         Parameters
         ----------
-        n: number of points to create.
-        r: radius
-        distribution: Specifies the distribution type. Options include:
-            urand - Uniform random
-            nrand - random uniform
-            qrand - quadratic random
-            crand - cubic random
-        return_type: Type of the return object. Options include:
-            coord_list_2d - [[x0, ..., xn], [y0, ..., yn]]
-            coords_2d - [[x0, y0], ..., [xn, yn]]
-            upxo_2d - upxo 2D point object
-            coord_list_3d - [[x0, ..., xn], [y0, ..., yn], [z0, ..., zn]]
-            coords_3d - [[x0, y0, z0], ..., [xn, yn, zn]]
-            upxo_3d - upxo 3D point object
-            gmsh - GMSH poit object
-            pyvista - Py-Vista object
-        zloc: Value of z-coordinate if return type is 3D.
+        n : int, optional
+            Number of points to generate. Default ``10``.
+        r : float, optional
+            Cluster radius. Default ``1``.
+        distribution : {'urand'}, optional
+            Spatial distribution type. Currently only uniform random
+            (``'urand'``) is implemented. Default ``'urand'``.
+        dmin : float or None, optional
+            Minimum inter-point distance constraint. Not yet implemented.
+        return_type : str, optional
+            Format of the returned points. Accepted values:
 
-        Return
-        ------
-        LIst of point coordinates.
+            ======================  ============================================
+            ``'coord_list'``        ``[[x0,…], [y0,…]]`` (default)
+            ``'coords_2d'``         ``[[x0,y0], …]``
+            ``'upxo_2d'``           List of ``Point2d``
+            ``'upxo_2d_leanest'``   List of ``p2d_leanest``
+            ``'coord_list_3d'``     ``[[x0,…], [y0,…], [z0,…]]``
+            ``'coords_3d'``         ``[[x0,y0,z0], …]``
+            ``'shapely'``           List of ``shapely.geometry.Point``
+            ``'gmsh'``              List of GMSH point tags
+            ``'pyvista'``           PyVista PolyData point cloud
+            ``'mulpoint2d'``        UPXO mulpoint2d object
+            ======================  ============================================
 
-        Explanations
-        ------------
-        When random, greater the value of n, nearer would be the self to
-        the centroid.
+        zloc : float, optional
+            Z-coordinate for 3D or GMSH output. Default ``0.0``.
+        gmsh_model_name : str, optional
+            GMSH model name created if GMSH is not yet initialised.
+            Default ``'Model-1'``.
+
+        Returns
+        -------
+        varies
+            Format depends on ``return_type``; see parameter description.
+
+        Limitations
+        -----------
+        - Only ``distribution='urand'`` is implemented.
+        - ``dmin`` constraint is not yet enforced.
 
         Examples
         --------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        p2d(0,0).array_by_clustering(n=10, r=1)
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='coords_2d')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='upxo_2d')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='upxo_2d_leanest')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='shapely')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='gmsh')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='pyvista')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='coords_3d')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='coord_list_3d')
-        p2d(0,0).array_by_clustering(n=10, r=1, return_type='mulpoint2d')
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> p2d(0, 0).array_by_clustering(n=10, r=1)
+        >>> p2d(0, 0).array_by_clustering(n=10, r=1, return_type='coords_2d')
+        >>> p2d(0, 0).array_by_clustering(n=10, r=1, return_type='upxo_2d')
+        >>> p2d(0, 0).array_by_clustering(n=10, r=1, return_type='shapely')
         """
         if distribution == 'urand':
             ang = np.random.uniform(0, 2*np.pi, n)
@@ -2203,10 +2262,22 @@ class Point2d():
 
     def set_z(self, z=0):
         """
-        from upxo.geoEntities.point2d import Point2d as p2d
-        A, z = p2d(10, 12), 100
-        A.set_z(z=100)
-        A.f['_coord_'][-1].z
+        Attach a Z-coordinate to this 2D point via the feature dictionary.
+
+        Stores a ``_coord_`` feature at key ``-1`` under ``self.f``.
+
+        Parameters
+        ----------
+        z : float, optional
+            Z-coordinate value to attach. Default ``0``.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> A = p2d(10, 12)
+        >>> A.set_z(z=100)
+        >>> A.f['_coord_'][-1].z
+        100
         """
         from upxo.geoEntities.point2d import _coord_
         self.attach_feature(feature=_coord_(self.x, self.y, z),
@@ -2214,13 +2285,26 @@ class Point2d():
 
     def make_vtk_point(self, z=0):
         """
-        from upxo.geoEntities.point2d import Point2d as p2d
-        A, z = p2d(10, 12), 100
-        vtkobj = A.make_vtk_point(z=100)
+        Wrap this point as a VTK PolyData point.
 
-        # Accessing data in the vtk_point
-        x, y, z = vtkobj['pd'].GetPoint(vtkobj['id'])
-        print(x, y, z)
+        Parameters
+        ----------
+        z : float, optional
+            Z-coordinate for the VTK point. If ``self.f`` does not already
+            contain a ``_coord_`` entry, ``set_z(z)`` is called first.
+            Default ``0``.
+
+        Returns
+        -------
+        dict
+            ``{'id': int, 'pd': vtkPolyData, 'help': str}`` where ``id``
+            is the inserted-point index and ``pd`` holds the vtkPolyData.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> vtkobj = p2d(10, 12).make_vtk_point(z=100)
+        >>> x, y, z = vtkobj['pd'].GetPoint(vtkobj['id'])
         """
         if not hasattr(self, 'f'):
             self.set_z(z=z)
@@ -2254,19 +2338,20 @@ def all_isinstance(dtype, *args):
     ----------
     dtype : type
         Target Python/UPXO type to validate against.
-    *args : tuple
-        Variable number of objects to test.
+    *args : various
+        Objects to test.
 
     Returns
     -------
     bool or None
-        Returns `True` only if every argument is an instance of `dtype`.
-        Returns `None` when no arguments are provided.
+        ``True`` if every argument is an instance of ``dtype``;
+        ``None`` if no arguments are provided.
 
-    Example
-    -------
-    from upxo.geoEntities.point2d import all_isinstance, p2d_leanest
-    all_isinstance(p2d_leanest, p2d_leanest(0, 0), p2d_leanest(1, 1))
+    Examples
+    --------
+    >>> from upxo.geoEntities.point2d import all_isinstance, p2d_leanest
+    >>> all_isinstance(p2d_leanest, p2d_leanest(0, 0), p2d_leanest(1, 1))
+    True
     """
     if len(args) > 0:
         print(args)

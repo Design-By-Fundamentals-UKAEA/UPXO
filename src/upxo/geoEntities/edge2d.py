@@ -1,15 +1,41 @@
 """
-This module has the following collection of edge classes:
-    2d1. edge2d
-    2d2. edge2d_lean_highest
-    2d3. edge2d_from_point2d
-    3d1. edge3d
+2D (and 3D) edge geometric entity classes for UPXO.
 
-This is a UPXO core module
-NOTE: NOT TO BE SHARED WITH ANYONE OTHER THAN:
-    *@UKAEA: Vaasu Anandatheertha, Chris Hardie, Vikram Phalke
-    *@UKAEA:  Ben Poole, Allan Harte, Cori Hamelin
-    *@OX,UKAEA:  Eralp Demir, Ed Tarleton
+Import
+------
+    from upxo.geoEntities.edge2d import edge2d
+    from upxo.geoEntities.edge2d import edge2d_lean_highest
+    from upxo.geoEntities.edge2d import edge2d_from_point2d
+
+Classes
+-------
+edge2d
+    Core 2D edge entity with full geometric and comparison operations.
+edge2d_lean_highest
+    Lean-mode 2D edge with reduced memory footprint.
+edge2d_from_point2d
+    2D edge constructed from ``Point2d`` endpoint objects.
+edge3d
+    3D edge entity (stub; development in progress).
+
+Dependencies
+------------
+    numpy, matplotlib, math, copy,
+    upxo._sup.dataTypeHandlers,
+    upxo.geoEntities.mulpoint2d,
+    upxo.geoEntities.point2d
+
+Notes
+-----
+This is a UPXO core module. The ``edge2d`` class uses secondary class-level
+epsilon constants derived from ``dataTypeHandlers.constants``; primary
+global values must be changed through that module, not through
+instance attributes.
+
+Limitations
+-----------
+- ``edge3d`` is not yet implemented.
+- Shapely, VTK, PyVista, and SciPy construction branches are stubs.
 """
 from numpy.random import uniform as npru
 from numpy import inf as INFINITY
@@ -19,7 +45,7 @@ from upxo.geoEntities.mulpoint2d import MPoint2d as mulpoint2d
 # from mulpoint2d import mulpoint2d
 from copy import deepcopy as dcp
 import matplotlib.pyplot as plt
-import point2d
+from upxo.geoEntities.point2d import Point2d as point2d
 from math import ceil, floor, nan
 from itertools import islice
 import numpy as np
@@ -39,54 +65,93 @@ __license__ = "GPL v3"
 
 class edge2d():
     """
-    UPXO core class.
-    Represents an edge in 2D Cartesian space.
+    Core 2D edge entity in UPXO.
 
-    Types of methods:
-        dunder methods: __dunder__ methods [double underscore methods]
-        update methods: methods to update existing attributes
-        calc methods: methods to calculate attributes
-        set methods: method to set attributes
-        contains methods: methods to assert if self contains another feature
-        geo methods: geometry methods
-        check methods: methods to check conditions
-        make methods: methods to make objects
-        F methods: methods working on deformation gradient
+    Represents a straight line segment in 2D Cartesian space defined by
+    two endpoint ``point2d`` objects. Provides geometric operations
+    (length, slope, angle, centroid, intersection), comparison utilities,
+    and construction routes from various input formats.
 
-    Method call philosophy and details:
-        1. Methods designed to accept multiple arguments to allow flexibiliy
-            A list of common attributes are in the following:
-                * saa: save as attribute (works only if the specific slot
-                                          exists)
-                * uto: update the object
-                * throw: choice to return the computation result
-                * value: usually a scalar to use in computation
-                * edge_lean: specifies leanness of the edge obejct
-                * point_lean: specifies leanness of the parent point object(s)
-                * pnta and pntb: start and end points respectively
-        2. Many arguments offer choices
-            Choices could be in the following:
-                * edge_lean: Five choices
-                * point_lean: Five choices
-                * method: could of the following types:
-                        - branch for calculation/computation technique
-                        - branch for the type of object in the input argument
-                        (more on this in 4.a)
-                * saa: boolean - True/False
-                * uto: boolean - True/False
-                * throw: boolean - True/False
-        3. Most arguments contain a suitable default choice/value
-            Some of the default
-        4. Expalantions on choices:
-            a. method: type of object:
-                Object could be of the following types:
-                    - upxo objects
-                    - shapely object
-                    - pyvista object
-                    - vtk object
-                    - scipy object
-                    - vedo object
-                    - gmsh object
+    Import
+    ------
+        from upxo.geoEntities.edge2d import edge2d
+
+    Parameters
+    ----------
+    method : str, optional
+        Construction route. Accepted values:
+
+        ========================  =====================================
+        ``'up2d'`` (default)      Two ``point2d`` objects via ``pnta`` / ``pntb``.
+        ``'xy_list'``             Two lists ``xlist``, ``ylist``.
+        ``'cpairs'``              Coordinate pairs ``[[x0,y0],[x1,y1]]``.
+        ========================  =====================================
+
+    pnta, pntb : point2d, optional
+        Start and end point objects. Required when ``method='up2d'``.
+    xlist, ylist : list of float, optional
+        X and Y coordinate lists. Required when ``method='xy_list'``.
+    cpairs : list of list, optional
+        Coordinate pairs. Required when ``method='cpairs'``.
+    edge_lean : {'leanest', 'ignore', 'no', 'notlean'}, optional
+        Lean mode for the edge object. Default ``'leanest'``.
+    points_lean : str, optional
+        Lean mode for the endpoint objects. Default ``'ignore'``.
+    tlen : float, optional
+        Tolerance for length comparisons. Default ``0.0``.
+    calc_slope : bool, optional
+        If ``True``, compute slope on construction. Default ``True``.
+
+    Attributes
+    ----------
+    pnta, pntb : point2d
+        Start and end endpoint objects.
+    length : float
+        Euclidean length of the edge.
+    slope : float
+        Geometric slope (dy/dx). ``inf`` for vertical edges.
+    angrad : float
+        Angle with x-axis in radians.
+    angdeg : float
+        Angle with x-axis in degrees.
+    xycen : array-like
+        Centroid coordinates ``[x, y]``.
+    edge_lean : str
+        Active lean mode.
+    tlen : float
+        Length tolerance.
+
+    Notes
+    -----
+    Common method arguments across the class API:
+
+    - ``saa`` — save as attribute (only if the slot exists).
+    - ``uto`` / ``update`` — update the object in-place.
+    - ``throw`` — return the computation result.
+    - ``edge_lean`` / ``point_lean`` — leanness of edge/point objects.
+    - ``pnta`` / ``pntb`` — start and end points.
+    - ``method`` — construction/computation branch selector.
+
+    Limitations
+    -----------
+    - Shapely, VTK, PyVista, SciPy, and vedo construction branches are
+      stubs and not yet implemented.
+    - 3D edge support (``edge3d``) is a separate, incomplete class.
+
+    Examples
+    --------
+    Construct from coordinate lists:
+
+    >>> from upxo.geoEntities.edge2d import edge2d
+    >>> e = edge2d(method='xy_list', xlist=[0.0, 1.0], ylist=[0.0, 0.0])
+    >>> e.length
+    1.0
+
+    Construct from coordinate pairs:
+
+    >>> e = edge2d(method='cpairs', cpairs=[[0, 0], [1, 1]])
+    >>> e.slope
+    1.0
     """
     # Secondary global EPS-e2d-length assignment from primary source
     # METHODS EXIT TO CHANGE LOCALLY ONLY AND NOT GLOBALLY
@@ -169,6 +234,36 @@ class edge2d():
                  tlen=0.0,
                  calc_slope=True,
                  ):
+        """
+        Parameters
+        ----------
+        method : str, optional
+            Construction strategy. ``'up2d'`` (default) builds from two
+            ``Point2d`` objects; ``'xy_list'`` from ``xlist``/``ylist``;
+            ``'cpairs'`` from a coordinate pair; ``'cpairs_list'`` from a
+            list of pairs.
+        pnta : Point2d, optional
+            Start endpoint (used when ``method='up2d'``).
+        pntb : Point2d, optional
+            End endpoint (used when ``method='up2d'``).
+        xlist : list of float, optional
+            x-coordinates ``[xa, xb]`` (used when ``method='xy_list'``).
+        ylist : list of float, optional
+            y-coordinates ``[ya, yb]`` (used when ``method='xy_list'``).
+        cpairs : list, optional
+            Coordinate pair ``[[xa, ya], [xb, yb]]`` (used when
+            ``method='cpairs'``).
+        end_points : list, optional
+            Alternate endpoint specification. Default ``None``.
+        edge_lean : str, optional
+            Lean of the edge object. Default ``'leanest'``.
+        points_lean : str, optional
+            Lean applied to the created endpoint objects. Default ``'ignore'``.
+        tlen : float, optional
+            Target length hint (informational). Default ``0.0``.
+        calc_slope : bool, optional
+            Compute slope during initialisation. Default ``True``.
+        """
         # Associate a few attributes
         if edge_lean in ('ignore', 'leanest', 'no', 'notlean'):
             self.points_lean = points_lean
@@ -240,6 +335,7 @@ class edge2d():
         # sunil
 
     def calculate_level01_basics(self, length_method='coords'):
+        """Compute and store centroid, length, and slope immediately after construction."""
         # Calculate centre of the edge
         self.calc_centre(saa=True, throw=False)
         # Calculate the length of the edge
@@ -249,25 +345,31 @@ class edge2d():
         self.calc_slope()
 
     def update_point(self, index, obj, method='up2d'):
-        '''
-        Method to update one of the points of the current self object
-        EXAMPLE:
-            a = point2d(x=0, y=0, lean='ignore')
-            b = point2d(x=1, y=0, lean='ignore')
-            c = point2d(x=1, y=1.01, lean='ignore')
-            from edge2d import edge2d
-            e1 = edge2d(method='up2d', pnta=a, pntb=b)
+        """
+        Replace one endpoint of the edge and recompute derived attributes.
 
-            print([e1.pnta, e1.pntb])
-            print([e1.length, e1.slope])
-            print(e1.centroid)
+        Parameters
+        ----------
+        index : {0, 1, 'a', 'b'}
+            Which endpoint to replace. ``0`` / ``'a'`` → start; ``1`` / ``'b'`` → end.
+        obj : point2d or list of float
+            Replacement point. A ``point2d`` object when ``method='up2d'``;
+            a ``[x, y]`` coordinate pair when ``method`` is ``'cpair'`` or
+            ``'coord'``.
+        method : {'up2d', 'cpair', 'coord'}, optional
+            Specifies the type of ``obj``. Default ``'up2d'``.
 
-            e1.update_point(1, c)
+        Notes
+        -----
+        Recomputes centroid, length, and slope after the update.
 
-            print([e1.pnta, e1.pntb])
-            print([e1.length, e1.slope])
-            print(e1.centroid)
-        '''
+        Examples
+        --------
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(method='xy_list', xlist=[0.0, 1.0], ylist=[0.0, 0.0])
+        >>> e1.update_point(1, [1.0, 1.01], method='coord')
+        >>> e1.length  # updated
+        """
         if index in (0, 'a'):
             if method == 'up2d':
                 self.pnta.x, self.pnta.y = obj.x, obj.y
@@ -286,62 +388,45 @@ class edge2d():
                        use_self_length_eps=True,
                        EPS_length_low=0.0, EPS_length_high=0.0):
         """
-        Compare lengths of edges
+        Compare the length of self against one or more other edges.
+
+        Returns a comparison symbol ('=', '>', '<') and a detail label for
+        each edge in `edges`. The reference length is ``self.length``.
 
         Parameters
         ----------
-        edges : TYPE
-            DESCRIPTION.
-        use_self_length_eps : TYPE, optional
-            DESCRIPTION. The default is True.
-        EPS_length_low : TYPE, optional
-            DESCRIPTION. The default is 0.0.
-        EPS_length_high : TYPE, optional
-            DESCRIPTION. The default is 0.0.
+        edges : edge2d or list of edge2d
+            One or more UPXO edge2d objects to compare against.
+        use_self_length_eps : bool, optional
+            If True, use the tolerance stored on self (``self.EPS_e2dl_low``
+            and ``self.EPS_e2dl_high``). If False, use the explicit
+            ``EPS_length_low`` / ``EPS_length_high`` arguments.
+            Default is True.
+        EPS_length_low : float, optional
+            Lower tolerance for length equality (used when
+            ``use_self_length_eps=False``). Default is 0.0.
+        EPS_length_high : float, optional
+            Upper tolerance for length equality (used when
+            ``use_self_length_eps=False``). Default is 0.0.
 
         Returns
         -------
-        LCOMP : TYPE
-            DESCRIPTION.
-        LCOMP_details : TYPE
-            DESCRIPTION.
+        LCOMP : list of str
+            Comparison symbol per edge: '=' (equal), '>' (self longer),
+            '<' (self shorter).
+        LCOMP_details : list of str
+            Human-readable label for each comparison (e.g. 'RL=OL').
 
-        from point2d import point2d
-        p1 = point2d(x=0, y=0)
-        p2 = point2d(x=1, y=0)
-        p3 = point2d(x=1, y=1)
-        p4 = point2d(x=1, y=0.1)
-        p5 = point2d(x=1, y=0.01)
-        p6 = point2d(x=1, y=0.001)
-        p7 = point2d(x=1, y=0.2)
-        p8 = point2d(x=-1, y=0.0)
-        p9 = point2d(x=0, y=1.0)
-
-        from edge2d import edge2d
-        e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
-        e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
-        e3 = edge2d(method='up2d', pnta=p3, pntb=p1)
-        e4 = edge2d(method='up2d', pnta=p1, pntb=p4)
-        e5 = edge2d(method='up2d', pnta=p1, pntb=p5)
-        e6 = edge2d(method='up2d', pnta=p1, pntb=p6)
-        e7 = edge2d(method='up2d', pnta=p1, pntb=p7)
-        e8 = edge2d(method='up2d', pnta=p8, pntb=p9)
-
-        print([e1.length, e2.length, e3.length, e4.length, e5.length, e6.length, e7.length])
-        print(e1.compare_length(e1))
-        print(e2.compare_length(e2))
-        print(e3.compare_length(e3))
-
-        print(e1.compare_length(e2))
-        print(e1.compare_length(e3))
-        print(e1.compare_length([e1, e2, e3]))
-        print(e2.compare_length([e1, e2, e3]))
-        print(e3.compare_length([e1, e2, e3]))
-
-        print([e1.length, e2.length, e3.length, e4.length, e5.length, e6.length, e7.length])
-        print([e1.EPS_e2dl_low, e1.EPS_e2dl_high])
-        print(e1.compare_length([e1, e2, e3, e4, e5, e6, e7]))
-
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+        >>> p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
+        >>> e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
+        >>> e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
+        >>> e3 = edge2d(method='up2d', pnta=p3, pntb=p1)
+        >>> e1.compare_length([e1, e2, e3])
         """
         # Test and make unique the input edges data
         edges = dth.make_list(edges, force_list=False)
@@ -386,105 +471,45 @@ class edge2d():
     def __eql__(self, edges, use_self_length_eps=True,
                 EPS_length_low=0.0, EPS_length_high=0.0):
         """
-        Check for equality of length of edges
+        Test length equality of self against one or more edges.
+
+        Delegates to :meth:`compare_length` and returns a boolean list.
+        Two lengths are considered equal when the other edge's length falls
+        within ``[self.length - EPS_low, self.length + EPS_high]``.
 
         Parameters
         ----------
-        edges : list, tuple, deque
-            Iterable collection of UPXO edge objects.
-        eps_self : True
-            Boolean indicating whether to consider global EPS_length value
-            or the locally provided value. There are two globals for this EPS.
-            1st is the `[datatype_handlers.constants.EPS_e2dl_low,
-                         datatype_handlers.constants.EPS_e2dl_high]`
-            This is the proimary global value of EPS_edge_length. It is
-            located in `datatype_handlers.constants`. The 2nd is the class
-            variable in the `edge_2d` class. This is the secondaryt global
-            value of `EPS_edge_length`. This is imported from the
-            `datatype_handlers.constants`. Upon import, its value will be
-            same as the primary global value, but can be  modified from
-            within the initialized edge. This modification
-            is restricted to have its effect locally and not globally. That is
-            any change to its values in an initialied edge in a set of
-            many initialised edges will only affect the current object,
-            that is, the edge under consideration and not all edges in the set.
-            The local value is the value input by user as an argument while
-            explicitly calling `__eql__`. The global value will be ignored if
-            called with `eps_self=True`, else. If `eps_self=False`, then user
-            value of input argument `EPS_edge_length` will be used. It
-            defaults to 0.0.
-        EPS_edge_length : int, float, np.float64
-            Local value of the EPS for current edge length. Defaults to 0.0.
+        edges : edge2d or list of edge2d
+            One or more UPXO edge2d objects to test.
+        use_self_length_eps : bool, optional
+            If True, use tolerances stored on self (``EPS_e2dl_low`` /
+            ``EPS_e2dl_high``). If False, use the explicit arguments below.
+            Default is True.
+        EPS_length_low : float, optional
+            Lower tolerance (used when ``use_self_length_eps=False``).
+            Default is 0.0.
+        EPS_length_high : float, optional
+            Upper tolerance (used when ``use_self_length_eps=False``).
+            Default is 0.0.
 
         Returns
         -------
-        tuple
-            Truth values of comparisons. True if current edge length is equal
-            to the lengths of each edge in `edges`.
+        list of bool
+            True for each edge in `edges` whose length equals self.length
+            within tolerance; False otherwise.
 
-        Pre-requisites for Examples:
-        ----------------------------
-        Branch 1:
-            from point2d_04 import point2d
-            from edge2d_05 import edge2d
-            p1, p2 = point2d(x=0.0, y=0.0), point2d(x=1.0, y=0.0)
-            p3, p4 = point2d(x=0.0, y=1.0), point2d(x=0.5, y=0.5)
-            p5, p6 = point2d(x=1.0, y=1.0), point2d(x=1.2, y=4.5)
-            p7, p8 = point2d(x=-0.5, y=-0.1), point2d(x=0.2, y=-6.6)
-            p9, p10 = point2d(x=-9.6, y=4.3), point2d(x=-0.5, y=-0.5)
-            p11 = point2d(x=2.0, y=0.0)
-            e1, e2 = edge2d(pnta=p1, pntb=p2), edge2d(pnta=p1, pntb=p3)
-            e3, e4 = edge2d(pnta=p1, pntb=p4), edge2d(pnta=p1, pntb=p5)
-            e5, e6 = edge2d(pnta=p1, pntb=p6), edge2d(pnta=p1, pntb=p7)
-            e7, e8 = edge2d(pnta=p1, pntb=p8), edge2d(pnta=p1, pntb=p9)
-            e9, e10 = edge2d(pnta=p1, pntb=p10), edge2d(pnta=p1, pntb=p11)
-            edges = [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10]
-
-        Branch 2:
-            from shapely.geometry import Point
-            from shapely.geometry import LineString as LS
-            p1,p2,p3 = Point((0.0,0.0)), Point((1.0,0.0)), Point((1.0,1.0))
-            l = LS((p1,p2))
-            l.xy
-
-            edges_shapely = [LS((p1,p2)), LS((p2,p3)), LS((p1,p3))]
-
-        Branch 3:
-            from point2d_04 import point2d
-            p1 = point2d(x=0.0, y=0.0)
-            p2 = point2d(x=1.0, y=0.0)
-            from edge2d_05 import edge2d
-            e1 = edge2d(pnta=p1, pntb=p2)
-            ..3a..
-            edges_list1 = [[[0,0], [1,0]], [[2,3], [5,1]]] # valid input
-                There are 2 edges in the above example:
-                    1st edge: [[0,0], [1,1]]: [pnta, pntb]
-                    2nd edge: [[2,3], [5,1]]: [pnta, pntb]
-            ..3b..
-            edges_tuple1 = (((0,0), (1,1)), ((1,1), (2,3))) # is also valid
-            ..3c..
-            np.random.seed(0)
-            edges_list2 = [[[npru(),npru()],
-                            [npru(),npru()]] for _ in range(10)]
-
-        Example. Branch 1: compared against UPXO edge2d objects:
-        --------------------------------------------------------
-        e1 == edges
-        e1.__eql__(edges)
-
-        Example. Branch 2: compared against Shapely LineString objects:
-        ---------------------------------------------------------------
-        e1 == edges
-        e1.__eql__(edges)
-
-        Example. Branch 3: compared agianst coord pair data in list / tuple:
-        --------------------------------------------------------------------
-        e1 == edges
-        e1.__eql__(e1)
-        e1.__eql__(e2)
-        e1.__eql__(e4)
-        [e1.length, e2.length]
-        e1.__eql__(edges)
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1 = Point2d(x=0.0, y=0.0)
+        >>> p2 = Point2d(x=1.0, y=0.0)
+        >>> p3 = Point2d(x=0.0, y=1.0)
+        >>> p11 = Point2d(x=2.0, y=0.0)
+        >>> e1 = edge2d(pnta=p1, pntb=p2)
+        >>> e2 = edge2d(pnta=p1, pntb=p3)
+        >>> e10 = edge2d(pnta=p1, pntb=p11)
+        >>> e1.__eql__([e1, e2, e10])
         """
         LCOMP, _ = self.compare_length(edges,
                                        use_self_length_eps=use_self_length_eps,
@@ -498,75 +523,53 @@ class edge2d():
                       use_self_eps=True,
                       EPS_RS_low=10**-3, EPS_RS_high=10**-3):
         """
-        Compare slopes of edge objects
+        Compare the slope of self against one or more other edges.
+
+        Uses case-based slope comparisons covering horizontal, inclined, and
+        vertical edge orientations across all quadrant combinations.
 
         Parameters
         ----------
-        edges : TYPE
-            DESCRIPTION.
-        use_global_slope_thresholds : TYPE, optional
-            DESCRIPTION. The default is True.
-        EPS_e2ds_lowest : TYPE, optional
-            DESCRIPTION. The default is -10**-3.
-        EPS_e2ds_highest : TYPE, optional
-            DESCRIPTION. The default is -10**-3.
-        use_self_eps : TYPE, optional
-            DESCRIPTION. The default is True.
-        EPS_RS_low : TYPE, optional
-            DESCRIPTION. The default is 10**-3.
-        EPS_RS_high : TYPE, optional
-            DESCRIPTION. The default is 10**-3.
+        edges : edge2d or list of edge2d
+            One or more UPXO edge2d objects to compare against.
+        use_global_slope_thresholds : bool, optional
+            If True, use class-level ``EPS_e2ds_lowest`` / ``EPS_e2ds_highest``
+            to classify horizontal, inclined, and vertical slopes.
+            Default is True.
+        EPS_e2ds_lowest : float, optional
+            Lower slope threshold (used when
+            ``use_global_slope_thresholds=False``). Default is -10**-3.
+        EPS_e2ds_highest : float, optional
+            Upper slope threshold (used when
+            ``use_global_slope_thresholds=False``). Default is -10**-3.
+        use_self_eps : bool, optional
+            If True, use tolerances from self (``self.EPS_RS_low`` /
+            ``self.EPS_RS_high``) for the reference-to-other comparison.
+            Default is True.
+        EPS_RS_low : float, optional
+            Lower tolerance for slope equality (used when
+            ``use_self_eps=False``). Default is 10**-3.
+        EPS_RS_high : float, optional
+            Upper tolerance for slope equality (used when
+            ``use_self_eps=False``). Default is 10**-3.
 
         Returns
         -------
-        SCOM : TYPE
-            DESCRIPTION.
-        SCOM_details : TYPE
-            DESCRIPTION.
+        SCOM : list of str
+            Comparison symbol per edge: '=' (equal slope), '>' (self steeper),
+            '<' (self shallower).
+        SCOM_details : list of str
+            Case label string (e.g. 'RS=OS.RH.OH') for each comparison.
 
-        from point2d_04 import point2d
-        p1 = point2d(x=0, y=0)
-        p2 = point2d(x=1, y=0)
-        p3 = point2d(x=1, y=1)
-        p4 = point2d(x=1, y=0.1)
-        p5 = point2d(x=1, y=0.01)
-        p6 = point2d(x=1, y=0.001)
-        p7 = point2d(x=1, y=0.2)
-        p8 = point2d(x=-1, y=0.0)
-        p9 = point2d(x=0, y=1.0)
-
-        from edge2d_05 import edge2d
-        e1 = edge2d(method='points', pnta=p1, pntb=p2)
-        e2 = edge2d(method='points', pnta=p2, pntb=p3)
-        e3 = edge2d(method='points', pnta=p3, pntb=p1)
-        e4 = edge2d(method='points', pnta=p1, pntb=p4)
-        e5 = edge2d(method='points', pnta=p1, pntb=p5)
-        e6 = edge2d(method='points', pnta=p1, pntb=p6)
-        e7 = edge2d(method='points', pnta=p1, pntb=p7)
-        e8 = edge2d(method='points', pnta=p8, pntb=p9)
-        print([e1.slope, e2.slope, e3.slope, e4.slope, e5.slope, e6.slope])
-
-        print(e1.compare_slope(e1))
-        print(e2.compare_slope(e2))
-        print(e3.compare_slope(e3))
-
-        print(e1.compare_slope(e2))
-        print(e1.compare_slope(e3))
-
-        print(e2.compare_slope(e1))
-        print(e2.compare_slope(e3))
-
-        print(e1.compare_slope([e1, e2, e3]))
-
-        print(e4.slope)
-        print([e4.EPS_e2ds_lowest, e4.EPS_e2ds_highest])
-        print([e4.EPS_e2dl_low, e4.EPS_e2dl_high])
-
-        print(e1.compare_slope(e4))
-
-        print(e1.compare_slope(e4))
-        print(e1.compare_slope(e5))
-        print(e1.compare_slope(e6))
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+        >>> p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
+        >>> e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
+        >>> e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
+        >>> e1.compare_slope([e1, e2])
         """
         # Test and make unique the input edges data
         edges = dth.make_list(edges, force_list=False)
@@ -790,89 +793,48 @@ class edge2d():
                 EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                 use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
         """
-        Check for equality of slopes of edges
+        Test slope equality of self against one or more edges.
+
+        Delegates to :meth:`compare_slope` and returns a boolean tuple.
 
         Parameters
         ----------
-        edges : TYPE
-            DESCRIPTION.
-        use_global_slope_thresholds : TYPE, optional
-            DESCRIPTION. The default is True.
-        EPS_e2ds_lowest : TYPE, optional
-            DESCRIPTION. The default is -10**-3.
-        EPS_e2ds_highest : TYPE, optional
-            DESCRIPTION. The default is -10**-3.
-        use_self_eps : TYPE, optional
-            DESCRIPTION. The default is True.
-        EPS_RS_low : TYPE, optional
-            DESCRIPTION. The default is 10**-3.
-        EPS_RS_high : TYPE, optional
-            DESCRIPTION. The default is 10**-3.
+        edges : edge2d or list of edge2d
+            One or more UPXO edge2d objects to test.
+        use_global_slope_thresholds : bool, optional
+            If True, use class-level slope threshold constants.
+            Default is True.
+        EPS_e2ds_lowest : float, optional
+            Lower slope threshold (used when
+            ``use_global_slope_thresholds=False``). Default is -10**-3.
+        EPS_e2ds_highest : float, optional
+            Upper slope threshold (used when
+            ``use_global_slope_thresholds=False``). Default is -10**-3.
+        use_self_eps : bool, optional
+            If True, use self's ``EPS_RS_low`` / ``EPS_RS_high``.
+            Default is True.
+        EPS_RS_low : float, optional
+            Lower slope equality tolerance (used when
+            ``use_self_eps=False``). Default is 10**-3.
+        EPS_RS_high : float, optional
+            Upper slope equality tolerance (used when
+            ``use_self_eps=False``). Default is 10**-3.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        tuple of bool
+            True for each edge in `edges` whose slope equals self.slope
+            within tolerance; False otherwise.
 
-        Pre-requisites for Examples:
-        ----------------------------
-        Branch 1:
-            from point2d_04 import point2d
-            from edge2d_05 import edge2d
-            p1, p2 = point2d(x=0.0, y=0.0), point2d(x=1.0, y=0.0)
-            p3, p4 = point2d(x=0.0, y=1.0), point2d(x=0.5, y=0.5)
-            p5, p6 = point2d(x=1.0, y=1.0), point2d(x=1.2, y=4.5)
-            p7, p8 = point2d(x=-0.5, y=-0.1), point2d(x=0.2, y=-6.6)
-            p9, p10 = point2d(x=-9.6, y=4.3), point2d(x=-0.5, y=-0.5)
-            p11 = point2d(x=2.0, y=0.0)
-            e1, e2 = edge2d(pnta=p1, pntb=p2), edge2d(pnta=p1, pntb=p3)
-            e3, e4 = edge2d(pnta=p1, pntb=p4), edge2d(pnta=p1, pntb=p5)
-            e5, e6 = edge2d(pnta=p1, pntb=p6), edge2d(pnta=p1, pntb=p7)
-            e7, e8 = edge2d(pnta=p1, pntb=p8), edge2d(pnta=p1, pntb=p9)
-            e9, e10 = edge2d(pnta=p1, pntb=p10), edge2d(pnta=p1, pntb=p11)
-            edges = [e1, e2, e3, e4, e5, e6, e7, e8, e9, e10]
-
-        Branch 2:
-            from shapely.geometry import Point
-            from shapely.geometry import LineString as LS
-            p1,p2,p3 = Point((0.0,0.0)), Point((1.0,0.0)), Point((1.0,1.0))
-            l = LS((p1,p2))
-            l.xy
-
-            edges_shapely = [LS((p1,p2)), LS((p2,p3)), LS((p1,p3))]
-
-        Branch 3:
-            from point2d_04 import point2d
-            p1 = point2d(x=0.0, y=0.0)
-            p2 = point2d(x=1.0, y=0.0)
-            from edge2d_05 import edge2d
-            e1 = edge2d(pnta=p1, pntb=p2)
-            ..3a..
-            edges_list1 = [[[0,0], [1,0]], [[2,3], [5,1]]] # valid input
-                There are 2 edges in the above example:
-                    1st edge: [[0,0], [1,1]]: [pnta, pntb]
-                    2nd edge: [[2,3], [5,1]]: [pnta, pntb]
-            ..3b..
-            edges_tuple1 = (((0,0), (1,1)), ((1,1), (2,3))) # is also valid
-            ..3c..
-            np.random.seed(0)
-            edges_list2 = [[[npru(),npru()],
-                            [npru(),npru()]] for _ in range(10)]
-
-        Example. Branch 1: compared against UPXO edge2d objects:
-        --------------------------------------------------------
-        e1 == edges
-        e1.__eqs__(edges)
-
-        Example. Branch 2: compared against Shapely LineString objects:
-        ---------------------------------------------------------------
-        e1 == edges
-        e1.__eqs__(edges)
-
-        Example. Branch 3: compared agianst coord pair data in list / tuple:
-        --------------------------------------------------------------------
-        e1 == edges
-        e1.__eqs__(edges)
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1, p2 = Point2d(x=0.0, y=0.0), Point2d(x=1.0, y=0.0)
+        >>> p3 = Point2d(x=0.0, y=1.0)
+        >>> e1 = edge2d(pnta=p1, pntb=p2)
+        >>> e2 = edge2d(pnta=p1, pntb=p3)
+        >>> e1.__eqs__([e1, e2])
         """
         _ugst = use_global_slope_thresholds
         SCOMP, _ = self.compare_slope(edges,
@@ -890,6 +852,55 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Combined equality test over length and/or slope against other edges.
+
+        Parameters
+        ----------
+        edges : edge2d or list of edge2d
+            Edges to compare against self.
+        equality_tests : tuple of str, optional
+            Which attributes to test. 'l' for length, 's' for slope.
+            Default is ('l', 's').
+        comparator : str, optional
+            Comparison operator to apply: '=', '>', '<', '>=', '<=', '!='.
+            Default is '='.
+        use_self_length_eps : bool, optional
+            Use self's stored length tolerances. Default is True.
+        EPS_length_low : float, optional
+            Lower length tolerance. Default is 0.0.
+        EPS_length_high : float, optional
+            Upper length tolerance. Default is 0.0.
+        slope_test_method : str, optional
+            Reserved for future slope method selection. Default is 'slope'.
+        use_global_slope_thresholds : bool, optional
+            Use class-level slope thresholds. Default is True.
+        EPS_e2ds_lowest : float, optional
+            Lower slope range threshold. Default is -10**-3.
+        EPS_e2ds_highest : float, optional
+            Upper slope range threshold. Default is -10**-3.
+        use_self_eps : bool, optional
+            Use self's stored slope tolerances. Default is True.
+        EPS_RS_low : float, optional
+            Lower slope equality tolerance. Default is 10**-3.
+        EPS_RS_high : float, optional
+            Upper slope equality tolerance. Default is 10**-3.
+
+        Returns
+        -------
+        list of bool
+            Per-edge truth values of the requested comparison.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+        >>> p3 = Point2d(x=0, y=1)
+        >>> e1 = edge2d(pnta=p1, pntb=p2)
+        >>> e2 = edge2d(pnta=p1, pntb=p3)
+        >>> e1.__eq__([e1, e2])
+        """
         if comparator not in dth.dt.ALL_COMPARATORS:
             print('UNKNOWN COMPARATOR INPUT')
         else:
@@ -937,6 +948,23 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Inequality test (``!=``) delegating to :meth:`__eq__` with '!='.
+
+        Parameters
+        ----------
+        edges : edge2d or list of edge2d
+            Edges to test against.
+        equality_tests : tuple of str, optional
+            Attributes to test: 'l' (length), 's' (slope). Default ('l','s').
+        comparison : str, optional
+            Fixed to '!=' for this operator. Default is '!='.
+
+        Returns
+        -------
+        list of bool
+            True where self != edge for the selected criteria.
+        """
         _ugst = use_global_slope_thresholds
         NE = self.__eq__(edges,
                          equality_tests=equality_tests,
@@ -959,6 +987,14 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Less-than test (``<``) delegating to :meth:`__eq__` with '<'.
+
+        Returns
+        -------
+        list of bool
+            True where self < edge for the selected criteria.
+        """
         _ugst = use_global_slope_thresholds
         LT = self.__eq__(edges,
                          equality_tests=equality_tests,
@@ -981,6 +1017,14 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Less-than-or-equal test (``<=``) delegating to :meth:`__eq__` with '<='.
+
+        Returns
+        -------
+        list of bool
+            True where self <= edge for the selected criteria.
+        """
         _ugst = use_global_slope_thresholds
         LE = self.__eq__(edges,
                          equality_tests=equality_tests,
@@ -1003,6 +1047,14 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Greater-than test (``>``) delegating to :meth:`__eq__` with '>'.
+
+        Returns
+        -------
+        list of bool
+            True where self > edge for the selected criteria.
+        """
         _ugst = use_global_slope_thresholds
         GT = self.__eq__(edges,
                          equality_tests=equality_tests,
@@ -1025,6 +1077,14 @@ class edge2d():
                slope_test_method='slope', use_global_slope_thresholds=True,
                EPS_e2ds_lowest=-10**-3, EPS_e2ds_highest=-10**-3,
                use_self_eps=True, EPS_RS_low=10**-3, EPS_RS_high=10**-3):
+        """
+        Greater-than-or-equal test (``>=``) delegating to :meth:`__eq__` with '>='.
+
+        Returns
+        -------
+        list of bool
+            True where self >= edge for the selected criteria.
+        """
         _ugst = use_global_slope_thresholds
         GE = self.__eq__(edges,
                          equality_tests=equality_tests,
@@ -1043,21 +1103,42 @@ class edge2d():
 
     def __add__(self, toadd, saa=True, throw=False, update_toadd=True,
                 addto='bothpoints', addtocoord='xy'):
-        '''
-        [edge2d(edge_lean=self.edge_lean,
-                       points_lean=self.points_lean,
-                       method='coord',
-                       pnta=point2d(
-                           x=self.x+A, y=self.y+A, lean='lowest'),
-                       pntb=self.y + A) for A in toadd]
+        """
+        Add a scalar, coordinate pair, or another edge to this edge's endpoints.
 
-        edge2d(edge_lean=edge.edge_lean,
-                      points_lean=edge.points_lean,
-                      method='points2d',
-                      pnta=self.pnta + edge.pnta,
-                      pntb=self.pntb + edge.pntb,
-                      )
-        '''
+        Parameters
+        ----------
+        toadd : int, float, list, or edge2d
+            Value(s) to add. Accepts a single number, a 2-element coordinate
+            pair, or a list of such values.
+        saa : bool, optional
+            Save-and-apply: if True, update self in-place with the first
+            element of `toadd`. Default is True.
+        throw : bool, optional
+            If True, also create and return new edge objects for each element
+            in `toadd`. Default is False.
+        update_toadd : bool, optional
+            Reserved for future use. Default is True.
+        addto : str, optional
+            Which endpoints to modify: 'bothpoints', 'pnta', or 'pntb'.
+            Default is 'bothpoints'.
+        addtocoord : str, optional
+            Which coordinate(s) to modify: 'xy', 'x', or 'y'.
+            Default is 'xy'.
+
+        Returns
+        -------
+        list of edge2d or None
+            New edge objects when ``throw=True``; otherwise None.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+        >>> e = edge2d(pnta=p1, pntb=p2)
+        >>> e.__add__([1.0], saa=True, throw=False)
+        """
         addto, addtocoord = str(addto).lower(), str(addtocoord).lower()
         if toadd in dth.dt.NUM_UPXOE2D_SHLS:
             # A single object has been entered
@@ -1662,22 +1743,36 @@ class edge2d():
                         pass
                 return new_edges
     def __sub__(self, edge=None, edge_type='edge2d', value=None):
+        """
+        Subtract a value or edge from this edge's endpoints.
+
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
+        """
         pass
 
     def __mul__(self, value=1.0):
         """
-        Multiply edge objects
+        Scale both endpoint coordinates of this edge by a scalar.
 
         Parameters
         ----------
-        value : TYPE, optional
-            DESCRIPTION. The default is 1.0.
+        value : float, optional
+            Scalar multiplier applied to both endpoint coordinates.
+            Default is 1.0.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        edge2d
+            New edge2d with scaled endpoint coordinates.
 
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(pnta=Point2d(1, 0), pntb=Point2d(2, 0))
+        >>> e2 = e * 3.0
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1688,18 +1783,29 @@ class edge2d():
 
     def __truediv__(self, value=1.0):
         """
-        Divide edge objects
+        Divide both endpoint coordinates of this edge by a scalar.
 
         Parameters
         ----------
-        value : TYPE, optional
-            DESCRIPTION. The default is 1.0.
+        value : float, optional
+            Divisor applied to both endpoint coordinates. Default is 1.0.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        edge2d
+            New edge2d with divided endpoint coordinates.
 
+        Raises
+        ------
+        ZeroDivisionError
+            If ``value`` is 0.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(pnta=Point2d(2, 0), pntb=Point2d(4, 0))
+        >>> e2 = e / 2.0
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1710,57 +1816,52 @@ class edge2d():
 
     def __bool__(self):
         """
-        Returns True if length is equal to or less than tolerance length of
-        self
+        Return True if edge length is within the tolerance length of self.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        bool
+            True when ``self.length <= self.tlen``.
         """
         return self.length <= self.tlen
 
     def __len__(self):
         """
-        Returns length of the edge object
+        Return the Euclidean length of the edge.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        float
+            Same as ``self.length``.
         """
         return self.length
 
     def __abs__(self):
         """
-        Take aboslute of theedge object coordinates
+        Replace endpoint coordinates with their absolute values in-place.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pnta = abs(self.pnta)
         self.pntb = abs(self.pntb)
 
     def __int__(self, saa=True, throw=True):
         """
-        Make int of the edge object coordinate float values
+        Return a new edge with endpoint coordinates cast to integers.
 
         Parameters
         ----------
-        saa : TYPE, optional
-            DESCRIPTION. The default is True.
-        throw : TYPE, optional
-            DESCRIPTION. The default is True.
+        saa : bool, optional
+            Passed to the constituent point __int__ call. Default is True.
+        throw : bool, optional
+            Passed to the constituent point __int__ call. Default is True.
 
         Returns
         -------
-        e : TYPE
-            DESCRIPTION.
-
+        edge2d
+            New edge2d with integer endpoint coordinates.
         """
         e = edge2d(edge_lean=self.edge_lean,
                    points_lean=self.points_lean,
@@ -1772,48 +1873,47 @@ class edge2d():
 
     def __float__(self):
         """
-        Make float of the edge objecxt coordinaste values.
+        Float conversion of edge endpoint coordinates.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def __complex__(self):
-        '''
-        __complex__(self) for complex() function support.
-        Return complex value representation of the object.
-        '''
+        """
+        Complex conversion of the edge object.
+
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
+        """
         pass
 
     def __trunc__(self):
         """
-        __trunc__(self) for trunc() function of math module
-        Returns the real value of the object.
+        Truncate endpoint coordinates toward zero.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def __round__(self, nDigits):
         """
-        Round of the coordinstes of the edges to nDigits
+        Return a new edge with endpoint coordinates rounded to `nDigits`.
 
         Parameters
         ----------
-        nDigits : TYPE
-            DESCRIPTION.
+        nDigits : int
+            Number of decimal places to round to.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        edge2d
+            New edge2d with rounded endpoint coordinates.
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1824,20 +1924,19 @@ class edge2d():
 
     def __ceil__(self, saa=True, throw=True):
         """
-        Ceil approximation of the edge object
+        Return a new edge with endpoint coordinates rounded up (ceiling).
 
         Parameters
         ----------
-        saa : TYPE, optional
-            DESCRIPTION. The default is True.
-        throw : TYPE, optional
-            DESCRIPTION. The default is True.
+        saa : bool, optional
+            Passed to constituent point ceil call. Default is True.
+        throw : bool, optional
+            Passed to constituent point ceil call. Default is True.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        edge2d
+            New edge2d with ceiling-rounded endpoint coordinates.
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1848,36 +1947,32 @@ class edge2d():
 
     def __iter__(self):
         """
-        Make edge2d object an iterable. Iterates over the constituent
-        point objects
+        Iterate over constituent point objects.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def __next__(self):
         """
-        For use in the __iter__
+        Advance the iterator over constituent points.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def __floor__(self):
         """
-        Round constituent point coordinates by flooring
+        Return a new edge with endpoint coordinates rounded down (floor).
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        edge2d
+            New edge2d with floor-rounded endpoint coordinates.
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1887,6 +1982,14 @@ class edge2d():
                       )
 
     def __repr__(self):
+        """
+        Return a human-readable string representation of this edge.
+
+        Returns
+        -------
+        str
+            Format: ``upxo.e2d[(xa, ya)⚯(xb, yb)⊢⊣length]``
+        """
         str1 = f'upxo.e2d[({round(self.pnta.x,4)}, {round(self.pnta.y,4)})'
         str2 = f'⚯({round(self.pntb.x,4)}, {round(self.pntb.y,4)})⊢⊣'
         str3 = f'{round(self.length, 4)}]'
@@ -1916,18 +2019,20 @@ class edge2d():
 
     def has(self, suffix):
         """
+        Check whether this edge object has the given attribute.
 
+        Accepts several aliases for common attribute names (e.g. 'point1' maps
+        to 'pnta', 'e2dl' maps to 'length').
 
         Parameters
         ----------
-        suffix : TYPE
-            DESCRIPTION.
+        suffix : str
+            Attribute name or recognised alias to look up.
 
         Returns
         -------
-        has_truth : TYPE
-            DESCRIPTION.
-
+        has_truth : bool
+            True if the attribute (or its canonical name) exists on self.
         """
         suffix = suffix.lower()
         if suffix in ('edge_lean', 'edge2d_lean'):
@@ -1956,6 +2061,14 @@ class edge2d():
 
     @property
     def centroid(self):
+        """
+        Midpoint of the edge.
+
+        Returns
+        -------
+        Point2d
+            Point at ``(pnta + pntb) / 2``.
+        """
         return (self.pnta+self.pntb)*0.5
 
     def negx(self):
@@ -2044,16 +2157,16 @@ class edge2d():
 
     def displace_a(self, xyincr):
         """
-        Displace pnta of the edge2d by xyincr
+        Displace pnta by an ``[dx, dy]`` increment in-place.
 
         Parameters
         ----------
-        incr : list/tuple
+        xyincr : list or tuple of float
+            ``[dx, dy]`` displacement applied to pnta.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pnta.translate(method='xyincr', xyincr=xyincr,
                             saa=True, make_new=False, throw=False)
@@ -2061,16 +2174,16 @@ class edge2d():
 
     def displace_ax(self, xincr):
         """
-        Displace x-coordinate of pnta of the edge2d by xincr
+        Displace the x-coordinate of pnta by ``xincr`` in-place.
 
         Parameters
         ----------
-        incr : float/int
+        xincr : float or int
+            Displacement to add to pnta.x.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pnta.translate(method='xincr', xincr=xincr,
                             saa=True, make_new=False, throw=False)
@@ -2078,16 +2191,16 @@ class edge2d():
 
     def displace_ay(self, yincr):
         """
-        Displace y-coordinate of pnta of the edge2d by yincr
+        Displace the y-coordinate of pnta by ``yincr`` in-place.
 
         Parameters
         ----------
-        incr : float/int
+        yincr : float or int
+            Displacement to add to pnta.y.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pnta.translate(method='yincr', yincr=yincr,
                             saa=True, make_new=False, throw=False)
@@ -2095,16 +2208,16 @@ class edge2d():
 
     def displace_b(self, xyincr):
         """
-        Displace pntb of the edge2d by xyincr
+        Displace pntb by an ``[dx, dy]`` increment in-place.
 
         Parameters
         ----------
-        incr : list/tuple
+        xyincr : list or tuple of float
+            ``[dx, dy]`` displacement applied to pntb.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pntb.translate(method='xyincr', xyincr=xyincr,
                             saa=True, make_new=False, throw=False)
@@ -2112,16 +2225,16 @@ class edge2d():
 
     def displace_bx(self, xincr):
         """
-        Displace x-coordinate of pntb of the edge2d by xincr
+        Displace the x-coordinate of pntb by ``xincr`` in-place.
 
         Parameters
         ----------
-        incr : float/int
+        xincr : float or int
+            Displacement to add to pntb.x.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pntb.translate(method='xincr', xincr=xincr,
                             saa=True, make_new=False, throw=False)
@@ -2129,84 +2242,82 @@ class edge2d():
 
     def displace_by(self, yincr):
         """
-        Displace y-coordinate of pntb of the edge2d by yincr
+        Displace the y-coordinate of pntb by ``yincr`` in-place.
 
         Parameters
         ----------
-        incr : float/int
+        yincr : float or int
+            Displacement to add to pntb.y.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pntb.translate(method='yincr', yincr=yincr,
                             saa=True, make_new=False, throw=False)
         self.post_displacement_updates()
 
     def stretch(self, method='strain', center='A', strain=None,):
+        """
+        Stretch the edge by a given strain about a center point.
+
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
+        """
         pass
 
     def rotate(self, method='point2d', about=None, angle=0,):
         """
-        Options for method: 'point2d/point', 'coord/coords'
-        Options for about: 'A', 'B', 'center', 'point2d/point', 'coord/coords'
+        Rotate the edge about a point by the given angle.
 
-        NOTE: negative angles mean clockwise
-              positive angles mean anti-clockwise
+        Negative angles rotate clockwise; positive angles anti-clockwise.
 
         Parameters
         ----------
-        method : TYPE, optional
-            DESCRIPTION. The default is 'point2d'.
-        about : TYPE, optional
-            DESCRIPTION. The default is None.
-        angle : TYPE, optional
-            DESCRIPTION. The default is 0.
+        method : str, optional
+            Pivot specification: 'point2d'/'point' or 'coord'/'coords'.
+            Default is 'point2d'.
+        about : Point2d, list, or str, optional
+            Pivot. Accepts a Point2d, a coordinate pair, or 'A', 'B',
+            'center'. Default is None.
+        angle : float, optional
+            Rotation angle in degrees. Default is 0.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def move_a_to(self, obj, method='update'):
         """
-        Moves pointa of the edge
+        Move pnta to a new location.
 
         Parameters
         ----------
-        obj : TYPE
-            DESCRIPTION.
-        method : TYPE, optional
-            DESCRIPTION. The default is 'update'.
+        obj : list, tuple, or Point2d
+            Target position as a 2-element coordinate pair or a UPXO Point2d.
+        method : str, optional
+            'update' — overwrite existing pnta coordinates in-place.
+            'replace' — swap pnta with a newly created point object.
+            Default is 'update'.
 
         Returns
         -------
-        None.
+        None
 
-        EXAMPLES
+        Notes
+        -----
+        'replace' changes the ``id(pnta)`` object identity; 'update' preserves it.
+
+        Examples
         --------
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pnta)]
-        e1.move_a_to([10, 10], method='replace')
-        [id(e1), id(e1.pnta)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pnta)]
-        e1.move_a_to([10, 10], method='update')
-        [id(e1), id(e1.pnta)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pnta)]
-        e1.move_a_to(point2d(10, 10), method='replace')
-        [id(e1), id(e1.pnta)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pnta)]
-        e1.move_a_to(point2d(10, 10), method='update')
-        [id(e1), id(e1.pnta)]
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+        >>> e1.move_a_to([10, 10], method='update')
+        >>> e1.move_a_to(Point2d(10, 10), method='replace')
         """
         if type(obj) in dth.dt.ITERABLES:
             # obj is a coordinate pair
@@ -2230,40 +2341,32 @@ class edge2d():
 
     def move_b_to(self, obj, method='update'):
         """
-        Moves pointb of the edge
+        Move pntb to a new location.
 
         Parameters
         ----------
-        obj : TYPE
-            DESCRIPTION.
-        method : TYPE, optional
-            DESCRIPTION. The default is 'update'.
+        obj : list, tuple, or Point2d
+            Target position as a 2-element coordinate pair or a UPXO Point2d.
+        method : str, optional
+            'update' — overwrite existing pntb coordinates in-place.
+            'replace' — swap pntb with a newly created point object.
+            Default is 'update'.
 
         Returns
         -------
-        None.
+        None
 
-        EXAMPLES
+        Notes
+        -----
+        'replace' changes the ``id(pntb)`` object identity; 'update' preserves it.
+
+        Examples
         --------
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pntb)]
-        e1.move_b_to([10, 10], method='replace')
-        [id(e1), id(e1.pntb)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pntb)]
-        e1.move_b_to([10, 10], method='update')
-        [id(e1), id(e1.pntb)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pntb)]
-        e1.move_b_to(point2d(10, 10), method='replace')
-        [id(e1), id(e1.pntb)]
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        [id(e1), id(e1.pntb)]
-        e1.move_b_to(point2d(10, 10), method='update')
-        [id(e1), id(e1.pntb)]
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+        >>> e1.move_b_to([10, 10], method='update')
+        >>> e1.move_b_to(Point2d(10, 10), method='replace')
         """
         if type(obj) in dth.dt.ITERABLES:
             # obj is a coordinate pair
@@ -2288,85 +2391,64 @@ class edge2d():
     def geo_sweep(self, method='along_edge', edge=None,
                   length=0.0, angle=None, uself=None, throw=False,):
         """
-        Explantions:
-            sweep the edge using the length
-        Options:
-            method:
-                'along_edge'/'edge'
-                'by_length'/'length'
-                'along_coord'/'coord'
-                'angle'
-                'miller'/'mi'/'miller_indices'/'uvw'
+        Sweep this edge to generate a 2-D face or surface patch.
 
         Parameters
         ----------
-        method : TYPE, optional
-            DESCRIPTION. The default is 'along_edge'.
-        edge : TYPE, optional
-            DESCRIPTION. The default is None.
-        length : TYPE, optional
-            DESCRIPTION. The default is 0.0.
-        angle : TYPE, optional
-            DESCRIPTION. The default is None.
-        uself : TYPE, optional
-            DESCRIPTION. The default is None.
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
-         : TYPE
-            DESCRIPTION.
+        method : str, optional
+            Sweep direction specification:
+            'along_edge'/'edge', 'by_length'/'length',
+            'along_coord'/'coord', 'angle',
+            'miller'/'mi'/'miller_indices'/'uvw'.
+            Default is 'along_edge'.
+        edge : edge2d, optional
+            Reference edge defining the sweep direction. Default is None.
+        length : float, optional
+            Sweep distance when ``method='by_length'``. Default is 0.0.
+        angle : float, optional
+            Sweep angle in degrees when ``method='angle'``. Default is None.
+        uself : float, optional
+            Fraction of self's length to use as sweep distance. Default is None.
+        throw : bool, optional
+            If True, return the swept geometry. Default is False.
 
-        Returns
-        -------
-        None.
-
+        Limitations
+        -----------
+        - Not yet implemented; returns None.
         """
         pass
 
     def overlaps(self, obj=None, method='parallelity', tdist=0.0, tang=0.0):
         """
+        Check whether another edge spatially overlaps self.
 
+        Both endpoints of ``obj`` must be contained within self (using
+        :meth:`contains_point`) for overlap to be True.
 
         Parameters
         ----------
-        obj : TYPE, optional
-            DESCRIPTION. The default is None.
-        method : TYPE, optional
-            DESCRIPTION. The default is 'parallelity'.
-        tdist : TYPE, optional
-            DESCRIPTION. The default is 0.0.
-        tang : TYPE, optional
-            DESCRIPTION. The default is 0.0.
+        obj : edge2d, optional
+            Edge to test against self. Default is None.
+        method : str, optional
+            Method passed to :meth:`contains_point`. Currently only
+            'parallelity' is supported. Default is 'parallelity'.
+        tdist : float, optional
+            Tolerance distance for the contains-point test. Default is 0.0.
+        tang : float, optional
+            Tolerance angle (reserved, not yet used). Default is 0.0.
 
         Returns
         -------
-        overlaps : TYPE
-            DESCRIPTION.
+        overlaps : bool
+            True if both endpoints of ``obj`` lie on self.
 
-        EXAMPLES
+        Examples
         --------
-        method, tdist, tang ='parallelity', 0.0, 0.0
-
-        e1 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(1.0, 0.0))
-        e2 = edge2d(pnta=point2d(-0.5,0.0), pntb=point2d(0.5, 0.0))
-        e3 = edge2d(pnta=point2d(-1.0,0.0), pntb=point2d(0.5, 0.0))
-        e4 = edge2d(pnta=point2d(-1.5,0.0), pntb=point2d(0.5, 0.0))
-        e5 = edge2d(pnta=point2d(-0.5,0.0), pntb=point2d(1.0, 0.0))
-        e6 = edge2d(pnta=point2d(-0.5,0.0), pntb=point2d(1.5, 0.0))
-        e7 = edge2d(pnta=point2d(-1.5,0.0), pntb=point2d(1.5, 0.0))
-        e8 = edge2d(pnta=point2d(-1.5,2.0), pntb=point2d(1.5, 2.5))
-
-        e1.overlaps(obj=e2, method=method, tdist=tdist, tang=tang)
-        e1.overlaps(obj=e3, method=method, tdist=tdist, tang=tang)
-        e1.overlaps(obj=e4, method=method, tdist=tdist, tang=tang)
-        e1.overlaps(obj=e5, method=method, tdist=tdist, tang=tang)
-        e1.overlaps(obj=e6, method=method, tdist=tdist, tang=tang)
-
-        e1.overlaps(obj=e7, method=method, tdist=tdist, tang=tang)
-        e7.overlaps(obj=e1, method=method, tdist=tdist, tang=tang)
-
-        e1.overlaps(obj=e1, method=method, tdist=tdist, tang=tang)
-
-        e1.overlaps(obj=e8, method=method, tdist=tdist, tang=tang)
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+        >>> e2 = edge2d(pnta=Point2d(-0.5, 0.0), pntb=Point2d(0.5, 0.0))
+        >>> e1.overlaps(obj=e2)
         """
         if not str(type(obj)) == "<class 'UPXO-edge.edge2d'>":
             print('Please input correct geometry object')
@@ -2389,62 +2471,49 @@ class edge2d():
 
     def swap_points(self):
         """
-        DESCRIPTION
-        -----------
-        Swaps point along with their pmids.
+        Swap pnta and pntb in-place, including their pmids.
 
-        INTERNAL CALLS
-        --------------
-        Internally called by method edge2d.reverse
+        Internally called by :meth:`reverse`.
 
-        EXAMPLE
+        Returns
         -------
-        p1 = point2d(0, 2)
-        p2 = point2d(10, 12)
-        e = edge2d(method='up2d', pnta=p1, pntb=p2)
+        None
 
-        [id(e.pnta), id(e.pntb)]
-        e.swap_points()
-        [id(e.pnta), id(e.pntb)]
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
+        >>> e.swap_points()
         """
         self.pnta, self.pntb = self.pntb, self.pnta
 
     def reverse(self, reverse_pmid=True, make_new_points=False):
         """
-        DESCRIPTION
-        -----------
-        If reverse_pmid is True, points will be swapped along
-        with their pmids.
+        Reverse the direction of this edge (swap pnta and pntb).
 
-        If reverse_pmid is False, only point coordinates will be swapped
-        without swapping their pmids.
+        Parameters
+        ----------
+        reverse_pmid : bool, optional
+            If True, swap the full point objects (including pmids) via
+            :meth:`swap_points`. If False, only coordinates are swapped
+            while pmid identity is preserved. Default is True.
+        make_new_points : bool, optional
+            If True, create brand-new point objects with swapped coordinates;
+            ``reverse_pmid`` has no effect in this case. Default is False.
 
-        If make_new_points is True, new points will be created with
-        swapped coordinates. reverse_pmid will have no effect.
+        Returns
+        -------
+        None
 
-        PREREQUISITE DATA FOR EXAMPLES
-        ------------------------------
-        p1 = point2d(0, 2)
-        p2 = point2d(10, 12)
-        e = edge2d(method='up2d', pnta=p1, pntb=p2)
-
-        EXAMPLE - 1
-        -----------
-        print(e, [id(e.pnta), id(e.pntb)])
-        e.reverse()
-        print(e, [id(e.pnta), id(e.pntb)])
-
-        EXAMPLE - 2
-        -----------
-        print(e, [id(e.pnta), id(e.pntb)])
-        e.reverse(reverse_pmid=False)
-        print(e, [id(e.pnta), id(e.pntb)])
-
-        EXAMPLE - 3
-        -----------
-        print(e, [id(e.pnta), id(e.pntb)])
-        e.reverse(reverse_pmid=False)
-        print(e, [id(e.pnta), id(e.pntb)])
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
+        >>> e.reverse()
+        >>> e.reverse(reverse_pmid=False)
+        >>> e.reverse(make_new_points=True)
         """
         if reverse_pmid:
             self.swap_points()
@@ -2460,22 +2529,29 @@ class edge2d():
 
     def _intersect_(self, a1, a2, b1, b2):
         """
-        SOURCE:
-            https://stackoverflow.com/questions/3252194/numpy-and-line-intersections
-        SOURCE BY:
-            https://stackoverflow.com/users/2186329/norbu-tsering
-        Minor edits by Dr. Sunil Anandatheertha
+        Return the intersection point of two infinite lines in homogeneous coordinates.
 
-        Returns the point of intersection of the lines passing
-        through a2,a1 and b2,b1.
-        a1: [x, y] a point on the first line
-        a2: [x, y] another point on the first line
-        b1: [x, y] a point on the second line
-        b2: [x, y] another point on the second line
+        Based on: stackoverflow.com/questions/3252194 by Norbu Tsering.
 
+        Parameters
+        ----------
+        a1 : array-like of float
+            ``[x, y]`` — first point on line A.
+        a2 : array-like of float
+            ``[x, y]`` — second point on line A.
+        b1 : array-like of float
+            ``[x, y]`` — first point on line B.
+        b2 : array-like of float
+            ``[x, y]`` — second point on line B.
 
-        TODO: VECTORIZE FOR LARGE NUMBER OF EDGES (IN METHOD,
-              intersect_with_edges2d)
+        Returns
+        -------
+        tuple of float
+            ``(x, y)`` intersection, or ``(inf, inf)`` when lines are parallel.
+
+        Limitations
+        -----------
+        - Operates on infinite lines, not bounded edge segments.
         """
         _cross_ = np.cross
         s = np.vstack([a1, a2, b1, b2])  # s for stacked
@@ -2489,41 +2565,28 @@ class edge2d():
 
     def intersect_with_edges2d(self, edges):
         """
-        True if "self(: edgeobject)" intersects inside the end points of
-        edge object
+        Compute intersection points of self's infinite line with each edge's infinite line.
+
+        Uses :meth:`_intersect_` which works on infinite lines, not bounded segments.
 
         Parameters
         ----------
-        edge : TYPE
-            DESCRIPTION.
+        edges : edge2d or list of edge2d
+            Edges to intersect self against.
 
         Returns
         -------
-        None.
+        list of tuple of float
+            Intersection coordinates ``(x, y)`` per edge. Returns
+            ``(inf, inf)`` for parallel pairs.
 
-        EXAMPLE
-        -------
-        p1, p2 = point2d(-1,0), point2d(0,1)
-        e12 = edge2d(pnta=p1, pntb=p2)
-        p3, p4 = point2d(0, -1), point2d(0, 1)
-        e34 = edge2d(pnta=p3, pntb=p4)
-        p5, p6 = p1*2, p2*2
-        e56 = edge2d(pnta=p5, pntb=p6)
-        p7, p8 = p3*2, p4*2
-        e78 = edge2d(pnta=p7, pntb=p8)
-        p9, p10 = point2d(-1, -2), point2d(2, 1)
-        e910 = edge2d(pnta=p9, pntb=p10)
-        p11, p12 = point2d(1, -5), point2d(0, 2)
-        e1112 = edge2d(pnta=p11, pntb=p12)
-        edges = [e12, e34, e56, e78, e910, e1112]
-
-        e12.intersect_with_edges2d(edges)
-        e34.intersect_with_edges2d(edges)
-        e56.intersect_with_edges2d(edges)
-        e78.intersect_with_edges2d(edges)
-        e910.intersect_with_edges2d(edges)
-        e1112.intersect_with_edges2d(edges)
-        e12.intersect_with_edges2d(e1112)
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e12 = edge2d(pnta=Point2d(-1, 0), pntb=Point2d(0, 1))
+        >>> e34 = edge2d(pnta=Point2d(0, -1), pntb=Point2d(0, 1))
+        >>> e12.intersect_with_edges2d([e34])
         """
         if type(edges) not in dth.dt.ITERABLES:
             edges = [edges]
@@ -2541,135 +2604,42 @@ class edge2d():
                             print_=False,
                             ):
         """
-        PRE-REQUISITE DATA FOR EXAMPLES
-        -------------------------------
-        e1 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
+        Find the intersection geometry between self and another edge2d.
 
-        EXAMPLE-1
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(-0.5, 0))
-        e1.edge2d_intersection(e2)
+        Handles collinear, overlapping, and crossing cases. Returns actual
+        intersection points on the bounded segments, not just the infinite-line
+        crossing point.
 
-        EXAMPLE-2
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(0, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-3
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(0.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-4
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-5
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-6
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(0, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-7
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(0.1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-8
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-9
-        ---------
-        e2 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-10
+        Parameters
         ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(-1, 0))
-        e1.edge2d_intersection(e2)
+        edge : edge2d
+            The other edge to intersect with.
+        return_ratios : bool, optional
+            If True, also return the parametric ratios (distance from pnta /
+            self.length) for each intersection point. Default is True.
+        sort : bool, optional
+            If True, sort intersection points by distance from ``self.pnta``.
+            Default is True.
+        print_ : bool, optional
+            If True, print diagnostic information. Default is False.
 
-        EXAMPLE-11
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(0, 0))
-        e1.edge2d_intersection(e2)
+        Returns
+        -------
+        tuple
+            ``(intersection_point,)`` when ``return_ratios=False``, or
+            ``(intersection_point, ratios)`` when ``return_ratios=True``.
+            ``intersection_point`` is an ``(N, 2)`` ndarray; ``ratios`` is a
+            1-D ndarray of parametric values in ``[0, 1]``.
 
-        EXAMPLE-12
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(0.1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-13
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(0.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-14
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(0.8, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-15
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(1.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-16
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(-1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-17
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(0, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-18
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(0.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-19
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(1, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-20
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(1.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-21
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1.2, 0), pntb=point2d(1.2, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-22
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(1.2, 0), pntb=point2d(1.5, 0))
-        e1.edge2d_intersection(e2)
-
-        EXAMPLE-23
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.8, 0), pntb=point2d(0.1, 0))
-        e1.edge2d_intersection(e2,
-                               return_ratios=True,
-                               sort=True,
-                               print_=False)
-
-        EXAMPLE-24
-        ----------
-        e2 = edge2d(method='up2d', pnta=point2d(0.1, -1), pntb=point2d(0.9, 5))
-        e1.edge2d_intersection(e2,
-                               return_ratios=True,
-                               sort=True,
-                               print_=False)
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
+        >>> pts, ratios = e1.edge2d_intersection(e2, return_ratios=True)
+        >>> e3 = edge2d(method='up2d', pnta=Point2d(0.1, -1), pntb=Point2d(0.9, 5))
+        >>> e1.edge2d_intersection(e3)
         """
         __PRINT_INTERSECTION_POINTS = False
         # -------------------------------------
@@ -2806,12 +2776,34 @@ class edge2d():
                              sort=True,
                              print_=False):
         """
-        e1 = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        e2 = edge2d(method='up2d', pnta=point2d(0.2, 0), pntb=point2d(0.8, 0))
-        e3 = edge2d(method='up2d', pnta=point2d(0.2, -2), pntb=point2d(0.8, 2))
-        edges = [e1, e2, e3]
-        a = e1.edge2d_intersections(edges, return_ratios=True)
-        a
+        Find intersection geometry between self and a list of edges.
+
+        Calls :meth:`edge2d_intersection` for each edge in ``edges``.
+
+        Parameters
+        ----------
+        edges : edge2d or list of edge2d
+            Edges to intersect self against.
+        return_ratios : bool, optional
+            Pass through to :meth:`edge2d_intersection`. Default is False.
+        sort : bool, optional
+            Pass through to :meth:`edge2d_intersection`. Default is True.
+        print_ : bool, optional
+            Pass through to :meth:`edge2d_intersection`. Default is False.
+
+        Returns
+        -------
+        list of tuple
+            One result tuple per edge (see :meth:`edge2d_intersection`).
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
+        >>> e3 = edge2d(method='up2d', pnta=Point2d(0.2, -2), pntb=Point2d(0.8, 2))
+        >>> e1.edge2d_intersections([e2, e3], return_ratios=True)
         """
         # Make list if already not
         if type(edges) not in dth.dt.ITERABLES:
@@ -2828,66 +2820,30 @@ class edge2d():
 
     def muledge2d_intersections(self, me):
         """
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(0.8, 0.2), pntb=point2d(0.2, 0.8))
+        Find intersections of self with all edges in a muledge2d object.
 
-        clist = [[1, 0], [0, 1], [-1, 0], [0, -1]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.plotme()
-        e.muledge2d_intersections(me)
+        Delegates to :meth:`edge2d_intersections` with ``return_ratios=True``.
 
-        EXAMPLE-1
-        ---------
-        e.muledge2d_intersections(me)
+        Parameters
+        ----------
+        me : muledge2d
+            Multi-edge container whose ``.edges`` list is intersected against self.
 
+        Returns
+        -------
+        list of tuple
+            One result tuple per edge in ``me.edges`` (see
+            :meth:`edge2d_intersection`).
 
-
-
-
-
-
-
-
-        e1 = edge2d(method='up2d', pnta=point2d(0.8, 0.2), pntb=point2d(0.2, 0.8))
-        e1.slope
-        e1.plot()
-
-        e2 = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(0, 1))
-        e2.slope
-
-        e2.edge2d_intersection(e1)
-
-
-
-
-
-        e1 = edge2d(method='up2d', pnta=point2d(-0.3, -0.3), pntb=point2d(-0.2, -0.2))
-        e2 = edge2d(method='up2d', pnta=point2d(1, 2), pntb=point2d(-1, -10))
-
-        ipoint = e2.edge2d_intersection(e1)
-
-        e1._intersect_((e1.pnta.x, e1.pnta.y),
-                       (e1.pntb.x, e1.pntb.y),
-                       (e2.pnta.x, e2.pnta.y),
-                       (e2.pntb.x, e2.pntb.y))
-
-
-
-        e1.contains_point(obj=ipoint[0][0], method='parallelity', tdist=0.0)
-        e2.contains_point(obj=ipoint[0][0], method='parallelity', tdist=0.0)
-
-        self.intersect_with_edges2d([edge])
-
-
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> from upxo.geoEntities.muledge2d import muledge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0.8, 0.2), pntb=Point2d(0.2, 0.8))
+        >>> me = muledge2d(method='clist', ordered=True, closed=False,
+        ...                clist=[[1, 0], [0, 1], [-1, 0], [0, -1]])
+        >>> e.muledge2d_intersections(me)
         """
         intersections = self.edge2d_intersections(me.edges, return_ratios=True)
         return intersections
@@ -2895,35 +2851,34 @@ class edge2d():
 
     def split_at_point(self, obj, new_edge_location=0):
         """
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(0, 0))
+        Split this edge at a point, returning the new child edge.
 
-        EXAMPLE-1
-        ---------
-        [id(e.pnta), id(e.pntb)]
-        point = point2d(0.5, 0)
-        id(point)
+        Self is modified in-place (its pntb or pnta is updated to ``obj``);
+        a new edge2d covering the remainder is returned.
 
-        new_edge = e.split_at_point(point, new_edge_location=0)
+        Parameters
+        ----------
+        obj : Point2d or list/tuple of float
+            Split point. Must lie on the bounded edge (not at the endpoints).
+            A 2-element coordinate pair is automatically promoted to Point2d.
+        new_edge_location : int, optional
+            0 — new edge covers ``[obj, old_pntb]``, self covers ``[pnta, obj]``.
+            1 — new edge covers ``[old_pnta, obj]``, self covers ``[obj, pntb]``.
+            Default is 0.
 
-        [id(e.pnta), id(e.pntb)]
-        [id(new_edge.pnta), id(new_edge.pntb)]
+        Returns
+        -------
+        new_edge : edge2d or list
+            The new child edge, or an empty list when the split point does not
+            lie on the bounded segment (including coincident-endpoint cases).
 
-        e
-        new_edge
-
-        EXAMPLE-2
-        ---------
-        point = point2d(0.5, 1)
-        new_edge = e.split_at_point(point, new_edge_location=0)
-        [e, new_edge]
-
-        EXAMPLE-3
-        ---------
-        point = point2d(0.1, 0)
-        new_edge = e.split_at_point(point, new_edge_location=0)
-        [e, new_edge]
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(1, 0), pntb=Point2d(0, 0))
+        >>> new_edge = e.split_at_point(Point2d(0.5, 0), new_edge_location=0)
+        >>> new_edge = e.split_at_point(Point2d(0.1, 0), new_edge_location=0)
         """
         if type(obj) in dth.dt.ITERABLES:
             # If obj is entered as a coordinate pair
@@ -2977,27 +2932,33 @@ class edge2d():
 
     def split_by_ratio(self, ratio, new_edge_location=0):
         """
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
+        Split this edge at a fractional position along its length.
 
-        EXAMPLE-1
-        ---------
-        [id(e.pnta), id(e.pntb)]
-        ratio = 0.5
+        Computes the split point as ``pnta + ratio * (pntb - pnta)`` then
+        delegates to :meth:`split_at_point`.
 
-        new_edge = e.split_by_ratio(ratio, new_edge_location=0)
+        Parameters
+        ----------
+        ratio : float
+            Parametric position in the open interval (0, 1).
+        new_edge_location : int, optional
+            Passed through to :meth:`split_at_point`. Default is 0.
 
-        [id(e.pnta), id(e.pntb)]
-        [id(new_edge.pnta), id(new_edge.pntb)]
+        Returns
+        -------
+        new_edge : edge2d or list
+            See :meth:`split_at_point`.
 
-        e
-        new_edge
+        Raises
+        ------
+        Prints a message (no exception raised) when ``ratio`` is not in (0, 1).
 
-        EXAMPLE-2
-        ---------
-        new_edge = e.split_by_ratio(0.2, new_edge_location=0)
-        [e, new_edge]
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> new_edge = e.split_by_ratio(0.5, new_edge_location=0)
         """
         if ratio > 0 and ratio < 1:
             point = point2d(self.pnta.x + ratio*(self.pntb.x - self.pnta.x),
@@ -3011,14 +2972,27 @@ class edge2d():
 
     def split_at_outside_point(self, point):
         """
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        point = point2d(0.5, 0.5)
+        Split this edge by inserting an off-edge point as the new pntb.
 
-        EXAMPLE-1
-        ---------
-        e.split_at_outside_point(point)
+        Creates a new edge covering the original ``[point, old_pntb]`` range,
+        and updates self's pntb to ``point``.
+
+        Parameters
+        ----------
+        point : Point2d
+            The new pntb. May lie off the original edge line.
+
+        Returns
+        -------
+        new_edge : edge2d
+            New edge covering ``[point, old_pntb]``.
+
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> new_edge = e.split_at_outside_point(Point2d(0.5, 0.5))
         """
         new_edge, self.pntb = edge2d(pnta=point,
                                      pntb=self.pntb,
@@ -3088,86 +3062,15 @@ class edge2d():
             list of x-coordinate values and list of y-coordinate values, in
             a tuple.
 
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(-2, -1), pntb=point2d(1, 3))
-        import matplotlib.pyplot as plt
-
-        EXAMPLE - 1
-        -----------
-        # Uniform distribution of 10 points between end points of e
-        # start from a
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 1, 1, 1],
-                           start='a')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 2
-        -----------
-        # Uniform distribution of 10 points between end points of e
-        # Start from b
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 1, 1],
-                           start='b')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 3
-        -----------
-        # Uniform distribution of 10 points between end points of e
-        # Points to cluster around centre
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 1, 1, 1],
-                           start='c1')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 4
-        -----------
-        # Uniform distribution of 10 points between end points of e
-        # Points to cluster around centre
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 1, 1, 1, 1],
-                           start='c2')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 5
-        -----------
-        # expalantion to write
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 10, 1, 1],
-                           start='c2_0.75')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 6
-        -----------
-        # expalantion to write
-        xy = e.gen_npoints(25,
-                           distribution='polynomial',
-                           coeff=[0, 1, 1, 1],
-                           start='c1_0.3')
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 7
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(1, 1), pntb=point2d(2, -2))
-        xy = e.gen_npoints(2,
-                           distribution='random',
-                           constraints=[0.05, 0.05, 0.001, -1, 'uniform']
-                           )
-        plt.plot(xy[0], xy[1], '-o')
-
-        EXAMPLE - 8
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(1, 1), pntb=point2d(2, -2))
-        xy = e.gen_npoints(50,
-                           distribution='random',
-                           constraints=[0.05, 0.05, 0.5, -1, 'uniform']
-                           )
-        plt.plot(xy[0], xy[1], '-o')
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
+        >>> xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='a')
+        >>> xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='c1')
+        >>> xy = e.gen_npoints(50, distribution='random',
+        ...                    constraints=[0.05, 0.05, 0.5, -1, 'uniform'])
         """
         if type(n) == int:
             pass
@@ -3496,50 +3399,32 @@ class edge2d():
             FEATURE NOT YET AVAILABLE.
             The default is '0.5*exp(x) + x^2/2'.
         make_mul_edge : bool, optional
-            if True, multi-edge object will be made
+            If True, a multi-edge object is assembled from the split edges
+            (not yet fully operational). Default is False.
+        throw_coords : bool, optional
+            If True, the coordinate arrays are included in the returned dict
+            under key ``'coords'``. Default is True.
+        throw_points : bool, optional
+            If True, the intermediate Point2d objects are included under key
+            ``'points'``. Default is True.
 
         Returns
         -------
-        edges_data : tuple
-            list of x-coordinate values and list of y-coordinate values, in
-            a tuple.
+        edges_data : dict
+            Dictionary with keys ``'coords'`` (tuple of x- and y-arrays),
+            ``'points'`` (list of Point2d), and ``'edges'`` (list of edge2d).
+            Keys are present only when the corresponding ``throw_*`` flag is
+            True and computation succeeds.
 
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(-2, -1), pntb=point2d(1, 3))
-
-
-        EXAMPLE-1
-        ---------
-        e = edge2d(method='up2d', pnta=point2d(-2, -1), pntb=point2d(1, 3))
-        n = 15
-        edges = e.split_nparts(n,
-                               distribution='polynomial',
-                               coeff=[0, 1, 10, -10, 1],
-                               weights=[],
-                               start='c1_0.5',
-                               make_mul_edge=False,
-                               throw_coords=True,
-                               throw_points=True,
-                               )
-        edges
-
-        plt.plot(edges['coords'][0], edges['coords'][1], '-o')
-
-        EXAMPLE-2
-        ---------
-        e = edge2d(method='up2d', pnta=point2d(-2, -1), pntb=point2d(1, 3))
-        n = 10
-        edges = e.split_nparts(n,
-                               distribution='random',
-                               constraints=[0.05, 0.05, 0.05, -1, 'uniform'],
-                               make_mul_edge=False,
-                               throw_coords=True,
-                               throw_points=True,
-                               )
-        edges
-
-        plt.plot(edges['coords'][0], edges['coords'][1], '-o')
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
+        >>> edges = e.split_nparts(15, distribution='polynomial',
+        ...                        coeff=[0, 1, 10, -10, 1], start='c1_0.5')
+        >>> edges = e.split_nparts(10, distribution='random',
+        ...                        constraints=[0.05, 0.05, 0.05, -1, 'uniform'])
         """
         # Make empty dictionary to store data
         edges_data = {}
@@ -3634,101 +3519,17 @@ class edge2d():
                 edge_splits['secondary'] = (primary split user input edge,
                                             None)
 
-        EXAMPLE - 1
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(0, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(0, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 2
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(-0.2, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 3
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(0, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 4
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(-1, 0), pntb=point2d(0.1, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 5
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(0.1, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 6
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0.1, 0), pntb=point2d(0.6, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 7
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0.6, 0), pntb=point2d(1, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 8
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0.6, 0), pntb=point2d(1, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 9
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(1.0, 0), pntb=point2d(2, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 10
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(1.1, 0), pntb=point2d(2, 0))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 11
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0.5, 1), pntb=point2d(0.8, 1))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
-
-        EXAMPLE - 12
-        -----------
-        e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
-        edge = edge2d(method='up2d', pnta=point2d(0.5, -1), pntb=point2d(0.5, 1))
-        new_edges = e.split_edge2d_intersection(edge)
-        print(new_edges['primary'])
-        print(new_edges['secondary'])
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> other = edge2d(method='up2d', pnta=Point2d(0.5, -1), pntb=Point2d(0.5, 1))
+        >>> splits = e.split_edge2d_intersection(other)
+        >>> print(splits['primary'])
+        >>> print(splits['secondary'])
+        >>> other2 = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(0.1, 0))
+        >>> splits2 = e.split_edge2d_intersection(other2)
         """
         # e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
         # edge = edge2d(method='up2d', pnta=point2d(-0.8, 0), pntb=point2d(-0.2, 0))
@@ -3897,6 +3698,7 @@ class edge2d():
         return edge_splits
 
     def split_at_muledge2d_intersection(self, edges):
+        """Split this edge at all intersection points with a multi-edge chain. Not yet implemented."""
         pass
 
     def contains_point(self, obj=None, method='parallelity', tdist=0.0):
@@ -3910,46 +3712,31 @@ class edge2d():
 
         Parameters
         ----------
-        obj : coord, UPXO point2d object
-            Represents a point in space. The default is None.
-        tdist : TYPE, optional
-            Tolerance distance. The default is 0.0.
+        obj : list of float or Point2d
+            Represents a point in space as ``[x, y]`` or a Point2d object.
+            Default is None.
+        method : str, optional
+            Intersection detection method. Default is ``'parallelity'``.
+        tdist : float, optional
+            Tolerance distance. Default is 0.0.
 
         Returns
         -------
-        intersection : [bool, bool, bool]
-            Provides the relative position of point with resepect to self edge.
+        intersection : list of bool
+            Three-element list ``[inside, on_extension, at_endpoint]``:
 
-            1. Contains the point. It coincides with one of the edge points.
-               The truth values in 'intersection' are [True, False, True]
-            2. Contains the point. Point is fully inside the edge.
-               The truth values in 'intersection' are [True, False, False]
-            3. Point is on the extended edge.
-               The truth values in 'intersection' are [False, True, False]
-            4. Relative position of point unknown.
-               The truth values in 'intersection' are [False, False, False]
+            * ``[True, False, True]``  — point coincides with an endpoint.
+            * ``[True, False, False]`` — point lies strictly inside the edge.
+            * ``[False, True, False]`` — point lies on the extended line only.
+            * ``[False, False, False]`` — relative position unknown.
 
-        EXAMPLES
+        Examples
         --------
-        e = edge2d(pnta=point2d(-1,0), pntb=point2d(1, 0))
-
-        e.contains_point([-0.5, 0])
-        e.contains_point([0, 0])
-        e.contains_point([-1, 0])
-        e.contains_point([1, 0])
-        e.contains_point([-1.1, 0])
-        e.contains_point([-1.1, 1])
-
-        e.contains_point(point2d(-0.5, 0))
-        e.contains_point(point2d(0, 0))
-        e.contains_point(point2d(-1, 0))
-        e.contains_point(point2d(1, 0))
-        e.contains_point(point2d(-1.1, 0))
-        e.contains_point(point2d(-1.1, 1))
-
-        e = edge2d(pnta=point2d(1, 0), pntb=point2d(1, 0))
-        e.contains_point([0.8, 0.2])
-        e.contains_point(point2d(0.8, 0.2))
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(1, 0))
+        >>> e.contains_point([-0.5, 0])
+        >>> e.contains_point(Point2d(-1.1, 0))
         """
         SQRT = math.sqrt
         if dth.IS_CPAIR(obj):
@@ -4053,18 +3840,14 @@ class edge2d():
             4. Relative position of point unknown
                The truth values in 'containment' are [False, False, False]
 
-        EXAMPLES
+        Examples
         --------
-        e = edge2d(pnta=point2d(0, 0), pntb=point2d(4, -1))
-
-        obj = [[0, 1, 2, 3, 4], [0, 1, 2, 3, -1]]
-
-        obj = [[-0.5, 0], [0, 0], [-1, 0], [1, 0], [-1.1, 0], [-1.1, 1]]
-
-        obj = [point2d(-0.5, 0), point2d(0, 0), point2d(-1, 0),
-               point2d(1, 0), point2d(-1.1, 0), point2d(-1.1, 1)]
-
-        e.contains_points(obj, otype='cpair_list')
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(4, -1))
+        >>> e.contains_points([[-0.5, 0], [0, 0], [1, 0]], otype='cpair_list')
+        >>> pts = [Point2d(-0.5, 0), Point2d(0, 0), Point2d(-1.1, 0)]
+        >>> e.contains_points(pts, otype='up2d_list')
         """
         if dth.IS_ITER(obj):
             obj = np.array(obj)
@@ -4162,83 +3945,19 @@ class edge2d():
 
         Returns
         -------
-        tuple( list(bool, bool), list(bool, bool) )
-            Two truth value pairs. Description:
-                1st value: [bool1, bool2]
-                2nd value: [bool3, bool4]
-                All values indicate location of points on the user input edge
-                bool1:
-                    True if pnta inside self edge
-                    True if pnta coincides with any of two self edge points
-                    False if pnta lies outside self edge
-                bool2:
-                    True only if pnta of input edge lies on extended self edge
+        tuple
+            ``(_pnta_, _pntb_, _edge_)`` where ``_pnta_`` and ``_pntb_`` are
+            three-element containment lists (see :meth:`contains_point`) for
+            each endpoint of the input edge, and ``_edge_`` is ``True`` when
+            both endpoints are contained inside self.
 
-
-        PRE-REQUISITE DATA
-        ------------------
-        e = edge2d(method='up2d', pnta=point2d(0,0), pntb=point2d(1,0))
-
-        EXAMPLE-1
-        ---------
-        obj = [[0.2, 0], [0.8, 0]]
-        k = e.contains_edge(obj=obj, otype='clist')
-        > k[0] = [True, False]
-        > k[1] = [True, False]
-        > k[2] = True
-
-        EXAMPLE-2
-        ---------
-        obj = [[-0.1, 0], [1.0, 0]]
-        k = e.contains_edge(obj=obj, otype='clist')
-        > k[0] = [False, True]
-        > k[1] = [True, False]
-        > k[2] = False
-
-        EXAMPLE-3
-        ---------
-        obj = [[-0.1, 1], [1.0, 0]]
-        k = e.contains_edge(obj=obj, otype='clist')
-        > k[0] = [False, False]
-        > k[1] = [True, False]
-        > k[2] = False
-
-        EXAMPLE-4
-        ---------
-        obj = [[0, 0], [1, 0]]
-        k = e.contains_edge(obj=obj, otype='clist')
-        > k[0] = [True, False]
-        > k[1] = [True, False]
-        > k[2] = True
-
-        EXAMPLE-5
-        ---------
-        obj = [[0, 0], [0, 0]]
-        k = e.contains_edge(obj=obj, otype='clist')
-        > k[0] = [True, False]
-        > k[1] = [True, False]
-        > k[2] = True
-
-        EXAMPLE-6
-        ---------
-        obj = [point2d(0.2, 0), point2d(0.8, 0)]
-        k = e.contains_edge(obj=obj, otype='up2d')
-        > k[0] = [True, False]
-        > k[1] = [True, False]
-
-        EXAMPLE-7
-        ---------
-        obj = [point2d(-0.1, 0), point2d(1.0, 0)]
-        k = e.contains_edge(obj=obj, otype='up2d')
-        > k[0] = [False, True]
-        > k[1] = [True, False]
-
-        EXAMPLE-8
-        ---------
-        edge = edge2d(method='up2d', pnta=point2d(1, 0), pntb=point2d(9, 0))
-        k = e.contains_edge(obj=obj, otype='up2d')
-        > k[0] = [False, True]
-        > k[1] = [True, False]
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.edge2d import edge2d
+        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+        >>> k = e.contains_edge(obj=[[0.2, 0], [0.8, 0]], otype='clist')
+        >>> k = e.contains_edge(obj=e, otype='ue2d')
         """
         if obj:
             if otype == 'clist':
@@ -4268,123 +3987,142 @@ class edge2d():
 
     def check_parallel(self, edge, tol_ang=0.0):
         """
-        Check parallellity between self and the other edge
+        Check whether self and another edge are parallel.
 
         Parameters
         ----------
-        edge : TYPE
-            DESCRIPTION.
-        tol_ang : TYPE, optional
-            DESCRIPTION. The default is 0.0.
+        edge : edge2d
+            The other edge to compare against.
+        tol_ang : float, optional
+            Angular tolerance in degrees. Default is 0.0.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        bool
+            True if the edges are parallel within ``tol_ang``.
         """
         difference = abs(abs(self.angrad) - abs(edge.angrad))
         return True if difference <= tol_ang or difference <= 180+tol_ang else False
 
     def check_normal(self, edge, tol_ang=0.0):
         """
-        Check perpendicularity of two edges - self and other
+        Check whether self and another edge are perpendicular.
 
         Parameters
         ----------
-        edge : TYPE
-            DESCRIPTION.
-        tol_ang : TYPE, optional
-            DESCRIPTION. The default is 0.0.
+        edge : edge2d
+            The other edge to compare against.
+        tol_ang : float, optional
+            Angular tolerance in degrees. Default is 0.0.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        bool
+            True if the angular difference is 90° or 270°.
         """
         difference = abs(abs(self.angrad) - abs(edge.angrad))
         return True if difference in (90.0, 270) else False
 
     def calc_dot(self, edge):
         """
-        Calculate dot product of self with other edge
+        Calculate the dot product of self with another edge.
 
         Parameters
         ----------
-        edge : TYPE
-            DESCRIPTION.
+        edge : edge2d
+            The other edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def calc_cross(self, edge):
         """
-        Calculate cross product of self with other edge
+        Calculate the cross product of self with another edge.
 
         Parameters
         ----------
-        edge : TYPE
-            DESCRIPTION.
+        edge : edge2d
+            The other edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def calc_area(self, y=0):
         """
-        Area under the edge y=0. NOTE: @y=0: we have x-axis
+        Calculate the signed area under this edge down to a reference line.
 
         Parameters
         ----------
-        y : TYPE, optional
-            DESCRIPTION. The default is 0.
+        y : float, optional
+            Y-coordinate of the reference baseline. Default is 0 (x-axis).
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def set_edge_type(self, edge_type='ggb'):
         """
-        Set the type of edge.
+        Set the semantic type label of this edge.
 
         Parameters
         ----------
-        edge_type : TYPE, optional
-            DESCRIPTION. The default is 'ggb'.
+        edge_type : str, optional
+            Label identifying the physical role of the edge. Default is
+            ``'ggb'`` (generic grain boundary).
 
-        Returns
-        -------
-        None.
+        Notes
+        -----
+        Suggested type labels:
 
-        Possible cases (suggested)
-        --------------------------
-        gbcb: grain boundary zone - core boundary
-        gtb: grain-twin boundary
-        gib: grain inclusion boundary
-        gicb: grain inclusion cluster boundary
+        * ``'gbcb'`` — grain boundary zone - core boundary
+        * ``'gtb'``  — grain-twin boundary
+        * ``'gib'``  — grain inclusion boundary
+        * ``'gicb'`` — grain inclusion cluster boundary
         """
         self.edge_type = edge_type
 
     @property
     def ends(self):
         """
-        Retain
+        Endpoint coordinates as plain tuples.
+
+        Returns
+        -------
+        tuple
+            ``((xa, ya), (xb, yb))``
         """
         return (self.pnta.x, self.pnta.y), (self.pntb.x, self.pntb.y)
 
     @property
     def angle(self):
+        """
+        Orientation angle of the edge in degrees, measured from the positive
+        x-axis, in the range [0, 360).
+
+        Returns
+        -------
+        float
+        """
         a, b = self.ends  # Call property method
         _angle_ = math.degrees(math.atan2(b[1]-a[1], b[0]-a[0]))
         if _angle_ < 0:
@@ -4393,12 +4131,14 @@ class edge2d():
 
     def calc_slope(self):
         """
-        Calculate slope of the edge object
+        Compute and store the slope of this edge in ``self.slope``.
+
+        Sets ``self.slope`` to ``INFINITY`` when the edge length is at or
+        below the threshold ``self.tlen`` (vertical or degenerate edge).
 
         Returns
         -------
-        None.
-
+        None
         """
         if self.length > self.tlen:
             self.slope = np.float64(self.pntb.y-self.pnta.y) / \
@@ -4407,26 +4147,27 @@ class edge2d():
             self.slope = INFINITY
 
     def _calc_slope_(self, x1, x2, y1, y2):
+        """Return ``(y2 - y1) / (x2 - x1)`` as float64."""
         return np.float64(y2-y1)/(x2-x1)
 
     def calc_length(self, method='points', saa=True, throw=False):
         """
-        Calculate length of the edge object
+        Calculate the Euclidean length of this edge.
 
         Parameters
         ----------
-        method : TYPE, optional
-            DESCRIPTION. The default is 'points'.
-        saa : TYPE, optional
-            DESCRIPTION. The default is True.
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
+        method : str, optional
+            ``'points'`` uses the Point2d endpoint objects; ``'coords'`` uses
+            the internal ``__x`` / ``__y`` arrays. Default is ``'points'``.
+        saa : bool, optional
+            If True, store the result in ``self.length``. Default is True.
+        throw : bool, optional
+            If True, return the computed length. Default is False.
 
         Returns
         -------
-        _length : TYPE
-            DESCRIPTION.
-
+        float or None
+            Computed length when ``throw`` is True; otherwise None.
         """
         if method.lower() in ('upxo_points', 'points'):
             _length = float(np.sqrt((self.pnta.x-self.pntb.x)**2 +
@@ -4444,21 +4185,19 @@ class edge2d():
                     throw=False
                     ):
         """
-        Calculate the centre point of the edge and update saa or throw
-        value as needed
+        Calculate the midpoint of this edge.
 
         Parameters
         ----------
-        saa : TYPE, optional
-            DESCRIPTION. The default is True.
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
+        saa : bool, optional
+            If True, store the result in ``self.xycen``. Default is True.
+        throw : bool, optional
+            If True, return the computed midpoint. Default is False.
 
         Returns
         -------
-        _xycen : TYPE
-            DESCRIPTION.
-
+        list of float or None
+            ``[x_centre, y_centre]`` when ``throw`` is True; otherwise None.
         """
         if self.edge_lean in ('lowest', 'leanest', 'no', 'low', 'medium'):
             _centerpoint = (self.pnta + self.pntb)*0.5
@@ -4472,12 +4211,13 @@ class edge2d():
 
     def update_m(self):
         """
-        Update operation. m is the UPXO mulpoint object.
+        Rebuild ``self.m`` (the mulpoint2d representation) from current endpoints.
+
+        Only operates when ``edge_lean`` is ``'leanest'`` or ``'lowest'``.
 
         Returns
         -------
-        None.
-
+        None
         """
         if self.edge_lean in ('leanest', 'lowest'):
             self.m = mulpoint2d(method='points',
@@ -4487,51 +4227,52 @@ class edge2d():
 
     def make_m(self):
         """
-        Make mul-point2d object of all points belonging to this edge
+        Create the mulpoint2d object for this edge's endpoints.
+
+        Delegates to :meth:`update_m`.
 
         Returns
         -------
-        None.
-
+        None
         """
         self.update_m()
 
     def make_bounding_box(self, return_format='coord_upxo'):
         """
-        Explanations:
-            find the minimum bounding box of the edge object and return in the
-            specified format.
-            Return foprmat is specified in argument "return_format"
-        Options:
-            return_format:
-                1 coord_upxo
-                2 coord
-                3 coord_shapely
-                4 upxo_partition
-                5 upxo_muledge
-                6 upxo_ring
-                7 shapely_ring
-                8 shapely_polygon
-                9 vtk_polygon
-                10 vtk mulpoint
-                11 upxo_mulpoint
-                12 shapely_mulpoint
-                13 vtk_polygon
-                14 vedo_polygon
+        Construct the axis-aligned bounding box of this edge.
 
         Parameters
         ----------
-        return_format : TYPE, optional
-            DESCRIPTION. The default is 'coord_upxo'.
+        return_format : str, optional
+            Format of the returned bounding box. Options:
+            ``'coord_upxo'``, ``'coord'``, ``'coord_shapely'``,
+            ``'upxo_partition'``, ``'upxo_muledge'``, ``'upxo_ring'``,
+            ``'shapely_ring'``, ``'shapely_polygon'``, ``'vtk_polygon'``,
+            ``'upxo_mulpoint'``, ``'shapely_mulpoint'``, ``'vedo_polygon'``.
+            Default is ``'coord_upxo'``.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def make_bounding_box_and_extrude(self):
+        """
+        Construct the bounding box and extrude it into a volume.
+
+        Returns
+        -------
+        None
+
+        Limitations
+        -----------
+        - Not yet implemented.
+        """
         pass
 
     def calc_center_from_m(self):
@@ -4549,20 +4290,19 @@ class edge2d():
 
     def calc_center(self, saa=True, throw=False):
         """
-        Calculate centre of the edge2d
+        Alias for :meth:`calc_centre` (US spelling).
 
         Parameters
         ----------
-        saa : TYPE, optional
-            DESCRIPTION. The default is True.
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
+        saa : bool, optional
+            If True, store the result in ``self.xycen``. Default is True.
+        throw : bool, optional
+            If True, return the computed midpoint. Default is False.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        list of float or None
+            ``[x_centre, y_centre]`` when ``throw`` is True; otherwise None.
         """
         if throw:
             return self.calc_centre(saa=saa, throw=throw)
@@ -4617,19 +4357,18 @@ class edge2d():
 
     def update_end_points_from_points(self, pnta=None, pntb=None):
         """
-        Update the self.pnta and self.pntb using the user input end_points
+        Replace the endpoint objects of this edge.
 
         Parameters
         ----------
-        pnta : TYPE, optional
-            DESCRIPTION. The default is None.
-        pntb : TYPE, optional
-            DESCRIPTION. The default is None.
+        pnta : Point2d, optional
+            New start point. Default is None (no change intended).
+        pntb : Point2d, optional
+            New end point. Default is None (no change intended).
 
         Returns
         -------
-        None.
-
+        None
         """
         self.pnta, self.pntb = pnta, pntb
 
@@ -4673,35 +4412,40 @@ class edge2d():
 
     def make_vtk_line(self):
         """
-        Make the VTK line object parallel
+        Construct a VTK line representation of this edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def make_pyvista_line(self):
         """
-        Make the PYVISTA line object parallel
+        Construct a PyVista line representation of this edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def make_shapely_line(self):
         """
-        Make the SHAPELY line object parallel
+        Construct a Shapely LineString from this edge.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
-
+        shapely.geometry.LineString
+            A two-point LineString from ``pnta`` to ``pntb``.
         """
         from shapely.geometry import LineString
         return LineString([(self.pnta.x, self.pnta.y),
@@ -4709,23 +4453,29 @@ class edge2d():
 
     def make_vedo_line(self):
         """
-        Make the VEDO line object parallel
+        Construct a Vedo line representation of this edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
     def make_gmsh_line(self):
         """
-        Make the GMSH line object parallel
+        Construct a GMSH line entity from this edge.
 
         Returns
         -------
-        None.
+        None
 
+        Limitations
+        -----------
+        - Not yet implemented.
         """
         pass
 
@@ -4733,19 +4483,16 @@ class edge2d():
              dpi=50,
              ):
         """
-        Visualize this edge2d object
+        Plot this edge with endpoint coordinate labels.
 
         Parameters
         ----------
-        dpi : TYPE, optional
-            DESCRIPTION. The default is 50.
-         : TYPE
-            DESCRIPTION.
+        dpi : int, optional
+            Resolution of the matplotlib figure. Default is 50.
 
         Returns
         -------
-        None.
-
+        None
         """
         x = [self.pnta.x, self.pntb.x]
         y = [self.pnta.y, self.pntb.y]
@@ -4757,19 +4504,29 @@ class edge2d():
                      verticalalignment='bottom'
                      )
 
-    @ property
+    @property
     def _xa_(self):
+        """x-coordinate of endpoint A (``pnta``). Setter triggers deformation updates."""
         return self.__x[0]
 
-    @ property
-    def _xb_(self): return self.__x[1]
-    @ property
-    def _ya_(self): return self.__y[0]
-    @ property
-    def _yb_(self): return self.__y[1]
+    @property
+    def _xb_(self):
+        """x-coordinate of endpoint B (``pntb``). Setter triggers deformation updates."""
+        return self.__x[1]
+
+    @property
+    def _ya_(self):
+        """y-coordinate of endpoint A (``pnta``). Setter triggers deformation updates."""
+        return self.__y[0]
+
+    @property
+    def _yb_(self):
+        """y-coordinate of endpoint B (``pntb``). Setter triggers deformation updates."""
+        return self.__y[1]
 
     @ _xa_.setter
     def _xa_(self, x):
+        """Set x of endpoint A and trigger deformation updates."""
         if self.__x[0] != x:
             self.__x[0] = x
             self.update_end_points_from_x_and_y()
@@ -4777,6 +4534,7 @@ class edge2d():
 
     @ _xb_.setter
     def _xb_(self, x):
+        """Set x of endpoint B and trigger deformation updates."""
         if self.__x[1] != x:
             self.__x[1] = x
             self.update_end_points_from_x_and_y()
@@ -4784,6 +4542,7 @@ class edge2d():
 
     @ _ya_.setter
     def _ya_(self, y):
+        """Set y of endpoint A and trigger deformation updates."""
         if self.__y[0] != y:
             self.__y[0] = y
             self.update_end_points_from_x_and_y()
@@ -4791,34 +4550,67 @@ class edge2d():
 
     @ _yb_.setter
     def _yb_(self, y):
+        """Set y of endpoint B and trigger deformation updates."""
         if self.__y[1] != y:
             self.__y[1] = y
             self.update_end_points_from_x_and_y()
             self.post_deformation_updates()
 
 class edge2d_lean_highest():
-    '''
-    UPXO core class.
-    '''
+    """
+    Minimal high-lean edge representation storing only raw xy coordinates.
+
+    Uses ``__slots__`` to reduce per-instance memory overhead.
+
+    Parameters
+    ----------
+    start : list of float, optional
+        ``[x, y]`` of the start point. Default is ``[0.0, 0.0]``.
+    end : list of float, optional
+        ``[x, y]`` of the end point. Default is ``[1.0, 1.0]``.
+
+    Attributes
+    ----------
+    xy : list
+        ``[[xa, xb], [ya, yb]]`` coordinate storage.
+    """
     __slots__ = 'xy'
 
     def __init__(self,
                  start=[0.0, 0.0],
                  end=[1.0, 1.0]
                  ):
+        """Initialise with ``start`` and ``end`` endpoint coordinates."""
         self.xy = [[start[0], end[0]], [start[1], end[1]]]
 
 
 class edge2d_from_point2d():
-    '''
-    UPXO core class.
-    '''
+    """
+    Lightweight edge built directly from two Point2d endpoint objects.
+
+    Computes Euclidean length at construction time and stores it.
+
+    Parameters
+    ----------
+    pnta : Point2d, optional
+        Start endpoint. Default is None.
+    pntb : Point2d, optional
+        End endpoint. Default is None.
+
+    Attributes
+    ----------
+    pnta : Point2d
+    pntb : Point2d
+    length : float
+        Euclidean distance between ``pnta`` and ``pntb``.
+    """
     __slots__ = ('pnta', 'pntb', 'length')
 
     def __init__(self,
                  pnta=None,
                  pntb=None
                  ):
+        """Initialise from two ``Point2d`` endpoints and compute Euclidean length."""
         self.pnta = pnta
         self.pntb = pntb
         self.length = np.sqrt((pnta.x-pntb.x)**2+(pnta.y-pntb.y)**2)
