@@ -31,6 +31,7 @@ setup(
         "scikit-learn>=1.7.2",
         "shapely>=2.1.1",
         "tqdm>=4.67.1",
+        "seaborn>=0.13.2",
         "defdap==0.93.6",
     ],
     python_requires=">=3.13",
