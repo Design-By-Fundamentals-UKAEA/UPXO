@@ -1,28 +1,45 @@
+"""
+2D multi-edge collection entity for UPXO.
+
+Import
+------
+    from upxo.geoEntities.muledge2d import muledge2d
+
+Classes
+-------
+muledge2d : Ordered collection of connected 2D edges with spatial operations.
+
+Notes
+-----
+A ``muledge2d`` stores an ordered, optionally closed chain of ``edge2d``
+objects, backed by a shared ``MPoint2d`` multi-point object for fast spatial
+queries.
+"""
 from upxo._sup import dataTypeHandlers as dth
 from upxo.geoEntities.mulpoint2d import MPoint2d as mulpoint2d
 # from mulpoint2d import mulpoint2d
-import point2d
-from edge2d import edge2d
+from upxo.geoEntities.point2d import Point2d as point2d
+from upxo.geoEntities.edge2d import edge2d
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import deque
 from upxo._sup import gops
 
 np.seterr(divide='ignore')
-# Script information for the file.
-__name__ = "UPXO-muledge"
-__authors__ = ["Vaasu Anandatheertha"]
-__lead_developer__ = ["Vaasu Anandatheertha"]
-__emails__ = ["vaasu.anandatheertha@ukaea.uk", ]
-__version__ = ["0.1: from.030522.git.no", ]
-
-__license__ = "GPL v3"
 
 
 class muledge2d():
     """
-    UPXO core class.
-    Represents collection of connected edges in 2D Cartesian space.
+    Ordered collection of connected 2D edges with spatial and geometric operations.
+
+    Represents a chain of ``edge2d`` objects sharing endpoints. Supports
+    multiple construction pathways (coordinate list, coordinate-pair list,
+    point objects) and exposes properties such as lengths, slopes, centroid,
+    and roughness over the full chain.
+
+    Import
+    ------
+        from upxo.geoEntities.muledge2d import muledge2d
     """
     ROUND_ZERO_DEC_PLACE = 10
     EPS = 0.000000000001
@@ -67,26 +84,49 @@ class muledge2d():
                  lean='ignore', plean='ignore', mplean='ignore',
                  elean='ignore', melean='ignore',
                  ):
-        '''
+        """
+        Parameters
+        ----------
         method : str
-            Enables branching.
-            Option 1: 'cpairs_list': @cpairs_list: raw co-ordinate data
-            Option 2: 'edges': @edges @edge_base: edge objects
-
-        cpairs_list : list/tuple/numpy array/deque
-            [[x0, y0], [x1, y1], ...]
-
-        edges : list/tuple
-
-        edge_base:
-            Case 1: 'upxo': UPXO edge object
-            Case 2: 'shapely'
-            Case 3: 'vtk'
-            Case 4: 'gmsh'
-
-        pindices : list/tuple/numpy array/deque
-            Point-pairing pindices needed to make edges2d objects
-        '''
+            Construction strategy. ``'clist'`` builds from a flat coordinate
+            list; ``'cpairs_list'`` from coordinate pairs; ``'edges'`` from
+            existing edge objects; ``'points'`` from Point2d objects.
+        ordered : bool, optional
+            Whether the edge chain is ordered (head-to-tail). Default ``True``.
+        closed : bool, optional
+            Whether the chain forms a closed loop. Default ``False``.
+        psense : str, optional
+            Point orientation sense. Default ``'counter_clockwise'``.
+        esense : str, optional
+            Edge orientation sense. Default ``'counter_clockwise'``.
+        clist : list
+            Flat coordinate list ``[[x0,y0], [x1,y1], ...]``.
+        cpairs_list : list
+            Coordinate pair list ``[[[x0,y0],[x1,y1]], ...]``.
+        points : list
+            Sequence of ``Point2d`` objects.
+        edges : list, optional
+            Pre-built edge objects (used when ``method='edges'``).
+        edge_base : str, optional
+            Backend of the supplied edges: ``'upxo'``, ``'shapely'``,
+            ``'vtk'``, or ``'gmsh'``. Default ``'upxo'``.
+        pindices : list, optional
+            Point-pairing indices used to construct ``edge2d`` objects.
+        make_mp : bool, optional
+            Build a ``mulpoint2d`` from all points. Default ``True``.
+        make_emp : bool, optional
+            Build per-edge ``mulpoint2d`` objects. Default ``True``.
+        lean : str, optional
+            Lean of the multi-edge object. Default ``'ignore'``.
+        plean : str, optional
+            Lean applied to point objects. Default ``'ignore'``.
+        mplean : str, optional
+            Lean applied to the multi-point object. Default ``'ignore'``.
+        elean : str, optional
+            Lean applied to edge objects. Default ``'ignore'``.
+        melean : str, optional
+            Lean applied to the multi-edge-point object. Default ``'ignore'``.
+        """
         # ---------------------------------
         self.dim = 2  # Dimensionality of the multi-edge object
         # ---------------------------------
@@ -527,9 +567,11 @@ class muledge2d():
 
     # #########################################################
     def __att__(self):
+        """Return a string listing of all attributes of this multi-edge."""
         return gops.att(self)
 
     def __repr__(self):
+        """Return ``id, e-<N> p-<M>, closed/open, sense, ordered`` summary."""
         string = []
         string.append(str(id(self)) + ', ')
         string.append(f'e-{len(self.edges)} p-{len(self.points)}, ')
@@ -545,67 +587,49 @@ class muledge2d():
         return ''.join(string)
 
     def __len__(self):
+        """Return the number of edges in the multi-edge chain."""
         return len(self.edges)
     # #########################################################
 
     def dbbuild_plean(self):
-        '''
-        Build a list of point lean values
-        '''
+        """Rebuild ``self.plean`` from the lean of each point in the chain."""
         self.plean = deque([p.lean for p in self.points])
 
     def dbbuild_elean(self):
-        '''
-        Build a list of edge lean values
-        '''
+        """Rebuild ``self.elean`` from the lean of each edge in the chain."""
         self.elean = deque([e.lean for e in self.edges])
 
     def dbbuild_pmid(self):
-        '''
-        Build a list of mid from me.points
-        '''
+        """Rebuild ``self.pmids`` from ``id()`` of each point in the chain."""
         self.pmids = deque([id(p) for p in self.points])
 
     def dbbuild_pmid_pairs(self):
-        '''
-        Build a list of mid from me.ppairs
-        '''
+        """Rebuild ``self.pmid_pairs`` from ``id()`` of each point-pair."""
         self.pmid_pairs = [[id(pp[0]), id(pp[1])] for pp in self.ppairs]
 
     def dbbuild_points(self,
                        method='ppairs',
                        data=None):
-        '''
-        Data-Base build -- points list
-        '''
+        """Rebuild ``self.points`` from the current point-pairs."""
         if method == 'ppairs':
             self.points = deque([self.ppairs[0][0]])
             for pp in self.ppairs:
                 self.points.append(pp[1])
 
     def dbbuild_mpoint(self):
-        '''
-        Create multi-point object of all the points in the mul
-        '''
+        """Rebuild ``self.mpoint`` as a ``mulpoint2d`` from all chain points."""
         self.mpoint = mulpoint2d(method='up2d_list',
                                  point_objects=self.points,
                                  lean=self.mplean)
 
     def dbbuild_empoint(self):
-        '''
-        Create a list of edge-wise multi-point objects
-        A multi-point object will be created for every edge object.
-        NOTE1: This enables easy introduction of roughness to an edge.
-        NOTE2: This will also be useful for GB definition in MC sim GS.
-        '''
+        """Rebuild ``self.empoints`` as per-edge ``mulpoint2d`` objects."""
         self.empoints = [mulpoint2d(method='up2d_list',
                                     point_objects=pp,
                                     lean=self.mplean) for pp in self.ppairs]
 
     def dbbuild_edges(self):
-        '''
-        Build data-base of edges using ppairs.
-        '''
+        """Rebuild ``self.edges`` as ``edge2d`` objects from ``self.ppairs``."""
         self.edges = deque([edge2d(method='up2d', pnta=pp[0], pntb=pp[1],
                                    edge_lean=self.elean)
                             for pp in self.ppairs])
@@ -617,7 +641,8 @@ class muledge2d():
         Original edge gets edited, new one will be returned.
         returns the additional edge.
         If EDGE be the edge and OBJ be the point object being added, then
-        the resulting edges will be:
+        the resulting edges will be::
+
             edge 1: EDGE.pnta  --  OBJ
             edge 2: OBJ  --  EDGE.pntb
 
@@ -702,24 +727,20 @@ class muledge2d():
 
     @property
     def roughness(self):
+        """Roughness measure of the chain. Not yet implemented."""
         pass
 
     @property
     def angles180(self):
-        '''
-        clist = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 0], [-1, -1],
-                 [0, -1], [1, -1]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.angles180
-        '''
+        """
+        Orientation angles of each vertex coordinate in [−180°, 180°].
+
+        Returns
+        -------
+        list of float
+            Angles computed from the positive x-axis for each coordinate in
+            ``self.clist``, signed by the y-component.
+        """
         _norm_ = np.linalg.norm
         angles = []
         for coord in self.clist:
@@ -735,20 +756,15 @@ class muledge2d():
 
     @property
     def angles(self):
-        '''
-        clist = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 0], [-1, -1],
-                 [0, -1], [1, -1]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.angles
-        '''
+        """
+        Orientation angles of each vertex coordinate in [0°, 360°].
+
+        Returns
+        -------
+        list of float
+            Angles in degrees measured counter-clockwise from the positive
+            x-axis for each coordinate in ``self.clist``.
+        """
         angles = []
         _norm_ = np.linalg.norm
         for coord in self.clist:
@@ -766,36 +782,39 @@ class muledge2d():
 
     # #########################################################
     def make_ring(self, saa=True, throw=False, close_index=0):
-        '''
-        1. If not me.closed, then make_ring closes the me object.
-        2. Update operations:
-            1.1. points
-            1.2. edges
-            1.3. cpairs
-            1.4. ppairs
-            1.5. empoints
-            1.6. pindices
-            1.7. closed
+        """
+        Close this multi-edge into a ring by connecting the last point to the first.
 
-        EXAMPLE:
-            cpairs_list = [[[1, 1], [-1, 1]],
-                           [[-1, 1], [-1, -1]],
-                           [[-1, -1], [1, -1]],
-                           ]
-            from muledge2d import muledge2d
-            me = muledge2d(method='cpairs_list',
-                           ordered=True,
-                           closed=False,
-                           cpairs_list=cpairs_list,
-                           make_mp=True, make_emp=True,
-                           lean='ignore', plean='ignore', mplean='ignore',
-                           elean='ignore', melean='ignore'
-                           )
-            me.is_ring(fast=True)
-            me.is_ring(fast=False)
-            me.make_ring()
-            me.is_ring()
-        '''
+        Parameters
+        ----------
+        saa : bool, optional
+            Save-and-apply: modify ``self`` in place. Default ``True``.
+        throw : bool, optional
+            Return a new closed object instead of modifying in place.
+            Default ``False``.
+        close_index : int, optional
+            Index of the point to close back to. Default ``0``.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        Closing updates: ``points``, ``edges``, ``cpairs``, ``ppairs``,
+        ``empoints``, ``pindices``, ``pmids``, ``pmid_pairs``, and
+        ``self.closed``.
+
+        Examples
+        --------
+        >>> from muledge2d import muledge2d
+        >>> cpairs_list = [[[1, 1], [-1, 1]], [[-1, 1], [-1, -1]],
+        ...                [[-1, -1], [1, -1]]]
+        >>> me = muledge2d(method='cpairs_list', ordered=True, closed=False,
+        ...                cpairs_list=cpairs_list, lean='ignore')
+        >>> me.make_ring()
+        >>> me.is_ring()
+        """
         if saa:
             if self.ordered:
                 # 1. Close the points
@@ -829,13 +848,26 @@ class muledge2d():
                 pass
 
     def is_ring(self, fast=True):
-        '''
-        Returns True if 1st point is same as last point, else returns False
-        Requirements to become ring:
-            1. All edges to have same sense
-            2. Edges to move adjacently from pnta of edge0 to pntb of edge(-1)
-            3. pnta of edge0 = pntb of edge(-1)
-        '''
+        """
+        Return ``True`` if this multi-edge forms a closed ring.
+
+        Parameters
+        ----------
+        fast : bool, optional
+            When ``True`` (default), compare point memory ids (fast).
+            When ``False``, compare point coordinate equality.
+
+        Returns
+        -------
+        bool
+            ``True`` if the first and last points coincide.
+
+        Notes
+        -----
+        A ring requires: all edges share the same sense; edges are adjacent
+        from ``pnta`` of edge 0 to ``pntb`` of edge −1; and
+        ``pnta`` of edge 0 equals ``pntb`` of edge −1.
+        """
         if self.ordered:
             if fast:
                 if self.pmids[0] == self.pmids[-1]:
@@ -853,57 +885,25 @@ class muledge2d():
     # #########################################################
     def pop_point_by_index(self, n):
         """
-        Delete n'th point object from the mul-edge object
+        Delete the n-th point from the multi-edge chain.
 
         Parameters
         ----------
         n : int
-            Point number within list(range(len(me.points)))
+            Index of the point to remove (within ``range(len(self.points))``).
 
         Returns
         -------
-        None.
+        None
 
-        EXAMPLE
-        -------
-        clist = [[0.00, 0.00],
-                 [0.50, 0.00],
-                 [1.00, 0.00],
-                 [1.50, 0.50],
-                 [1.00, 1.01],
-                 [2.00, 2.00],
-                 [2.50, 0.00]
-                 ]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        ['points:==', me.points, 'mulpoint.points:==', me.mpoint.points,
-         'edges:==', me.edges, 'pmids:==', me.pmids,
-         'pmid_pairs:==', me.pmid_pairs, 'pindices==', me.pindices,
-         'clist:', me.clist]
-
-        me.plotme()
-
-        me.pop_point_by_index(0)
-
-        ['points:==', me.points, 'mulpoint.points:==', me.mpoint.points,
-         'edges:==', me.edges, 'pmids:==', me.pmids,
-         'pmid_pairs:==', me.pmid_pairs, 'pindices==', me.pindices,
-         'clist:', me.clist]
-
-        [[[f'emp.{i}-a', id(me.empoints[i].points[0]),
-           f'e.{i}-a', id(me.edges[i].pnta)],
-          [f'emp.{i}-b', id(me.empoints[i].points[1]),
-           f'e.{i}-b',id(me.edges[i].pntb)]]
-         for i in range(len(me.edges))]
-
-        me.plotme()
+        Examples
+        --------
+        >>> from muledge2d import muledge2d
+        >>> clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0],
+        ...          [1.5, 0.5], [1.0, 1.01], [2.0, 2.0], [2.5, 0.0]]
+        >>> me = muledge2d(method='clist', ordered=True, closed=False,
+        ...                clist=clist, make_mp=True, lean='ignore')
+        >>> me.pop_point_by_index(0)
         """
         '''
         PROOF OF CONCEPT CODE - 1
@@ -1166,8 +1166,8 @@ class muledge2d():
 
         Parameters
         ----------
-        n : TYPE
-            DESCRIPTION.
+        n : int
+            n value.
 
         Returns
         -------
@@ -1220,43 +1220,16 @@ class muledge2d():
         -------
         None.
 
-        EXAMPLE
-        -------
-        clist = [[0.00, 0.00],
-                 [0.50, 0.00],
-                 [1.00, 0.00],
-                 [1.50, 0.50],
-                 [1.00, 1.01],
-                 [2.00, 2.00],
-                 [2.50, 0.00]
-                 ]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-
-        coord = [0.1, 0.0]
-        tdist = 1.0
-
-
-        me.points
-        me.edges
-
-        me.pop_point_by_coord(coord=coord, tdist=0.1)
-
-        me.points
-        me.edges
-        me.clist
-        me.mpoint
-        me.empoints
-        me.slopes
-        me.angles180
-        me.angles
+        Examples
+        --------
+        >>> from upxo.geoEntities.muledge2d import muledge2d
+        >>> clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00],
+        ...          [1.50, 0.50], [1.00, 1.01], [2.00, 2.00], [2.50, 0.00]]
+        >>> me = muledge2d(method='clist', ordered=True, closed=False,
+        ...                clist=clist, make_mp=True, make_emp=True,
+        ...                lean='ignore', plean='ignore', mplean='ignore',
+        ...                elean='ignore', melean='ignore')
+        >>> me.pop_point_by_coord(coord=[0.1, 0.0], tdist=1.0)
         """
         _point_ = point2d(x=coord[0], y=coord[1], lean='ignore')
         equalities = list(_point_.__eq__(self.points,
@@ -1282,39 +1255,30 @@ class muledge2d():
     def insert_point_by_index(self,
                               obj,
                               index=None):
-        '''
-        Allow inserting one point at a time in index
-        PRE-REQUISITE DATA
-        ------------------
-        clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00], [1.50, 0.50],
-                 [1.00, 1.01], [2.00, 2.00], [2.50, 0.00]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist', ordered=True, closed=False,
-                       clist=clist, make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore')
+        """
+        Insert one point into the multi-edge at the given index position.
 
-        EXAMPLE-1
-        ---------
-        me.plotme()
-        me.insert_point_by_index(point2d(0, 5), index=1)
-        me.plotme()
+        Parameters
+        ----------
+        obj : Point2d or list of float
+            Point to insert. A coordinate pair ``[x, y]`` is automatically
+            promoted to a Point2d.
+        index : int, optional
+            Position in the point list where the new point will be inserted.
+            Default is None.
 
-        me.edges, me.points
-        me.mpoint, me.mpoint.points, me.mpoint.locx, me.mpoint.locy
-        me.pmids, me.pmid_pairs
-        me.pindices, me.eindices
-        me.lengths, me.slopes, me.centroid, me.centroids
+        Returns
+        -------
+        None
 
-        me.insert_point_by_index(point2d(-2, 2), index=1)
-        me.plotme()
-
-        me.pop_points_by_indices([1])
-        me.plotme()
-
-        me.pop_point_by_coord(coord=[0, 4.5], tdist = 1)
-        me.plotme()
-        '''
+        Examples
+        --------
+        >>> from muledge2d import muledge2d
+        >>> from upxo.geoEntities.point2d import point2d
+        >>> clist = [[0, 0], [0.5, 0], [1, 0], [1.5, 0.5]]
+        >>> me = muledge2d(method='clist', ordered=True, clist=clist, lean='ignore')
+        >>> me.insert_point_by_index(point2d(0, 5), index=1)
+        """
         # Check validity of input
         input_valid = False
         if obj.__class__.__name__ == 'point2d':
@@ -1380,27 +1344,25 @@ class muledge2d():
 
     # #########################################################
     def fine(self, level):
-        '''
-        PRE-REQUISITE DATA
-        ------------------
-        clist = [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]
+        """
+        Subdivide all edges by inserting their centroids, ``level`` times.
 
-        clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00], [1.50, 0.50],
-                 [1.00, 1.00], [2.00, 2.00], [2.50, 0.00]]
+        Parameters
+        ----------
+        level : int
+            Number of subdivision passes. Must be in ``[0, 2]``.
 
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist', ordered=True, closed=False,
-                       clist=clist, make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore')
+        Returns
+        -------
+        None
 
-        EXAMPLE-1
-        ---------
-        me.plotme()
-        me.edges
-        me.fine(level=1)
-        me.plotme()
-        '''
+        Examples
+        --------
+        >>> from muledge2d import muledge2d
+        >>> me = muledge2d(method='clist', ordered=True,
+        ...                clist=[[0, 0], [1, 0], [2, 0]], lean='ignore')
+        >>> me.fine(level=1)
+        """
         if type(level) == int and level >= 0 and level <= 2:
             for _ in range(level):
                 centroids = self.centroids
@@ -1417,45 +1379,41 @@ class muledge2d():
 
     def insert_point(self, obj, index=None,
                      insertion_check='edge'):
-        '''
-        Allow inserting one point at a time
-        EXAMPLE:
+        """
+        Insert a single point into the multi-edge at the specified position.
 
-        clist = [[0.00, 0.00],
-                 [0.50, 0.00],
-                 [1.00, 0.00],
-                 [1.50, 0.50],
-                 [1.00, 1.01],
-                 [2.00, 2.00],
-                 [2.50, 0.00]
-                 ]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
+        Parameters
+        ----------
+        obj : Point2d
+            The point to insert.
+        index : int, optional
+            Position at which to insert the point. Default is ``None``.
+        insertion_check : str, optional
+            Strategy used to validate the insertion location.
+            ``'edge'`` checks containment on an existing edge;
+            ``'index'`` uses the raw index directly.
+            Default is ``'edge'``.
 
-        me.mpoint.points
-        me.points
-        me.edges
+        Returns
+        -------
+        None
 
-        # Points to add
-        obj = point2d(20, 15)
+        Limitations
+        -----------
+        - Implementation is incomplete; only the multi-point bookkeeping is
+          partially done. Edge rebuilding is a stub (``pass``).
+        - ``insertion_check='edge'`` only works for non-intersecting edge chains.
 
-        # Provide the indices to insert the points at
-        index = 1
-
-        # Update the mul-point object
-        me.mpoint.__add__(obj=[obj], indices=index)
-        me.mpoint.points
-
-        me.points
-        me.edges
-        '''
+        Examples
+        --------
+        >>> from point2d import point2d
+        >>> from muledge2d import muledge2d
+        >>> clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0], [1.5, 0.5]]
+        >>> me = muledge2d(method='clist', ordered=True, closed=False,
+        ...                clist=clist, make_mp=True, make_emp=True,
+        ...                lean='ignore')
+        >>> me.insert_point(point2d(0.25, 0.0), index=1)
+        """
         # ---------------------------
         # Number of points in the me.mpoint
         mpoint_npoints_bf = len(me.mpoint)
@@ -1515,6 +1473,7 @@ class muledge2d():
         pass
 
     def insert_coord_at(self, coord, indices=[0, 1]):
+        """Insert a raw coordinate into the chain at the given edge indices. Not yet implemented."""
         # Update clist and Update cpairs
         # Update points
         # Update pindices
@@ -1530,6 +1489,7 @@ class muledge2d():
         pass
 
     def insert_point_bw(self, k=0.5):
+        """Insert a point at fractional position ``k`` along each edge. Not yet implemented."""
         # Make coord
         # Make point object
         # Update points
@@ -1548,39 +1508,28 @@ class muledge2d():
 
     # #########################################################
     def move_nthpoint(self, n=0, xyincr=[0, 0], overlap_action='exit'):
-        '''
-        clist = [[0, 0],
-                 [1, 0],
-                 [1.5, 0.5],
-                 [1, 1.01],
-                 [2, 2],
-                 [2.5, 0]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.points
-        me.mpoint.points
-        me.pmids
-        me.pmid_pairs
-        me.clist
-        me.lengths
-        me.slopes
+        """
+        Translate the n-th point by a coordinate increment.
 
-        me.move_nthpoint(n=0, xyincr=[10, 0], overlap_action='exit')
+        Parameters
+        ----------
+        n : int, optional
+            Index of the point to move. Default ``0``.
+        xyincr : list of float, optional
+            Translation increment ``[dx, dy]``. Default ``[0, 0]``.
+        overlap_action : str, optional
+            Behaviour when the new position coincides with an existing point.
+            ``'exit'`` rejects the move; ``'remove_edge2'`` removes the
+            resulting dangling edge. Default ``'exit'``.
 
-        me.points
-        me.mpoint.points
-        me.pmids
-        me.clist
-        me.lengths
-        me.slopes
-        '''
+        Returns
+        -------
+        None
+
+        Limitations
+        -----------
+        - ``'remove_edge2'`` branch is not yet fully implemented.
+        """
         # Move the point object
         # Update the cpairs
         # Check if new point coincides with any in self.points
@@ -1627,6 +1576,7 @@ class muledge2d():
                 # pop points at np.where(overlaps)[0] locations
 
     def move_pointat(self, coord=[0, 0]):
+        """Move the point at ``coord`` to a new position. Not yet implemented."""
         # Update points
         # Update pindices
         # Update ppairs
@@ -1643,6 +1593,7 @@ class muledge2d():
 
     # #########################################################
     def explode(self, k, method='centroid'):
+        """Explode the chain outward from its centroid by factor ``k``. Not yet implemented."""
         # . Explode the multi-point
         # . Update self.cpairs form multi-point
         # . Update all multi-point properties. points need not be updated.
@@ -1662,6 +1613,7 @@ class muledge2d():
         pass
 
     def move(self):
+        """Translate the entire multi-edge chain. Not yet implemented."""
         # Translate the multi-point
         # Update cpairs from multi-point
 
@@ -1680,6 +1632,7 @@ class muledge2d():
         pass
 
     def stretch(self):
+        """Stretch the chain along an axis. Not yet implemented."""
         # Stretch the multi-point
         # Update cpairs from multi-point
 
@@ -1699,6 +1652,20 @@ class muledge2d():
 
     # #########################################################
     def plotme(self, i=None, j=None, show_coord=True):
+        """
+        Plot a slice of the edge chain using Matplotlib.
+
+        Parameters
+        ----------
+        i : int, optional
+            Start index of the edge slice. Defaults to ``0``.
+        j : int, optional
+            End index (exclusive) of the edge slice. Defaults to
+            ``len(self.edges)``.
+        show_coord : bool, optional
+            Annotate each node with its ``(x, y)`` coordinates.
+            Default ``True``.
+        """
         if not i:
             i = 0
         if not j:
@@ -1725,6 +1692,7 @@ class muledge2d():
             print('Enter valid slice indices')
 
     def plotmp(self):
+        """Plot all multi-point nodes with coordinate annotations using Matplotlib."""
         plt.plot(self.mpoint.locx, self.mpoint.locy, 'ks')
         for _x_, _y_ in zip(self.mpoint.locx, self.mpoint.locy):
             plt.text(_x_, _y_,

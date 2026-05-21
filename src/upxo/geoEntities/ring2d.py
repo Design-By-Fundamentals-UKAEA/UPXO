@@ -1,5 +1,22 @@
-from edge2d import edge2d
-from muledge2d import muledge2d
+"""
+2D ring (closed loop of edges) geometric entity for UPXO.
+
+Import
+------
+    from upxo.geoEntities.ring2d import ring2d
+
+Classes
+-------
+ring2d : Closed 2D polygon represented as a multi-edge loop with a closing edge.
+
+Notes
+-----
+A ``ring2d`` is formed from an ordered, continuous, non-self-intersecting
+``muledge2d`` object by adding a closing edge between the last pntb and the
+first pnta of the multi-edge chain.
+"""
+from upxo.geoEntities.edge2d import edge2d
+from upxo.geoEntities.muledge2d import muledge2d
 import matplotlib.pyplot as plt
 from upxo._sup import dataTypeHandlers as dth
 from upxo._sup import gops
@@ -8,26 +25,23 @@ import numpy as np
 from numpy import inf
 import upxo._sup.dataTypeHandlers as dth
 
-__name__ = "UPXO-muledge"
-__authors__ = ["Vaasu Anandatheertha"]
-__lead_developer__ = ["Vaasu Anandatheertha"]
-__emails__ = ["vaasu.anandatheertha@ukaea.uk", ]
-__version__ = ["0.1", ]
-__license__ = "GPL v3"
-
 
 class ring2d():
     """
-    Represents a ring in 2D Cartesian space.
+    Closed 2D polygon represented as a multi-edge loop with a closing edge.
 
-    ENTRY POINTS TO RING OBJECT
-        (A) Bottom-up
-                Only from Multi-Edge object
-        (B) Top-down:
-            1. From Crystal object
-            2. From Poly-crystal object
-        (C) Cross-library:
-            1. Shapely ring object
+    A ``ring2d`` wraps a continuous, non-self-intersecting ``muledge2d``
+    and adds a synthetic closing edge from the last endpoint back to the first.
+
+    Entry points:
+
+    * Bottom-up: from a ``muledge2d`` object.
+    * Top-down: from a Crystal or Poly-crystal object.
+    * Cross-library: from a Shapely ring object.
+
+    Import
+    ------
+        from upxo.geoEntities.ring2d import ring2d
     """
     EPS = 0.000000000001
     __slots__ = ('dim',  # Dimensionality
@@ -43,23 +57,25 @@ class ring2d():
                  lean='ignore',  # Lean specification
                  ):
         """
-        PRE-REQUISITE DATA
-        ------------------
-        clist = [[-1, 0], [-1, 0.5], [0, 0.5], [1, 0.50],
-                 [1, 0], [1, -0.5], [0, -0.5], [-0.5, -0.5]]
+        Parameters
+        ----------
+        me : muledge2d, optional
+            Ordered, continuous multi-edge chain to close into a ring.
+        dim : int, optional
+            Dimensionality. Default is 2.
+        lean : str, optional
+            Lean specification for the ring object. Default is ``'ignore'``.
 
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist', ordered=True, closed=False,
-                       clist=clist, make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore')
-       # me.plotme()
-
-       # EXAMPLE-1
-      # ---------
-        from ring2d import ring2d
-        ring = ring2d(me=me, lean='ignore', )
-        ring.centroids
+        Examples
+        --------
+        >>> from muledge2d import muledge2d
+        >>> from ring2d import ring2d
+        >>> clist = [[-1, 0], [-1, 0.5], [0, 0.5], [1, 0.5],
+        ...          [1, 0], [1, -0.5], [0, -0.5], [-0.5, -0.5]]
+        >>> me = muledge2d(method='clist', ordered=True, closed=False,
+        ...                clist=clist, lean='ignore')
+        >>> ring = ring2d(me=me, lean='ignore')
+        >>> ring.centroids
         """
         # ---------------------------------------------------------------------
         # Check if entered multi-edge is ordered and continous
@@ -115,54 +131,65 @@ class ring2d():
                 self.me.__rings__.append(self)
         # ---------------------------------------------------------------------
     def __att__(self):
+        """Return a string listing of all attributes of this ring."""
         return gops.att(self)
 
     def __repr__(self):
+        """Return ``id, e-<N> p-<M>`` summary string."""
         string = []
         string.append(str(id(self)) + ', ')
         string.append(f'e-{len(self.me.edges)+1} p-{len(self.me.points)}')
         return ''.join(string)
 
     def __len__(self):
+        """Return the total number of edges (including the closing edge)."""
         return len(self.me.edges)+1
 
     @property
     def centroid(self):
+        """Centroid of the ring, computed from the underlying multi-edge."""
         return self.me.centroid
 
     @property
     def centroids(self):
+        """List of edge centroids including the closing edge centroid."""
         _ring_centroids_ = self.me.centroids
         _ring_centroids_.append(self.ce.centroid)
         return _ring_centroids_
 
     @property
     def lengths(self):
+        """List of edge lengths including the closing edge length."""
         _ring_lengths_ = self.me.lengths
         _ring_lengths_.append(self.ce.length)
         return _ring_lengths_
 
     @property
     def slopes(self):
+        """List of edge slopes including the closing edge slope."""
         _ring_slopes_ = self.me.slopes
         _ring_slopes_.append(self.ce.slope)
         return _ring_slopes_
 
     @property
     def length(self):
+        """Total perimeter length of the ring."""
         return sum(self.lengths)
 
     @property
     def length_mean(self):
+        """Mean edge length of the ring."""
         return self.length/len(self)
 
     @property
     def slope_mean(self):
+        """Mean slope, ignoring NaN and infinite values."""
         slopes = self.slopes
         return np.ma.masked_invalid(slopes).mean()
 
     @property
     def slope_max_hiv(self):
+        """Maximum slope; returns ``inf`` if any vertical edge is present."""
         slopes = self.slopes
         if np.inf in slopes or -np.inf in slopes:
             return inf
@@ -171,38 +198,37 @@ class ring2d():
 
     @property
     def slope_max_hi(self):
+        """Maximum finite slope (masked invalid values)."""
         slopes = self.slopes
         return np.ma.masked_values(slopes).mean()
 
     @property
     def slope_max_i(self):
+        """Mean of valid slopes (masked invalid values)."""
         slopes = self.slopes
         return np.ma.masked_values(slopes).mean()
 
     @property
     def roughness(self):
+        """Roughness measure delegated to the underlying multi-edge."""
         return self.me.roughness
 
     @property
     def angles(self):
-        '''
-        clist = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 0], [-1, -1],
-                 [0, -1], [1, -1]]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.angles180
-        '''
+        """
+        Orientation angles of all edges in the ring, including the closing edge.
+
+        Returns
+        -------
+        list of float
+            Angles in degrees for each edge, in chain order with the closing
+            edge appended last.
+        """
         _angles_ = [edge.angle for edge in self.me.edges]
         _angles_.append(self.ce.angle)
         return _angles_
     
     @property
     def nodes(self):
-        # Returns cumulative list of all nodes of all constituent multiline segments 
+        """Cumulative list of all nodes from all constituent multi-edge segments."""
+        # Returns cumulative list of all nodes of all constituent multiline segments
