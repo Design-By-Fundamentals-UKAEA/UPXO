@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Created on Thu Jun 27 10:10:12 2024
 
-@author: rg5749
+@author: Dr. Sunil Anandatheertha
 """
 
 import numpy as np

@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Created on Tue Dec  3 12:54:33 2024
 
-@author: rg5749
+@author: Dr. Sunil Anandatheertha
 """
 
 from itertools import product

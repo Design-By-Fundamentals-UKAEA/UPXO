@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Created on Fri Jun  7 11:35:01 2024
 
-@author: rg5749
+@author: Dr. Sunil Anandatheertha
 """
 import numpy as np
 import networkx as nx
