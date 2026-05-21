@@ -205,10 +205,12 @@ class p2d_leanest():
         bool
             True if coordinate satisfies circle-membership criterion.
 
-        Example
-        -------
-        from upxo.geoEntities.point2d import p2d_leanest
-        p2d_leanest(0, 0).is_coord_within_cor(0, 1, 1E-8)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import p2d_leanest
+            p2d_leanest(0, 0).is_coord_within_cor(0, 1, 1E-8)
         """
         if on_cor_flag:
             return math.sqrt((self._x-x)**2+(self._y-y)**2) <= cor
@@ -234,10 +236,12 @@ class p2d_leanest():
         bool
             True if point satisfies circle-membership criterion.
 
-        Example
-        -------
-        from upxo.geoEntities.point2d import p2d_leanest
-        p2d_leanest(0, 0).is_p2dl_within_cor(p2d_leanest(0, 0), 1E-8)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import p2d_leanest
+            p2d_leanest(0, 0).is_p2dl_within_cor(p2d_leanest(0, 0), 1E-8)
         """
         if on_cor_flag:
             return math.sqrt((self._x-point._x)**2+(self._y-point._y)**2) <= cor
@@ -263,10 +267,12 @@ class p2d_leanest():
         bool
             True if point satisfies circle-membership criterion.
 
-        Example
-        -------
-        from upxo.geoEntities.point2d import p2d_leanest, Point2d
-        p2d_leanest(0, 0).is_p2d_within_cor(Point2d(0, 0), 1E-8)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import p2d_leanest, Point2d
+            p2d_leanest(0, 0).is_p2d_within_cor(Point2d(0, 0), 1E-8)
         """
         if on_cor_flag:
             return math.sqrt((self._x-point.x)**2+(self._y-point.y)**2) <= cor
