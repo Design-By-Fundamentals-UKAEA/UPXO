@@ -6,8 +6,8 @@ This module provides a container class for managing ordered collections of
 Point2d objects, rectangular grids, and intersection results, and exposes
 numerical, geometric, and spatial-query operations over the full point set.
 
-Imports
--------
+Usage
+-----
 from upxo.geoEntities.mulpoint2d import MPoint2d
 
 Recommended alias imports:
@@ -118,14 +118,16 @@ class MPoint2d():
 
     def __iter__(self):
         """
-        Return an iterable of point coordsinates in self.
+        Return an iterable of point coordinates in self.
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        >>> for coord in mulpoint2d:
-        >>> print(coord)
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            for coord in mulpoint2d:
+                print(coord)
         """
         return iter(self.coords)
 
@@ -135,10 +137,12 @@ class MPoint2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        >>> mulpoint2d[9]
-        >>> mulpoint2d[10]
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d[9]
+            mulpoint2d[10]
         """
         if i >= self.n:
             raise ValueError('Index exceeds maximum number of coordinates.')
@@ -148,45 +152,57 @@ class MPoint2d():
         """
         Add toadd to self.coords.
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        mulpoint2d.coords
-        mulpoint2d.add(toadd=10, operation='add')
-        mulpoint2d.coords
+        Examples
+        --------
+        **Example 1** — add a scalar:
 
-        Example-2
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        mulpoint2d.coords
-        mulpoint2d.add(toadd=[-10, 20], operation='add')
-        mulpoint2d.coords
+        .. code-block:: python
 
-        Example-3
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        mulpoint2d.coords
-        mulpoint2d.add(toadd=np.random.random((mulpoint2d.n, 2)), operation='add')
-        mulpoint2d.coords
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d.coords
+            mulpoint2d.add(toadd=10, operation='add')
+            mulpoint2d.coords
 
-        Example-4
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        mulpoint2d.coords
-        mulpoint2d.add(toadd=np.random.random((mulpoint2d.n, 2)).T, operation='add')
-        mulpoint2d.coords
+        **Example 2** — add a 2-element list:
 
-        Example-5
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
-        mulpoint2d.coords
-        mulpoint2d.add(toadd=np.random.random((10,2)), operation='append')
-        mulpoint2d.coords
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d.coords
+            mulpoint2d.add(toadd=[-10, 20], operation='add')
+            mulpoint2d.coords
+
+        **Example 3** — add an (N, 2) array:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d.coords
+            mulpoint2d.add(toadd=np.random.random((mulpoint2d.n, 2)), operation='add')
+            mulpoint2d.coords
+
+        **Example 4** — add a transposed (2, N) array:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d.coords
+            mulpoint2d.add(toadd=np.random.random((mulpoint2d.n, 2)).T, operation='add')
+            mulpoint2d.coords
+
+        **Example 5** — append rows:
+
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((10,2)))
+            mulpoint2d.coords
+            mulpoint2d.add(toadd=np.random.random((10,2)), operation='append')
+            mulpoint2d.coords
         """
         if toadd is None:
             return
@@ -263,11 +279,13 @@ class MPoint2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> point_coords = np.array([[0, 0], [1, 1], [2, 3], [4, 5]])
-        >>> MULPOINT2D = mp2d.from_coords(point_coords)
-        >>> MULPOINT2D.coords
-        >>> MULPOINT2D.points
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            point_coords = np.array([[0, 0], [1, 1], [2, 3], [4, 5]])
+            MULPOINT2D = mp2d.from_coords(point_coords)
+            MULPOINT2D.coords
+            MULPOINT2D.points
         """
         # Validations
         return cls(coords=np.array(point_coords))
@@ -279,10 +297,12 @@ class MPoint2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> xy = np.array([[0, 0], [1, 1], [2, 3], [4, 5]]).T
-        >>> MULPOINT2D = mp2d.from_xy(xy)
-        >>> MULPOINT2D.coords
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            xy = np.array([[0, 0], [1, 1], [2, 3], [4, 5]]).T
+            MULPOINT2D = mp2d.from_xy(xy)
+            MULPOINT2D.coords
         """
         # Validations
         return cls(coords = xy.T)
@@ -300,10 +320,14 @@ class MPoint2d():
     @classmethod
     def from_rect_grid(cls, xstart, xinc, xend, ystart, yinc, yend):
         """
-        Example-1
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d
-        mp = MPoint2d.from_rect_grid(0, 1, 5, 0, 1, 3)
+        Instantiate a rectangular grid of 2D points.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d
+            mp = MPoint2d.from_rect_grid(0, 1, 5, 0, 1, 3)
         """
         # Validations
         # ------------------------------
@@ -322,19 +346,23 @@ class MPoint2d():
         --------
         Single cluster at (-5, -10) with 1000 points, radius 1:
 
-        >>> import matplotlib.pyplot as plt
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d
-        >>> MP2D = MPoint2d.from_clustering_around_centroid(
-        ...     (-5, -10), n=1000, r=1, distribution='urand', dmin=0.1)
-        >>> plt.scatter(MP2D.coords[:, 0], MP2D.coords[:, 1])
+        .. code-block:: python
+
+            import matplotlib.pyplot as plt
+            from upxo.geoEntities.mulpoint2d import MPoint2d
+            MP2D = MPoint2d.from_clustering_around_centroid(
+                (-5, -10), n=1000, r=1, distribution='urand', dmin=0.1)
+            plt.scatter(MP2D.coords[:, 0], MP2D.coords[:, 1])
 
         Multiple clusters along the x-axis:
 
-        >>> cenx, ceny = [0, 1, 2, 3, 4], [0, 0, 0, 0, 0]
-        >>> for cx, cy in zip(cenx, ceny):
-        ...     MP2D = MPoint2d.from_clustering_around_centroid(
-        ...         (cx, cy), n=250, r=0.25, distribution='urand', dmin=0.1)
-        ...     plt.scatter(MP2D.coords[:, 0], MP2D.coords[:, 1])
+        .. code-block:: python
+
+            cenx, ceny = [0, 1, 2, 3, 4], [0, 0, 0, 0, 0]
+            for cx, cy in zip(cenx, ceny):
+                MP2D = MPoint2d.from_clustering_around_centroid(
+                    (cx, cy), n=250, r=0.25, distribution='urand', dmin=0.1)
+                plt.scatter(MP2D.coords[:, 0], MP2D.coords[:, 1])
         """
         # Validations
         centroid = val_point_and_get_coord(centroid, return_type='upxo',
@@ -356,36 +384,43 @@ class MPoint2d():
 
         Parameters
         ----------
-        la: list of upxo line objects
-        lb: list of upxo line objects
-        return_ordered_points: if True, ordered points will also be return3ed
-        plot: if True, lines and intersection points will be visualized.
+        La : list of Sline2d
+            Line objects for the first group.
+        Lb : list of Sline2d
+            Line objects for the second group.
+        return_ordered_points : bool, optional
+            If True, ordered points will also be returned. Default is True.
+        plot : bool, optional
+            If True, lines and intersection points will be visualized.
 
-        Return
-        ------
-        cls: MPoint2d of the list of intersection points.
-        points: ordered list of points. Number of rows is len(lb) and number
-            of columns is len(la)
+        Returns
+        -------
+        cls : MPoint2d
+            Collection of intersection points.
+        points : list of list of Point2d
+            Ordered intersection points; ``len(Lb)`` rows by ``len(La)`` columns.
 
         Examples
         --------
-        >>> from upxo.geoEntities.sline2d import Sline2d
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d
+        .. code-block:: python
 
-        >>> na, nb = 5, 5
-        >>> R = np.random.rand
-        >>> La = [Sline2d.by_coord([-10-R(),-10+R()], [10+R(),10-R()])
-        >>> for _ in range(na)]
-        >>> Lb = [Sline2d.by_coord([-10+R(),-10-R()], [10-R(),10+R()])
-        >>> for _ in range(nb)]
-        >>> MPoint2d.from_intersection_linesA_linesB(La, Lb,
-        >>> return_ordered_points=True,
-        >>> plot=True)
-        >>> MP2D = MPoint2d.from_intersection_linesA_linesB(La, Lb,
-        >>> return_ordered_points=False,
-        >>> plot=False)
-        >>> MP2D.points, MP2D.coords
+            from upxo.geoEntities.sline2d import Sline2d
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.mulpoint2d import MPoint2d
+
+            na, nb = 5, 5
+            R = np.random.rand
+            La = [Sline2d.by_coord([-10-R(),-10+R()], [10+R(),10-R()])
+                  for _ in range(na)]
+            Lb = [Sline2d.by_coord([-10+R(),-10-R()], [10-R(),10+R()])
+                  for _ in range(nb)]
+            MPoint2d.from_intersection_linesA_linesB(La, Lb,
+                return_ordered_points=True,
+                plot=True)
+            MP2D = MPoint2d.from_intersection_linesA_linesB(La, Lb,
+                return_ordered_points=False,
+                plot=False)
+            MP2D.points, MP2D.coords
         """
         # Validations
         '''Validation: La and Lb must be non-empty Iterables.'''
@@ -439,10 +474,16 @@ class MPoint2d():
 
     def __contains__(self, point, validate=False):
         """
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        xy = np.array([[0, 0], [1, 1], [2, 3], [4, 5]]).T
-        MULPOINT2D = mp2d.from_xy(xy)
-        [0, 0] in MULPOINT2D
+        Check whether ``point`` is among the stored points.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            xy = np.array([[0, 0], [1, 1], [2, 3], [4, 5]]).T
+            MULPOINT2D = mp2d.from_xy(xy)
+            [0, 0] in MULPOINT2D
         """
         return any(self.squared_distances_to_point(point,
                                                    validate=validate) <= self.EPS)
@@ -471,28 +512,30 @@ class MPoint2d():
 
         Parameters
         ----------
-        points: list of points
-
-        validate_points: If True, validation will be used. When confident that
+        points : list of Point2d or numpy.ndarray
+            Points to compute distances from.
+        validate_points : bool, optional
+            If True, validation will be used. When confident that
             points are provided as a numpy array of coordinate pairs, it is
-            advised to keep this False. When unknown, keep it True. True will
-            may increase computation time depending on the number of points.
-
-        points_type: If validate_points is False, then points_type must be
-            'numpy'. You could also use 'coord' but, this would include an
-            additional overhead of conversion from coord to numpy array. This
-            is provided to ensure safe claculation.
+            advised to keep this False. When unknown, keep it True. True may
+            increase computation time depending on the number of points.
+        points_type : str, optional
+            If validate_points is False, then points_type must be
+            ``'numpy'``. You could also use ``'coord'`` but this would include an
+            additional overhead of conversion from coord to numpy array.
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> MULPOINT2D = MPoint2d.from_coords(np.random.random((10, 2)))
-        >>> POINTS = make_p2d(2+np.random.random((10, 2)), return_type='p2d')
-        >>> MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=True)
-        >>> POINTS = 2+np.random.random((10, 2))
-        >>> MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=False,
-        >>> points_type='numpy')
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d
+            from upxo.geoEntities.point2d import Point2d
+            MULPOINT2D = MPoint2d.from_coords(np.random.random((10, 2)))
+            POINTS = make_p2d(2+np.random.random((10, 2)), return_type='p2d')
+            MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=True)
+            POINTS = 2+np.random.random((10, 2))
+            MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=False,
+                points_type='numpy')
         """
         cen = self.centroid
         if validate_points:
@@ -515,18 +558,20 @@ class MPoint2d():
     def distance_to_centroid(self, points, validate_points=True,
                              points_type='numpy'):
         """
-        Calculates squared distances between self.centroid and other 2D points.
+        Calculates distances between self.centroid and other 2D points.
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> MULPOINT2D = MPoint2d.from_coords(np.random.random((10, 2)))
-        >>> POINTS = make_p2d(2+np.random.random((10, 2)), return_type='p2d')
-        >>> MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=True)
-        >>> POINTS = 2+np.random.random((10, 2))
-        >>> MULPOINT2D.distance_to_centroid(POINTS, validate_points=False,
-        >>> points_type='numpy')
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d
+            from upxo.geoEntities.point2d import Point2d
+            MULPOINT2D = MPoint2d.from_coords(np.random.random((10, 2)))
+            POINTS = make_p2d(2+np.random.random((10, 2)), return_type='p2d')
+            MULPOINT2D.squared_distance_to_centroid(POINTS, validate_points=True)
+            POINTS = 2+np.random.random((10, 2))
+            MULPOINT2D.distance_to_centroid(POINTS, validate_points=False,
+                points_type='numpy')
         """
         return np.sqrt(self.squared_distance_to_centroid(points,
                                                          validate_points=validate_points,
@@ -554,20 +599,19 @@ class MPoint2d():
         """
         Return bounding box of the mulpoint.
 
-        Parameters
-        ----------
-        None
+        Returns
+        -------
+        bbox : dict
+            Keys ``'bl'``, ``'br'``, ``'tr'``, ``'tl'`` for bottom-left,
+            bottom-right, top-right, and top-left corners.
 
-        Return
-        ------
-        bbox: dict of keys 'bl', 'br', 'tr' and 'tl', standing for bottom left,
-            bottom right, top right and top left.
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-1
-        ---------
-        from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        MP2D = mp2d.from_coords(np.random.random((10,2)))
-        MP2D.bbox()
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            MP2D = mp2d.from_coords(np.random.random((10,2)))
+            MP2D.bbox()
         """
         x, y = self.x, self.y
         bl, br = [x.min(), y.min()], [x.max(), y.min()]
@@ -580,12 +624,14 @@ class MPoint2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> mulpoint2d = mp2d.from_coords(np.random.random((25, 3)))
-        >>> mulpoint2d.coords
-        >>> from scipy.spatial import cKDTree as ckdt
-        >>> a = ckdt(mulpoint2d.coords, copy_data=False, balanced_tree=True)
-        >>> a.data
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((25, 3)))
+            mulpoint2d.coords
+            from scipy.spatial import cKDTree as ckdt
+            a = ckdt(mulpoint2d.coords, copy_data=False, balanced_tree=True)
+            a.data
         """
         if treeType in ('ckdtree', 'kdtree'):
             # Scipy ckdtree
@@ -605,15 +651,17 @@ class MPoint2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
-        >>> mulpoint2d = mp2d.from_coords(np.random.random((25, 3)))
-        >>> MULPOINT2D = mp2d.from_mulpoint2d(mulpoint2d=mulpoint2d,
-        >>> dxy=[0.0, 0.0],
-        >>> translate_ref=mulpoint2d.centroid,
-        >>> rot=[10, 0.0, 0.0],
-        >>> rot_ref=mulpoint2d.centroid,
-        >>> degree=True)
-        >>> mulpoint2d.plot(MULPOINT2D.coords, primary_ms=50)
+        .. code-block:: python
+
+            from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
+            mulpoint2d = mp2d.from_coords(np.random.random((25, 3)))
+            MULPOINT2D = mp2d.from_mulpoint2d(mulpoint2d=mulpoint2d,
+            dxy=[0.0, 0.0],
+            translate_ref=mulpoint2d.centroid,
+            rot=[10, 0.0, 0.0],
+            rot_ref=mulpoint2d.centroid,
+            degree=True)
+            mulpoint2d.plot(MULPOINT2D.coords, primary_ms=50)
         """
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
