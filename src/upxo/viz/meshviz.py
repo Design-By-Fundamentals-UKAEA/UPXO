@@ -373,6 +373,7 @@ def plot_elements_geometric_grain(grain_name, elsets_eltype=None,
                         elem_linewidth=0.7, gb_linewidth=2.0, plot_triangles=True,
                         plot_quads=True, quality_by_eltype=None, cmap='cubehelix_r',
                         vmin=None, vmax=None, show_colorbar=True):
+    """Visualise elements geometric grain using Matplotlib or PyVista."""
     if fig is None or ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
 
@@ -540,6 +541,7 @@ def plot_elements_geometric_grains(grain_names=None, grain_ids=None, prefix='gra
                               plot_triangles=True, plot_quads=True,
                               quality_by_eltype=None, cmap='cubehelix_r',
                               vmin=None, vmax=None, show_colorbar=True):
+    """Visualise elements geometric grains using Matplotlib or PyVista."""
     if grain_names is None and grain_ids is None:
         raise ValueError("Provide grain_names or grain_ids.")
         
@@ -618,6 +620,7 @@ def plot_elements_geometric_grains(grain_names=None, grain_ids=None, prefix='gra
 
 
 def pick_contrasting_colours_from_cmap(n_colours, cmap_name='nipy_spectral'):
+    """Pick contrasting colours from cmap."""
     cmap = plt.cm.get_cmap(cmap_name)
     if n_colours <= 1:
         return [cmap(0.55)]
@@ -639,6 +642,7 @@ def pick_contrasting_colours_from_cmap(n_colours, cmap_name='nipy_spectral'):
 
 
 def resolve_band_colours(bands, band_colours=None, auto_cmap='nipy_spectral'):
+    """Resolve band colours."""
     if band_colours is not None and len(band_colours) < len(bands):
         raise ValueError('Length of band_colours must be >= number of bands.')
     if band_colours is not None:
@@ -647,6 +651,7 @@ def resolve_band_colours(bands, band_colours=None, auto_cmap='nipy_spectral'):
 
 
 def resolve_plot_eltype(eltypes, plot_eltype=None):
+    """Resolve plot eltype."""
     if len(eltypes) == 0:
         return None
     if plot_eltype is None:
@@ -659,6 +664,7 @@ def resolve_plot_eltype(eltypes, plot_eltype=None):
 def plot_band_elements(element_ids_by_band, bands, plot_eltype, gbcoords,
                        gsConfMesh, gblines_by_grain=None, colours_to_use=None,
                        title='Selected elements by band', band_facecolors=False):
+    """Visualise band elements using Matplotlib or PyVista."""
     fig = ax = None
     if plot_eltype is None:
         fig, ax = plt.subplots(figsize=(6, 6), dpi=100)
@@ -724,6 +730,7 @@ def see_gbElements_grains(gb_elements_grain, eltypes=None, elConn=None,
                          quality_by_eltype=None, cmap='cubehelix_r',
                          vmin=None, vmax=None, show_colorbar=True,
                          title='Selected elements'):
+    """See gbelements grains."""
     
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     for idx, eltype in enumerate(eltypes):

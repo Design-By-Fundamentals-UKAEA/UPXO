@@ -79,7 +79,7 @@ def check_coord_distr_for_randomness(coords, method='by_distance', cor=1):
     test_results = check_coord_distr_for_randomness(coords)
     test_results['random']
     """
-    pass
+    raise NotImplementedError("check_coord_distr_for_randomness is not yet implemented.")
 
 def test_rand_distr_autocorr(ARRAY,
                              alpha=0.05,
@@ -179,6 +179,7 @@ def test_rand_distr_runs(ARRAY, alpha=0.05, print_msg=False):
     """
 
     def runs_test(arr):
+        """Runs test."""
         median = np.median(arr)
         runs = np.sum(np.diff(arr > median) != 0) + 1
         n1 = np.sum(arr > median)

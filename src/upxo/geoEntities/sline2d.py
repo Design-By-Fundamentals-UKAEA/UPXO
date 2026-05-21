@@ -1,62 +1,34 @@
 """
-2D straight line.
+2D straight-line entity classes for UPXO.
 
-This module provides lightweight and full-featured 2D straight-line classes
-used in UPXO geometry construction, neighborhood operations, meshing support,
-and geometric characterization workflows.
+Provides lightweight and full-featured 2D straight-line classes used in UPXO
+geometry construction, neighbourhood operations, meshing support, and geometric
+characterisation workflows.
 
-Imports
--------
-from upxo.geoEntities.sline2d import Sline2d_leanest
-from upxo.geoEntities.sline2d import Sline2d
-
-Recommended alias imports:
---------------------------
-from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
-from upxo.geoEntities.sline2d import Sline2d as sl2d
-
-Metadata
---------
-* Module: upxo.geoEntities.sline2d
-* Package: upxo
-* License: GPL-3.0-only
-* Author: Dr. Sunil Anandatheertha
-* Email: vaasu.anandatheertha@ukaea.uk
-* Status: Active development
-* Last updated: 2026-03-11
-
-Applications
-------------
-* Non-conformal geometry to conformal geometry conversion
-* Hierarchical grain structure feature generation
-* General geometry use
+Import
+------
+    from upxo.geoEntities.sline2d import Sline2d_leanest
+    from upxo.geoEntities.sline2d import Sline2d
+    from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+    from upxo.geoEntities.sline2d import Sline2d as sl2d
 
 Classes
 -------
-* Sline2d_leanest
-* Sline2d
+Sline2d_leanest : Minimal 2D straight line (coordinates only, ``__slots__``).
+Sline2d         : Full-featured 2D straight line with geometric operations.
 
-Definitions
------------
-None
+Notes
+-----
+Coordinate system convention (right-hand, Y-up)::
 
-Coordinate system
------------------
-                     Y+
-                     |           Z-
-                     |         /
-                     |       /
-                     |     /
-                     |   /
-    X-               | /               X+
-    -----------------O------------------
-                    /|
-                  /  |
-                /    |
-              /      |
-            /        |
-          /          |
-        Z+           Y-
+         Y+
+         |           Z-
+         |         /
+    X-   |       /        X+
+    -----O-----/----------
+        /|
+      /  |
+    Z+   Y-
 """
 
 import math
@@ -94,32 +66,17 @@ class Sline2d_leanest():
     x1, y1 : float
         Coordinates of end point.
 
-    Metadata
-    --------
-    * Class: Sline2d_leanest
-    * Module: upxo.geoEntities.sline2d
-    * Author: Dr. Sunil Anandatheertha
-    * Email: vaasu.anandatheertha@ukaea.uk
-    * Status: Active
-    * Last updated: 2026-03-11
-
     Import
     ------
-    from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+        from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
 
     Examples
     --------
-    sl2dl(-2, 3, 4, 5)
-    sl2dl()
-
-    # Example-2
-    for coord in e:
-        print(coord)
-
-    # Example-3
-    print(e[1])
-
-    Author: Dr. Sunil Anandatheertha
+    >>> from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+    >>> e = sl2dl(-2, 3, 4, 5)
+    >>> for coord in e:
+    ...     print(coord)
+    >>> print(e[1])
     """
 
     __slots__ = ('x0', 'y0', 'x1', 'y1')
@@ -139,7 +96,7 @@ class Sline2d_leanest():
         self.x1, self.y1 = x1, y1
 
     def __repr__(self):
-        """Repr function."""
+        """Return ``UPXO-sl2d-lean (x0,y0)-(x1,y1)`` with 6 decimal places."""
         return f'UPXO-sl2d-lean ({round(self.x0, 6)},{round(self.y0, 6)})-({round(self.x1, 6)},{round(self.y1, 6)})'
 
     def __iter__(self):
@@ -185,18 +142,20 @@ class Sline2d_leanest():
 
         Parameters
         ----------
-        start: Starting point coordinate [x0, y0]
-        end: Ending point coordinate [x1, y1]
+        start : list of float
+            Start point as ``[x0, y0]``.
+        end : list of float
+            End point as ``[x1, y1]``.
 
         Returns
         -------
         Sline2d_leanest
-            Lean line connecting `start` and `end`.
+            Lean line connecting ``start`` and ``end``.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dlean
-        A = sl2dlean.by_coord([-1, 2], [3, 4])
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dlean
+        >>> A = sl2dlean.by_coord([-1, 2], [3, 4])
         """
         return cls(start[0], start[1], end[0], end[1])
 
@@ -210,11 +169,11 @@ class Sline2d_leanest():
         float
             Euclidean distance between `(x0, y0)` and `(x1, y1)`.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
-        e = sl2dl(-2, 3, 4, 5)
-        e.length
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+        >>> e = sl2dl(-2, 3, 4, 5)
+        >>> e.length
         """
         return math.sqrt((self.x0-self.x1)**2 + (self.y0-self.y1)**2)
 
@@ -223,27 +182,16 @@ class Sline2d_leanest():
         """
         Return the gradient of the self line.
 
-        Parameters
-        ----------
-        None
-
         Returns
         -------
-        Gradient of the line.
+        float
+            Slope ``(y1 - y0) / (x1 - x0)``, or ``math.inf`` for vertical lines.
 
         Examples
         --------
-        from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
-
-        Example-1
-        ---------
-        e = sl2dl(-2, 3, 4, 5)
-        e.gradient
-
-        Example-2
-        ---------
-        e = sl2dl(0, 1, 0, 2)
-        e.gradient
+        >>> from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
+        >>> sl2dl(-2, 3, 4, 5).gradient
+        >>> sl2dl(0, 1, 0, 2).gradient
         """
         if self.x0 == self.x1:
             return math.inf
@@ -285,29 +233,13 @@ class Sline2d_leanest():
             4. Relative position of point unknown.
                The truth values in 'intersection' are [False, False, False]
 
-        EXAMPLES
+        Examples
         --------
-        from upxo.geoEntities.point2d import Point2d
-        from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dlean
-        e = sl2dlean.by_coord([-1, 0], [1, 0])
-
-        e.contains_point([-0.5, 0])
-        e.contains_point([0, 0])
-        e.contains_point([-1, 0])
-        e.contains_point([1, 0])
-        e.contains_point([-1.1, 0])
-        e.contains_point([-1.1, 1])
-
-        e.contains_point(Point2d(-0.5, 0))
-        e.contains_point(Point2d(0, 0))
-        e.contains_point(Point2d(-1, 0))
-        e.contains_point(Point2d(1, 0))
-        e.contains_point(Point2d(-1.1, 0))
-        e.contains_point(Point2d(-1.1, 1))
-
-        e = Sline2d(pnta=Point2d(1, 0), pntb=Point2d(1, 0))
-        e.contains_point([0.8, 0.2])
-        e.contains_point(Point2d(0.8, 0.2))
+        >>> from upxo.geoEntities.point2d import Point2d
+        >>> from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dlean
+        >>> e = sl2dlean.by_coord([-1, 0], [1, 0])
+        >>> e.contains_point([-0.5, 0])
+        >>> e.contains_point(Point2d(-1.1, 1))
         """
         SQRT = math.sqrt
         if dth.IS_CPAIR(obj):
@@ -422,18 +354,9 @@ class Sline2d():
         * horz: True if horizontal
         * lean: Return lean representation of self.
 
-    Metadata
-    --------
-    * Class: Sline2d
-    * Module: upxo.geoEntities.sline2d
-    * Author: Dr. Sunil Anandatheertha
-    * Email: vaasu.anandatheertha@ukaea.uk
-    * Status: Active development
-    * Last updated: 2026-03-11
-
     Import
     ------
-    from upxo.geoEntities.sline2d import Sline2d
+        from upxo.geoEntities.sline2d import Sline2d
     """
 
     ε = 1E-8
@@ -530,17 +453,17 @@ class Sline2d():
 
         Parameters
         ----------
-        start: Starting point coordinate [x0, y0]
-        end: Ending point coordinate [x1, y1]
+        start : Starting point coordinate [x0, y0]
+        end : Ending point coordinate [x1, y1]
 
         Returns
         -------
         Sline2d
             Line connecting `start` and `end`.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
         A = sl2d.by_coord([-1, 2], [3, 4])
         """
         return cls(start[0], start[1], end[0], end[1])
@@ -552,19 +475,19 @@ class Sline2d():
 
         Parameters
         ----------
-        start: Starting point
-        end: Ending point
+        start : Starting point
+        end : Ending point
 
         Returns
         -------
         Sline2d
             Line created from two UPXO point objects.
 
-        Example
-        -------
-        from upxo.geoEntities.point2d import Point2d as p2d
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_p2d(p2d(-1, 2), p2d(3, 4))
+        Examples
+        --------
+        >>> from upxo.geoEntities.point2d import Point2d as p2d
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_p2d(p2d(-1, 2), p2d(3, 4))
         """
         return cls(pnta=start, pntb=end)
 
@@ -575,17 +498,17 @@ class Sline2d():
 
         Parameters
         ----------
-        gradient: Slope of the 2D line
-        intercept: Y-intercept of the straight line
-        length: Length of the straight line
+        gradient : Slope of the 2D line
+        intercept : Y-intercept of the straight line
+        length : Length of the straight line
 
-        Return
-        ------
+        Returns
+        -------
         Instance of Sline2d
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d
         Sline2d.by_MCL(1.0, -1, 1)
         """
         if np.isinf(gradient):
@@ -603,24 +526,24 @@ class Sline2d():
         """
         Instantiate Sline2d using m, c and L, centred at centre-(cx, cy).
 
-        Explanations
-        ------------
-        MCLC: Gradient, Y-intercept, Length, Centre
+        Notes
+        -----
+        MCLC stands for: Gradient (M), Y-intercept (C), Length (L), Centre (C).
 
         Parameters
         ----------
-        gradient: Slope of the 2D line
-        intercept: Y-intercept of the straight line
-        length: Length of the straight line
-        centre: Proposed x- and y-location of line midpoint: (cx, cy)
+        gradient : Slope of the 2D line
+        intercept : Y-intercept of the straight line
+        length : Length of the straight line
+        centre : Proposed x- and y-location of line midpoint: (cx, cy)
 
-        Return
-        ------
+        Returns
+        -------
         Instance of Sline2d
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d
         Sline2d.by_MCLC(1.0, 0, 2.0, (-10.0, -10.0))
         Sline2d.by_MCLC(1.0, -1.0, 2.0, (-10.0, -5.0))
         """
@@ -649,7 +572,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("by_parametric is not yet implemented.")
 
     @classmethod
     def by_general_form(cls, A, B, C):
@@ -756,13 +679,13 @@ class Sline2d():
 
         Parameters
         ----------
-        ref: Specifies which point on the line is used to specify the edge.
+        ref : Specifies which point on the line is used to specify the edge.
 
-        loc: Specifies the ref point.
+        loc : Specifies the ref point.
 
-        length: Length of the line to be made.
+        length : Length of the line to be made.
 
-        angle: Angle(s) of inclination of the line. If 2D, single value. If 3D,
+        angle : Angle(s) of inclination of the line. If 2D, single value. If 3D,
         this specifies a list of three angles. First angle
 
         degree: ang considered in degree if degree is True, in radians if
@@ -822,8 +745,8 @@ class Sline2d():
 
         Parameters
         ----------
-        e: Edge specification. Preferred: UPXO edge2d_leanest
-        p: Point specification. Preferred: UPXO point2d_leanest
+        e : Edge specification. Preferred: UPXO edge2d_leanest
+        p : Point specification. Preferred: UPXO point2d_leanest
 
         Examples
         --------
@@ -842,7 +765,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("by_perp_bisector is not yet implemented.")
 
     @classmethod
     def by_transform(cls, refedge=None, shiftxy=[0, 1],
@@ -852,16 +775,16 @@ class Sline2d():
 
         Parameters
         ----------
-        refedge: Reference sline which is to be transformed. Preferably,
+        refedge : Reference sline which is to be transformed. Preferably,
             provide UPXO edge2d object.
-        shiftxy: Translation along x and y axes.
-        rot: Rotation angle about a point. This point location is determined
+        shiftxy : Translation along x and y axes.
+        rot : Rotation angle about a point. This point location is determined
             using input rot_pnt_f. Positive value indicates CCW from x+ axis.
             Negative value indicated CW from x+ axis. Domain is [0, 180] and
             [-(180-eps), 0-eps], eps is very small number in python (value?).
-        degree: If True, provided rot value will be considered in degrees,
+        degree : If True, provided rot value will be considered in degrees,
             else, in radians.
-        rot_pnt_f: Valid domain [0.0, 1.0]. This is a factor of length. For
+        rot_pnt_f : Valid domain [0.0, 1.0]. This is a factor of length. For
             example, if rot_pnt_f = 0.25, then the point about which the edge
             shall be rotated by rot angle will be located at 25% length away
             from start (i.e, (x0, y0)) point of the refedge.
@@ -870,7 +793,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("by_transform is not yet implemented.")
 
     @property
     def mid_coord(self):
@@ -906,13 +829,13 @@ class Sline2d():
         float
             Gradient of the line. Returns `math.inf` for vertical lines.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_coord([-1, 2], [3, 4]).gradient
-        sl2d.by_coord([-1, -1], [1, 1]).gradient
-        sl2d.by_coord([0, 0], [0, 1]).gradient
-        sl2d.by_coord([0, 0], [1, 0]).gradient
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_coord([-1, 2], [3, 4]).gradient
+        >>> sl2d.by_coord([-1, -1], [1, 1]).gradient
+        >>> sl2d.by_coord([0, 0], [0, 1]).gradient
+        >>> sl2d.by_coord([0, 0], [1, 0]).gradient
         """
         if self.x0 == self.x1:
             return math.inf
@@ -924,11 +847,11 @@ class Sline2d():
         """
         Return the length increments along x and y.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        a = sl2d(0,0, 1,1)
-        a.dxdy
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> a = sl2d(0,0, 1,1)
+        >>> a.dxdy
         """
         return self.dx, self.dy
 
@@ -937,11 +860,11 @@ class Sline2d():
         """
         Return the length increment along x.
 
-        Example
-        -------
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        a = sl3d(0,0,0, 1,1,1)
-        a.dx
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline3d import Sline3d as sl3d
+        >>> a = sl3d(0,0,0, 1,1,1)
+        >>> a.dx
         """
         return self.x1-self.x0
 
@@ -950,11 +873,11 @@ class Sline2d():
         """
         Return the length increments along y.
 
-        Example
-        -------
-        from upxo.geoEntities.sline3d import Sline3d as sl3d
-        a = sl3d(0,0,0, 1,1,1)
-        a.dy
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline3d import Sline3d as sl3d
+        >>> a = sl3d(0,0,0, 1,1,1)
+        >>> a.dy
         """
         return self.y1-self.y0
 
@@ -968,14 +891,14 @@ class Sline2d():
         float
             Y-intercept if finite; `math.inf` for vertical lines.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_coord([-1, 2], [3, 4]).yint
-        sl2d.by_coord([-1, -1], [1, 1]).yint
-        sl2d.by_coord([0, 0], [0, 1]).yint
-        sl2d.by_coord([0, 0], [1, 0]).yint
-        sl2d.by_coord([0, -1], [1, -1]).yint
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_coord([-1, 2], [3, 4]).yint
+        >>> sl2d.by_coord([-1, -1], [1, 1]).yint
+        >>> sl2d.by_coord([0, 0], [0, 1]).yint
+        >>> sl2d.by_coord([0, 0], [1, 0]).yint
+        >>> sl2d.by_coord([0, -1], [1, -1]).yint
         """
         if self.x0 == self.x1:
             return math.inf
@@ -992,14 +915,14 @@ class Sline2d():
         float
             Angle from positive x-axis to line direction in radians.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_coord([-1, 2], [3, 4]).ang
-        sl2d.by_coord([-1, -1], [1, 1]).ang
-        sl2d.by_coord([0, 0], [0, 1]).ang
-        sl2d.by_coord([0, 0], [1, 0]).ang
-        sl2d.by_coord([0, -1], [1, -1]).ang
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_coord([-1, 2], [3, 4]).ang
+        >>> sl2d.by_coord([-1, -1], [1, 1]).ang
+        >>> sl2d.by_coord([0, 0], [0, 1]).ang
+        >>> sl2d.by_coord([0, 0], [1, 0]).ang
+        >>> sl2d.by_coord([0, -1], [1, -1]).ang
         """
         return math.atan2(self.y1-self.y0, self.x1-self.x0)
 
@@ -1013,14 +936,14 @@ class Sline2d():
         float
             Angle from positive x-axis to line direction in degrees.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_coord([-1, 2], [3, 4]).angd
-        sl2d.by_coord([-1, -1], [1, 1]).angd
-        sl2d.by_coord([0, 0], [0, 1]).angd
-        sl2d.by_coord([0, 0], [1, 0]).angd
-        sl2d.by_coord([0, -1], [1, -1]).angd
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_coord([-1, 2], [3, 4]).angd
+        >>> sl2d.by_coord([-1, -1], [1, 1]).angd
+        >>> sl2d.by_coord([0, 0], [0, 1]).angd
+        >>> sl2d.by_coord([0, 0], [1, 0]).angd
+        >>> sl2d.by_coord([0, -1], [1, -1]).angd
         """
         return math.degrees(self.ang)
 
@@ -1034,14 +957,14 @@ class Sline2d():
         float
             Euclidean distance between line endpoints.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d.by_coord([-1, 2], [3, 4]).length
-        sl2d.by_coord([-1, -1], [1, 1]).length
-        sl2d.by_coord([0, 0], [0, 1]).length
-        sl2d.by_coord([0, 0], [1, 0]).length
-        sl2d.by_coord([0, -1], [1, -1]).length
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d.by_coord([-1, 2], [3, 4]).length
+        >>> sl2d.by_coord([-1, -1], [1, 1]).length
+        >>> sl2d.by_coord([0, 0], [0, 1]).length
+        >>> sl2d.by_coord([0, 0], [1, 0]).length
+        >>> sl2d.by_coord([0, -1], [1, -1]).length
         """
         return math.sqrt((self.x0-self.x1)**2 + (self.y0-self.y1)**2)
 
@@ -1103,11 +1026,11 @@ class Sline2d():
         list
             Coordinates `[x0, y0, x1, y1]`.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        a = sl2d(0,0, 1,1)
-        a.coords
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> a = sl2d(0,0, 1,1)
+        >>> a.coords
         """
         return [self.x0, self.y0, self.x1, self.y1]
 
@@ -1121,11 +1044,11 @@ class Sline2d():
         list
             Endpoint coordinates `[[x0, y0], [x1, y1]]`.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        a = sl2d(0,0, 1,1)
-        a.coord_list
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> a = sl2d(0,0, 1,1)
+        >>> a.coord_list
         """
         return [[self.x0, self.y0], [self.x1, self.y1]]
 
@@ -1207,11 +1130,11 @@ class Sline2d():
         """
         Return True if point is one of the end points on the line.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        sl2d(0,0,1,1).is_point_endpoint((0,0))
-        sl2d(0,0,1,1).is_point_endpoint([1, 3])
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> sl2d(0,0,1,1).is_point_endpoint((0,0))
+        >>> sl2d(0,0,1,1).is_point_endpoint([1, 3])
         """
         is_endpoint = False
         if np.any(np.all(np.array(self.coord_list) == point, axis=1)):
@@ -1222,12 +1145,12 @@ class Sline2d():
         """
         Invert start and end points.
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        a = sl2d(0,0,1,1)
-        a.invert()
-        a.coord_list
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> a = sl2d(0,0,1,1)
+        >>> a.invert()
+        >>> a.coord_list
         """
         ends = self.coord_list
         self.x0, self.y0 = ends[1]
@@ -1751,6 +1674,7 @@ class Sline2d():
         ang, length = self.ang, self.length
         # .........
         def apply_spacing(r, spacing, fac):
+            """Map ratio array ``r`` through the chosen spacing function."""
             # Valid only for factors = 0.0, 1.0
             spacing_actions = {
                 'constant': lambda r: r,
@@ -1868,8 +1792,8 @@ class Sline2d():
 
         Parameters
         ----------
-        lines: Iterable of UPXO lines.
-        _tol_decplace_: Number of rounding decimal places for gradient product
+        lines : Iterable of UPXO lines.
+        _tol_decplace_ : Number of rounding decimal places for gradient product
             check. Defaults to 8.
 
         Examples
@@ -2188,8 +2112,8 @@ class Sline2d():
 
         Parameters
         ----------
-        points: List of points
-        ref: Refers to point(s) location on the sline. Options include:
+        points : List of points
+        ref : Refers to point(s) location on the sline. Options include:
             * 'all': uses location i, j and the mid on the line.
             * 'i': starting point, (x0, y0)
             * 'j': starting point, (x1, y1)
@@ -2233,8 +2157,8 @@ class Sline2d():
 
         Parameters
         ----------
-        lines: List of lines
-        method: Indicate the method of calculation. Can take following values:
+        lines : List of lines
+        method : Indicate the method of calculation. Can take following values:
             * 'ref': Use the reference location specifiers to calculate
             distance. That is, use refi and refj.
             * 'min': Minimum Baudhāyana distance
@@ -2249,8 +2173,8 @@ class Sline2d():
         selected reference points only. The `method` argument is currently not
         branched into `min`/`max`/`mean` logic inside this function.
 
-        Return
-        ------
+        Returns
+        -------
         List of ndarray distances to all edges.
 
         Examples
@@ -2322,22 +2246,22 @@ class Sline2d():
 
         Parameters
         ----------
-        vector: Direction of translation. Two specifications allowed are:
+        vector : Direction of translation. Two specifications allowed are:
              Specification 1: [vector start point coords,
                                vector end point coords]
              Specification 2: 'x+', 'z-'
 
-        dist: Euclidean distance. If None and not a Number, then the
+        dist : Euclidean distance. If None and not a Number, then the
             translation distance will be the length of the vector. If a
             number, then dist will be the translation distance, in which case
             the vector will only be used to know the translation direction.
 
-        update: Update the current point if True, do not update if False.
+        update : Update the current point if True, do not update if False.
 
-        throw: Return a edge if True, else return nothing if False.
+        throw : Return a edge if True, else return nothing if False.
 
-        Return
-        ------
+        Returns
+        -------
         UPXO edge object: Conditional, depending on input throw (refer to
                                                                  description).
 
@@ -2352,7 +2276,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("translate_by is not yet implemented.")
 
     def intersection_lines(self, lines, dim=2):
         """
@@ -2365,23 +2289,23 @@ class Sline2d():
 
         Parameters
         ----------
-        lines: Data representing 2D and/or 3D lines.
+        lines : Data representing 2D and/or 3D lines.
         dim: dimensionality. Default to 2. Options are:
             2: 2D.
             3: 3D.
             4: 2D/3D - indicates mixed collection in lines user input.
 
-        Example
-        -------
-        import random
-        from upxo.geoEntities.sline2d import Sline2d as sl2d
-        lines = [sl2d.by_coord([-1, -1], [3, 3]),
-                 sl2d.by_coord([-1, 1], [1, -1]),
-                 sl2d.by_coord([0, 0], [1, 0]),
-                 sl2d.by_coord([0, 0], [0, 1])
-                 ]
-        sl2d.by_coord([0, 0], [0, 1]).intersection_lines(lines)
-        sl2d.by_coord([1, 0], [1, 1]).intersection_lines(lines)
+        Examples
+        --------
+        >>> import random
+        >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
+        >>> lines = [sl2d.by_coord([-1, -1], [3, 3]),
+                 >>> sl2d.by_coord([-1, 1], [1, -1]),
+                 >>> sl2d.by_coord([0, 0], [1, 0]),
+                 >>> sl2d.by_coord([0, 0], [0, 1])
+                 >>> ]
+        >>> sl2d.by_coord([0, 0], [0, 1]).intersection_lines(lines)
+        >>> sl2d.by_coord([1, 0], [1, 1]).intersection_lines(lines)
         """
         # Validations
         # ------------------------------------
@@ -2409,10 +2333,10 @@ class Sline2d():
         vis: bool, optional
             If True, plot a quick visualization of line and rectangle.
 
-        Return
-        ------
+        Returns
+        -------
         coords: list of [p1, p2, p3, p4]. CCW from lower left point, p1.
-        rectangle: Shapely polygon object
+        rectangle : Shapely polygon object
 
         Examples
         --------
@@ -2448,6 +2372,7 @@ class Sline2d():
         # Validate user input
         # ------------------------------------------
         def splot(r):
+            """Plot the bounding rectangle ``r`` for visualisation."""
             x, y = r.boundary.xy
             # ..........
             # plt.plot(x[0], y[0], 'ro', markersize=6)
@@ -2499,18 +2424,18 @@ class Sline2d():
         ----------
         points: coordinates as [[x-coords],[y-coords]]
         width: rectangle width
-        boundary_points: If True, points on the boundary of the rectangle will
+        boundary_points : If True, points on the boundary of the rectangle will
             be considered, else not.
-        vis: If True, a quick visualization will be provided. Green is for
+        vis : If True, a quick visualization will be provided. Green is for
             self line, where smaller is starting point i and larger is ending
             point j. Marker sizes indicating corners of rectangle follow
             shapely polygon coordinate order. Black dots are points. Blue
             crosses are points which satisfy the geometric condition.
             NOTE: The above order may differ from UPXO line.rectangle.
 
-        Return
-        ------
-        inside: Numpy arrau of bools. A True indicates position in input
+        Returns
+        -------
+        inside : Numpy arrau of bools. A True indicates position in input
             points which satisfy the geometric criteria.
 
         Notes
@@ -2582,6 +2507,7 @@ class Sline2d():
         # ------------------------------------------
 
         def splot(r, x, y, inside):
+            """Plot the bounding rectangle ``r`` and highlight inside/outside points."""
             rx, ry = r.boundary.xy
             # ..........
             plt.plot([rx[0], rx[1]], [ry[0], ry[1]], '--ko', markersize=6)
@@ -2619,21 +2545,21 @@ class Sline2d():
 
         Parameters
         ----------
-        ref: Location on the edge which translates to new point. Values of ref
+        ref : Location on the edge which translates to new point. Values of ref
         could be:
             * 'i': Starting point of the edge
             * 'j': Ending point of the edge
             * 'mid': Middle point of the edge
             * [x, y, (z)]: Coordinate value
 
-        point: New position. UPXO / direct point specification.
+        point : New position. UPXO / direct point specification.
 
-        update: Update the current point if True, do not update if False.
+        update : Update the current point if True, do not update if False.
 
-        throw: Return a point if True, else return nothing if False.
+        throw : Return a point if True, else return nothing if False.
 
-        Return
-        ------
+        Returns
+        -------
         UPXO point object: Conditional, depending on input throw (refer to
                                                                   description).
 
@@ -2641,7 +2567,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("translate_to is not yet implemented.")
 
     def rotate_about(self, *, axis=None, angle=0, degree=True,
                      update=False, throw=True):
@@ -2657,21 +2583,21 @@ class Sline2d():
 
         Parameters
         ----------
-        axis: Axis of rotation. Two specifications allowed are:
+        axis : Axis of rotation. Two specifications allowed are:
              Specification 1: [axis start point coords,
                                axis end point coords]
              Specification 2: 'x+', 'z-'
 
-        angle: Counter-Clockwise positive, angle of rotation
+        angle : Counter-Clockwise positive, angle of rotation
 
         degree: angle considered in degrees if True, radians if False.
 
-        update: Update the current point if True, do not update if False.
+        update : Update the current point if True, do not update if False.
 
-        throw: Return a point if True, else return nothing if False.
+        throw : Return a point if True, else return nothing if False.
 
-        Return
-        ------
+        Returns
+        -------
         UPXO point object: Conditional, depending on input throw (refer to
                                                                   description).
 
@@ -2679,7 +2605,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("rotate_about is not yet implemented.")
 
     def attach_mp(self, *, mp=None, name=None):
         """Attach a UPXO multi-point object and a name."""
@@ -2693,7 +2619,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("attach_xtal is not yet implemented.")
 
     def perp_distance(self, plist, ptype='coord_list'):
         """
@@ -2740,11 +2666,11 @@ class Sline2d():
 
         Parameters
         ----------
-        points: Elements of points must contain the coordinates either in direct
+        points : Elements of points must contain the coordinates either in direct
         Iterable form  (such a list of [x, y] or a nparray np.array([x, y]))
         OR a 2D/3D UPXO point object.
 
-        r: Cut-off perpendicular diatance.
+        r : Cut-off perpendicular diatance.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
@@ -2758,8 +2684,8 @@ class Sline2d():
         vis : bool, optional
             If True, plot the selected neighboring points.
 
-        Return
-        ------
+        Returns
+        -------
         list
             Indices in `points` satisfying selection criteria.
             Empty list if no points are inside cut-off.
@@ -2805,6 +2731,7 @@ class Sline2d():
         import matplotlib.pyplot as plt
 
         def splot(line, x, y, xnearest, ynearest):
+            """Plot the line, all points, and nearest-neighbour highlights."""
             plt.plot(line.x0, line.y0, 'gs', markersize=12)
             plt.plot(line.x1, line.y1, 'gs', markersize=16)
             # ..........
@@ -2839,21 +2766,21 @@ class Sline2d():
         Iterable form  (such a list of [x, y] or a nparray np.array([x, y]))
         OR a 2D/3D UPXO point object.
 
-        n: Number of nearest neighbours to return. If not entered, a single
+        n : Number of nearest neighbours to return. If not entered, a single
         point shall be returned.
 
-        plane: Specify the plane of the self point. Only used if self is a 2D
+        plane : Specify the plane of the self point. Only used if self is a 2D
         point object. Defaults to 'xy'.
 
-        Return
-        ------
+        Returns
+        -------
         Indices in plist.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_point_by_count is not yet implemented.")
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
@@ -2868,27 +2795,27 @@ class Sline2d():
 
         Parameters
         ----------
-        mplist: Elements of plist must contain the coordinates either in direct
+        mplist : Elements of plist must contain the coordinates either in direct
         Iterable form  (such a list of [x, y] or a nparray np.array([x, y]))
         OR a 2D/3D UPXO point object.
 
-        plane: Specify the plane of the self point. Only used if self is a 2D
+        plane : Specify the plane of the self point. Only used if self is a 2D
         point object. Defaults to 'xy'.
 
-        r: Euclidean radius of search.
+        r : Euclidean radius of search.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
 
-        Return
-        ------
+        Returns
+        -------
         Indices in mplist.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_mulpoint_by_distance is not yet implemented.")
 
     def find_neigh_edge_by_distance(self, *, elist=None,
                                     plane='xy', refloc='starting', r=0):
@@ -2897,16 +2824,16 @@ class Sline2d():
 
         Parameters
         ----------
-        elist: Elements of elist must contain edges in either of the following
+        elist : Elements of elist must contain edges in either of the following
             two formats:
                 1. 2D/3D UPXO edge objects.
                 2. Iterable object with elements starting point: [x0, y0, z0]
                    and ending point: [x1, y1, z1]
 
-        plane: Specify the plane of the self point. Only used if self is a 2D
+        plane : Specify the plane of the self point. Only used if self is a 2D
         point object. Defaults to 'xy'.
 
-        refloc: Specify the location on th edge which is to be used for
+        refloc : Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
         can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
@@ -2915,20 +2842,20 @@ class Sline2d():
             * 'any'. Any point of the edge.  No alternate.
             * 'all'. Both start and end points of the edge.  No alternate.
 
-        r: Euclidean radius of search.
+        r : Euclidean radius of search.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
 
-        Return
-        ------
+        Returns
+        -------
         Indices in mplist.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_edge_by_distance is not yet implemented.")
 
     def find_neigh_muledge_by_distance(self, *, melist=None,
                                        plane='xy', refloc='starting', r=0):
@@ -2937,14 +2864,14 @@ class Sline2d():
 
         Parameters
         ----------
-        melist: Elements of melist must contain medges in either of the
+        melist : Elements of melist must contain medges in either of the
         following single format:
                 1. 2D/3D UPXO medge objects.
 
-        plane: Specify the plane of the self point. Only used if self is a 2D
+        plane : Specify the plane of the self point. Only used if self is a 2D
         point object. Defaults to 'xy'.
 
-        refloc: Specify the location on th edge which is to be used for
+        refloc : Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
         can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
@@ -2953,20 +2880,20 @@ class Sline2d():
             * 'any'. Any point of the edge.  No alternate.
             * 'all'. Both start and end points of the edge.  No alternate.
 
-        r: Euclidean radius of search.
+        r : Euclidean radius of search.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
 
-        Return
-        ------
+        Returns
+        -------
         Indices in mplist.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_muledge_by_distance is not yet implemented.")
 
     def find_neigh_xtal_by_distance(self, *, xlist=None,
                                     plane='xy', refloc='starting', r=0):
@@ -2975,17 +2902,17 @@ class Sline2d():
 
         Parameters
         ----------
-        xlist: Elements of xlist must contain xtals in either of the
+        xlist : Elements of xlist must contain xtals in either of the
         following three formats:
                 1. 2D/3D UPXO xtal objects.
                 2. Shapely polygon object.
                 3. GMSH closed region.
                 4. VTK polyhedra object.
 
-        plane: Specify the plane of the self point. Only used if self is a 2D
+        plane : Specify the plane of the self point. Only used if self is a 2D
         point object. Defaults to 'xy'.
 
-        refloc: Specify the location on th edge which is to be used for
+        refloc : Specify the location on th edge which is to be used for
         calculating the distance form the self point itself and the edge. It
         can have the following options:
             * 'starting'. Starting point of the edge. Alternative use: start
@@ -2994,20 +2921,20 @@ class Sline2d():
             * 'any'. Any point of the edge.  No alternate.
             * 'all'. Both start and end points of the edge.  No alternate.
 
-        r: Euclidean radius of search.
+        r : Euclidean radius of search.
            If 0, the closest point will be looked out for.
            If > 0, all points which fall in or on a circle of radius r will be
            looked out for.
 
-        Return
-        ------
+        Returns
+        -------
         Indices in mplist.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_xtal_by_distance is not yet implemented.")
 
     def find_colinear_lines(self, lines, line_repr='upxo'):
         """
@@ -3075,8 +3002,8 @@ class Sline2d():
                 * 'upxo'
                 * 'coord_list'
 
-        Return
-        ------
+        Returns
+        -------
         Location indices of those lines in lines parallel to self.
 
         Example-1
@@ -3125,15 +3052,15 @@ class Sline2d():
 
         Parameters
         ----------
-        n: Number of points to make
+        n : Number of points to make
         spacing: mathematical spacing to apply
         threshold_factor
         start: spacifies the location about which point creation starts.
-        store_as_feature: If True, points will be stored in self.f dictionary.
+        store_as_feature : If True, points will be stored in self.f dictionary.
             Defaults to False.
-        feature_replace: If True, any existing feature points will be erased.
+        feature_replace : If True, any existing feature points will be erased.
             DEfaults to False.
-        vis: If True, result shall be visualized. Defaults to False.
+        vis : If True, result shall be visualized. Defaults to False.
 
         Returns
         -------
@@ -3174,6 +3101,7 @@ class Sline2d():
         # Validate user inputs
         # ------------------------------------
         def plot(points):
+            """Plot the seed line endpoints and the generated seed points."""
             plt.figure()
             plt.plot(self.x0, self.y0, 'ks', markersize=6)
             plt.plot(self.x1, self.y1, 'ks', markersize=8)
@@ -3212,7 +3140,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("set_gmsh_props is not yet implemented.")
 
     def make_shapely(self):
         """
@@ -3222,7 +3150,7 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("make_shapely is not yet implemented.")
 
     def make_vtk(self):
         """
@@ -3232,18 +3160,18 @@ class Sline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("make_vtk is not yet implemented.")
 
     def generate_points(self, dxmean, pert_factor=0.0):
         """
-        dxmean: Mean spacing
+        dxmean : Mean spacing
         pert_factor
 
-        Example
-        -------
-        from upxo.geoEntities.sline2d import Sline2d
-        line = Sline2d(0, 0, 1, 1)
-        line.generate_points(np.sqrt(2)/10, pert_factor=1)
+        Examples
+        --------
+        >>> from upxo.geoEntities.sline2d import Sline2d
+        >>> line = Sline2d(0, 0, 1, 1)
+        >>> line.generate_points(np.sqrt(2)/10, pert_factor=1)
         """
         x0, y0, x1, y1 = self.coords
 
@@ -3323,6 +3251,7 @@ class Sline2d():
 
         if method == 'by_count':
             def get_spacing(k):
+                """Return the spacing distance for offset index ``k``."""
                 if isinstance(spacing, dict) and spacing.get("dist") == "normal":
                     mu = spacing.get("mean", 1.0)
                     std_factor = spacing.get("std_factor", 0.0)
@@ -3490,8 +3419,8 @@ class Sline2d():
         vector:
         spacing:
 
-        Return
-        ------
+        Returns
+        -------
         list of point objects
 
         Example-1
@@ -3562,20 +3491,20 @@ class Sline2d():
         ----------
         elist: list of edge objects
 
-        consider_ends: If True, index of the edge containing the selfpoint
+        consider_ends : If True, index of the edge containing the selfpoint
         coordinates at one of its end points will also be returned. If False,
         the index will be included only if the point is not on the end
         points but completely inside the edge's end points.
 
-        Return
-        ------
+        Returns
+        -------
         List of indices of points which satisfy the condition.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("lies_on_which_edge is not yet implemented.")
 
     def lies_in_which_xtal(self, *, xlist=None,
                            cosider_boundary=True,
@@ -3590,26 +3519,26 @@ class Sline2d():
         ---------
         xlist: list of edge objects
 
-        consider_boundary: If True, search will be carried out to see if the
+        consider_boundary : If True, search will be carried out to see if the
         self point lies on one of the boundary edges of the xtal. How this
         search behaves is decided by consider_boundary_ends.
 
-        consider_boundary_ends: If True, index of the xtal containing the
+        consider_boundary_ends : If True, index of the xtal containing the
         selfpoint coordinates at one of the end points of its the xtal's
         many boundary edges will be returned. If False, the index will be
         included only if the point is not on the end points but completely
         inside the edge's end points, provided that the cosider_boundary is
         True.
 
-        Return
-        ------
+        Returns
+        -------
         List of indices of points which satisfy the condition.
 
         Notes
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("lies_in_which_xtal is not yet implemented.")
 
     def split(self, method='byfactor', f=0.5, divider=None,
               saa=False, throw=True, update='pntb',

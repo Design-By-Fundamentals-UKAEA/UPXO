@@ -31,4 +31,4 @@ def mc_iterations_3d_alg224(self):
     STEP 9: If the peak shift is in the direction of target peak, then
     accept the present iteration using a iteration transition probability.
     """
-    pass
+    raise NotImplementedError("mc_iterations_3d_alg224 is not yet implemented.")

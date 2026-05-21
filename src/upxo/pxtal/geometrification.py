@@ -53,6 +53,7 @@ class polygonised_grain_structure():
     EPS_coord_coincide = 1E-8
 
     def __init__(self, lgi, gids, neigh_gid_pxtal):
+        """Initialise the instance."""
         self.lgi, self.gid, self.neigh_gid_pxtal = lgi, gids, neigh_gid_pxtal
         self.n = len(np.unique(self.gid))
         self.GBSEG = {gid: [] for gid in self.gid}
@@ -64,6 +65,7 @@ class polygonised_grain_structure():
         self.smoothed = {}
 
     def geometrify(self, verbose=True):
+        """Geometrify."""
         self.polygonize(self.lgi, self.gid, verbose=verbose)
 
     def polygonize(self, user_lgi=False, lgi=None, user_gids=False, gids=None,
@@ -100,9 +102,11 @@ class polygonised_grain_structure():
                         self.raster_img_polygonisation_results.append(rs)
 
     def setup_gsmp_datastructure(self):
+        """Setup gsmp datastructure."""
         self.gsmp = {'raw': None, 'smoothed': None}
 
     def make_gsmp(self, verbose=True):
+        """Build and return gsmp."""
         if verbose:
             print("Setting up grain structure multi-polygon data structure.")
         if not self.gsmp:
@@ -114,6 +118,7 @@ class polygonised_grain_structure():
             print('Not implemented yet.')
 
     def make_polygonal_grains_raw(self, verbose=True, perform_xtal_dict_check=True):
+        """Build and return polygonal grains raw."""
         if verbose:
             print("Setting up raw polygon data structure for the grain structure.")
         for i, rpolrs in enumerate(self.raster_img_polygonisation_results,
@@ -143,10 +148,12 @@ class polygonised_grain_structure():
 
     @property
     def expol(self):
+        """Expol."""
         return list(self.polygons_raw_exteriors.values())
 
     @property
     def hlpol(self):
+        """Hlpol."""
         # Return all holes in the grain structure. Searches 3 levels deep.
         if not self.holes_exist:
             return []
@@ -176,10 +183,12 @@ class polygonised_grain_structure():
 
     @property
     def holes_exist(self):
+        """Holes exist."""
         return len(self.polygons_raw_holes.keys()) == 0
 
     @property
     def allpol(self):
+        """Allpol."""
         if not self.holes_exist:
             return self.expol
         else:
@@ -236,11 +245,13 @@ class polygonised_grain_structure():
         return not(any(neighcount)), not(any(diffid))
 
     def make_neighpols(self):
+        """Build and return neighpols."""
         polygons = self.allpol
         self.neigh_pols = {pid: [polygons[i-1] for i in self.neigh_gid[pid]]
                            for pid in self.gid}
 
     def extract_gbsegments_raw(self):
+        """Extract gbsegments raw."""
         self.gbsegments_raw = {}
         gptl_fx = self.get_polygon_touch_lines
         polygons = self.allpol
@@ -249,6 +260,7 @@ class polygonised_grain_structure():
                                         for npols in self.neigh_pols[pid]]
 
     def extract_gbsegments_mls_raw(self):
+        """Extract gbsegments mls raw."""
         MLS = MultiLineString
         self.gbsegments_mls = {}
         for pid in self.gid:
@@ -457,48 +469,61 @@ class polygonised_grain_structure():
         return ax
 
     def set_minimum_nnodes_per_gbseg(self):
-        pass
+        """Set or update minimum nnodes per gbseg."""
+        raise NotImplementedError("set_minimum_nnodes_per_gbseg is not yet implemented.")
 
     def subdivide_gbsegments(self, method=1):
         """
         """
-        pass
+        raise NotImplementedError("subdivide_gbsegments is not yet implemented.")
 
     def smooth_moving_avg(self, n=3):
-        pass
+        """Smooth moving avg."""
+        raise NotImplementedError("smooth_moving_avg is not yet implemented.")
 
     def smooth_polynomial(self):
-        pass
+        """Smooth polynomial."""
+        raise NotImplementedError("smooth_polynomial is not yet implemented.")
 
     def extract_gids_for_smoothing(self, verbose=True):
-        pass
+        """Extract gids for smoothing."""
+        raise NotImplementedError("extract_gids_for_smoothing is not yet implemented.")
 
     def heal_edges(self, verbose=True):
-        pass
+        """Heal edges."""
+        raise NotImplementedError("heal_edges is not yet implemented.")
 
     def plot_gbseg(self, gid, segid=[]):
-        pass
+        """Visualise gbseg using Matplotlib or PyVista."""
+        raise NotImplementedError("plot_gbseg is not yet implemented.")
 
     def link_polygons(self):
-        pass
+        """Link polygons."""
+        raise NotImplementedError("link_polygons is not yet implemented.")
 
     def heal_polygons(self):
-        pass
+        """Heal polygons."""
+        raise NotImplementedError("heal_polygons is not yet implemented.")
 
     def write_abq_script_data(self):
-        pass
+        """Export or convert to te abq script data."""
+        raise NotImplementedError("write_abq_script_data is not yet implemented.")
 
     def set_mesh_properties(self):
-        pass
+        """Set or update mesh properties."""
+        raise NotImplementedError("set_mesh_properties is not yet implemented.")
 
     def mesh(self):
-        pass
+        """Mesh."""
+        raise NotImplementedError("mesh is not yet implemented.")
 
     def assess_mesh_quality(self):
-        pass
+        """Assess mesh quality."""
+        raise NotImplementedError("assess_mesh_quality is not yet implemented.")
 
     def export_mesh(self):
-        pass
+        """Export or convert to ort mesh."""
+        raise NotImplementedError("export_mesh is not yet implemented.")
 
     def set_grain_centroids_raw(self, verbose=True):
         """
@@ -525,12 +550,14 @@ class polygonised_grain_structure():
         # To do
 
     def set_polygonization_xyoffset(self, xyoffset, verbose=True):
+        """Set or update polygonization xyoffset."""
         # Validations
         if verbose:
             print(f"Setting up polygonization xy-offset to {xyoffset}.")
         self.xyoffset = xyoffset
 
     def pix_to_geom(self, polygonisation_offset=0.5, verbose=True, perform_xtal_dict_check=True):
+        """Pix to geom."""
         if verbose:
             print(40*'-', "\n", "Starting geometrification of the grain structure.")
         if verbose:
@@ -812,6 +839,7 @@ class polygonised_grain_structure():
                               }
 
     def get_junction_points_from_grain_intersections(self, verbose=True):
+        """Return the junction points from grain intersections."""
         if verbose:
             print("Extracting grain boundary segments and junction points")
         self.JNP = []
@@ -1032,6 +1060,7 @@ class polygonised_grain_structure():
                     self.gbp_grain_wise_indices[gid].append(i)
 
     def build_gbp_grain_wise_indices_coordbased(self, verbose=True):
+        """Build and return  gbp grain wise indices coordbased."""
         if verbose:
             print("Building grain boundary point objects based on grain-wise indices and geometric coordinates.")
         findloc = DO.find_coorda_loc_in_coords_arrayb
@@ -1041,6 +1070,7 @@ class polygonised_grain_structure():
             self.gbp_grain_wise_indices[gid] = [findloc(p, self.gbp_all_coords) for p in plist]
 
     def build_gbp_grain_wise_indices_pointsbased(self, verbose=True):
+        """Build and return  gbp grain wise indices pointsbased."""
         if verbose:
             print("Building grain boundary point objects based on grain-wise indices.")
         self.gbp_grain_wise_points = {gid: None for gid in self.gid}
@@ -1077,6 +1107,7 @@ class polygonised_grain_structure():
             self.gbmullines_grain_wise[gid].add_nodes(jnps_to_insert)
 
     def arrange_junction_point_coords_new(self, gbcoords_thisgrain, junction_points_coord):
+        """Arrange junction point coords new."""
         # Create a dictionary to map coordinates to their indices in gbcoords_thisgrain
         coord_index_map = {tuple(coord): idx for idx, coord in enumerate(gbcoords_thisgrain)}
         # Generate a list of indices for sorting
@@ -1086,6 +1117,7 @@ class polygonised_grain_structure():
         return sorted_junction_points, sorted_indices
 
     def build_sorted_jnp_objects(self, plot=False, verbose=True):
+        """Build and return  sorted jnp objects."""
         if verbose:
             print("Building sorted junction point objects")
         # find_coord_loc = DO.find_coorda_loc_in_coords_arrayb
@@ -1125,6 +1157,7 @@ class polygonised_grain_structure():
                     plt.text(j[0]+0.15, j[1], i, color='red')
 
     def align_gbmullines_start_to_jnp_start(self, plot_bf=False, plot_af=False, verbose=True):
+        """Align gbmullines start to jnp start."""
         if verbose:
             print("Aligning grain boundary multi-linestrings with junction points.")
         if plot_bf:
@@ -1295,6 +1328,7 @@ class polygonised_grain_structure():
                                                        'areas_raw',
                                                        'uniquified'],
                                         verbose=True):
+        """Setup neigh connectivity flags ds."""
         if verbose:
             print("Setting up neighbor connectivity flags for grain boundary segments.")
         if neigh_sense == 'lr':
@@ -1305,6 +1339,7 @@ class polygonised_grain_structure():
                       for neighpair in unique_pair_ids}
 
     def extract_end_coordinates_of_grain_boundary_segments_grain_wise(self, gid):
+        """Extract end coordinates of grain boundary segments grain wise."""
         # Extract segment end coordinates
         seg_ends = {}
         for count in range(len(self.jnp_all_sorted_coords[gid])):
@@ -1314,6 +1349,7 @@ class polygonised_grain_structure():
         return seg_ends
 
     def set_neigh_connectivity_flags_DS(self, centroid_eq_EPS=1E-8, verbose=True):
+        """Set or update neigh connectivity flags DS."""
         if verbose:
             print("Setting up neighbor connectivity flags for grain boundary segments based on centroid proximity.")
         for i, pair in enumerate(self.gid_pair_ids_unique_lr):
@@ -1394,6 +1430,7 @@ class polygonised_grain_structure():
         return unique_indices
 
     def gather_grain_boundary_segments_of_all_pairs(self, verbose=True):
+        """Gather grain boundary segments of all pairs."""
         # Gather grain boundary segments of all pairs
         if verbose:
             print("Gathering grain boundary segments of all pairs and consolidating them.")
@@ -1486,6 +1523,7 @@ class polygonised_grain_structure():
         return problematic_grains
 
     def find_segs_at_loc(self, gbsegs, axis='y', location=-0.5):
+        """Find segs at loc."""
         gb_indices, gbsegs_at_location = [], []
         column = 0 if axis == 'x' else 1 if axis == 'y' else None
         for i, gbseg in enumerate(gbsegs, start=0):
@@ -1495,6 +1533,7 @@ class polygonised_grain_structure():
         return gb_indices, gbsegs_at_location
 
     def update_consolidated_segments_with_boundary_grain_gids(self, plot=False, verbose=True):
+        """Set or update te consolidated segments with boundary grain gids."""
         if verbose:
             print("Updating consolidated grain boundary segments with boundary grain IDs.")
         if self.gid.size == 1:
@@ -1554,6 +1593,7 @@ class polygonised_grain_structure():
 
 
     def plot_consolidated_segments(self):
+        """Visualise consolidated segments using Matplotlib or PyVista."""
         fig, ax = plt.subplots()
         ax.imshow(self.lgi)
         for gid in self.gid:
@@ -1568,6 +1608,7 @@ class polygonised_grain_structure():
                                                   _print_individual_excoord_order_=True,
                                                   _print_statement_=True
                                                   ):
+        """Check or validate check if all gbsegs can form closed rings."""
         jnp_unique_counts_grain_wise = []
         for gid in GBSEGS.keys():
             extreme_coords_unique = []
@@ -1594,6 +1635,7 @@ class polygonised_grain_structure():
             return False, jnp_unique_counts_grain_wise
 
     def flip_segments_to_reorder_GBS(self, plot_each_grain_details=False, verbose=True):
+        """Flip segments to reorder gbs."""
         if verbose:
             print("Flipping grain boundary segments to reorder them in a consistent manner.")
         self.GB = {gid: None for gid in self.gid}
@@ -1724,6 +1766,7 @@ class polygonised_grain_structure():
             print(40*'-', f'\nTotal number of iterations: {sum(list(niterations.values()))}')
 
     def update_segflip_requirements(self, verbose=True):
+        """Set or update te segflip requirements."""
         # Re-assessment - segflips of the last segment.
         if verbose:
             print("Updating segment flip requirements to ensure spatial continuity of grain boundary segments.")
@@ -1773,6 +1816,7 @@ class polygonised_grain_structure():
         return sorted_subsets, subset_indices
 
     def sort_gbsegments_by_original_order(self, verbose=True):
+        """Sort gbsegments by original order."""
         if verbose:
             print("Sorting grain boundary segments by original order.")
         self.sorted_segs = {gid: None for gid in self.gid}
@@ -1783,6 +1827,7 @@ class polygonised_grain_structure():
             self.sorted_segs[gid] = [self.consolidated_segments[gid][ssind] for ssind in subset_indices]
 
     def calculate_grain_boundary_coordinates_after_gbseg_reordering(self, verbose=True):
+        """Calculate grain boundary coordinates after gbseg reordering."""
         if verbose:
             print("Calculating grain boundary coordinates after grain boundary segment reordering.")
         self.GBCoords = {gid: None for gid in self.gid}
@@ -1794,9 +1839,11 @@ class polygonised_grain_structure():
             self.GBCoords[gid] = coord
 
     def are_grains_closed_usenodes(self):
+        """Are grains closed usenodes."""
         return [gb.check_closed() for gb in self.GB.values()]
 
     def are_grains_closed_usecoords(self):
+        """Are grains closed usecoords."""
         coords = self.GBCoords
         flags = []
         for gid in self.gid:
@@ -1805,6 +1852,7 @@ class polygonised_grain_structure():
         return flags
 
     def set_pure_gbpoints(self, verbose=True):
+        """Set or update pure gbpoints."""
         if verbose:
             print("Setting up pure grain boundary points.")
         GBP_pure = []
@@ -1816,6 +1864,7 @@ class polygonised_grain_structure():
         self.GBP_pure = np.array(GBP_pure)
 
     def plot_reordered_GBCoords(self, gid, force_close=True):
+        """Visualise reordered GBCoords using Matplotlib or PyVista."""
         # gid = 43
         # GB[gid].segments
         # GB[gid].segflips
@@ -1834,12 +1883,14 @@ class polygonised_grain_structure():
             plt.plot(c[:, 0], c[:, 1])
 
     def plot_user_gbcoords(self, gbcoords, lw=1.5):
+        """Visualise user gbcoords using Matplotlib or PyVista."""
         fig, ax = plt.subplots()
         for gid in self.gid:
             plt.plot(gbcoords[gid][:, 0], gbcoords[gid][:, 1],
                      ls='solid', lw=lw)
 
     def plot_user_gbcoords1(self, gbcoords, lw=1.5):
+        """Visualise user gbcoords1 using Matplotlib or PyVista."""
         fig, ax = plt.subplots()
         for gid in self.gid:
             gbc = gbcoords[gid]
@@ -1881,6 +1932,7 @@ class polygonised_grain_structure():
                                                    plot_polyxtal=False,
                                                    verbose=True
                                                    ):
+        """Construct geometric polyxtal from gbcoords."""
         if verbose:
             print("Constructing geometric polyxtal from grain boundary coordinates.")
         if dtype == 'shapely':
@@ -1905,6 +1957,7 @@ class polygonised_grain_structure():
 
 
     def AssembleGBSEGS(self, GB, saa=True, throw=False, verbose=True):
+        """Assemblegbsegs."""
         if verbose:
             print("Assembling grain boundary segments into grain boundary multi-linestrings")
         mids_all_gbsegs = []
@@ -1927,9 +1980,11 @@ class polygonised_grain_structure():
             return mids_all_gbsegs, sgseg_obj_list
 
     def get_mids_gbsegs(self, gid):
+        """Return the mids gbsegs."""
         return [id(seg) for seg in self.GB[gid].segments]
 
     def get_gbmid_indices_at_gid(self, gid, all_mids):
+        """Return the gbmid indices at gid."""
         segmids = self.get_mids_gbsegs(gid)
         locs = [np.argwhere(all_mids == segmid)[0][0] for segmid in segmids]
         # for segmid in segmids:
@@ -1938,6 +1993,7 @@ class polygonised_grain_structure():
 
     def smooth_gbsegs(self, GB, npasses=2, max_smooth_levels=[3, 3], plot=True,
                       name='kali'):
+        """Smooth gbsegs."""
         # Validations
         if type(max_smooth_levels) in dth.dt.NUMBERS:
             max_smooth_levels = [max_smooth_levels]
@@ -1983,6 +2039,7 @@ class polygonised_grain_structure():
 
     def plotgs(self, gs_geometric, fig=None, ax=None, cmap='tab20', edgecolor='black', 
                alpha=0.7, lw=1, figsize=(10, 10), dpi=100):
+        """Plotgs."""
         from upxo.viz.gsviz import plot_multipolygon_geometric
         fig, ax = plot_multipolygon_geometric(gs_geometric, fig=fig, ax=ax, cmap=cmap,
                         edgecolor=edgecolor, alpha=alpha, lw=lw,
@@ -1995,6 +2052,7 @@ class polygonised_grain_structure():
 
 class VoronoiMasking(ABC):
     def __init__(self, lfi):
+        """Initialise the instance."""
         self.lfi = lfi  # n x m (x o)
         self.seeds = None         # Seed coordinates
         self.cell_to_id = {}   # Mapping: {cell_idx: grain_id}
@@ -2056,6 +2114,7 @@ from collections import defaultdict
 class GrainManifold2D(VoronoiMasking):
     @classmethod
     def by_tessellation(cls, lfi, seeds, channel=0):
+        """By tessellation."""
         instance = cls(lfi)
         instance.seeds = seeds
         # 1. Map seeds
@@ -2139,6 +2198,7 @@ class GrainManifold2D(VoronoiMasking):
     def smooth_interfaces(self, iterations=10, lmbda=0.5, mu=-0.53,
                           method='taubin', ma_window=3, corner_angle_deg=30.0,
                           thin_grain_px=0.0):
+        """Smooth interfaces."""
         if method == 'taubin':
             from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
             adj = self._get_vertex_adjacency()
@@ -2257,6 +2317,7 @@ class GrainManifold2D(VoronoiMasking):
         return adj
 
     def _get_vertex_adjacency(self):
+        """ get vertex adjacency."""
         from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
         from collections import defaultdict
         
@@ -2265,6 +2326,7 @@ class GrainManifold2D(VoronoiMasking):
         for entity_id, geom in self.cells.items():
             # Helper to extract polygons from any geometry type
             def get_polys(g):
+                """Return the polys."""
                 if isinstance(g, Polygon):
                     return [g]
                 elif isinstance(g, (MultiPolygon, GeometryCollection)):
@@ -2288,6 +2350,7 @@ class GrainManifold2D(VoronoiMasking):
         return adj
 
     def gb_smooth(self, ma_window=3, taubin_iter=10, lmbda=0.5, mu=-0.5, ma_smoother_version=2):
+        """Gb smooth."""
         # 1. Stage 1: Local Moving Average
         if ma_smoother_version == 1:
             self._apply_moving_average_v1(window_size=ma_window)
@@ -2391,11 +2454,13 @@ class GrainManifold2D(VoronoiMasking):
 
         # Internal helper to compute moving average (mode='valid')
         def local_ma(data, w):
+            """Local ma."""
             if len(data) < w: return data
             return np.convolve(data, np.ones(w) / w, mode='valid')
 
         # Internal helper to apply smoothing and re-cap endpoints
         def local_smooth(coords, w):
+            """Local smooth."""
             if len(coords) < w: return coords
             x, y = coords[:, 0], coords[:, 1]
             x_smooth = local_ma(x, w)
@@ -2529,6 +2594,7 @@ class GrainManifold2D(VoronoiMasking):
         self._reconstruct_from_coords(coords)
 
     def _reconstruct_from_coords(self, smoothed_coords_map):
+        """ reconstruct from coords."""
         from shapely.geometry import Polygon
         from shapely.ops import unary_union
         from collections import defaultdict
@@ -2765,6 +2831,7 @@ class GrainManifold2D(VoronoiMasking):
 class GrainManifold3D(VoronoiMasking):
     @classmethod
     def by_tessellation(cls, lfi, seeds, channel=0):
+        """By tessellation."""
         instance = cls(lfi)
         instance.seeds = seeds
         instance.map_seeds_to_lfi(channel=channel)
@@ -2774,5 +2841,6 @@ class GrainManifold3D(VoronoiMasking):
         return instance
 
     def assemble_cells(self, solids):
+        """Assemble cells."""
         # Use PyVista/VTK boolean_union or append filters here
         pass

@@ -1009,6 +1009,7 @@ def plot_grain_role_property_stats(
 
     # Extract property values per group into plain arrays
     def _get_vals(gids: set, pname: str) -> np.ndarray:
+        """ get vals."""
         vals = []
         for gid in gids:
             if pname == 'n_neighbours':
@@ -1117,6 +1118,7 @@ def plot_grain_role_map(
     import matplotlib.colors as mcolors
 
     def _ids(v):
+        """ ids."""
         return v['grain_ids'] if isinstance(v, dict) else v
 
     pp_set = _ids(role_sets['pure_parents'])
@@ -1234,6 +1236,7 @@ def plot_twin_introduction_map(
     _c_o = list(plt.matplotlib.colors.to_rgb(color_other)) + [alpha_other]
 
     def _make_rgba(lfi):
+        """ make rgba."""
         ny, nx = lfi.shape
         rgba = np.ones((ny, nx, 4), dtype=float)
         rgba[..., :3] = 0.90

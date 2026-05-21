@@ -30,4 +30,4 @@ def mc_iterations_3d_alg230(self):
 
     STEP 7: Characterise the grain structure.
     """
-    pass
+    raise NotImplementedError("mc_iterations_3d_alg230 is not yet implemented.")

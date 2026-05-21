@@ -44,9 +44,7 @@ class INSTANCES():
                  )
     def __init__(self):
         """Initialise the instance."""
-        pass
-
-    pass
+        raise NotImplementedError("INSTANCES.__init__ is not yet implemented.")
 
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -146,7 +144,7 @@ class vtpolyxtal2d():
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
         '''
-        pass
+        raise NotImplementedError("__eq__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __gt__(self,
                bID = 0,
@@ -156,7 +154,7 @@ class vtpolyxtal2d():
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
         '''
-        pass
+        raise NotImplementedError("__gt__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __lt__(self,
                bID = 0,
@@ -166,7 +164,7 @@ class vtpolyxtal2d():
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
         '''
-        pass
+        raise NotImplementedError("__lt__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __iter__(self):
         """Return an iterator over this instance."""
@@ -198,7 +196,7 @@ class vtpolyxtal2d():
             Underlying seeds can be altered as below:
                 pxtal.seed_points.plot()
         '''
-        pass
+        raise NotImplementedError("recompute_vtess is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def prepare_seeds(self,
                       point_method = 'points',
@@ -358,27 +356,27 @@ class vtpolyxtal2d():
     def from_edges(self):
         """Construct this instance from edges."""
         # Method to make pxtal from shapely edge objects
-        pass
+        raise NotImplementedError("from_edges is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def from_vertices(self):
         """Construct this instance from vertices."""
         # Method to make pxtal from shapely point objects
-        pass
+        raise NotImplementedError("from_vertices is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def clip(self):
         """Clip."""
         # Method to clip pxtal from a bounding shapely polygon
-        pass
+        raise NotImplementedError("clip is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def add_xtal(self):
         """Add or insert xtal."""
         # Method to add a xtal to pxtal
-        pass
+        raise NotImplementedError("add_xtal is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def rem_xtal(self):
         """Rem xtal."""
         # Method to remove a xtal to pxtal
-        pass
+        raise NotImplementedError("rem_xtal is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def progress_bar(self,
                      first_call = False,
@@ -812,7 +810,7 @@ class vtpolyxtal2d():
         '''
         Documentation
         '''
-        pass
+        raise NotImplementedError("make_tree_triple_point_junctions is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_tree(self,
                  tree = 'L0.xtal.centroids',
@@ -2117,17 +2115,17 @@ class vtpolyxtal2d():
         '''
         Documentation
         '''
-        pass
+        raise NotImplementedError("plot_neigh_0 is not yet implemented.")
     def plot_neigh_1(self):
         '''
         Documentation
         '''
-        pass
+        raise NotImplementedError("plot_neigh_1 is not yet implemented.")
     def plot_neigh_2(self):
         '''
         Documentation
         '''
-        pass
+        raise NotImplementedError("plot_neigh_2 is not yet implemented.")
     def get_L0_ng(self):
         """Return the L0 ng."""
         return len(self.L0.xtals_ids)
@@ -2165,7 +2163,7 @@ class vtpolyxtal2d():
         return self.L0.xtals_boundary.APE_val
     def get_xbp_L0_boundary_xtals(self):
         """Return the xbp L0 boundary xtals."""
-        pass
+        raise NotImplementedError("get_xbp_L0_boundary_xtals is not yet implemented.")
     # THRESHOLDED XTALS
         # 1. by area quartiles
         # 2. by perimeter quartiles

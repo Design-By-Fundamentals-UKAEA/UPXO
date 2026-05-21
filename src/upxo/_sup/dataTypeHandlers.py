@@ -472,6 +472,7 @@ def find_neighdata_ckdt_list(xself, yself, ckdtrees, cor, nworkers):
 
 
 def make_ckdt_from_coordpair_lists(np_coord_pair_lists, copy_data=False, balanced_tree=True):
+    """Build and return ckdt from coordpair lists."""
     # EXAMPLE INPUT FOR "np_coord_pair_lists"
     # np_coord_pair_lists = [np.array([[0.0, 0.0], [0.1, 0.1], [0.2, 0.2],
     #                                  [0.3, 0.3], [0.3, 0.3], [0.1, 0.2],
@@ -491,6 +492,7 @@ def make_ckdt_from_coordpair_lists(np_coord_pair_lists, copy_data=False, balance
 def make_ckdt_from_coord_lists(np_coord_lists,
                                copy_data=False,
                                balanced_tree=True):
+    """Build and return ckdt from coord lists."""
     # EXAMPLE INPUT FOR "np_coord_lists"
     # np_coord_lists = [np.array([[0.0, 0.0], [0.1, 0.1], [0.2, 0.2],
     #                             [0.3, 0.3], [0.3, 0.3], [0.1, 0.2],
@@ -506,11 +508,13 @@ def make_ckdt_from_coord_lists(np_coord_lists,
     return tree
 
 def make_ckdt_from_upxo_points2d():
-    pass
+    """Build and return ckdt from upxo points2d."""
+    raise NotImplementedError("make_ckdt_from_upxo_points2d is not yet implemented.")
 
 
 def make_ckdt_from_mpoints2d():
-    pass
+    """Build and return ckdt from mpoints2d."""
+    raise NotImplementedError("make_ckdt_from_mpoints2d is not yet implemented.")
 ###############################################################################
 ###############################################################################
 ###############################################################################
@@ -556,21 +560,25 @@ def unique_of_datatypes(data_list):
 
 
 def are_all_numbers(lst):
+    """Are all numbers."""
     if type(lst) not in dt.ITERABLES:
         lst = [lst]
 
     return all(isinstance(x, (int, float, np.float16, np.float32, np.float64)) for x in lst)
 
 def are_all_strings(lst):
+    """Are all strings."""
     if type(lst) not in dt.ITERABLES:
         lst = [lst]
 
     return all(isinstance(x, str) for x in lst)
 
 def IS_ITER(obj):
+    """Check or validate IS ITER."""
     return isinstance(obj, dt.ITERABLES)
 
 def IS_CPAIR(obj):
+    """Check or validate IS CPAIR."""
     is_cpair_truth_value = False
     if IS_ITER(obj):
         if ALL_NUM(obj):
@@ -579,9 +587,11 @@ def IS_CPAIR(obj):
 
 
 def ALL_ITER(obj):
+    """All iter."""
     return all([isinstance(_, dt.ITERABLES) for _ in obj])
 
 def ALL_NUM(obj):
+    """All num."""
     return all([isinstance(_, dt.NUMBERS) for _ in obj])
 
 def ALL_UP2D(obj):
@@ -775,6 +785,7 @@ def ShapelyPointList_to_coords(list_of_points, target_type='np@ckdtree'):
 
 
 def inlist(data):
+    """Inlist."""
     if type(data) not in dt.ITERABLES:
         data = [data]
     return data

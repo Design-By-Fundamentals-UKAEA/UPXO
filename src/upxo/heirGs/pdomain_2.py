@@ -25,6 +25,7 @@ class pdomInstances():
     matdata = copy.deepcopy(O)
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __repr__(self):
+        """Return a string representation of this instance."""
         if self.count < self.NPDI+1:
             repr1 = ''.join([40*'-', '\n We can hold ' + str(self.NPDI) + ' instances of the physical domain for you\n'])
             repr2 = ''.join([40*'-'])
@@ -135,6 +136,7 @@ class pdomain_info():
     ninst_tex: int = field(default = 1)
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __repr__(self):
+        """Return a string representation of this instance."""
         reprstr0a = '\n--------------------------------------------------\n'
         reprstr0b = 'PHYSICAL DOMAIN INSTANCE:\n\n'
         reprstr1  = 'Dimensionality = ' + str(self.dimen) + '\n'
@@ -173,6 +175,7 @@ class pdomain_bounds():
     endz: float = field(default = 1.0)
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __repr__(self):
+        """Return a string representation of this instance."""
         str1 = 'Domain starts at: '+ ''.join(str([self.orix,
                                                   self.oriy,
                                                   self.oriz]))
@@ -203,6 +206,7 @@ class gstack():
     IDLevel3_GSSM: np.ndarray = field(default = np.array([], dtype = int))
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __post_init__(self):
+        """Post-initialisation hook for dataclass fields."""
         pass
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def build_IA(self, pdo_info):
@@ -425,6 +429,7 @@ class gstack():
         self.GSStackMatrix = copy.deepcopy(self.IDLevel_0123_GSSM)
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def build(self, pdo_info):
+        """Build."""
         # DEF SUMMARY: Build the instance map variables. These are:
             # IA
             # p0, p1, p2, p3
@@ -453,6 +458,7 @@ class gstack():
         elif pdo_info.level == 3:
             self.Level3_ID_GSSM()
         def squeeze_unlinked_GSSM():
+            """Squeeze unlinked gssm."""
             self.IDLevel0_GSSM = np.squeeze(self.IDLevel0_GSSM)
             self.IDLevel1_GSSM = np.squeeze(self.IDLevel1_GSSM)
             self.IDLevel2_GSSM = np.squeeze(self.IDLevel2_GSSM)
@@ -665,9 +671,10 @@ def get_level_instance_chains(gstack_pd_df,
         return df_subset
 ###############################################################################
 def write_instances(self):
+    """Export or convert to te instances."""
     # Write Unlinked instances Pandas dataframe to file
     # REFER https://xlsxwriter.readthedocs.io/working_with_pandas.html
-    pass
+    raise NotImplementedError("write_instances is not yet implemented.")
 ###############################################################################
 def vis_all_gs_level_instances(Physical_Domains,
                                pullLink_pdi):
@@ -683,12 +690,15 @@ def vis_all_gs_level_instances(Physical_Domains,
     # for pullLink_pdi
     class vis_instances:
         def __init__(self):
+            """Initialise the instance."""
             self.EdgeEnds = []
         #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
         def addEdge(self, EdgeEnd1, EdgeEnd2):
+            """Addedge."""
             self.EdgeEnds.append([EdgeEnd1, EdgeEnd2])
         #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
         def visualize(self):
+            """Visualize."""
             G = nx.Graph()
             G.add_edges_from(self.EdgeEnds)
             nx.draw_networkx(G, node_size = 200,
@@ -736,14 +746,17 @@ def vis_all_gs_level_instances(Physical_Domains,
 class maths:
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def cosd(angle):
+        """Cosd."""
         # cosine of angle in degree
         return np.cos(np.deg2rad(angle))
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def sind(angle):
+        """Sind."""
         # sine of angle in degree
         return np.sin(np.deg2rad(angle))
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def alike(sourceArray, arrayType = 'ru'):
+        """Alike."""
         # array like: make a new array (of specified type), the same shape as the sourceArray
         if arrayType == 'ru': # Random Uniform
             return np.random.random(np.shape(sourceArray))
@@ -816,6 +829,7 @@ class lattice(pdomInstances, maths):
                                     'z-', 'z+', 'behind', 'back', 'front')
     #//////////////////////////////////////////////////////////////////////////
     def __len__(self, gana_pdi):
+        """Return the number of items in this instance."""
         length = pdomInstances.B[gana_pdi][1].endx - pdomInstances.B[gana_pdi][1].orix
         breadth = pdomInstances.B[gana_pdi][1].endy - pdomInstances.B[gana_pdi][1].oriy
         size = length * breadth
@@ -825,6 +839,7 @@ class lattice(pdomInstances, maths):
         return f'Domain size of PDI = {gana_pdi} is {size} units'
     #//////////////////////////////////////////////////////////////////////////
     def __repr__(self):
+        """Return a string representation of this instance."""
         z = "Proper repr to appear in near future for lattice object(s)"
         return z
     #//////////////////////////////////////////////////////////////////////////
@@ -889,7 +904,7 @@ class lattice(pdomInstances, maths):
         ACCESS:
             lat.__mul__(0, 0, 0.5, (0, 0, 0))
         '''
-        pass
+        raise NotImplementedError("__mul__ is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////
     def container(self, display_structure = False):
         '''
@@ -1040,21 +1055,27 @@ class lattice(pdomInstances, maths):
         return status_flag_unlinked, status_flag_linked
     @property
     def statstat(self):
+        """Statstat."""
         return self.statstat_unlinked, self.statstat_linked
     @property
     def statval(self):
+        """Statval."""
         return self.statval_unlinked, self.statval_linked
     @property
     def opt_flag(self):
+        """Opt flag."""
         return self.opt_flag_unlinked, self.opt_flag_linked
     @property
     def opt_technique(self):
+        """Opt technique."""
         return self.opttech_value_unlinked, self.opttech_value_linked
     @property
     def pointcloudseed_N(self):
+        """Pointcloudseed n."""
         return self.pointcloudseed_N_unlinked, self.pointcloudseed_N_linked
     @property
     def pointcount_N_trimmed(self):
+        """Pointcount n trimmed."""
         return self.pointcounttrimmed_N_unlinked, self.pointcounttrimmed_N_linked
     #//////////////////////////////////////////////////////////////////////////
     def coord_container(self):
@@ -1109,52 +1130,88 @@ class lattice(pdomInstances, maths):
         print(''.join(['Coordinate data containers build complete\n', 40*'*']))
     #//////////////////////////////////////////////////////////////////////////
     @property
-    def xu(self): return self.__LAT_XU
+    def xu(self): 
+        """Xu."""
+        return self.__LAT_XU
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def yu(self): return self.__LAT_YU
+    def yu(self): 
+        """Yu."""
+        return self.__LAT_YU
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def zu(self): return self.__LAT_ZU
+    def zu(self): 
+        """Zu."""
+        return self.__LAT_ZU
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def cu(self): return self.__LAT_XU, self.__LAT_YU, self.__LAT_ZU
+    def cu(self): 
+        """Cu."""
+        return self.__LAT_XU, self.__LAT_YU, self.__LAT_ZU
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def xp(self): return self.LAT_XP
+    def xp(self): 
+        """Xp."""
+        return self.LAT_XP
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def yp(self): return self.LAT_YP
+    def yp(self): 
+        """Yp."""
+        return self.LAT_YP
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_zp(self): return self.LAT_ZP
+    def get_zp(self): 
+        """Return ``zp``."""
+        return self.LAT_ZP
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_cp(self): return self.LAT_XP, self.LAT_YP, self.LAT_ZP
+    def get_cp(self): 
+        """Return ``cp``."""
+        return self.LAT_XP, self.LAT_YP, self.LAT_ZP
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_px(self): return self.LAT_PX
+    def get_px(self): 
+        """Return ``px``."""
+        return self.LAT_PX
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_py(self): return self.LAT_PY
+    def get_py(self): 
+        """Return ``py``."""
+        return self.LAT_PY
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_pz(self): return self.LAT_PZ
+    def get_pz(self): 
+        """Return ``pz``."""
+        return self.LAT_PZ
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     @property
-    def get_pc(self): return self.LAT_PX, self.LAT_PY, self.LAT_PZ
+    def get_pc(self): 
+        """Return ``pc``."""
+        return self.LAT_PX, self.LAT_PY, self.LAT_PZ
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __random_uniform(self): pass
+    def __random_uniform(self):
+        """  random uniform."""
+        raise NotImplementedError("__random_uniform is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __random_normal(self): pass
+    def __random_normal(self):
+        """  random normal."""
+        raise NotImplementedError("__random_normal is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __random_clustered(self): pass
+    def __random_clustered(self):
+        """  random clustered."""
+        raise NotImplementedError("__random_clustered is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __rectangular(self): pass
+    def __rectangular(self):
+        """  rectangular."""
+        raise NotImplementedError("__rectangular is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __triangular(self): pass
+    def __triangular(self):
+        """  triangular."""
+        raise NotImplementedError("__triangular is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
     def __hexagonal(self, origin, length, end, a1, angle1):
+        """Xu."""
+        """Xu."""
         '''
         Build database of base seed points for hexagonal lattice
         
@@ -1179,29 +1236,53 @@ class lattice(pdomInstances, maths):
         self.ybase = np.reshape(y_temp, np.size(y_temp))[np.newaxis].T
         self.zbase = maths.alike(self.xbase, 'z')
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __hexagonal_random_interleaved(self): pass
+    def __hexagonal_random_interleaved(self):
+        """  hexagonal random interleaved."""
+        raise NotImplementedError("__hexagonal_random_interleaved is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __hexagonal_rectangular_interleaved(self): pass
+    def __hexagonal_rectangular_interleaved(self):
+        """  hexagonal rectangular interleaved."""
+        raise NotImplementedError("__hexagonal_rectangular_interleaved is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __hexagonal_triangular_interleaved(self): pass
+    def __hexagonal_triangular_interleaved(self):
+        """  hexagonal triangular interleaved."""
+        raise NotImplementedError("__hexagonal_triangular_interleaved is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __rectangular_triangular_interleaved(self): pass
+    def __rectangular_triangular_interleaved(self):
+        """  rectangular triangular interleaved."""
+        raise NotImplementedError("__rectangular_triangular_interleaved is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __rectangular_random_interleaved(self): pass
+    def __rectangular_random_interleaved(self):
+        """  rectangular random interleaved."""
+        raise NotImplementedError("__rectangular_random_interleaved is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __penrose_tiling(self): pass
+    def __penrose_tiling(self):
+        """  penrose tiling."""
+        raise NotImplementedError("__penrose_tiling is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __rangoli_tiling(self): pass
+    def __rangoli_tiling(self):
+        """  rangoli tiling."""
+        raise NotImplementedError("__rangoli_tiling is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __simple_cubic(self): pass
+    def __simple_cubic(self):
+        """  simple cubic."""
+        raise NotImplementedError("__simple_cubic is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __face_centred_cubic(self): pass
+    def __face_centred_cubic(self):
+        """  face centred cubic."""
+        raise NotImplementedError("__face_centred_cubic is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __body_centric_cubic(self): pass
+    def __body_centric_cubic(self):
+        """  body centric cubic."""
+        raise NotImplementedError("__body_centric_cubic is not yet implemented.")
     #  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  - -
-    def __import_lattice(self): pass
+    def __import_lattice(self):
+        """  import lattice."""
+        raise NotImplementedError("__import_lattice is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////
     def base_coord_generator_vt(self, gana_pdi):
+        """  hexagonal random interleaved."""
+        """  hexagonal random interleaved."""
         '''
         This def is confined only to 'vt' type of grain structures as in intself
         if quite a big method. There is a seperate similar method for 'mc' type
@@ -1256,7 +1337,8 @@ class lattice(pdomInstances, maths):
             # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     #//////////////////////////////////////////////////////////////////////////
     def base_coord_generator_mc(self, gana_pdi):
-        pass
+        """Base coord generator mc."""
+        raise NotImplementedError("base_coord_generator_mc is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////
     def perturb(self, gana_pdi):
         '''
@@ -1278,10 +1360,12 @@ class lattice(pdomInstances, maths):
                 self.z = self.zbase + self.zpert
     #//////////////////////////////////////////////////////////////////////////
     def optimize(self):
-        pass
+        """Optimize."""
+        raise NotImplementedError("optimize is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////
     def stretch(self):
-        pass
+        """Stretch."""
+        raise NotImplementedError("stretch is not yet implemented.")
     #//////////////////////////////////////////////////////////////////////////
     def make_xyz(self):
         '''
@@ -1451,13 +1535,17 @@ def make_lattice(Physical_Domain_Object):
 ###############################################################################
 class opt_ckdtree:
     def __init__(self):
-        pass
+        """Initialise the instance."""
+        raise NotImplementedError("opt_ckdtree.__init__ is not yet implemented.")
     def __coordinates_vertices_vt(self):
-        pass
+        """  coordinates vertices vt."""
+        raise NotImplementedError("__coordinates_vertices_vt is not yet implemented.")
 ###############################################################################
 class hdf5(lattice):
     def __init__(self):
-        pass
+        """Initialise the instance."""
+        raise NotImplementedError("hdf5.__init__ is not yet implemented.")
     def write(self):
-        pass
+        """Write."""
+        raise NotImplementedError("write is not yet implemented.")
 ###############################################################################

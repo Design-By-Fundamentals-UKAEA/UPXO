@@ -223,6 +223,7 @@ class parameter_sweep():
                                 filename=None)
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         print('/'*60)
         print("+ + + + + UPXO MCGS PARAMETER SWEEP + + + + +")
         print('/'*60)
@@ -237,10 +238,12 @@ class parameter_sweep():
 
     @property
     def info_message_display_level(self):
+        """Info message display level."""
         return [self.gsi[n].info_message_display_level for n in self.N]
 
     @info_message_display_level.setter
     def info_message_display_level(self, level):
+        """Info message display level."""
         if level == 'simple':
             self.set_gsi_info_message_display_level_simple
         elif level == 'detailed':
@@ -248,19 +251,23 @@ class parameter_sweep():
 
     @property
     def info_message_display_level_simple(self):
+        """Info message display level simple."""
         for n in self.N:
             self.gsi[n].info_message_display_level_simple
 
     @property
     def info_message_display_level_detailed(self):
+        """Info message display level detailed."""
         for n in self.N:
             self.gsi[n].info_message_display_level_detailed
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         self.__gsi_index__ = 1
         return self
 
     def __next__(self):
+        """Return the next item from this iterator."""
         if self.__gsi_index__ <= len(self.N):
             _gsi_ = self.gsi[self.__gsi_index__]
             self.__gsi_index__ += 1
@@ -269,17 +276,19 @@ class parameter_sweep():
             raise StopIteration
 
     def limit_check(self):
-        pass
+        """Limit check."""
+        raise NotImplementedError("limit_check is not yet implemented.")
 
     def generate_mcgs2d(self):
-        pass
+        """Generate mcgs2d."""
+        raise NotImplementedError("generate_mcgs2d is not yet implemented.")
 
     def characterize_gs(self):
-        for n in self.N:
-            if self.gsi[n].uigsc.parallel:
-                pass
+        """Characterize gs."""
+        raise NotImplementedError("characterize_gs is not yet implemented.")
 
     def initialize(self, N=2):
+        """Initialize."""
         if type(N) == int and N != 0 and N < 25:
             self.N = [n+1 for n in range(N)]
             from mcgs import monte_carlo_grain_structure as mcgs
@@ -307,9 +316,10 @@ class parameter_sweep():
             If parchar=False, characterization GS will not be characterized,
             in which case, use the characterize method explicitly.
         '''
-        pass
+        raise NotImplementedError("run is not yet implemented.")
 
     def assemble_locks(self):
+        """Assemble locks."""
         for n in self.N:
             self.__GENLOCK__['uisim'] = self.gsi[n].uisim.__uisim_lock__
 
@@ -898,13 +908,15 @@ class parameter_sweep():
         '''
         Pickle the dataset
         '''
-        pass
+        raise NotImplementedError("save is not yet implemented.")
 
     def update_gmp(self):
-        pass
+        """Set or update te gmp."""
+        raise NotImplementedError("update_gmp is not yet implemented.")
 
     def update_qmp(self):
-        pass
+        """Set or update te qmp."""
+        raise NotImplementedError("update_qmp is not yet implemented.")
 
     def plot(self,
              defaults=False,
@@ -947,7 +959,7 @@ class parameter_sweep():
         plot_type: Type of visualization
         --------------------------------------------------
         '''
-        pass
+        raise NotImplementedError("plot is not yet implemented.")
 
     @property
     def uigrid(self):
@@ -1057,6 +1069,7 @@ class parameter_sweep():
         return _
 
     def info_attributes(self, n, throw=False):
+        """Info attributes."""
         if n not in self.N:
             print('N not set. Skipped')
         else:
@@ -1199,14 +1212,17 @@ class parameter_sweep():
         None.
 
         """
-        pass
+        raise NotImplementedError("generate_report is not yet implemented.")
 
     def to_excel(self):
-        pass
+        """Export or convert to excel."""
+        raise NotImplementedError("to_excel is not yet implemented.")
 
     def model(self):
-        pass
+        """Model."""
+        raise NotImplementedError("model is not yet implemented.")
 
     @property
     def default_mcalg(self):
+        """Default mcalg."""
         return self.__default_mcalg__

@@ -22,9 +22,11 @@ class transTemporalGSSLICEVoids:
                  'dim'
                  )
     def __init__(self):
-        pass
+        """Initialise the instance."""
+        raise NotImplementedError("__init__ is not yet implemented.")
 
     def load_images(self, imgCATEGORY, imgs):
+        """Load or import images."""
         if imgCATEGORY not in self.valid_imgCATEGORY:
             raise ValueError(f"imgCATEGORY: {imgCATEGORY} invalid.")
         if isinstance(imgs, dict):
@@ -38,4 +40,5 @@ class transTemporalGSSLICEVoids:
             raise ValueError("targetLFI must be a dict or numpy ndarray")
     
     def load_k(self):
-        pass
+        """Load or import k."""
+        raise NotImplementedError("load_k is not yet implemented.")

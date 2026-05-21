@@ -1,6 +1,7 @@
 import numpy as np
 import shapely
 def make_grid_pxtal(distribution_type, **kwargs):
+    """Build a grid-based polycrystal seed layout for the given distribution type."""
     if distribution_type == 'rectgrid':
         method_bounds = kwargs['method_bounds']
         usefactor     = kwargs['usefactor']

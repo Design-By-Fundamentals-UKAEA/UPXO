@@ -157,6 +157,7 @@ class gtess3d():
 
     def __init__(self, pxtals=None, gen_method='from_seed_points',
                  phid=None):
+        """Initialise the instance."""
         # ------------------------------------------------------------------
         if gen_method == 'seed_point_extrusion':
             self.pxtals = pxtals['pxtals']
@@ -278,9 +279,11 @@ class gtess3d():
                                               saa=True, throw=True)])'''
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"gtess2d instances. n: {self.ninst}. Nsp={[]}"
 
     def plot_sp(self, inst):
+        """Visualise sp using Matplotlib or PyVista."""
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         ax.scatter(self.sp['coords_all'][inst-1][:, 0],
@@ -310,6 +313,7 @@ class gtess3d():
     @classmethod
     def from_regular_lattice(cls, bounding_box, xincr, yincr, zincr,
                              lattice='sc',lc=None, start_offset=True):
+        """Construct this instance from regular lattice."""
         if lattice == 'sc':
             (xmin, xmax), (ymin, ymax), (zmin, zmax) = bounding_box
 
@@ -907,6 +911,7 @@ class gtess3d():
                                   char_length_min=0.1111,
                                   char_length_max=0.9999,
                                   nt=10, space='linear'):
+        """Build and return e 2d base seedpoints."""
         if sp_distr == 'random':
             if gridding_technique == 'random':
                 if sampling_technique == 'uniform':
@@ -949,6 +954,7 @@ class gtess3d():
 
     @staticmethod
     def find_bounds_2dpoints(points):
+        """Find bounds 2dpoints."""
         if isinstance(points, np.ndarray):  # Check if it's a NumPy array
             if points.size == 0:  # Correct way to check if a NumPy array is empty
                 return None
@@ -975,6 +981,7 @@ class gtess3d():
 
     @staticmethod
     def find_bounds_3dpoints(points):
+        """Find bounds 3dpoints."""
         if isinstance(points, np.ndarray):
             if points.size == 0:
                 return None
@@ -1002,6 +1009,7 @@ class gtess3d():
 
     def visualize_voronoi_cell(cell, ax=None, color='cyan', alpha=0.5,
                                edge_color='black'):
+        """Visualize voronoi cell."""
         if ax is None:
             fig = plt.figure(figsize=(8, 8))
             ax = fig.add_subplot(111, projection='3d')
@@ -1034,6 +1042,7 @@ class gtess3d():
                                          colors=None,
                                          alpha=0.5,
                                          edge_color='black'):
+        """Visualize multiple voronoi cells."""
         tessellation = self.pxtals[inst]
         # ---------------------------------------------------
         fig = plt.figure(figsize=(10, 10))
@@ -1074,6 +1083,7 @@ class gtess3d():
         plt.show()
 
     def construct_pyvista_surface(cell):
+        """Construct pyvista surface."""
 
 
         vertices = np.array(cell["vertices"], dtype=np.float64)
@@ -1093,6 +1103,7 @@ class gtess3d():
         return polydata
 
     def generate_uniform_tet_mesh(surface, resolution=5, maxvol=0.001):
+        """Generate uniform tet mesh."""
 
 
         # Step 1: Extract the bounding box of the surface
@@ -1123,6 +1134,7 @@ class gtess3d():
 
 
     def interactive_slice_view(self, tet_mesh):
+        """Interactive slice view."""
 
         # Setup PyVista plotter
         plotter = pv.Plotter()
@@ -1132,6 +1144,7 @@ class gtess3d():
 
         # Define an initial slicing plane
         def update_plane(normal, origin):
+            """Set or update te plane."""
             sliced_mesh = tet_mesh.slice(normal=normal, origin=origin)
             plotter.add_mesh(sliced_mesh, color='blue', show_edges=True, line_width=1.5)
 
@@ -1147,6 +1160,7 @@ class gtess3d():
     # interactive_slice_view(tet_mesh)
 
     def compute_cell_quality(self, tet_mesh, metric="aspect_ratio"):
+        """Return the ute cell quality."""
 
         quality_mesh = tet_mesh.compute_cell_quality(quality_measure=metric)
         quality_values = quality_mesh["CellQuality"]  # Extract computed cell quality values
@@ -1155,6 +1169,7 @@ class gtess3d():
 
     def interactive_slice_view_with_quality(self, tet_mesh, metric="aspect_ratio",
                                             cmap="nipy_spectral", clim=[1, 5]):
+        """Interactive slice view with quality."""
 
 
         quality_values = self.compute_cell_quality(tet_mesh, metric)
@@ -1180,6 +1195,7 @@ class gtess3d():
         plotter.show()
 
     def compute_cell_quality(self, tet_mesh, metric="aspect_ratio"):
+        """Return the ute cell quality."""
 
         quality_mesh = tet_mesh.compute_cell_quality(quality_measure=metric)
         quality_values = quality_mesh["CellQuality"]  # Extract computed cell quality values
@@ -1187,6 +1203,7 @@ class gtess3d():
         return tet_mesh
 
     def plot_multiple_meshes(meshes, scalars=None, cmap="viridis", clim=[0, 1], opacity=0.5, show_edges=True):
+        """Visualise multiple meshes using Matplotlib or PyVista."""
 
         # Setup the PyVista plotter
         plotter = pv.Plotter()
@@ -1204,6 +1221,7 @@ class gtess3d():
                                                             cmaps=["nipy_spectral",
                                                                    "viridis"],
                                                             clim=[1, 5]):
+        """Interactive slice view with quality multiple meshes."""
 
         quality_values = [self.compute_cell_quality(tet_mesh, metric)
                           for tet_mesh in tet_meshes]
@@ -1229,6 +1247,7 @@ class gtess3d():
 
 
     def generate_background_mesh(bounds, resolution=20, eps=1e-6):
+        """Generate background mesh."""
         xmin, xmax, ymin, ymax, zmin, zmax = bounds
         grid_x, grid_y, grid_z = np.meshgrid(
             np.linspace(xmin - eps, xmax + eps, resolution),
@@ -1242,5 +1261,6 @@ class gtess3d():
     bg_mesh.plot(show_edges=True)'''
 
     def sizing_function(points, focus_point=np.array([0, 0, 0]), max_size=1.0, min_size=0.1):
+        """Sizing function."""
         distances = np.linalg.norm(points - focus_point, axis=1)
         return np.clip(max_size - distances, min_size, max_size)

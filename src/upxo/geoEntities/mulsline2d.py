@@ -355,7 +355,7 @@ class MSline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("by_random_walk is not yet implemented.")
 
     @property
     def nlines(self):
@@ -947,7 +947,7 @@ class MSline2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("splice is not yet implemented.")
 
     def roll(self, roll_distance):
         """
@@ -1895,16 +1895,21 @@ class mulring2d():
     """
 
     def __init__(self, rings):
+        """Initialise from a list of ring objects."""
         self.rings = rings
 
     def build_points_list(self):
-        pass
+        """Build a flat list of all points from the ring collection. Not yet implemented."""
+        raise NotImplementedError("build_points_list is not yet implemented.")
 
     def set_coords(self):
-        pass
+        """Set coordinate arrays from the ring collection. Not yet implemented."""
+        raise NotImplementedError("set_coords is not yet implemented.")
 
     def export_abaqus_for_meshing(self):
-        pass
+        """Export the geometry in Abaqus mesh-input format. Not yet implemented."""
+        raise NotImplementedError("export_abaqus_for_meshing is not yet implemented.")
 
     def mesh(self):
-        pass
+        """Generate a mesh for the ring collection. Not yet implemented."""
+        raise NotImplementedError("mesh is not yet implemented.")

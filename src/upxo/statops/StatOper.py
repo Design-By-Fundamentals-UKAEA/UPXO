@@ -1,5 +1,7 @@
 def hist1d(data):
-    pass
+    """Hist1d."""
+    raise NotImplementedError("hist1d is not yet implemented.")
 
 def hist2d(data):
-    pass
+    """Hist2d."""
+    raise NotImplementedError("hist2d is not yet implemented.")

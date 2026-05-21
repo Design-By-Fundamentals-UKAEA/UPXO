@@ -7,6 +7,7 @@ import numpy as np
 
 @njit
 def mcloop_alg300(cbp, sbp, S, xinda, yinda, zinda):
+    """Mcloop alg300."""
     xi, yi, zi = xinda, yinda, zinda
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
     for P in range(S_sz2):  # along axis 2, along plane
@@ -129,6 +130,7 @@ def mc_iterations_3d_alg300(S=None,
                             vox_size=None, xinda=None, yinda=None, zinda=None,
                             uidata=None, uigrid=None, uisim=None, uiint=None,
                             uimesh=None, verbose=False):
+    """Mc iterations 3d alg300."""
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
     S_sz0_list = list(range(S_sz0))
     S_sz1_list = list(range(S_sz1))

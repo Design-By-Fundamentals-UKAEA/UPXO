@@ -27,12 +27,13 @@ class metaa:
 
 @dataclass
 class principle_component_analysis:
-    pass
+    raise NotImplementedError("principle_component_analysis is not yet implemented.")
 
 class kmodel():
     __slots__ = ('G', 'gprop', 'mprop', 'pathlengths')
 
     def __init__(self, G):
+        """Initialise the instance."""
         self.G = G
         self.gprop = {}
 
@@ -117,9 +118,11 @@ class kmodel():
                     print("Skipping distance metrics: Graph is not connected.")
 
     def load_mprop(self, mprop_df):
+        """Load or import mprop."""
         self.mprop = mprop_df
 
     def summary(self):
+        """Summary."""
         D = self.G.is_directed()
         M = self.G.is_multigraph()
         Dflag = 'directed' if D else 'undirected'
@@ -129,6 +132,7 @@ class kmodel():
         return {'directed': D, 'multigraph': M,}
          
     def shortest_path_length(self, see_distribution=True, figsize=(3, 2), kde=True):
+        """Shortest path length."""
         pathlengths = []
         for v in self.G.nodes():
             spl = nx.shortest_path_length(self.G, source=v)
@@ -159,6 +163,7 @@ class kmodel():
         return gids_shortest_path
 
     def average_shortest_path_length(self, recalulate=False):
+        """Average shortest path length."""
         if hasattr(self, 'pathlengths') and not recalulate:
             pathlengths = self.pathlengths
         else:
@@ -168,6 +173,7 @@ class kmodel():
         return average_path_length
 
     def see_pathlength_distribution(self, recalulate=False, figsize=(3, 2), kde=True, throw_hist=False):
+        """See pathlength distribution."""
         if hasattr(self, 'pathlengths') and not recalulate:
             pathlengths = self.pathlengths
         else:
@@ -188,6 +194,7 @@ class kmodel():
                           treat_undirected=True, validate=True,
                           see_on_map=False, upxo_gs_object=None,
                           figsize=(6, 6), dpi=100, throw_plt_object=False):
+        """Extract subgraphs."""
         if validate:
             if method not in ('connected_neighbors',
                               'maximal_independent_set',
@@ -248,6 +255,7 @@ class kmodel():
             return sg, None
         
     def extract_subgraph_connected_neighbors(self, **kwargs):
+            """Extract subgraph connected neighbors."""
             sg = {}
             for nid_count, (nid, r) in enumerate(zip(kwargs['nids'], kwargs['radii']), start=0):
                 sg[nid_count] = nx.ego_graph(self.G, nid, radius=r,
@@ -260,17 +268,21 @@ class kmodel():
             return sg
 
     def extract_largest_connected_component(self):
+        """Extract largest connected component."""
         largest_cc = max(nx.connected_components(self.G), key=len)
         lcc_subgraph = self.G.subgraph(largest_cc).copy()
         return lcc_subgraph
     
     def GET_connected_components(self, G):
+        """Return the connected components."""
         return [G.subgraph(c).copy() for c in nx.connected_components(G)]
 
     def GET_maximal_independent_set(self, G):
+        """Return the maximal independent set."""
         return nx.maximal_independent_set(G)
 
     def PRUNE_connected_component(self, cc, mis_nodes):
+        """Prune connected component."""
         cc_pruned = cc.copy()
         cc_pruned.remove_nodes_from(mis_nodes)
         return cc_pruned
@@ -328,6 +340,7 @@ class kmodel():
         return decomposition_layers
     
     def see_nnodes_vs_peeldepth(self, decomposition_layers):
+        """See nnodes vs peeldepth."""
         nnodes = [len(r) for r in decomposition_layers.values()]
         plt.figure(figsize=(6,4), dpi=120)
         plt.plot(list(range(1, len(nnodes)+1)), nnodes, marker='o', linestyle='-', color='b', markersize=6, 
@@ -345,6 +358,7 @@ class kmodel():
                                                            normalize_ng=False,
                                                            vmax=0.5
                                                            ):
+        """Partition into nonconnected sets mis nrealizations."""
         # Run decomposition 100 times and collect results
         num_runs, n_decomposition_layers = n, []
         if save_partitions:
@@ -426,6 +440,7 @@ class kmodel():
         return n_decomposition_layers_np, n_decomposition_layers_pd, partitions
     
     def fit_regr_lin_mis_partitions(self, n_decomposition_layers_np):
+        """Fit regr lin mis partitions."""
         data = np.array(n_decomposition_layers_np, dtype=float)
         regression_coeffs = []
         confidence_bounds = []
@@ -488,6 +503,7 @@ class kmodel():
         return comm, modularity
     
     def _create_community_node_colors_(self, communities):
+        """ create community node colors ."""
         # function to create node colour list
         number_of_colors = len(communities)
         colors = ["#D4FCB1", "#CDC5FC", "#FFC2C4", "#F2D140", "#BCC6C8"][:number_of_colors]
@@ -529,6 +545,7 @@ class kmodel():
                 with_labels=True, font_size=20, font_color="black",)
         
     def see_graph(self, plot_type='edges', seed=1):
+        """See graph."""
         pos = nx.spring_layout(self.G, seed=seed)  # Seed layout for reproducibility
         if plot_type == 'numbered nodes':
             plt.figure(figsize=(4, 4))
@@ -570,6 +587,7 @@ class gsan2d():
                  creation='distr_single',
                  stack={},
                  pnames=None):
+        """Initialise the instance."""
         self.metaa.creation = creation
 
         if creation == 'pxtal_single':
@@ -688,6 +706,7 @@ class gsan2d():
 
     @classmethod
     def from_gsstack_varied(cls, gsstack):
+        """Construct this instance from gsstack varied."""
         obj = cls(temporal=False, stack_type='varied', gsstack=gsstack)
         obj.gsstack = gsstack
         return obj
@@ -705,6 +724,7 @@ class gsan2d():
                               circularity=False, eccentricity=True,
                               euler_number=True, moments_hu=True,
                               char_gb=False, get_grain_coords=False):
+        """Construct this instance from gsstack temporal."""
         cls.defmp['npixels'], cls.defmp['npixels_gb'] = npixels, npixels_gb
         cls.defmp['gb_length_px'] = gb_length_px
         cls.defmp['eq_diameter'], cls.defmp['feret_diameter'] = eq_diameter, feret_diameter
@@ -782,6 +802,7 @@ class gsan2d():
 
     @classmethod
     def from_distr(cls, distributions):
+        """Construct this instance from distr."""
         obj = cls(temporal=True, stack_type='temporal', gsstack=gsstack)
         obj.gsstack = gsstack
         return obj
@@ -790,6 +811,7 @@ class gsan2d():
                    include_central_feat=False,
                    throw_numba_dict=False,
                    verbosity_nfids=1000):
+        """Find neigh."""
         # -------------------------------------------
         # Validations
         if not gsids:
@@ -811,6 +833,7 @@ class gsan2d():
                                      include_central_feat=[False],
                                      throw_numba_dict=False,
                                      verbosity_nfids=1000):
+        """Find neigh variable settings."""
         # -------------------------------------------
         # Validations
         if not gsids:
@@ -838,6 +861,7 @@ class gsan2d():
                                              verbosity_nfids=verbosity_nfids)
 
     def extract_props(self):
+        """Extract props."""
         if self.metaa.creation == 'pxtal_single':
             self.extract_props_pxtal_single()
         if self.metaa.creation == 'pxtal_tmp':
@@ -851,6 +875,7 @@ class gsan2d():
             pass
 
     def extract_props_pxtal_single(self, gsid=None):
+        """Extract props pxtal single."""
         if not gsid:
             gsid = self.gsid[0]
         gsobj = self.gsstack[gsid]
@@ -871,6 +896,7 @@ class gsan2d():
         self.dfs[gsid] = self._create_dfs_(data)
 
     def _create_dfs_(self, data_dict):
+        """ create dfs ."""
         df = pd.DataFrame({pname: data_dict[pname] for pname in data_dict.keys()})
         if 'orientation' in df.columns:
             df['orientation'] = df['orientation']*(180/np.pi)
@@ -882,10 +908,12 @@ class gsan2d():
         return df
 
     def compute_temporal_dfs(self):
+        """Return the ute temporal dfs."""
         # Placeholder for method to compute temporal dataframes
         pass
 
     def compute_statistics(self):
+        """Return the ute statistics."""
         for gsid in self.gsid:
             self.stts[gsid] = self.dfs[gsid].describe()
             self.stts[gsid].loc['skew'] = self.dfs[gsid].skew()
@@ -895,6 +923,7 @@ class gsan2d():
 
     def correlate(self, gsids=[1], pnames=['area', 'major_axis_length', 'minor_axis_length', 'eccentricity'],
                   saa=True, throw=False):
+        """Correlate."""
         if len(gsids) == 0:
             gsids = self.gsid
         if len(pnames) == 0:
@@ -911,6 +940,7 @@ class gsan2d():
             return corr
 
     def correlate_temporal(self, pnames=['area', 'major_axis_length', 'minor_axis_length', 'eccentricity']):
+        """Correlate temporal."""
         slices = sorted(self.dfs['temporal']['time_slice'].unique())
         num_slices = len(slices)
         corr_volume = np.zeros((num_slices, len(pnames), len(pnames)))
@@ -924,6 +954,7 @@ class gsan2d():
                   auto_ncomp=True, ncomp_method='mle', svd_solver='auto', saa=True, throw=False,
                   see_scree=True, annotate=True, see_exvar=True, see_cum_exvar=False,
                   figsize=(8, 3)):
+        """Pcanalyis."""
         
         if len(gsids) == 0:
             gsids = [i for i in list(self.dfs.keys()) if type(i)==int]
@@ -1015,6 +1046,7 @@ class gsan2d():
     def initiate_kmodel(self, gsids=[1], k_char_level='none',
                         recalculate_neighbours=True,
                         include_central_grain=False):
+        """Initiate kmodel."""
         if type(gsids) in dth.dt.NUMBERS and int(gsids) in self.gsid:
             gsids = [int(gsids)]
         elif len(gsids) == 0:
@@ -1030,6 +1062,7 @@ class gsan2d():
                 self.K[gsid].characterize_graph(k_char_level=k_char_level)
 
     def see_stats(self, gsid=[1], pname='area', metric='mean'):
+        """See stats."""
         # Extract data.
         values = []
         for tslice in range(len(STATS_list)):
@@ -1047,6 +1080,7 @@ class gsan2d():
                             title_fsz=14, xmax_mult=1.1, grid_alpha=0.3, multiple='stack', 
                             kind='kde', fill=True, 
                             ):
+        """See dstr univariate."""
         # Input validations
         for pname in pnames:
             if pname not in self.dfs[gsid].columns.to_list():
@@ -1090,9 +1124,11 @@ class gsan2d():
             sns.jointplot(self.dfs[gsid][pnames], x=pnames[0], y=pnames[1], kind='kde', levels=levels)
 
     def see_pairgrid(self, gsid=1, pnames=['area', 'aspect_ratio']):
+        """See pairgrid."""
         sns.PairGrid(self.dfs[gsid][pnames])  # To be debugged
 
     def see_correlation(self, gsids=[1], pnames=['area', 'perimeter'], recorrelate=True):
+        """See correlation."""
         if recorrelate:
             corr = self.correlate(gsids=gsids, pnames=pnames, saa=False, throw=True)
         else:
@@ -1104,6 +1140,7 @@ class gsan2d():
             pass
     
     def see_correlation_temporal(self):
+        """See correlation temporal."""
         slices = sorted(self.dfs['temporal']['time_slice'].unique())
         num_slices = self.corr['temporal'].shape[0]
         corr_volume = self.corr['temporal']
@@ -1158,6 +1195,7 @@ class gsan2d():
         fig.show()
 
     def see_dstr_stack(self, pname='area', metric='mean'):
+        """See dstr stack."""
         values = []
         for tslice in range(len(self.stts)):
             values.append(self.stts[tslice].loc[metric, pname])
@@ -1170,10 +1208,12 @@ class gsan2d():
         plt.tight_layout()
 
     def see_stats_stack(self, pname='', metric=''):
+        """See stats stack."""
         # Placeholder for method to plot statistics
         pass
 
     def see_evol(self, pname='area', plottype='basic', metric='mean'):
+        """See evol."""
         plt.figure(figsize=(4, 3))
         if plottype == 'basic':
             pvals = []  # Parameter values

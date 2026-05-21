@@ -62,6 +62,7 @@ def find_outliers_iqr(data, mode='both'):
     return outlier_indices
 
 def distance_between_two_points(point1, point2):
+    """Distance between two points."""
     return math.sqrt((point2[0]-point1[0])**2 + (point2[1]-point1[1])**2)
 
 
@@ -181,6 +182,7 @@ def approximate_to_bin_means(A, n_bins=50):
     return bin_means, A_approx
 
 def make_equal_bins(data1, data2):
+    """Build and return equal bins."""
     # Calculate histograms with the same bins for fair comparison
     min_degree = min(np.min(data1), np.min(data2))
     max_degree = max(np.max(data1), np.max(data2))
@@ -190,6 +192,7 @@ def make_equal_bins(data1, data2):
     return data1_eq_bin, data2_eq_bin
 
 def find_intersection(arrays):
+    """Find intersection."""
     # Filter out empty arrays
     non_empty_arrays = [arr for arr in arrays if arr.size > 0]
 
@@ -205,6 +208,7 @@ def find_intersection(arrays):
     return intersection
 
 def find_union_with_counts(arrays):
+    """Find union with counts."""
     # Filter out empty arrays
     non_empty_arrays = [arr for arr in arrays if arr.size > 0]
 
@@ -384,12 +388,15 @@ def mean_coordinates(coords, window_size):
     return smoothed_coords
 
 def is_a_in_b(a, b):
+    """Check or validate is a in b."""
     return any((b[:, 0] == a[0]) & (b[:, 1] == a[1]))
 
 def is_a_in_b_3d(a, b):
+    """Check or validate is a in b 3d."""
     return any((b[:, 0] == a[0]) & (b[:, 1] == a[1]) & (b[:, 2] == a[2]))
 
 def find_coorda_loc_in_coords_arrayb(a, b):
+    """Find coorda loc in coords arrayb."""
     # find_coorda_loc_in_coords_arrayb(neigh_points[1], sinkarray)
     return np.argwhere((b[:, 0] == a[0]) & (b[:, 1] == a[1]))[0][0]
 
@@ -430,6 +437,7 @@ def remove_permutations(arr):
     return result
 
 def remove_permutations1(arr, N):
+    """Remove permutations1."""
     # Ensure each column contains numbers from 1 to N
     for col in range(arr.shape[1]):
         if set(arr[:, col]) != set(range(1, N+1)):
@@ -447,6 +455,7 @@ def remove_permutations1(arr, N):
     return result
 
 def find_closest_locations(array, parameter_metric):
+    """Find closest locations."""
     # Calculate the desired metric based on the input control
     if parameter_metric == 'mean':
         metric_value = np.mean(array)

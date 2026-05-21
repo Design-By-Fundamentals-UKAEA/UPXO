@@ -1,3 +1,31 @@
+"""
+Pure point operations and point-to-entity comparison utilities for UPXO.
+
+Import
+------
+    from upxo.geoEntities import pops
+
+Functions
+---------
+Profiling
+  PROFILE_up2d_INST
+
+Point operations (single-point arithmetic / transforms)
+  xadd, yadd, xmul, ymul, xdiv, ydiv, xabs, yabs,
+  intize, floatize, roundround, roundceil, roundfloor,
+  negxy, negx, negy, mirrorx, mirrory, translate, rotate
+
+Point-point comparisons
+  CMPEQ_points, CMPEQ_pnt_fast_exact, CMPEQ_pnt_fast_EPS,
+  CMPEQ_pnt_fast_tdist
+
+Point-edge operations
+  CMPEQ_up2d_edge, CMPEQ_up2d_edges, DIST_point_edges
+
+Point-point relative-position queries
+  RELPOS_point_points_above, RELPOS_point_points_below,
+  RELPOS_point_points_left, RELPOS_point_points_right
+"""
 import cProfile
 import numpy as np
 # import pops
@@ -79,10 +107,12 @@ LIST OF POINT-PXTAL OPERATION METHODS
 # POINT TO POINT(S) COMPARISON OPERATIONS
 
 def CMPEQ_points(p1, p2):
+    """Return ``p1 == p2`` using the point equality operator."""
     return p1 == p2
 
 
 def CMPEQ_pnt_fast_exact(p1, p2):
+    """Return ``True`` if ``p1`` and ``p2`` have exactly equal x and y."""
     equality = False
     if p1.x == p2.x and p1.y == p2.y:
         equality = True
@@ -90,6 +120,7 @@ def CMPEQ_pnt_fast_exact(p1, p2):
 
 
 def CMPEQ_pnt_fast_EPS(p1, p2):
+    """Return ``True`` if the Euclidean distance between ``p1`` and ``p2`` is ≤ EPS."""
     EPS, equality = 0.000000000001, False
     if sqrt((p1.x-p2.x)**2+(p1.y-p2.y)**2) <= EPS:
         equality = True
@@ -97,6 +128,7 @@ def CMPEQ_pnt_fast_EPS(p1, p2):
 
 
 def CMPEQ_pnt_fast_tdist(p1, p2, tdist=0.000000000001):
+    """Return ``True`` if the Euclidean distance between ``p1`` and ``p2`` is ≤ ``tdist``."""
     equality = False
     if sqrt((p1.x-p2.x)**2+(p1.y-p2.y)**2) <= tdist:
         equality = True
@@ -127,22 +159,14 @@ def CMPEQ_up2d_edge(point, edge):
         second for pntb of input edge. If distance <= point EPS,
         value is True, else False
 
-    PRE-REQUISITE DATA
-    ------------------
-    from edge2d import edge2d
-    p = point2d(0, 0, lean='ignore')
-    e = edge2d(method='up2d', pnta=point2d(0,0), pntb=point2d(1,0))
-
-    ######################################
-    EXAMPLE-1
-    ---------
-    pops.CMPEQ_up2d_edge(p, e)
-
-    EXAMPLE-1: PROFILE
-    ------------------
-    import gops
-    gops.PROFILE_this_method(pops.CMPEQ_up2d_edge, 10000, (p, e))
-    ######################################
+    Examples
+    --------
+    >>> from upxo.geoEntities.point2d import point2d
+    >>> from upxo.geoEntities.edge2d import edge2d
+    >>> from upxo.geoEntities import pops
+    >>> p = point2d(0, 0, lean='ignore')
+    >>> e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
+    >>> pops.CMPEQ_up2d_edge(p, e)
     """
     # Check equality with a single edge
 
@@ -169,24 +193,14 @@ def CMPEQ_up2d_edges(point, edges, data_set):
     equalities : np.array
         (N, 2) shaped numpy array of truth values, N: number of edges
 
-    PRE-REQUISITE DATA
-    ------------------
-    from edge2d import edge2d
-    p = point2d(0, 0, lean='ignore')
-    e1 = edge2d(method='up2d', pnta=point2d(0,0), pntb=point2d(1,0))
-    e2 = edge2d(method='up2d', pnta=point2d(1,6), pntb=point2d(0,0))
-    e3 = edge2d(method='up2d', pnta=point2d(3,2), pntb=point2d(0,0))
-    edges = [e1, e2, e3]
-    ######################################
-    EXAMPLE-1
-    ---------
-    pops.CMPEQ_up2d_edges(p, edges)
-
-    EXAMPLE-1: SPEED PROFILE
-    ------------------------
-    import gops
-    gops.PROFILE_this_method(CMPEQ_up2d_edges, 10000, (p, edges))
-    ######################################
+    Examples
+    --------
+    >>> from upxo.geoEntities.point2d import point2d
+    >>> from upxo.geoEntities.edge2d import edge2d
+    >>> from upxo.geoEntities import pops
+    >>> p = point2d(0, 0, lean='ignore')
+    >>> edges = [edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))]
+    >>> pops.CMPEQ_up2d_edges(p, edges, 'large_data_set')
     """
     np_array, np_sqrt = np.array, np.sqrt
     xp, yp, _EPS_ = point.x, point.y, point.EPS
@@ -223,18 +237,14 @@ def DIST_point_edges(point, edges, data_set):
         dist[n, 0]: distance from point to pnta of nth edge
         dist[n, 1]: distance from point to pntb of nth edge
 
-    PRE-REQUISITE DATA
-    ------------------
-    from edge2d import edge2d
-    p = point2d(0, 0, lean='ignore')
-    e1 = edge2d(method='up2d', pnta=point2d(0,0), pntb=point2d(1,0))
-    e2 = edge2d(method='up2d', pnta=point2d(1,6), pntb=point2d(0,0))
-    e3 = edge2d(method='up2d', pnta=point2d(3,2), pntb=point2d(0,0))
-    edges = [e1, e2, e3]
-
-    EXAMPLE-1
-    ---------
-    pops.DIST_point_edges(p, edges)
+    Examples
+    --------
+    >>> from upxo.geoEntities.point2d import point2d
+    >>> from upxo.geoEntities.edge2d import edge2d
+    >>> from upxo.geoEntities import pops
+    >>> p = point2d(0, 0, lean='ignore')
+    >>> edges = [edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))]
+    >>> pops.DIST_point_edges(p, edges, 'large_data_set')
     """
     np_array, np_sqrt = np.array, np.sqrt
     xp, yp = point.x, point.y
@@ -264,7 +274,7 @@ def RELPOS_point_points_above(point, point_objects):
     ----------
     point_objects : point2d / shapely point / coord_xy list
                    / coord_xy tuple
-        DESCRIPTION. An input set of points to compare against
+        Input set of points to compare against.
 
     Returns
     -------
@@ -285,7 +295,7 @@ def RELPOS_point_points_below(point, point_objects):
     ----------
     point_objects : point2d / shapely point / coord_xy list
                    / coord_xy tuple
-        DESCRIPTION. An input set of points to compare against
+        Input set of points to compare against.
 
     Returns
     -------
@@ -306,7 +316,7 @@ def RELPOS_point_points_left(point, point_objects):
     ----------
     point_objects : point2d / shapely point / coord_xy list
                    / coord_xy tuple
-        DESCRIPTION. An input set of points to compare against
+        Input set of points to compare against.
 
     Returns
     -------
@@ -327,7 +337,7 @@ def RELPOS_point_points_right(point, point_objects):
     ----------
     point_objects : point2d / shapely point / coord_xy list
                    / coord_xy tuple
-        DESCRIPTION. An input set of points to compare against
+        Input set of points to compare against.
 
     Returns
     -------
@@ -340,6 +350,7 @@ def RELPOS_point_points_right(point, point_objects):
 
 
 def xadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Add ``k`` to the x-coordinate of ``point``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -384,6 +395,7 @@ def xadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def yadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Add ``k`` to the y-coordinate of ``point``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -428,6 +440,7 @@ def yadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xmul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Multiply the x-coordinate of ``point`` by ``k``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -472,6 +485,7 @@ def xmul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def ymul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Multiply the y-coordinate of ``point`` by ``k``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -516,6 +530,7 @@ def ymul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xdiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Divide the x-coordinate of ``point`` by ``k``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if k >= 0.000000000001:
@@ -567,6 +582,7 @@ def xdiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def ydiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
+    """Divide the y-coordinate of ``point`` by ``k``, with saa/throw control."""
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if k >= 0.000000000001:
@@ -618,6 +634,7 @@ def ydiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xabs(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Apply absolute value to the x-coordinate of ``point``, with saa/throw control."""
     if saa or make_new:
         _x = abs(point.x)
     if saa and make_new:
@@ -635,6 +652,7 @@ def xabs(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def yabs(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Apply absolute value to the y-coordinate of ``point``, with saa/throw control."""
     if saa or make_new:
         _y = abs(point.y)
     if saa and make_new:
@@ -652,6 +670,7 @@ def yabs(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def intize(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Convert both coordinates of ``point`` to ``int``, with saa/throw control."""
     if saa or make_new:
         _x, _y = int(point.x), int(point.y)
     if saa and make_new:
@@ -669,6 +688,7 @@ def intize(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def floatize(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Convert both coordinates of ``point`` to ``float``, with saa/throw control."""
     if saa or make_new:
         _x, _y = float(point.x), float(point.y)
     if saa and make_new:
@@ -687,6 +707,7 @@ def floatize(point, saa=False, make_new=True, lean='ignore', throw=True):
 
 def roundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
+    """Round both coordinates of ``point`` to ``ndigits``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x, _y = round(point.x, nd), round(point.y, nd)
@@ -706,6 +727,7 @@ def roundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
+    """Round the x-coordinate of ``point`` to ``ndigits``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x = round(point.x, nd)
@@ -725,6 +747,7 @@ def xroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
+    """Round the y-coordinate of ``point`` to ``ndigits``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _y = round(point.y, nd)
@@ -744,6 +767,7 @@ def yroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def roundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
               throw=True):
+    """Apply ``math.ceil`` to both coordinates of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x_, _y_ = point.x, point.y
@@ -765,6 +789,7 @@ def roundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
+    """Apply ``math.ceil`` to the x-coordinate of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x_ = point.x
@@ -785,6 +810,7 @@ def xroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
+    """Apply ``math.ceil`` to the y-coordinate of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _y_ = point.y
@@ -805,6 +831,7 @@ def yroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def roundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
+    """Apply ``math.floor`` to both coordinates of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x_, _y_ = point.x, point.y
@@ -826,6 +853,7 @@ def roundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
+    """Apply ``math.floor`` to the x-coordinate of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _x_ = point.x
@@ -846,6 +874,7 @@ def xroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
+    """Apply ``math.floor`` to the y-coordinate of ``point``, with saa/throw control."""
     # nd: number of decimal places
     if saa or make_new:
         _y_ = point.y
@@ -865,6 +894,7 @@ def yroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
         return to_return
 
 def negxy(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Negate both coordinates of ``point``, with saa/throw control."""
     if saa or make_new:
         _x, _y = -point.x, -point.y
     if saa and make_new:
@@ -882,6 +912,7 @@ def negxy(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def negx(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Negate the x-coordinate of ``point``, with saa/throw control."""
     if saa or make_new:
         _x = -point.x
     if saa and make_new:
@@ -899,6 +930,7 @@ def negx(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def negy(point, saa=False, make_new=True, lean='ignore', throw=True):
+    """Negate the y-coordinate of ``point``, with saa/throw control."""
     if saa or make_new:
         _y = -point.y
     if saa and make_new:
@@ -917,16 +949,12 @@ def negy(point, saa=False, make_new=True, lean='ignore', throw=True):
 
 def mirrorx(point, saa: bool = False, make_new: bool = True,
             lean: bool = 'ignore', throw: bool = True):
-    """
-    Mirror about x-axis
-    """
+    """Mirror point about the x-axis."""
     return point.negy(saa=saa, make_new=make_new, lean=lean, throw=throw)
 
 def mirrory(point, saa: bool = False, make_new: bool = True,
             lean: bool = 'ignore', throw: bool = True):
-    """
-    Mirror about y-axis
-    """
+    """Mirror point about the y-axis."""
     return point.negx(saa=saa, make_new=make_new, lean=lean, throw=throw)
 
 def translate(point, xyincr: list = [0.0, 0.0], method: str = 'xyincr',
@@ -935,6 +963,7 @@ def translate(point, xyincr: list = [0.0, 0.0], method: str = 'xyincr',
               xynew: list = [0.0, 0.0], saa: bool = False,
               make_new: bool = True, lean: bool = 'ignore',
               throw: bool = True):
+    """Translate ``point`` by a displacement vector, with saa/throw control."""
     if saa or make_new:
         if method in dth.opt.translate_xyincr:
             _x, _y = point.x+xyincr[0], point.y+xyincr[1]
@@ -1294,233 +1323,87 @@ def pixelize(point, dim=2, k1=0.5, k2=0.5, k3=0.5, z0=0.0, t=0.0,
              break_into_2tria=False, break_into_2trib=False,
              break_into_4tri=False):
     """
-            y+
-            ^
-            :
-            :
-    x-<-----O------> x+
-            :
-            :
-            :
-            y+
+    Build a pixel (rectangular voxel) around a point and optionally subdivide it.
 
-    p2.................................p1     /
-    :              ^                   :    /
-    :              :                   :  /
-    :           k2 :                   :/  t: angle
-    :              :  O(_x, _y)        :- - - - - - - -
-    :                 |--------------->:
-    :                         k1       :
-    :                                  :
-    p3.................................p4
-        O = (_x, _y)
-        p1 = (_x+k1, _y+k2)
-        p2 = (_x-k1, _y+k2)
-        p3 = (_x-k1, _y-k2)
-        p4 = (_x+k1, _y-k2)
-    p2 ----------------- p1   p2 ------- p1   p2 --------p1  p2 ------ p1
-     :                   :    :  *    2   :   :        *  :   :  * 4 *  :
-     :         O         :    :    *      :   :  1   *    :   :   * *   :
-     :                   :    :  1   *    :   :    *  2   :   : 1  O  3 :
-    p3 ----------------- p4   :        *  :   :  *        :   :   * *   :
-                              p3 ------- p4   p3 --------p4   :  * 2 *  :
-                                                             p3 ------ p4
-             (A)                   (B)             (C)            (D)
-    (A): v = (p3, p4, p1, p2)
-    (B): v = ((p3, p4, p2), (p4, p1, p2))
-    (C): v = ((p3, p1, p2), (p3, p4, p1))
-    (D): v = ((p3, O, p2), (p3, p4, O), (O, p4, p1), (p2, O, p1))
+    Constructs a 2-D rectangular pixel centred on ``point`` with half-widths
+    ``k1`` (x) and ``k2`` (y), optionally rotated by angle ``t``.  In 3-D mode
+    (``dim=3``) the pixel is extruded to a hexahedral cell using half-depth
+    ``k3``.  The cell can be returned as a whole or split into triangles /
+    tetrahedra, and optionally converted to UPXO, Shapely, VTK, Gmsh, or
+    Abaqus element representations.
 
-    p2 ---m12--- p1
-     :           :
-    m23    O    m41
-     :           :
-    p3 ---m34--- p4
-        m12 = (_x, _y+k2)
-        m23 = (_x-k1, _y)
-        m34 = (_x, _y-k2)
-        m41 = (_x+k1, _y)
+    Parameters
+    ----------
+    point : Point2d
+        Centre point of the pixel.
+    dim : {2, 3}, optional
+        Spatial dimension of the output cell.  Default is ``2``.
+    k1 : float, optional
+        Half-width along x.  Default is ``0.5``.
+    k2 : float, optional
+        Half-width along y.  Default is ``0.5``.
+    k3 : float, optional
+        Half-depth along z (3-D only).  Default is ``0.5``.
+    z0 : float, optional
+        z-coordinate of the bottom face (3-D only).  Default is ``0.0``.
+    t : float, optional
+        Rotation angle of the pixel about its centre.  Default is ``0.0``.
+    aunit : {'deg', 'rad'}, optional
+        Unit of ``t``.  Default is ``'deg'``.
+    avoidEPS : bool, optional
+        If ``True``, suppress epsilon-based adjustments.  Default is ``False``.
+    nd : int, optional
+        Number of decimal places for coordinate rounding.  Default is ``12``.
+    saa : bool, optional
+        If ``True``, store the result back on ``point`` (save-and-apply).
+        Default is ``False``.
+    throw : bool, optional
+        If ``True``, return the pixel vertices.  Default is ``False``.
+    throw_edges : bool, optional
+        If ``True``, return edge objects.  Default is ``False``.
+    throw_faces : bool, optional
+        If ``True``, return face objects (3-D only).  Default is ``False``.
+    make_midnode : bool, optional
+        If ``True``, compute and include the mid-node.  Default is ``False``.
+    makextal_upxo : bool, optional
+        If ``True``, build a UPXO crystal from the pixel.  Default is ``False``.
+    makextal_shapely : bool, optional
+        If ``True``, build a Shapely polygon.  Default is ``False``.
+    makextal_vtk : bool, optional
+        If ``True``, build a VTK cell.  Default is ``False``.
+    makeelement_gmsh : bool, optional
+        If ``True``, build a Gmsh element.  Default is ``False``.
+    make_abaqus_element : bool, optional
+        If ``True``, build an Abaqus element.  Default is ``False``.
+    break_into_2tria : bool, optional
+        If ``True``, split the quad into two triangles (variant A).
+        Default is ``False``.
+    break_into_2trib : bool, optional
+        If ``True``, split the quad into two triangles (variant B).
+        Default is ``False``.
+    break_into_4tri : bool, optional
+        If ``True``, split the quad into four triangles about the centre.
+        Default is ``False``.
 
-    p2 ---m12--- p1
-     :           :
-    m23    O    m41
-     :           :
-    p3 ---m34--- p4
-          (A)
-    p2 --m12-- p1    p2 ---m12--p1     [p2]-----m12-----[p1]
-    :  *     2  :    : 1      *  :      :  *     4     *  :
-    :    *      :    :      *    :      :   mo2     m1o   :
-   m23    O   m41  m23     O   m41      :      *   *      :
-    :       *   :    :   *       :     m23  1   [O]   3  m41
-    :  1      * :    : *      2  :      :      *   *      :
-    p3 --m34-- p4    p3 --m23---p4      :   m3o     m4o   :
-                                        :  *     2     *  :
-                                       [p3]-----m34-----[p4]
-    1  --m12--  0    1  ---m12-- 0      1  -----m12-----  0
-    :  *     2  :    : 1      *  :      :  *     4     *  :
-    :    *      :    :      *    :      :   mo2     m1o   :
-   m23    O   m41  m23     O   m41      :      *   *      :
-    :       *   :    :   *       :     m23  1   [O]   3  m41
-    :  1      * :    : *      2  :      :      *   *      :
-    2  --m34--  3    2  --m23--- 3      :   m3o     m4o   :
-                                        :  *     2     *  :
-                                        2  -----m34-----  3
-        (B)              (C)                   (D)
-    m1o = (_x+0.5*k1, _y+0.5*k2)
-    mo2 = (_x-0.5*k1, _y+0.5*k2)
-    m3o = (_x-0.5*k1, _y-0.5*k2)
-    m4o = (_x+0.5*k1, _y-0.5*k2)
+    Returns
+    -------
+    None or tuple
+        Returns pixel data when ``throw`` or related flags are ``True``;
+        otherwise modifies ``point`` in-place (when ``saa=True``) and returns
+        ``None``.
 
-    (A) v = (p3, m34, p4, m41, p1, m12, p2, m23)
-    (B) v = ((p3, m34, p4, O, p2, m23), (p4, m41, p1, m12, p2, O))
-    (C) v = ((p3, O, p1, m12, p2, m23), (p3, m23, p4, m41, p1, O))
-    (D) v = ((p3, m3o, o, mo2, p2, m23), (p3, m34, p4, m4o, o, m3o),
-             (o, m4o, p4, m41, p1, m1o), (p2, mo2, o, m1o, p1, m12))
+    Notes
+    -----
+    Corner-point naming convention (2-D, unrotated)::
 
-    FOR 3D: Hexahedral only
-        Top face same as above
-             z+
-             ^           y-
-             |         /
-             |       /
-             |     /
-             |   /
-             | /
-    x-<----- O------------> x+
-            /|
-          /  |
-        /    |
-      /      |
-    y+       |
-             |
-             z-
-    POINT DEFINITIONS:
-        POINT INDEX: 0,  1,  2,  3,  4,  5,  6,  7
-                    p1, p2, p3, p4, p5, p6, p7, p8
-          p2 -------e12------- p1
-         :|                  : |
-       e9 |                e11 |
-      :   e8              :    e7
-    p3 -------e10------ p4     |
-    |     |             |      |
-    |     |       O     |      |
-    e5    |             e6     |
-    |     p6 -------e4--|----- p5
-    |    :              |    :
-    |   e1              |   e3
-    | :                 |  :
-    p7 -------e2-------- p8
-    EDGE DEFINITIONS:
-        EDGE INDEX: EDGENAME: POINTS: POINT INDICES
-                 0: e1: p6-p7: (5, 6)
-                 1: e2: p7-p8: (6, 7)
-                 2: e3: p8-p5: (7, 4)
-                 3: e4: p5-p6: (4, 5)
-                 4: e5: p7-p3: (6, 2)
-                 5: e6: p8-p4: (7, 3)
-                 6: e7: p5-p1: (4, 0)
-                 7: e8: p6-p2: (5, 1)
-                 8: e9: p2-p3: (1, 2)
-                 9: e10: p3-p4: (2, 3)
-                 10: e11: p4-p1: (3, 0)
-                 11: e12: p1-p2: (0, 1)
-             -----------------                 p2 -------e12------- p1
-         :|                  : |             :|                  : |
-        : |       F6        :  |           e9 |       F6       e11 |
-      :   |               :    |          :   e8              :    e7
-       -------------F5-        |        p3 -------e10----F5 p4     |
-    |     |             |      |        |     |             |      |
-    |  F2 |             |  F4  |        |  F2 |             |   F4 |
-    |     |             |      |        e5    |             e6     |
-    |        -F3--------|-----          |     p6 -F3----e4--|----- p5
-    |    :              |    :          |    :              |    :
-    |   :        F1     |   :           |   e1       F1     |   e3
-    | :                 |  :            | :                 |  :
-       -----------------                p7 -------e2-------- p8
-    FACE DEFINITIONS. corner points: generic face names
-        p7, p8, p5, p6: BOTTOM FACE
-        p7, p6, p2, p3: LEFT FACE
-        p7, p8, p4, p3: FRONT FACE
-        p8, p5, p1, p4: RIGHT FACE
-        p6, p5, p1, p2: BACK FACE
-        p3, p4, p1, p2: TOP FACE
-    FACE DEFINITIONS. FACE INDEX: FACENAME: EDGES: EDGE-INDICES
-        0: F1: (e1-e2-e3-e4): (0,1,2,3)
-        1: F2: (e5-e1-e8-e9): (4,0,7,8)
-        2: F3: (e5-e2-e6-e10): (4,1,5,9)
-        3: F4: (e6-e3-e7-e11): (5,2,6,10)
-        4: F5: (e8-e4-e7-e12): (7,3,6,11)
-        5: F6: (e9-e10-e11-e12): (8,9,10,11)
-    FACE DEFINITIONS. FACE INDEX: FACENAME: POINTS: POINT INDICES
-        0: F1: ((p6-p7)-(p7-p8)-(p8-p5)-(p5-p6): ((5,6)-(6,7)-(7,4)-(4,5))
-        1: F2: ((p7-p3)-(p6-p7)-(p6-p2)-(p2-p3): ((6,2)-(5,6)-(1,2)-(2,3))
-        2: F3: ((p7-p3)-(p7-p8)-(p8-p4)-(p3-p4): ((6,2)-(6,7)-(7,3)-(2,3))
-        3: F4: ((p8-p4)-(p8-p5)-(p5-p1)-(p4-p1): ((7,3)-(7,4)-(5,1)-(3,0))
-        4: F5: ((p6-p2)-(p5-p6)-(p5-p1)-(p1-p2): ((1,2)-(4,5)-(5,1)-(0,1))
-        5: F6: ((p2-p3)-(p3-p4)-(p4-p1)-(p1-p2): ((2,3)-(2,3)-(3,0)-(0,1))
-          :--------------------:
-         :|                  : |
-       :  |                 :  |
-      :   |               :    |
-    :-------------------:      |
-    |     |             |      |
-    |     |             |      |
-    |     |             |      |
-    |     :-------------|------:
-    |    :              |     :
-    |  :                |   :
-    | :                 |  :
-    |-------------------|:
-    CELL DEFINITION:
-        CELL INDEX: CELLNAME: FACES
-                 0: C1: (F1-F2-F3-F4-F5-F6)
-        CELL INDEX: CELLNAME: EDGES
-                 0: C1: (((p6, p7), (p7, p8), (p8, p5), (p5, p6)),
-                         ((p7, p3), (p6, p7), (p6, p2), (p2, p3)),
-                         ((p7, p3), (p7, p8), (p8, p4), (p3, p4)),
-                         ((p8, p4), (p8, p5), (p5, p1), (p4, p1)),
-                         ((p6, p2), (p5, p6), (p5, p1), (p1, p2)),
-                         ((p2, p3), (p3, p4), (p4, p1), (p1, p2))
-                         )
-        CELL INDEX: CELLNAME: POINTS
-                 0: C1: (((5,6), (6,7), (7,4), (4,5)),
-                         ((6,2), (5,6), (1,2), (2,3)),
-                         ((6,2), (6,7), (7,3), (2,3)),
-                         ((7,3), (7,4), (5,1), (3,0)),
-                         ((1,2), (4,5), (5,1), (0,1)),
-                         ((2,3), (2,3), (3,0), (0,1))
-                         )
-        DATA EXTRACTION APPDE:
-            Vertices will be stored as:
-                v = (p1, p2, p3, p4, p5, p6, p7, p8)
-            Pixel, itself will may be expressed as:
-                PXL = (((v[5],v[6]), v[6],v[7]), (v[7],v[4]), (v[4],v[5])),
-                       ((v[6],v[2]), v[5],v[6]), (v[1],v[2]), (v[2],v[3])),
-                       ((v[6],v[2]), v[6],v[7]), (v[7],v[3]), (v[2],v[3])),
-                       ((v[7],v[3]), v[7],v[4]), (v[5],v[1]), (v[3],v[0])),
-                       ((v[1],v[2]), v[4],v[5]), (v[5],v[1]), (v[0],v[1])),
-                       ((v[2],v[3]), v[2],v[3]), (v[3],v[0]), (v[0],v[1]))
-                      )
-          p2 ----------------- p1
-         :| .                : |
-        : |  .    6        .:  |
-      :   |   .         . :    |
-    p3 -------------5-- p4     |
-    |  '  2     .   .   |      |
-    |     | .  .  O .  .| 4    |
-    |     |  .  .  .    | .  . |
-    |     p6'-3-----.---|----- p5
-    |    :  .        .  |    :
-    |   : .      1    . |   :
-    | :.               .|  :
-    p7 ----------------- p8
-    IN THE ABOVE ILLUSTRATION:
-        Tetrahedron 1: Bottom
-        Tetrahedron 2: Left
-        Tetrahedron 3: Front
-        Tetrahedron 4: Right
-        Tetrahedron 5: Back
-        Tetrahedron 6: Top
+        p2 ----------- p1      p1 = (x + k1,  y + k2)
+        |               |      p2 = (x - k1,  y + k2)
+        |    O(x, y)    |      p3 = (x - k1,  y - k2)
+        |               |      p4 = (x + k1,  y - k2)
+        p3 ----------- p4
+
+    For 3-D hexahedral cells the bottom face duplicates the 2-D layout at
+    ``z = z0`` and the top face at ``z = z0 + 2*k3``.
     """
     import matplotlib.pyplot as plt
     # k1, k2 = half of rectangle pixel length, width

@@ -40,6 +40,8 @@ setup(
         "connected-components-3d>=3.26.1",
         "xlrd>=2.0.1",
         "termcolor>=2.4.0",
+        "plotly>=5.0.0",
+        "openpyxl>=3.1.0",
     ],
     python_requires=">=3.13",
     classifiers=classifiers,

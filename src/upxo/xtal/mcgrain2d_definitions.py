@@ -187,6 +187,7 @@ class grain2d():
     rtol = 1e-6
 
     def __init__(self):
+        """Initialise the instance."""
         # Set position/location related slots
         self.loc, self.position = None, None
         self.coords, self.gbloc = None, None
@@ -233,18 +234,22 @@ class grain2d():
     #    return _repr_
 
     def __len__(self):
+        """Return the number of items in this instance."""
         return len(self.loc)
 
     @property
     def lfi_gbseg_empties(self):
+        """Lfi gbseg empties."""
         return self._lfi_gbseg_empties_
 
     @lfi_gbseg_empties.setter
     def lfi_gbseg_empties(self, value):
+        """Lfi gbseg empties."""
         self._lfi_gbseg_empties_ = value
 
     @lfi_gbseg_empties.deleter
     def lfi_gbseg_empties(self):
+        """Lfi gbseg empties."""
         del self._lfi_gbseg_empties_
 
     @val.DEC_validate_samples
@@ -267,6 +272,7 @@ class grain2d():
         return cmp
 
     def __ne__(self, samples=None):
+        """Check inequality with another object."""
         return [not _ for _ in self.__eq__(samples=samples)]
 
     @val.DEC_validate_samples
@@ -304,10 +310,12 @@ class grain2d():
         return cmp
 
     def __le__(self, samples=None, types=None):
+        """Less-than-or-equal comparison."""
         return [lt or eq for lt, eq in zip(self.__lt__(samples=samples),
                                            self.__eq__(samples=samples))]
 
     def __ge__(self, samples=None, types=None):
+        """Greater-than-or-equal comparison."""
         return [gt or eq for gt, eq in zip(self.__gt__(samples=samples),
                                            self.__eq__(samples=samples))]
 
@@ -316,16 +324,19 @@ class grain2d():
         Provides the location subset of all
         keys --> start_percentage : end_percentage
         """
-        pass
+        raise NotImplementedError("__getitem__ is not yet implemented.")
 
     def __mul__(self, k):
+        """Multiply this instance by a scalar."""
         # INCLUDE VALIDATIONS
         self._px_area *= k
 
     def __att__(self):
+        """Return a string listing of all attributes."""
         return gops.att(self)
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         return iter(self.loc)
 
     def __contains__(self, points):
@@ -360,35 +371,43 @@ class grain2d():
         return _gbseg_
 
     def set_quat(self):
+        """Set or update quat."""
         self.quats_pixels
         self.ref_quat
 
     def find_misori(self, angles):
-        pass
+        """Find misori."""
+        raise NotImplementedError("find_misori is not yet implemented.")
 
     def set_glb_ea_pert(self, pert_ea1, pert_ea2, pert_ea3):
+        """Set or update glb ea pert."""
         self.glb_pert_min_ea1, self.glb_pert_max_ea1 = pert_ea1[0], pert_ea1[1]
         self.glb_pert_min_ea2, self.glb_pert_max_ea2 = pert_ea2[0], pert_ea2[1]
         self.glb_pert_min_ea3, self.glb_pert_max_ea3 = pert_ea3[0], pert_ea3[1]
 
     def make_loctree(self):
+        """Build and return loctree."""
         from scipy.spatial import cKDTree as ckdt
         self.loctree = ckdt(self.loc, copy_data=False, balanced_tree=True)
 
     @property
     def mean_ea(self):
+        """Mean ea."""
         # return the mean orientatipon: euler angle in degrees
-        pass
+        raise NotImplementedError("mean_ea is not yet implemented.")
 
     def make_coordtree(self):
+        """Build and return coordtree."""
         from scipy.spatial import cKDTree as ckdt
         self.loctree = ckdt(self.coords, copy_data=False, balanced_tree=True)
 
     def set_skprop(self):
+        """Set or update skprop."""
         from skimage.measure import regionprops as skim_regionprops
         self.make_prop(skim_regionprops, skprop=True)
 
     def make_prop(self, generator, skprop=True):
+        """Build and return prop."""
         if skprop:
             #print('=======================')
             #print(generator)
@@ -397,10 +416,12 @@ class grain2d():
 
     @property
     def centroid(self):
+        """Centroid."""
         coords = self.coords.T
         return (coords[0].mean(), coords[1].mean())
 
     def plot(self, hold_on=False):
+        """Plot."""
         if not hold_on:
             plt.figure()
         plt.imshow(self.bbox_ex)
@@ -411,6 +432,7 @@ class grain2d():
             plt.show()
 
     def plotgb(self, hold_on=False):
+        """Plotgb."""
         z = np.zeros_like(self.bbox_ex)
         rmin = self.bbox_ex_bounds[0]
         cmin = self.bbox_ex_bounds[2]
@@ -427,6 +449,7 @@ class grain2d():
             plt.show()
 
     def plotgbseg(self, hold_on=False):
+        """Plotgbseg."""
         if not hold_on:
             plt.figure()
         plt.imshow(self.gbsegs)

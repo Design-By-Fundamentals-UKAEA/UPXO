@@ -14,6 +14,7 @@ centroid = np.mean(L, axis=0)
 
 # Function to calculate angle and distance from centroid
 def angle_and_distance(point, centroid, clockwise=False):
+    """Angle and distance."""
     angle = np.arctan2(point[1] - centroid[1], point[0] - centroid[0])
     if clockwise:
         # To sort clockwise, we can invert the angle
@@ -23,6 +24,7 @@ def angle_and_distance(point, centroid, clockwise=False):
 
 # Function to sort points with an option for direction
 def sort_points(points, clockwise=False):
+    """Sort points."""
     # Sorting indices based on angles (and distances for collinear points)
     sorted_indices = sorted(range(len(points)), key=lambda i: angle_and_distance(points[i], centroid, clockwise))
     # Sorted points using the sorted indices

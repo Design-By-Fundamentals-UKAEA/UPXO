@@ -290,6 +290,7 @@ class gtess2d():
 
     def __init__(self, sps=None, xbound=None, ybound=None, pxtals=None,
                  uinputs=None, phid=1, gen_method='from_seed_points'):
+        """Initialise the instance."""
         # ------------------------------------------------------------------
         print(50*'#')
         print(50*'#')
@@ -392,11 +393,13 @@ class gtess2d():
                                               make_upxo_mp_subfeatures=False,
                                               saa=True, throw=True)])
     def __repr__(self):
+        """Return a string representation of this instance."""
         return f"gtess2d instances. n: {self.ninst}. "
 
     @classmethod
     def from_shapely_mulpolygon(cls, mpol):
-        pass
+        """Construct this instance from shapely mulpolygon."""
+        raise NotImplementedError("from_shapely_mulpolygon is not yet implemented.")
 
     @classmethod
     def from_geometrified_mcgs2d(cls, polgs):
@@ -704,7 +707,8 @@ class gtess2d():
 
     @classmethod
     def from_geometry_link(self, geo_link):
-        pass
+        """Construct this instance from geometry link."""
+        raise NotImplementedError("from_geometry_link is not yet implemented.")
 
     @staticmethod
     def _make_pxtal_single_instance(spinput='gen',
@@ -720,6 +724,7 @@ class gtess2d():
                                     char_length_min=0.1111,
                                     char_length_max=0.9999,
                                     nt=10, space='linear',):
+        """ make pxtal single instance."""
         if sp_distr == 'random':
             if gridding_technique == 'random':
                 if sampling_technique == 'uniform':
@@ -1780,6 +1785,7 @@ class gtess2d():
         return cells
 
     def get_all_cids(self, gslevel='base', instance_ID=1):
+        """Return the all cids."""
         if gslevel == 'base':
             cids = list(range(len(self.pxtals[instance_ID].geoms)))
         elif gslevel == 'subgrains':
@@ -1919,6 +1925,7 @@ class gtess2d():
                                   pac_instance_ID=1, base_gs_instance_ID=1,
                                   plot_base=True,
                                   plot_pac=True, plot_blocks=True):
+        """Build and return sub blocks in blocks."""
         fragments_all = []
         # POLYGONS = gset.pxtals[1].geoms
         POLYGONS = [g for g in pxtal_blocks]
@@ -2808,6 +2815,7 @@ class gtess2d():
                            } for inst in range(self.ninst)}
 
     def get_stat(self, data, nan_policy='omit'):
+        """Return the stat."""
         statistics = stats.describe(data, axis=None, nan_policy=nan_policy)
         return {'min': statistics.minmax[0],
                 'max': statistics.minmax[1],
@@ -2822,11 +2830,13 @@ class gtess2d():
                 }
 
     def setup_mprop(self):
+        """Setup mprop."""
         self.mprop = {}
         self.mprop['area'] = {1: {'prop_type': None, 'val': None, 'stat': None}}
         self.mprop['ar'] = {1: {'prop_type': None, 'val': None, 'stat': None}}
 
     def setup_tprop(self):
+        """Setup tprop."""
         self.tprop = {}
         self.tprop['neigh'] = {1: {0.00: None,
                                    0.50: None,
@@ -3237,9 +3247,11 @@ class gtess2d():
             return link
 
     def make_upxo_gs(self, instance=1):
+        """Build and return upxo gs."""
         link = self.link_geom(instance=1, saa=True, throw=True)
 
     def reconstruct_pxtal_from_geom_link(self, link):
+        """Reconstruct pxtal from geom link."""
         if 'p2d' not in link.keys():
             raise KeyError("Key 'p2d' is not a key in link dictionary")
         if 'p2d_cid' not in link.keys():
@@ -3247,6 +3259,7 @@ class gtess2d():
         # -------------------------------------------
 
     def setup_fdb(self):
+        """Setup fdb."""
         self.fdb = {'base': {'sh': None,
                              'vc': None,
                              'vc_cid_ind': None,
@@ -3435,6 +3448,7 @@ fs.interiors[2]
         return 1+len(cell.interiors)
 
     def get_cell_vertices_ext_from_cell(self, cell):
+        """Return the cell vertices ext from cell."""
         vert = np.array([crd for crd in cell.exterior.coords])[:-1]
         return vert
 
@@ -3755,10 +3769,12 @@ fs.interiors[2]
         return hexagons
 
     def _round_coords_(self, poly, ndigits=6):
+        """ round coords ."""
         return Polygon([(round(x, ndigits), round(y, ndigits))
                         for x, y in poly.exterior.coords])
 
     def find_scells_in_tcell(self, scells, tcell):
+        """Find scells in tcell."""
         hexes[0].bounds
         xmin, ymin, xmax, ymax = grain.bounds
         bbc = np.array([[bounds[0], bounds[1]],  # xmin, ymin
@@ -3769,13 +3785,16 @@ fs.interiors[2]
         pass
 
     def assemble_cells(self, features):
+        """Assemble cells."""
         return MultiPolygon(features)
 
     def perturb_feat(self, instance=1, gslevel='base', cid=[], ):
-        pass
+        """Perturb feat."""
+        raise NotImplementedError("perturb_feat is not yet implemented.")
 
     def fe_mesh(self, instance=1, gslevel='base', tool='gmsh'):
-        pass
+        """Fe mesh."""
+        raise NotImplementedError("fe_mesh is not yet implemented.")
 
     def get_idmap_cf(self, gslevel, instance_ID, fname, fid, cids=[]):
         '''
@@ -3896,6 +3915,7 @@ fs.interiors[2]
         return mapping
 
     def validate_instance_ID(self, gslevel, instance_ID):
+        """Check or validate validate instance ID."""
         if gslevel == 'base':
             if instance_ID in self.instn:
                 flag = True

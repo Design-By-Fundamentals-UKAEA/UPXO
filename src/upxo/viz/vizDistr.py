@@ -74,6 +74,7 @@ class DistrViz:
     """
 
     def __init__(self, data, label='value', units=''):
+        """Initialise the instance."""
         arr = np.asarray(data, dtype=float).ravel()
         self.data = arr[np.isfinite(arr)]
         self.label = label
@@ -119,6 +120,7 @@ class DistrViz:
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _xlabel(self, step_size=None):
+        """ xlabel."""
         parts = [self.label]
         if self.units or step_size is not None:
             inner = self.units
@@ -129,11 +131,13 @@ class DistrViz:
         return '  '.join(parts)
 
     def _stat_title(self):
+        """ stat title."""
         s = self.stats
         return (f'{self.label} distribution  '
                 f'(n={s["n"]},  mean={s["mean"]:.2f},  std={s["std"]:.2f})')
 
     def _draw_stat_lines(self, ax):
+        """ draw stat lines."""
         s = self.stats
         ax.axvline(s['mean'],   color='k',      ls='--', lw=1.2,
                    label=f'mean = {s["mean"]:.2f}')

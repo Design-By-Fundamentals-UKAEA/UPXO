@@ -295,7 +295,7 @@ class MPoint2d():
     @classmethod
     def from_mulpoint2d(cls, mp2d, zloc=0.0):
         """Construct from an existing ``MPoint2d`` instance. Not yet implemented."""
-        pass
+        raise NotImplementedError("from_mulpoint2d is not yet implemented.")
 
     @classmethod
     def from_rect_grid(cls, xstart, xinc, xend, ystart, yinc, yend):
@@ -534,21 +534,21 @@ class MPoint2d():
 
     def linreg(self):
         """Fit a linear regression line through all points. Not yet implemented."""
-        pass
+        raise NotImplementedError("linreg is not yet implemented.")
 
     def relax(self):
         """Relax point positions (e.g., Lloyd iteration). Not yet implemented."""
-        pass
+        raise NotImplementedError("relax is not yet implemented.")
 
     def convex_hull(self):
         """Compute the convex hull of the point set. Not yet implemented."""
-        pass
+        raise NotImplementedError("convex_hull is not yet implemented.")
 
     def find_boundary(self, boundary_type='chull'):
         """
         Use convex hull and find boundaries
         """
-        pass
+        raise NotImplementedError("find_boundary is not yet implemented.")
 
     def bbox(self):
         """

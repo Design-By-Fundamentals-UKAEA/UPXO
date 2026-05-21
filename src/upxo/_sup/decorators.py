@@ -27,6 +27,7 @@ def port_doc(module_path, func_name):
     import upxo._sup.decorators as decorators
     """
     def decorator(target_func):
+        """Decorator."""
         try:
             # Import the module only when the decorator is executed
             module = importlib.import_module(module_path)

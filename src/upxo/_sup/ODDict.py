@@ -6,15 +6,18 @@ class ObjectDataDictionary:
         data storage
     """
     def __init__(self):
+        """Initialise the instance."""
         self.data = {} 
         # All data will be appended to this dictionary as and when 
         # the append defs are cllaed after updateoing every data field,
         # such as material or ID data field for example.
 
     def append(self, DataClassObject):
+        """Append."""
         self.data[DataClassObject.__class__.__name__] = asdict(DataClassObject)
         
     def CrossCheckAndAppend(self, DataClassObject):
+        """Crosscheckandappend."""
         if DataClassObject.__class__.__name__ not in self.data.keys():
             ObjectDataDictionary.append(DataClassObject)
         elif DataClassObject.__class__.__name__ in self.data.keys():

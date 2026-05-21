@@ -74,6 +74,7 @@ class Sline3d_leanest():
     __slots__ = ('x0', 'y0', 'z0', 'x1', 'y1', 'z1')
 
     def __init__(self, x0=0, y0=0, z0=0, x1=1, y1=0, z1=0):
+        """Initialise with six scalar endpoint coordinates."""
         self.x0, self.y0, self.z0 = x0, y0, z0
         self.x1, self.y1, self.z1 = x1, y1, z1
 
@@ -109,6 +110,7 @@ class Sline3d():
     __slots__ = ('x0', 'y0', 'z0', 'x1', 'y1', 'z1', 'f', 'pnta', 'pntb')
 
     def __init__(self, x0=0, y0=0, z0=0, x1=1, y1=0, z1=0, pnta=None, pntb=None):
+        """Initialise from six scalar coordinates or two ``Point3d`` endpoints."""
         if pnta is None and pntb is None:
             self.x0, self.y0, self.z0 = x0, y0, z0
             self.x1, self.y1, self.z1 = x1, y1, z1
@@ -119,6 +121,7 @@ class Sline3d():
             self.x1, self.y1, self.z1 = pntb.x, pntb.y, pnta.z
 
     def __repr__(self):
+        """Return ``UPXO-sl3d (x0,y0,z0)-(x1,y1,z1). <id>`` summary string."""
         return f'UPXO-sl3d ({self.x0},{self.y0},{self.z0})-({self.x1},{self.y1},{self.z1}). {id(self)}'
 
     def __iter__(self):
@@ -194,7 +197,7 @@ class Sline3d():
         A line can be represented using end point on the line and a dir. vector.
         line = [[x, y], [dx, dy]]
         """
-        pass
+        raise NotImplementedError("by_vector is not yet implemented.")
 
     @property
     def mid(self):
@@ -405,14 +408,17 @@ class Sline3d():
 
     @property
     def coord_i(self):
+        """Start coordinate as ``[x0, y0, z0]``."""
         return [self.x0, self.y0, self.z0]
 
     @property
     def coord_j(self):
+        """End coordinate as ``[x1, y1, z1]``."""
         return [self.x1, self.y1, self.z1]
 
     @property
     def points(self):
+        """Return ``[Point3d(i), Point3d(mid), Point3d(j)]``."""
         from upxo.geoEntities.point3d import Point3d
         mp = self.mid
         return [Point3d(self.x0, self.y0, self.z0),
@@ -435,14 +441,17 @@ class Sline3d():
         return is_endpoint
 
     def invert(self):
+        """Swap start and end endpoints in place."""
         ends = self.coord_list
         self.x0, self.y0, self.z0 = ends[1]
         self.x1, self.y1, self.z1 = ends[0]
 
     def move_i(self, point):
+        """Move the start point to ``point`` in place."""
         self.x0, self.y0, self.z0 = point
 
     def move_j(self, point):
+        """Move the end point to ``point`` in place."""
         self.x1, self.y1, self.z1 = point
 
     def distance_to_points(self, points=None, *, ref='all'):
@@ -574,6 +583,7 @@ class Sline3d():
         return distances
 
     def extend(self, dincr, direction='both', saa=True, throw=False):
+        """Extend the line by ``dincr`` at the start, end, or both ends."""
         # -------------------------------------
         P1 = np.array([self.x0, self.y0, self.z0])
         P2 = np.array([self.x1, self.y1, self.z1])

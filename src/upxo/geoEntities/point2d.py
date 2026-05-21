@@ -1322,7 +1322,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("from_intersection_lines_regions is not yet implemented.")
 
     @property
     def coords(self):
@@ -1967,7 +1967,7 @@ class Point2d():
         To be developed.
         """
         # Use the ckdtree option.
-        pass
+        raise NotImplementedError("find_neigh_mulpoint_by_distance is not yet implemented.")
 
     def find_neigh_edge_by_distance(self, *, elist=None,
                                     plane='xy', refloc='starting', r=0):
@@ -1989,7 +1989,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_edge_by_distance is not yet implemented.")
 
     def find_neigh_muledge_by_distance(self, *, melist=None,
                                        plane='xy', refloc='starting', r=0):
@@ -2011,7 +2011,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_muledge_by_distance is not yet implemented.")
 
     def find_neigh_xtal_by_distance(self, *, xlist=None,
                                     plane='xy', refloc='starting', r=0):
@@ -2033,7 +2033,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("find_neigh_xtal_by_distance is not yet implemented.")
 
     def set_gmsh_props(self, prop_dict):
         """
@@ -2048,7 +2048,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("set_gmsh_props is not yet implemented.")
 
     def array_by_translation(self,
                              ncopies=10,
@@ -2070,7 +2070,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("array_by_translation is not yet implemented.")
 
     def array_by_rotation(self,
                           ncopies=10,
@@ -2092,7 +2092,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("array_by_rotation is not yet implemented.")
 
     def array_on_arc(self, ncopies=10, r=1, angles=[0.0, 360.0], degree=True):
         """
@@ -2113,7 +2113,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("array_on_arc is not yet implemented.")
 
     def array_by_clustering(self, n=10, r=1,
                             distribution='urand', dmin=None,
@@ -2237,7 +2237,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("lies_on_which_edge is not yet implemented.")
 
     def lies_in_which_xtal(self, *, xlist=None,
                            cosider_boundary=True,
@@ -2258,7 +2258,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("lies_in_which_xtal is not yet implemented.")
 
     def set_z(self, z=0):
         """
@@ -2327,7 +2327,7 @@ class Point2d():
         -----
         To be developed.
         """
-        pass
+        raise NotImplementedError("make_shape is not yet implemented.")
 
 
 def all_isinstance(dtype, *args):

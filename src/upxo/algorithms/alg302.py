@@ -38,6 +38,7 @@ def unique_with_counts(arr):
 
 @njit
 def mcloop_alg302(cbp, sbp, S, xinda, yinda, zinda, rsfso):
+    """Mcloop alg302."""
     xi, yi, zi = xinda, yinda, zinda
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
     for P in range(S_sz2):  # along axis 2, along plane
@@ -168,6 +169,7 @@ def mc_iterations_3d_alg302(S=None,
                             rsfso=3, uidata=None, uigrid=None,
                             uisim=None, uiint=None,
                             uimesh=None, verbose=False):
+    """Mc iterations 3d alg302."""
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
     S_sz0_list = list(range(S_sz0))
     S_sz1_list = list(range(S_sz1))

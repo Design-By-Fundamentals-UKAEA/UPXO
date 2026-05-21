@@ -41,6 +41,7 @@ from upxo._sup.validation_values import isinstance_many
 class _coord_():
     __slots__ = ('x', 'y', 'z')
     def __init__(self, x, y, z):
+        """Store raw 3D coordinate values in ``x``, ``y``, ``z``."""
         self.x, self.y, self.z = x, y, z
 
 
@@ -65,6 +66,7 @@ class p3d_leanest():
     __slots__ = ('_x', '_y', '_z')
 
     def __init__(self, x, y, z):
+        """Initialise the leanest 3D point with ``x``, ``y``, ``z`` coordinates."""
         self._x, self._y, self._z = x, y, z
 
     def __repr__(self):
@@ -131,6 +133,7 @@ class Point3d(UPXO_Point):
     __slots__ = UPXO_Point.__slots__ + ('z', )
 
     def __init__(self, x, y, z=0.0):
+        """Initialise a 3D point with Cartesian coordinates ``x``, ``y``, ``z``."""
         super().__init__(x, y, z)
         self.x = x
         self.y = y
@@ -218,6 +221,7 @@ class Point3d(UPXO_Point):
             return None
 
     def __ne__(self, plist, use_tol=True):
+        """Return ``True`` if self is not equal to any point in ``plist``."""
         return not self.__eq__(plist, use_tol=use_tol)
 
     def eq(self, plist, use_tol=False, tolerance=None):
@@ -290,9 +294,11 @@ class Point3d(UPXO_Point):
         return cmp
 
     def add(self, d, update=True, throw=False, mydecatlen2NUM='b'):
-        pass
+        """Add scalar or vector ``d`` to self coordinates. Not yet implemented."""
+        raise NotImplementedError("add is not yet implemented.")
 
     def __mul__(self, f=1.0, update=True, throw=False):
+        """Scale self coordinates by factor ``f``."""
         # Validate f
         # ----------------------------------
         # DEVELOPMENT STAGE - 1
@@ -342,6 +348,7 @@ class Point3d(UPXO_Point):
 
     @property
     def coords(self):
+        """Return ``[x, y]`` as a numpy array (2D projection of this 3D point)."""
         return np.array([self.x, self.y])
 
     def squared_distance(self, plist=None, point_spec = -1):
@@ -530,6 +537,7 @@ class Point3d(UPXO_Point):
                            self.y+distances[2])
 
     def translate_to(self, *, point=None, update=False, throw=True):
+        """Translate self to the location of ``point``."""
         if not point:
             raise ValueError('Must provide point object. Could also be coord.')
         xloc, yloc, zloc = Point3d.validate_single_point_input(point)
@@ -578,6 +586,7 @@ class Point3d(UPXO_Point):
         return x, y
 
     def attach_feature(self, *, feature=None, feature_id=None):
+        """Attach a feature object to ``self.f[feature_id]``."""
         if not feature:
             raise ValueError('feature cannot be empty.')
         if not feature_id:
@@ -635,37 +644,45 @@ class Point3d(UPXO_Point):
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
+        """Find neighbouring multi-point objects within radius ``r``. Not yet implemented."""
         # Use the ckdtree option.
-        pass
+        raise NotImplementedError("find_neigh_mulpoint_by_distance is not yet implemented.")
 
     def find_neigh_edge_by_distance(self, *, elist=None,
                                     plane='xy', refloc='starting', r=0):
-        pass
+        """Find neighbouring edges within radius ``r``. Not yet implemented."""
+        raise NotImplementedError("find_neigh_edge_by_distance is not yet implemented.")
 
     def find_neigh_muledge_by_distance(self, *, melist=None,
                                        plane='xy', refloc='starting', r=0):
-        pass
+        """Find neighbouring multi-edges within radius ``r``. Not yet implemented."""
+        raise NotImplementedError("find_neigh_muledge_by_distance is not yet implemented.")
 
     def find_neigh_xtal_by_distance(self, *, xlist=None,
                                     plane='xy', refloc='starting', r=0):
-        pass
+        """Find neighbouring crystals within radius ``r``. Not yet implemented."""
+        raise NotImplementedError("find_neigh_xtal_by_distance is not yet implemented.")
 
     def set_gmsh_props(self, prop_dict):
-        pass
+        """Apply GMSH mesh properties from ``prop_dict`` to this point. Not yet implemented."""
+        raise NotImplementedError("set_gmsh_props is not yet implemented.")
 
     def array_translation(self, *,
                           ncopies=10,
                           vector=[[0, 0, 0], [0, 0, 1]],
                           spacing='constant'):
-        pass
+        """Generate an array of translated copies along ``vector``. Not yet implemented."""
+        raise NotImplementedError("array_translation is not yet implemented.")
 
     def lies_on_which_line(self, *, llist=None, consider_ends=True):
-        pass
+        """Return which line(s) in ``llist`` this point lies on. Not yet implemented."""
+        raise NotImplementedError("lies_on_which_line is not yet implemented.")
 
     def lies_in_which_xtal(self, *, xlist=None,
                            cosider_boundary=True,
                            consider_boundary_ends=True):
-        pass
+        """Return which crystal(s) in ``xlist`` contain this point. Not yet implemented."""
+        raise NotImplementedError("lies_in_which_xtal is not yet implemented.")
 
     def make_vtk_point(self, z=0):
         """
@@ -688,7 +705,8 @@ class Point3d(UPXO_Point):
                 'help': "return['pd'].GetPoint(return['id'])"}
 
     def make_shape(self):
-        pass
+        """Create a geometric shape representation of this point. Not yet implemented."""
+        raise NotImplementedError("make_shape is not yet implemented.")
 
 
 '''def isinstance_many(tocheck, dtype):

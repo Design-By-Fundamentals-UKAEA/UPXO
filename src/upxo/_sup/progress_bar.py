@@ -4,6 +4,7 @@ import time
 def with_progress_bar(func):
     """Decorator to add a tqdm progress bar to a function."""
     def wrapper(*args, **kwargs):
+        """Wrapper."""
         if 'total' in kwargs:  # Check if 'total' is provided
             total = kwargs.pop('total')
             pbar = tqdm.tqdm(total=total)
@@ -22,6 +23,7 @@ def with_progress_bar(func):
 
 @with_progress_bar
 def my_computation(total=None):
+    """My computation."""
     # Your computation here (you can remove time.sleep if needed)
     time.sleep(0.1)
 
