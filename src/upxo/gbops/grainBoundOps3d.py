@@ -1,121 +1,247 @@
+"""
+Module: grainBoundOps3d
+-----------------------
+Grain-boundary operations for 3D labelled voxel structures.
+
+Provides fast, Numba-accelerated routines for detecting grain-boundary voxels
+in 3-D labelled feature images (LFI) and for identifying topologically
+problematic voxels (articulation points) that violate manifold connectivity.
+
+Functions
+---------
+compute_gb_boundary_mask_interiorVoxels(lfi)
+    Detect interior boundary voxels using 6-connectivity (Numba parallel).
+compute_gb_boundary_mask(lfi)
+    Extend interior boundary mask to include the full RVE outer shell.
+identify_articulation_voxels(lfi)
+    Flag voxels whose removal would disconnect their local grain neighbourhood.
+
+Usage
+-----
+::
+
+    import upxo.gbops.grainBoundOps3d as gbOps
+
+@author: Dr. Sunil Anandatheertha
+"""
 import numpy as np
 from numba import njit, prange
 import pyvista as pv
 import cc3d
 
+
 @njit(parallel=True)
 def compute_gb_boundary_mask_interiorVoxels(lfi):
-    """
-    Compute a boolean mask of boundary voxels in the labeled feature image (LFI).
-    A voxel is considered a boundary voxel if it has at least one 6-connected 
-    neighbor with a different feature ID.
+    """Detect interior grain-boundary voxels using 6-connectivity.
+
+    A voxel is classified as a boundary voxel when at least one of its six
+    face-adjacent neighbours (±x, ±y, ±z) carries a different grain ID.
+    Voxels on the outermost shell of the array are excluded; use
+    :func:`compute_gb_boundary_mask` to include those.
+
+    The loop over the x-axis is parallelised with ``prange``; inner loops
+    remain serial so that Numba can apply vectorisation.
 
     Parameters
     ----------
-    lfi : numpy.ndarray
-        A 3D array of labeled feature IDs.
+    lfi : numpy.ndarray of int, shape (nx, ny, nz)
+        3-D array of integer grain (feature) IDs.
 
     Returns
     -------
-    numpy.ndarray
-        A boolean array of the same shape as `lfi`, where True indicates a boundary 
-        voxel and False indicates an internal voxel.
+    boundary : numpy.ndarray of bool, shape (nx, ny, nz)
+        Boolean mask where ``True`` marks a grain-boundary voxel.
+        The outermost shell (index 0 and n-1 in each axis) is always
+        ``False`` — use :func:`compute_gb_boundary_mask` to set it.
+
+    Notes
+    -----
+    Decorated with ``@njit(parallel=True)``: the function is JIT-compiled by
+    Numba on the first call and cached for subsequent calls.  It is called
+    internally by :func:`compute_gb_boundary_mask`; direct use is only needed
+    when the RVE outer faces should be excluded from the boundary mask.
 
     Import
     ------
-    import upxo.gbops.grainBoundOps3d as gbOps
+    ::
+
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+    Examples
+    --------
+    .. code-block:: python
+
+        import numpy as np
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+        lfi = np.zeros((10, 10, 10), dtype=np.int32)
+        lfi[5:, :, :] = 1          # two-grain RVE split at x=5
+        mask = gbOps.compute_gb_boundary_mask_interiorVoxels(lfi)
+        # voxels at x=4 and x=5 that face the split are True
+        print(mask[4, 5, 5], mask[5, 5, 5])  # True True
     """
     nx, ny, nz = lfi.shape
     boundary = np.zeros((nx, ny, nz), dtype=np.bool_)
-    for i in prange(1, nx-1):
-        for j in range(1, ny-1):
-            for k in range(1, nz-1):
+    for i in prange(1, nx - 1):
+        for j in range(1, ny - 1):
+            for k in range(1, nz - 1):
                 fi = lfi[i, j, k]
-                if (lfi[i+1, j, k] != fi or
-                    lfi[i-1, j, k] != fi or
-                    lfi[i, j+1, k] != fi or
-                    lfi[i, j-1, k] != fi or
-                    lfi[i, j, k+1] != fi or
-                    lfi[i, j, k-1] != fi):  # 6-neighbours
+                if (lfi[i + 1, j, k] != fi or
+                        lfi[i - 1, j, k] != fi or
+                        lfi[i, j + 1, k] != fi or
+                        lfi[i, j - 1, k] != fi or
+                        lfi[i, j, k + 1] != fi or
+                        lfi[i, j, k - 1] != fi):
                     boundary[i, j, k] = True
     return boundary
 
+
 def compute_gb_boundary_mask(lfi):
-    """
-    Compute boundary mask including RVE exterior boundaries.
+    """Compute a grain-boundary mask that includes the RVE outer shell.
+
+    Calls :func:`compute_gb_boundary_mask_interiorVoxels` to detect all
+    interior boundary voxels (6-connectivity criterion), then sets every voxel
+    on the six outer faces of the bounding box to ``True``.  This represents
+    the physical convention that grains touching the RVE surface are bounded
+    by that surface.
 
     Parameters
     ----------
-    lfi : ndarray[int]
-        3D grain ID array.
+    lfi : numpy.ndarray of int, shape (nx, ny, nz)
+        3-D array of integer grain (feature) IDs.
 
     Returns
     -------
-    boundary_mask : ndarray[bool]
-        Boolean mask of boundary voxels including outer RVE shell.
+    boundary : numpy.ndarray of bool, shape (nx, ny, nz)
+        Boolean mask where ``True`` marks either an interior grain-boundary
+        voxel or a voxel on the outer RVE shell.
+
+    Notes
+    -----
+    The outer shell assignment is O(n²) per face and does not require Numba.
+    The dominant cost is the parallel interior scan in
+    :func:`compute_gb_boundary_mask_interiorVoxels`.
 
     Import
     ------
-    import upxo.gbops.grainBoundOps3d as gbOps
+    ::
+
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+    Examples
+    --------
+    .. code-block:: python
+
+        import numpy as np
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+        lfi = np.zeros((10, 10, 10), dtype=np.int32)
+        lfi[5:, :, :] = 1
+        mask = gbOps.compute_gb_boundary_mask(lfi)
+        # All six outer faces are True
+        assert mask[0, :, :].all()
+        assert mask[-1, :, :].all()
+        # Interior boundary plane is also True
+        assert mask[4, 5, 5] and mask[5, 5, 5]
     """
-    # Step 1 — interior boundary detection
     boundary = compute_gb_boundary_mask_interiorVoxels(lfi)
     nx, ny, nz = lfi.shape
-    # Step 2 — enforce RVE outer shell boundaries
     boundary[0, :, :] = True
-    boundary[nx-1, :, :] = True
+    boundary[nx - 1, :, :] = True
     boundary[:, 0, :] = True
-    boundary[:, ny-1, :] = True
+    boundary[:, ny - 1, :] = True
     boundary[:, :, 0] = True
-    boundary[:, :, nz-1] = True
+    boundary[:, :, nz - 1] = True
     return boundary
 
+
 def identify_articulation_voxels(lfi):
-    """
-    Identifies voxels that violate manifold connectivity (6-connectivity) 
-    within their 26-connectivity neighborhood.
+    """Identify voxels whose removal disconnects their local grain neighbourhood.
+
+    For every boundary voxel, the function extracts the 3×3×3 neighbourhood
+    and checks whether the same-grain voxels within that stencil remain
+    6-connected after the centre voxel is excluded.  If they split into more
+    than one connected component the centre voxel is an *articulation point*:
+    removing it (e.g. during surface reconstruction or mesh smoothing) would
+    create a topological hole in the grain.
+
+    Parameters
+    ----------
+    lfi : numpy.ndarray of int, shape (nx, ny, nz)
+        3-D array of integer grain (feature) IDs.
+
+    Returns
+    -------
+    articulation_mask : numpy.ndarray of bool, shape (nx, ny, nz)
+        Boolean mask where ``True`` marks a voxel whose removal would
+        disconnect the local 26-neighbourhood same-grain region under
+        6-connectivity.
+
+    Notes
+    -----
+    Complexity is O(N_boundary) × O(1) per voxel (the 3×3×3 stencil is
+    constant size), so runtime scales with the total grain-boundary area
+    rather than the full volume.
+
+    A simplified x-shift is used for the initial boundary pre-filter: only
+    voxels where ``lfi[i,j,k] != lfi[i-1,j,k]`` are considered.  This may
+    miss some boundary voxels detected by the full 6-neighbour check in
+    :func:`compute_gb_boundary_mask_interiorVoxels`, but reduces unnecessary
+    6-connectivity tests on clearly interior voxels.
+
+    The connected-component labelling is performed by ``cc3d.connected_components``
+    with ``connectivity=6``.
+
+    Import
+    ------
+    ::
+
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+    Examples
+    --------
+    .. code-block:: python
+
+        import numpy as np
+        import upxo.gbops.grainBoundOps3d as gbOps
+
+        lfi = np.zeros((20, 20, 20), dtype=np.int32)
+        lfi[10:, :, :] = 1
+        art = gbOps.identify_articulation_voxels(lfi)
+        # For a clean planar boundary no articulation voxels should be present
+        print("Articulation voxels found:", art.sum())
+
+    See Also
+    --------
+    compute_gb_boundary_mask : Identify all grain-boundary voxels.
     """
     nx, ny, nz = lfi.shape
-    # Mask to store identified problem sites
     articulation_mask = np.zeros_like(lfi, dtype=bool)
 
-    # 1. Focus only on boundary voxels to save compute time
-    # A boundary voxel has at least one neighbor with a different ID.
-    shifted_x = np.pad(lfi, ((1,0),(0,0),(0,0)), mode='edge')[:-1,:,:]
-    boundary_mask = (lfi != shifted_x) # Simplified boundary detection
-    
-    # Iterate through the volume (excluding outer padding for safety)
-    for i in range(1, nx-1):
-        for j in range(1, ny-1):
-            for k in range(1, nz-1):
-                
+    shifted_x = np.pad(lfi, ((1, 0), (0, 0), (0, 0)), mode='edge')[:-1, :, :]
+    boundary_mask = (lfi != shifted_x)
+
+    for i in range(1, nx - 1):
+        for j in range(1, ny - 1):
+            for k in range(1, nz - 1):
                 if not boundary_mask[i, j, k]:
                     continue
-                
-                # 2. Extract the 3x3x3 local stencil
+
                 current_id = lfi[i, j, k]
-                neighborhood = lfi[i-1:i+2, j-1:j+2, k-1:k+2]
-                
-                # 3. Create a binary mask of neighbors sharing the same ID
-                # We exclude the center voxel itself to check if its neighbors 
-                # stay connected without it.
+                neighborhood = lfi[i - 1:i + 2, j - 1:j + 2, k - 1:k + 2]
                 local_mask = (neighborhood == current_id).astype(np.uint8)
-                local_mask[1, 1, 1] = 0 
-                
+                local_mask[1, 1, 1] = 0
+
                 if np.sum(local_mask) <= 1:
-                    # Isolated or single-neighbor voxels are manifold
                     continue
-                
-                # 4. Check connectivity of the local neighborhood
-                # We use 6-connectivity (connectivity=6) to enforce manifoldedness.
+
                 labels, n_components = cc3d.connected_components(
-                    local_mask, 
-                    connectivity=6, 
-                    return_N=True
+                    local_mask,
+                    connectivity=6,
+                    return_N=True,
                 )
-                
-                # 5. If neighbors are split into >1 component, this is a pinch point
+
                 if n_components > 1:
                     articulation_mask[i, j, k] = True
-                    
+
     return articulation_mask
