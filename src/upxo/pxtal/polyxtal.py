@@ -13,7 +13,6 @@ from copy import deepcopy
 from colorama import Fore
 from colorama import Back
 from colorama import Style
-from shapely import speedups
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from collections import deque
@@ -44,6 +43,7 @@ class INSTANCES():
                  'D1_par1values',
                  )
     def __init__(self):
+        """Initialise the instance."""
         pass
 
     pass
@@ -69,6 +69,7 @@ class vtpolyxtal2d():
                  lean = 'no',
                  INSTANCE = None
                  ):
+        """Initialise the instance."""
         #.......................
 
         #.......................
@@ -95,10 +96,6 @@ class vtpolyxtal2d():
                     # following apply
                     if lean in ('no'):
                         self.L0.mpo_seeds = mulpoint_object
-                if vt_base_tool in ('shapely', 'sha') and speedups.available:
-                    # If shapely version supports, enable speedups
-                    speedups.enable()
-                    #    -    -    -    -    -
                 self.from_points(vt_base_tool = vt_base_tool,
                                  point_method = point_method,
                                  mulpoint_object = mulpoint_object,
@@ -172,6 +169,7 @@ class vtpolyxtal2d():
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __iter__(self):
+        """Return an iterator over this instance."""
         #for i in pxtal:
         #    print(40*'-')
         #    print(i.centroid)
@@ -179,6 +177,7 @@ class vtpolyxtal2d():
         return self.L0.xtals.__iter__()
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def load_xtals(self, method = 'ctf'):
+        """Load or import xtals."""
         # Method to load list of polygon objects
         if method == 'ctf':
             ''' Import CTF files '''
@@ -207,6 +206,7 @@ class vtpolyxtal2d():
                       locx_list = [],
                       locy_list = [],
                       ):
+        """Prepare seeds."""
         if point_method not in ('points', 'mulpoints', 'coords'):
             return 'Please specify correct point_method'
         if point_method == 'points':
@@ -224,6 +224,7 @@ class vtpolyxtal2d():
                     ybound = None,
                     vis_vtgs = False,
                     ):
+        """Construct this instance from points."""
         #.......................
         self.prepare_seeds(point_method = point_method,
                            mulpoint_object = mulpoint_object
@@ -355,22 +356,27 @@ class vtpolyxtal2d():
             pass
     #--------------------------------------------------------------------------
     def from_edges(self):
+        """Construct this instance from edges."""
         # Method to make pxtal from shapely edge objects
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def from_vertices(self):
+        """Construct this instance from vertices."""
         # Method to make pxtal from shapely point objects
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def clip(self):
+        """Clip."""
         # Method to clip pxtal from a bounding shapely polygon
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def add_xtal(self):
+        """Add or insert xtal."""
         # Method to add a xtal to pxtal
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def rem_xtal(self):
+        """Rem xtal."""
         # Method to remove a xtal to pxtal
         pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -641,6 +647,7 @@ class vtpolyxtal2d():
                                   )
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_mpo_L0_centroids(self):
+        """Build and return mpo L0 centroids."""
         self.L0.mpo_xtals_centroids = mulpoint2d(mulpoint_type = 'centroids',
                                                  method = 'coords',
                                                  coordx = self.L0.xtal_coord_centroid_x,
@@ -648,6 +655,7 @@ class vtpolyxtal2d():
                                                  )
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_mpo_L0_reppoints(self):
+        """Build and return mpo L0 reppoints."""
         self.L0.mpo_xtals_reppoints = mulpoint2d(mulpoint_type = 'reppoints',
                                                  method = 'coords',
                                                  coordx = self.L0.xtal_coord_reppoint_x,
@@ -1082,6 +1090,7 @@ class vtpolyxtal2d():
     def __identify_xtals_with_coordinates(self,
                                           xy_coords = []
                                           ):
+        """  identify xtals with coordinates."""
         self.progress_bar(first_call = True,
                           first_message = 'Identifying boundary grains',
                           progress_fraction = 0,
@@ -1710,6 +1719,7 @@ class vtpolyxtal2d():
         return cmap
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def summary(self):
+        """Summary."""
         _sep = ''.join([30*'*', '\n'])
 
         print(''.join([_sep,
@@ -2099,6 +2109,7 @@ class vtpolyxtal2d():
         plt.show()
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def SFV_assign_polygonal_areas_to_reppoints(self):
+        """Sfv assign polygonal areas to reppoints."""
         for _xtal_, _point_ in zip(self.L0.xtals, self.L0.mpo_xtals_reppoints.points):
             _point_.polygonal_area = _xtal_.area
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -2118,32 +2129,42 @@ class vtpolyxtal2d():
         '''
         pass
     def get_L0_ng(self):
+        """Return the L0 ng."""
         return len(self.L0.xtals_ids)
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     # IDS OF THE FEATURES
     def get_ids_L0_all_xtals(self):
+        """Return the ids L0 all xtals."""
         return self.L0.xtals_ids
     def get_ids_L0_boundary_xtals(self):
+        """Return the ids L0 boundary xtals."""
         return self.L0.xtals_boundary.ids
 
     # COUNT OF THE FEATURES
     def get_n_L0_boundary_xtals(self):
+        """Return the n L0 boundary xtals."""
         return self.L0.xtals_boundary.n
     def get_n_L0_internal_xtals(self):
+        """Return the n L0 internal xtals."""
         return self.internal_xtals.n
     def get_xnBE_L0_boundary_xtals(self):
+        """Return the xnBE L0 boundary xtals."""
         #xtal number of boundary edges
         return self.L0.xtals_boundary.nBE
     def get_nBE_L0_internal_xtals(self):
+        """Return the nBE L0 internal xtals."""
         return self.internal_xtals.nBE
 
     # SCALAR FIELD - ALL VALUES
     def get_L0x_pae(self, ):
+        """Return the L0x pae."""
         # L0-xtal-polygonal-area-exterior
         return self.areas_polygonal_exterior
     def get_xea_L0_boundary(self):
+        """Return the xea L0 boundary."""
         return self.L0.xtals_boundary.APE_val
     def get_xbp_L0_boundary_xtals(self):
+        """Return the xbp L0 boundary xtals."""
         pass
     # THRESHOLDED XTALS
         # 1. by area quartiles
@@ -2159,9 +2180,11 @@ class vtpolyxtal2d():
         if level == 0:
             return self.L0.coord_seeds_x
     def get_ycoord_vtseeds(self, level = 0, instance = 0):
+        """Return the ycoord vtseeds."""
         if level == 0:
             return self.L0.coord_seeds_y
     def get_xycoord_vtseeds(self, level = 0, instance = 0):
+        """Return the xycoord vtseeds."""
         if level == 0:
             if hasattr(self.L0, 'xtal_coord_centroid_xy'):
                 return self.L0.coord_seeds_xy
@@ -2176,9 +2199,11 @@ class vtpolyxtal2d():
         if level == 0:
             return self.L0.xtal_coord_centroid_x
     def get_ycoord_centroid(self, level = 0, instance = 0):
+        """Return the ycoord centroid."""
         if level == 0:
             return self.L0.xtal_coord_centroid_y
     def get_xycoord_centroid(self, level = 0, instance = 0):
+        """Return the xycoord centroid."""
         if level == 0:
             if hasattr(self.L0, 'xtal_coord_centroid_xy'):
                 return self.L0.xtal_coord_centroid_xy
@@ -2193,9 +2218,11 @@ class vtpolyxtal2d():
         if level == 0:
             return self.L0.xtal_coord_reppoint_x
     def get_ycoord_reppoint(self, level = 0, instance = 0):
+        """Return the ycoord reppoint."""
         if level == 0:
             return self.L0.xtal_coord_reppoint_y
     def get_xycoord_reppoint(self, level = 0, instance = 0):
+        """Return the xycoord reppoint."""
         if level == 0:
             if hasattr(self.L0, 'xtal_coord_reppoint_xy'):
                 return self.L0.xtal_coord_reppoint_xy
@@ -2210,9 +2237,11 @@ class vtpolyxtal2d():
         if level == 0:
             return self.L0.xtal_coord_vertices_x
     def get_ycoord_vertices(self, level = 0, instance = 0):
+        """Return the ycoord vertices."""
         if level == 0:
             return self.L0.xtal_coord_vertices_y
     def get_xycoord_vertices(self, level = 0, instance = 0):
+        """Return the xycoord vertices."""
         if level == 0:
             if hasattr(self.L0, 'xtal_coord_vertices_xy'):
                 return self.L0.xtal_coord_vertices_xy
@@ -2223,48 +2252,60 @@ class vtpolyxtal2d():
                 _2 = self.get_ycoord_reppoint(self, level = level, instance = instance)
                 return _1, _2
     def get_ids_xtals(self, level = 0, instance = 0):
+        """Return the ids xtals."""
         return self.L0.xtals_ids
     def has_ids_xtals(self, level = 0, instance = 0, ids = [0, 70, 71, 58, 72]):
+        """Check or validate has ids xtals."""
         all_ids = get_ids_xtals(level = level, instance = instance)
         return [False if id_ not in all_ids else True for id_ in ids]
     def get_dco_xtals_boundary(self, level = 0, instance = 0):
+        """Return the dco xtals boundary."""
         # dc: data container object
         if level == 0:
             return self.L0.xtal_ss_boundary
     def get_dcostat_area_xtals_boundary(self, level = 0, instance = 0):
+        """Return the dcostat area xtals boundary."""
         return self.get_dco_xtals_boundary(level = level,
                                            instance = instance).APE_distr
     def get_dcostat_area_xtals_boundary(self, level = 0, instance = 0, measure = 'ape'):
+        """Return the dcostat area xtals boundary."""
         if level == 0:
             if measure == 'ape':
                 return self.get_dco_xtals_boundary(level = level,
                                                    instance = instance).APE_distr
     def get_area_xtals_boundary(self, level = 0, instance = 0, measure = 'ape'):
+        """Return the area xtals boundary."""
         if level == 0:
             if measure == 'ape':
                 return self.get_dco_xtals_boundary(level = level,
                                                    instance = instance).APE_val
     def get_stat_H_area_xtals_boundary(self, level = 0, instance = 0, measure = 'ape'):
+        """Return the stat H area xtals boundary."""
         return self.get_dcostat_area_xtals_boundary(level = level,
                                                     instance = instance,
                                                     measure = measure).H
     def get_stat_K_area_xtals_boundary(self, level = 0, instance = 0, measure = 'ape'):
+        """Return the stat K area xtals boundary."""
         return self.get_dcostat_area_xtals_boundary(level = level,
                                                     instance = instance,
                                                     measure = measure).K
     def get_stat_S_area_xtals_boundary(self, level = 0, instance = 0, measure = 'ape'):
+        """Return the stat S area xtals boundary."""
         return self.get_dcostat_area_xtals_boundary(level = level,
                                                     instance = instance,
                                                     measure = measure).S
     def get_stat_nbins_area_xtals_boundary(self, level = 0, instance = 0):
+        """Return the stat nbins area xtals boundary."""
         return self.get_stat_H_area_xtals_boundary(level = level,
                                                    instance = instance,
                                                    measure = measure).nbins
     def get_stat_be_area_xtals_boundary(self, level = 0, instance = 0):
+        """Return the stat be area xtals boundary."""
         return self.get_stat_H_area_xtals_boundary(level = level,
                                                    instance = instance,
                                                    measure = measure).be
     def get_stat_hv_area_xtals_boundary(self, level = 0, instance = 0):
+        """Return the stat hv area xtals boundary."""
         return self.get_stat_H_area_xtals_boundary(level = level,
                                                    instance = instance,
                                                    measure = measure).hv

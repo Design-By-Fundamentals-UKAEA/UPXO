@@ -12,3 +12,7 @@ shapely>=2.1.1
 tqdm>=4.67.1
 seaborn>=0.13.2
 defdap==0.93.6
+rasterio>=1.4.3
+colorama>=0.4.6
+pyvoro>=1.3.2
+tetgen>=0.8.2
