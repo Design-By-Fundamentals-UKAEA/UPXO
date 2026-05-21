@@ -75,6 +75,7 @@ def _mesh_conformal(
     formats: list | None,
     verbose: bool,
 ) -> dict:
+    """ mesh conformal."""
     from upxo.meshing.conformal_mesher2d import confMesh2dGMSH
 
     flat_cells, gid_map = _flatten_cells(cells)

@@ -12,6 +12,7 @@ class uigrid:
                  'ymin', 'zbound', 'zinc', 'zls', 'zmax', 'zmin',)
     def __init__(self, dim=3, npixels_max=1.01E9, xmin=0.0, xinc=1.0, xmax=100.0,
                  ymin=0.0, yinc=1.0, ymax=100.0, zmin=0.0, zinc=1.0, zmax=100.0):
+        """Initialise the instance."""
         self.dim = dim
         self.npixels_max = npixels_max
         self.vox_size = (xinc, yinc, zinc)

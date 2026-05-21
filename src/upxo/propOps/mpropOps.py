@@ -15,9 +15,11 @@ import upxo.propOps.mpropOps as mpropOps
 """
 
 def get_feature_volumes(lfi):
+    """Return the feature volumes."""
     return np.bincount(lfi.ravel())[1:]
 
 def extract_feature_volumes(lfi):
+    """Extract feature volumes."""
     feature_volumes = get_feature_volumes(lfi)
     fids = np.arange(1, len(feature_volumes)+1)
     return fids, feature_volumes

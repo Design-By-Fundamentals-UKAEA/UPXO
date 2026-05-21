@@ -95,21 +95,26 @@ def calculate_kdegrees_equalbinning(networks):
     return kdeg
 
     def calculate_degree_centrality(networks):
+        """Calculate degree centrality."""
         degree_centrality = [nx.degree_centrality(k) for k in networks]
         return degree_centrality
 
     def calculate_betweenness_centrality(networks):
+        """Calculate betweenness centrality."""
         btw_centrality = [nx.betweenness_centrality(k) for k in networks]
         return btw_centrality
 
     def calculate_closeness_centrality(networks):
+        """Calculate closeness centrality."""
         closeness_centrality = [nx.closeness_centrality(k) for k in networks]
         return closeness_centrality
 
     def calculate_eigenvector_centrality(networks):
+        """Calculate eigenvector centrality."""
         eigenvector_centrality = [nx.eigenvector_centrality(k) for k in networks]
         return eigenvector_centrality
 
     def calculate_centrality_measures(self):
+       """Calculate centrality measures."""
        # Node Properties
        pass

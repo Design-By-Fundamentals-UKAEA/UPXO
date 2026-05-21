@@ -1531,6 +1531,7 @@ def generate_constrained_hybrid_seeds_3d(lfi, target_spacing=0.5, bulk_spacing=1
 
     # Helper to generate a 2D grid for the faces
     def get_grid(dim1_range, dim2_range, fixed_val, axis):
+        """Return the grid."""
         grid_a, grid_b = np.meshgrid(
             np.arange(-pad, dim1_range + pad, guard_spacing),
             np.arange(-pad, dim2_range + pad, guard_spacing)
@@ -1712,6 +1713,7 @@ def pad_lfi(lfi, pad_width, padder):
     Use as: gridOps.pad_lfi
     """
     def pad_with(vector, pad_width, iaxis, kwargs):
+        """Pad with."""
         # REF: https://numpy.org/doc/stable/reference/generated/numpy.pad.html
         pad_value = kwargs.get('padder', 10)
         vector[:pad_width[0]] = pad_value
@@ -1720,6 +1722,7 @@ def pad_lfi(lfi, pad_width, padder):
     return lgi_padded
 
 def find_gb_v1(gsimage, plot_gb=True, figsize=(6, 6), dpi=100, cmap='nipy_spectral'):
+    """Find gb v1."""
     from skimage.segmentation import find_boundaries
     gsimg_padded_boundaries = find_boundaries(gsimage, connectivity=1, mode='thick', background=0)*gsimage
     # gsimg_boundaries = gsimg_padded_boundaries[1:-1, 1:-1]
@@ -1736,6 +1739,7 @@ def find_gb_v1(gsimage, plot_gb=True, figsize=(6, 6), dpi=100, cmap='nipy_spectr
     return gsimg_boundaries
 
 def segment_grain_boundaries(gsimage, gbimage, neigh_fid, connectivity=8):
+    """Segment grain boundaries."""
     from collections import defaultdict
     rows, cols = np.where(gbimage)
     interfaces = defaultdict(list)
@@ -1760,6 +1764,7 @@ def segment_grain_boundaries(gsimage, gbimage, neigh_fid, connectivity=8):
     return segments, nsegments
 
 def make_gbsegImage(gbMask, segments, nsegments, neigh_fid):
+    """Build and return gbsegImage."""
     new_ids = {cg: np.round(np.linspace(cg, cg+1, nsegments[cg]+1)[:-1], 4) 
                for cg, ngs in neigh_fid.items()}
     from copy import deepcopy

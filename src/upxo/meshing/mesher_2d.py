@@ -77,6 +77,7 @@ class mesh_mcgs2d():
                  gsInfo=dict(m=10, grainAreas=np.random.random(10), ),
                  lfi=np.random.randint(low=1, high=10, size=(10, 5), dtype=np.int32),
                  ):
+        """Initialise the instance."""
         # -----------------------------------------------
         if getFEControlsFromUPXO:
             self.meshInfo = dict(nNodes=np.nan, nElements=np.nan,
@@ -113,17 +114,21 @@ class mesh_mcgs2d():
         self.mesher_brancher()
 
     def __att__(self):
+        """Return a string listing of all attributes."""
         return att(self)
 
     def mesher_brancher(self):
+        """Mesher brancher."""
         if self.meshInfo['FESoftware'] == 'Abaqus':
             self.abaqus_mesher_brancher()
 
     def abaqus_mesher_brancher(self):
+        """Abaqus mesher brancher."""
         if self.meshInfo['mesher'] == 'UPXO':
             self.upxo_abaqus_nonconformal_mesher()
 
     def upxo_abaqus_nonconformal_mesher(self):
+        """Upxo abaqus nonconformal mesher."""
         if self.meshInfo['elementType'] == 'quad4':
             self.mesh_abaqus_upxo_nonconformal_quad4()
         if self.meshInfo['elementType'] == 'quad8':
@@ -258,9 +263,11 @@ class mesh_mcgs2d():
         return grain_element_sets
 
     def abaqus_make_element_sets(self):
+        """Abaqus make element sets."""
         return self.map_elements_grainids()
 
     def info(self):
+        """Info."""
         print(f"Number of elements, nodes: {self.meshInfo['nElements']}, {self.meshInfo['nNodes']}")
         print(f"Element type: {self.meshInfo['elementType']}")
         print(f"Temporal slice number of the mcgs: {self.gsInfo['m']}")
@@ -270,6 +277,7 @@ class mesh_mcgs2d():
                                folder="DATABASE_FEMESH",
                                file="UPXO_ABQ_MESH.inp",
                                ):
+        """Export or convert to ort abaqus inp file."""
         os.makedirs(folder, exist_ok=True)
         file = file
         file_path = os.path.join(folder, file)

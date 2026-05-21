@@ -18,6 +18,7 @@ from shapely.geometry import LinearRing
 
 
 def bounding_rectangle_pxtal(pxtal):
+    """Bounding rectangle pxtal."""
     # Calculate the grid on the poly-xtal
     rec = pxtal.envelope
     recx, recy = rec.boundary.xy[0][:-1], rec.boundary.xy[1][:-1]

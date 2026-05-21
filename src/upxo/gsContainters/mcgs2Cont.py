@@ -89,9 +89,11 @@ class MC_GS_Container2d:
     # ── Display ────────────────────────────────────────────────────────────────
 
     def __str__(self) -> str:
+        """Return the string form of this instance."""
         return f'UPXO. MCS2D.Container. ID({id(self)})'
 
     def __repr__(self) -> str:
+        """Return a string representation of this instance."""
         n = len(self.gsset) if self.gsset else 0
         return (
             f'MC_GS_Container2d('
