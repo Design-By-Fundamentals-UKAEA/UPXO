@@ -27,7 +27,7 @@ class metaa:
 
 @dataclass
 class principle_component_analysis:
-    raise NotImplementedError("principle_component_analysis is not yet implemented.")
+    pass
 
 class kmodel():
     __slots__ = ('G', 'gprop', 'mprop', 'pathlengths')
