@@ -1,11 +1,11 @@
-"""
+﻿"""
 EBSD visualisation helpers for UPXO.
 
 All functions accept an :class:`upxo.interfaces.defdap.ebsd_reader.EBSDReader`
 instance (or plain NumPy arrays where noted) and produce Matplotlib figures.
 
-Import
-------
+Usage
+-----
 import upxo.viz.ebsdviz as ebsdviz
 """
 

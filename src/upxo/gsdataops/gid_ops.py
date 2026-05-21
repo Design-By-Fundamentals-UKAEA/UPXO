@@ -1,4 +1,4 @@
-"""
+﻿"""
 Grain/Feature ID operations.
 
 This module provides utilities for Labelled Feature Image (LFI) processing,
@@ -157,8 +157,8 @@ def find_O1_neigh_3d(lgi, p=1.0, include_central_grain=False, throw_numba_dict=F
     neigh_fids : dict
         Dictionary where keys are grain IDs and values are lists of neighbour grain IDs.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.gid_ops as gidOps
     Use as: gidOps.find_O1_neigh_3d
     """
@@ -286,8 +286,8 @@ def select_neighs_with_probability(neigh_fids, p=1.0, include_central_grain=Fals
     """
     Helper function to select neighbours with a given probability once neighbours have been found.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.gid_ops as gidOps
     Use as: gidOps.select_neighs_with_probability
     """
@@ -575,8 +575,8 @@ def _find_neigh_selected_3d_(lgi, selected_fids):
 def shuffleLFIIDs(self, lfi):
     """
     Shuffle LFI IDs to randomize grain labels while preserving structure.
-    Import
-    ------
+    Usage
+    -----
     from upxo.gsdataops.gid_ops import shuffleLFIIDs
     """
     unique_ids = np.unique(lfi)
@@ -600,8 +600,8 @@ def find_neighs2d(lfi, conn):
     neigh_fids : dict
         Dictionary where keys are grain IDs and values are arrays of neighboring grain IDs.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.gsdataops.gid_ops import find_neighs3d
     """
     edges = cc3d.region_graph(lfi, connectivity=conn)
@@ -627,8 +627,8 @@ def find_neighs3d(lfi, conn):
     neigh_fids : dict
         Dictionary where keys are grain IDs and values are arrays of neighboring grain IDs.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.gsdataops.gid_ops import find_neighs3d
     """
     edges = cc3d.region_graph(lfi, connectivity=conn)
@@ -643,8 +643,8 @@ def find_neighs3d(lfi, conn):
 def get_nth_order_neighbors(target_fid, neigh_fids, n_order=1):
     """Recursively finds Nth order neighbors using the neigh_fids dictionary.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.gsdataops.gid_ops import get_nth_order_neighbors
     """
     cluster = {target_fid}

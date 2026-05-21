@@ -1,4 +1,4 @@
-"""
+﻿"""
 Module: mcgb2dops
 -----------------
 Grain-boundary operations for 2D labelled pixel (Monte-Carlo) structures.
@@ -767,8 +767,8 @@ def segment_existing_boundaries(labels, gb_mask, connectivity=8):
     Called internally by :func:`segment_cell_boundaries` with
     ``connectivity = 4 * user_connectivity``.
 
-    Import
-    ------
+    Usage
+    -----
     ::
 
         import upxo.gbops.mcgb2dops as gbops2d

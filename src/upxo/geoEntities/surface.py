@@ -1,8 +1,8 @@
-"""
+﻿"""
 3D surface geometric entity for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.surface import Surface
 
 Classes

@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import matplotlib.pyplot as plt
 from upxo.meshing import elemOps
 from upxo.viz import meshviz
@@ -8,8 +8,8 @@ class confMesh2d():
     """
     An orchastrator class capable of multiple 2D conformal mehsing pipelines.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.meshing.conformal_mesher2d import confMesh2d as cm2d
     """
     ValidElTypesOptions =('triangle', 'quad')
@@ -452,8 +452,8 @@ class confMesh2dGMSH():
     analytical / post-processing methods from confMesh2d so that pygmsh can
     be phased out without breaking existing workflows.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.meshing.conformal_mesher2d import confMesh2dGMSH as cm2dg
 
     Typical workflow

@@ -1,8 +1,8 @@
-"""
+﻿"""
 Factory functions for creating and converting UPXO geometric entities.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.featmake import make_p2d, make_p3d
     from upxo.geoEntities.featmake import intersect_slines2d
 

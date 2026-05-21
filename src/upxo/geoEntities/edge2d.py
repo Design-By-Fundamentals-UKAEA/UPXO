@@ -1,8 +1,8 @@
-"""
+﻿"""
 2D (and 3D) edge geometric entity classes for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.edge2d import edge2d
     from upxo.geoEntities.edge2d import edge2d_lean_highest
     from upxo.geoEntities.edge2d import edge2d_from_point2d
@@ -72,8 +72,8 @@ class edge2d():
     (length, slope, angle, centroid, intersection), comparison utilities,
     and construction routes from various input formats.
 
-    Import
-    ------
+    Usage
+    -----
         from upxo.geoEntities.edge2d import edge2d
 
     Parameters

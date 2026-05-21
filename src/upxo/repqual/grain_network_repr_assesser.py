@@ -64,8 +64,8 @@ class KREPR():
     """
     Docstring.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.repqual.grain_network_repr_assesser import KREPR
 
     Parameters

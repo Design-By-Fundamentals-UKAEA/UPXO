@@ -1,4 +1,4 @@
-from upxo._sup import dataTypeHandlers as dth
+﻿from upxo._sup import dataTypeHandlers as dth
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -77,8 +77,8 @@ def see_distr(self, gsdim=2, vis='hist',
     This function creates distributions for specified grain properties in a grid of subplots.
     It supports data input as either a pandas DataFrame or a dictionary of properties.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.viz.dataviz import see_distr
     '''
     if gsdim != 2:

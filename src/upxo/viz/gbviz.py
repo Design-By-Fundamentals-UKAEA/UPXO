@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import matplotlib.pyplot as plt
 
 def see_all_gbsegs(gbsegImage, figsize=(5, 5), dpi=75, cmap='nipy_spectral',
@@ -12,8 +12,8 @@ def see_all_gbsegs(gbsegImage, figsize=(5, 5), dpi=75, cmap='nipy_spectral',
     gbsegImage : 2D array-like
         The image containing the GB segments, where each segment is represented by a unique ID (float).
     
-    Import
-    ------
+    Usage
+    -----
     import upxo.viz.gbviz as gbViz
     Use as: gbViz.see_all_gbsegs
     """

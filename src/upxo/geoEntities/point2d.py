@@ -1,4 +1,4 @@
-"""
+﻿"""
 2D Point geometric entity module for UPXO (Universal PolyXtal Operations).
 
 This module provides two-dimensional point representations with support for
@@ -6,8 +6,8 @@ lightweight (leanest) and feature-rich implementations. It includes geometric
 operations (distance, translation, rotation), type conversions (UPXO, Shapely,
 VTK, PyVista, GMSH), and point array generation methods.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.point2d import p2d_leanest
     from upxo.geoEntities.point2d import Point2d
     from upxo.geoEntities.point2d import Point2d as p2d
@@ -121,8 +121,8 @@ class p2d_leanest():
     Intended for inner-loop use where only core geometric predicates are
     required; use ``Point2d`` when richer features are needed.
 
-    Import
-    ------
+    Usage
+    -----
         from upxo.geoEntities.point2d import p2d_leanest
 
     Parameters
@@ -288,8 +288,8 @@ class Point2d():
     comparison utilities with tolerance, feature-dictionary attachment, and
     interoperability with Shapely, VTK, PyVista, and GMSH.
 
-    Import
-    ------
+    Usage
+    -----
         from upxo.geoEntities.point2d import Point2d
         from upxo.geoEntities.point2d import Point2d as p2d
 

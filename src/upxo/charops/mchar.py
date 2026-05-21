@@ -1,4 +1,4 @@
-"""
+﻿"""
 Module: mchar
 ----------------
 This module provides functions for morphological character analysis in 2D and 3D image data. It includes feature detection and characterization based on connectivity criteria.
@@ -6,8 +6,8 @@ Functions---------
 - detect_features(mcStateArray, connectivity=18, delta=0): Detects and labels connected features in 3D image data based on specified connectivity and delta threshold.
 - charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid, make_skprops=True, extract_coords=True, throw_bounding_box=True): Characterizes features in a 2D labeled image, extracting properties and coordinates.
 - charecterise_features_in_image_v2(labelled_image, Xgrid, Ygrid, make_skprops=True, extract_coords=True, throw_bounding_box=True): An alternative version of the feature characterization function for 2D images.
-Import
-------
+Usage
+-----
 import upxo.charops._mchar2d as _mchar2d
 import upxo.charops._mchar3d as _mchar3d
 import upxo.charops.mchar as mchar
@@ -52,8 +52,8 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
     This function wraps the underlying _mchar3d.detect_features implementation
     for 3D morphological character analysis.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.charops.mchar as mchar
     Use as: mchar.detect_features
 

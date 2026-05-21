@@ -1,12 +1,12 @@
-import numpy as np
+﻿import numpy as np
 import os
 
 class ArrExp2d:
     """
     Orchastrator class for exporting numpy arrays.
     
-    Import
-    ------
+    Usage
+    -----
     from upxo.interfaces.io.expop import ArrExp2d as arex2
     """
 

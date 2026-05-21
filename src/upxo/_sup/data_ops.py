@@ -3,8 +3,8 @@ Created on Thu May 23 09:39:31 2024
 
 @author: Dr. Sunil Anandatheertha
 
-Import
-------
+Usage
+-----
 from upxo._sup.data_ops import NAME
 """
 import math
@@ -22,8 +22,8 @@ def find_outliers_iqr(data, mode='both'):
     """
     Find outliers in data using Inter-Quartile Range.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.data_ops import find_outliers_iqr
 
     Parameters
@@ -78,8 +78,8 @@ def calculate_angular_distance(coord1, coord2):
     Returns:
         float: The angle between the position vectors in radians (0 to pi).
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.data_ops import calculate_angular_distance
     """
     # Convert coordinates to NumPy arrays (if not already)
@@ -121,8 +121,8 @@ def calculate_density_bins(A, n_bins=10):
     Returns:
         np.ndarray: An array of bin edges.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.data_ops import calculate_density_bins
 
     Example
@@ -160,8 +160,8 @@ def approximate_to_bin_means(A, n_bins=50):
     Returns:
         np.ndarray: A new 2D array with elements approximated to their bin means.
 
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.data_ops import approximate_to_bin_means
     """
     bin_edges = calculate_density_bins(A, n_bins=n_bins)
@@ -402,8 +402,8 @@ def find_coorda_loc_in_coords_arrayb(a, b):
 
 def remove_2d_child_array_from_2d_parent_array(parent_array, child_array):
     """
-    Import
-    ------
+    Usage
+    -----
     from upxo._sup.data_ops import remove_2d_child_array_from_2d_parent_array
 
     Example

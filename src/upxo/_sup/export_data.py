@@ -1,4 +1,4 @@
-"""
+﻿"""
 This module stores data used to export grain structures to different
 formats.
 
@@ -29,8 +29,8 @@ def exlwrite(self, data):
     Key names will become the sheet names, so name them properly as needed by
     excel requiremets.
 
-    Import
-    ------
+    Usage
+    -----
     """
     wb = Workbook()
     for i, name, value in enumerate(data.items(), start=0):

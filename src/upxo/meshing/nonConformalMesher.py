@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import time
 
 class nonConformalMesher():
@@ -8,8 +8,8 @@ class nonConformalMesher():
     2D Element Types: Quad4, Quad8, Tri3, Tri6
     3D Element Types: Hex8, Hex20, Tet5
 
-    Import
-    ------
+    Usage
+    -----
     from upxo.meshing.nonConformalMesher import nonConformalMesher as ncm
 
     Example

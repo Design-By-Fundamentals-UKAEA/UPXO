@@ -1,4 +1,4 @@
-"""
+﻿"""
 Grid operations for Labelled Feature Image workflows.
 
 This module provides utilities for sectioning, interpolation/resampling,
@@ -132,8 +132,8 @@ def mask_featIDImg_at_coords(featIDImg, bsegCoords, local_seg_ids,
     -------
     mask_featIDImg_at_coords(lgi_boundaries, bsegCoords, local_seg_ids,
                         featName='fbseg', maskDType=np.int32)
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.mask_featIDImg_at_coords
     """
@@ -199,8 +199,8 @@ def find_feature_extended_bbox_pix(fid=None, lfi=None, make_binary=False):
     function call in the temporal slice object. The present function is called 
     internally by that function.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.find_feature_extended_bbox_pix
     """
@@ -238,8 +238,8 @@ def find_extended_bbox_pix_fids(fids=None, lfi=None, make_binary=False):
     -----
     Refer to find_feature_extended_bbox_pix for detailed documentation.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.find_extended_bbox_pix_fids
     """
@@ -305,8 +305,8 @@ def rescale_grid_2d(data, scale_factor, method='nearest'):
         Rescaled 2D array with shape determined by scale_factor, maintaining
         the original data type.
     
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     """
     h, w = data.shape
@@ -459,8 +459,8 @@ def rescale_grid_3d(data, scale_factor, method='nearest'):
         Rescaled 3D array with shape determined by scale_factor,
         maintaining original dtype.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
 
     Call
@@ -891,8 +891,8 @@ def shuffle_feature_IDs(lfi):
     np.ndarray
         Local feature ID array with shuffled feature IDs.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.shuffle_feature_IDs
     """
@@ -924,8 +924,8 @@ def merge_features_to_neighs(lfi, fids, neigh_fids):
     np.ndarray
         Updated lfi array with specified fids merged into their neighbors.
     
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.merge_features_to_neighs
     """
@@ -1054,8 +1054,8 @@ def majority_filter_2d(lfi):
     np.ndarray
         Smoothed 2D array of feature IDs after applying the majority filter.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.majority_filter_2d
     """
@@ -1131,8 +1131,8 @@ def majority_filter_3d_1pass(lfi=None, size=3):
     np.ndarray
         Smoothed 3D array of feature IDs after applying the majority filter.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.majority_filter_3d
     """
@@ -1259,8 +1259,8 @@ def generate_test_2D_LFI_1(plotlfi=True, figsize=(6, 6), dpi=100):
     -------
     np.ndarray
         A 2D array of shape (200, 200) representing the LFI with various features.
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.generate_test_2D_LFI_1
     """
@@ -1396,8 +1396,8 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
       the Voronoi tessellation produces straight edges at the boundaries, eliminating
         irregularities caused by boundary effects.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.constrained_hybrid_seeds
     """
@@ -1598,8 +1598,8 @@ def generate_poisson_disk_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, 
     - This method is particularly useful for applications like seeding in Voronoi tessellations, where a more 
         uniform distribution of seeds is desired compared to purely random sampling.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.generate_poisson_disk_seeds
     """
@@ -1659,8 +1659,8 @@ def generate_darted_seeds(xbound, ybound, radius=5, k=6, see_seeds=False, **plot
     - The 'darting' aspect of the algorithm can help to break up clusters of points that might occur in 
         Poisson Disk Sampling, leading to a more even distribution of seeds across the domain.
     
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.generate_darted_seeds
     """
@@ -1707,8 +1707,8 @@ def pad_lfi(lfi, pad_width, padder):
     np.ndarray
         The padded local feature ID array with the specified padding width and padder value.
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.pad_lfi
     """
@@ -1818,8 +1818,8 @@ def combine_partitions(image_data, combinations):
     #  [1 2 2 1]
     #  [2 2 2 1]]
 
-    Import
-    ------
+    Usage
+    -----
     import upxo.gsdataops.grid_ops as gridOps
     Use as: gridOps.combine_partitions
     """

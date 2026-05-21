@@ -1,8 +1,8 @@
-"""
+﻿"""
 2D ring (closed loop of edges) geometric entity for UPXO.
 
-Import
-------
+Usage
+-----
     from upxo.geoEntities.ring2d import ring2d
 
 Classes
@@ -39,8 +39,8 @@ class ring2d():
     * Top-down: from a Crystal or Poly-crystal object.
     * Cross-library: from a Shapely ring object.
 
-    Import
-    ------
+    Usage
+    -----
         from upxo.geoEntities.ring2d import ring2d
     """
     EPS = 0.000000000001
