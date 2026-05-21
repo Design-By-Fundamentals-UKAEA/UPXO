@@ -125,11 +125,6 @@ class Grain3d():
         raise NotImplementedError("meanori is not yet implemented.")
 
     @property
-    def bbox(self):
-        """Bbox."""
-        raise NotImplementedError("bbox is not yet implemented.")
-
-    @property
     def eqd(self):
         """Eqd."""
         # Equivalent diameter
