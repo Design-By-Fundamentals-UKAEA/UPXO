@@ -648,10 +648,10 @@ class muledge2d():
 
         Parameters
         ----------
-        eind : integer
+        eind : int
             Specifies which edge to be edited
 
-        obj : UPXO point2d type
+        obj : Point2d
             Specifies the UPXO point2d object to be inserted
 
         Returns
@@ -807,13 +807,15 @@ class muledge2d():
 
         Examples
         --------
-        >>> from muledge2d import muledge2d
-        >>> cpairs_list = [[[1, 1], [-1, 1]], [[-1, 1], [-1, -1]],
-        ...                [[-1, -1], [1, -1]]]
-        >>> me = muledge2d(method='cpairs_list', ordered=True, closed=False,
-        ...                cpairs_list=cpairs_list, lean='ignore')
-        >>> me.make_ring()
-        >>> me.is_ring()
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            cpairs_list = [[[1, 1], [-1, 1]], [[-1, 1], [-1, -1]],
+                           [[-1, -1], [1, -1]]]
+            me = muledge2d(method='cpairs_list', ordered=True, closed=False,
+                           cpairs_list=cpairs_list, lean='ignore')
+            me.make_ring()
+            me.is_ring()
         """
         if saa:
             if self.ordered:
@@ -898,12 +900,14 @@ class muledge2d():
 
         Examples
         --------
-        >>> from muledge2d import muledge2d
-        >>> clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0],
-        ...          [1.5, 0.5], [1.0, 1.01], [2.0, 2.0], [2.5, 0.0]]
-        >>> me = muledge2d(method='clist', ordered=True, closed=False,
-        ...                clist=clist, make_mp=True, lean='ignore')
-        >>> me.pop_point_by_index(0)
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0],
+                     [1.5, 0.5], [1.0, 1.01], [2.0, 2.0], [2.5, 0.0]]
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=clist, make_mp=True, lean='ignore')
+            me.pop_point_by_index(0)
         """
         '''
         PROOF OF CONCEPT CODE - 1
@@ -1162,40 +1166,30 @@ class muledge2d():
 
     def pop_points_by_indices(self, n):
         """
-
+        Delete multiple points from the multi-edge chain by index.
 
         Parameters
         ----------
-        n : int
-            n value.
+        n : int or list of int
+            Index or list of indices of points to remove.
 
         Returns
         -------
-        None.
+        None
 
-        EXANPLE
-        -------
-        clist = [[0.00, 0.00],
-                 [0.50, 0.00],
-                 [1.00, 0.00],
-                 [1.50, 0.50],
-                 [1.00, 1.01],
-                 [2.00, 2.00],
-                 [2.50, 0.00]
-                 ]
-        from muledge2d import muledge2d
-        me = muledge2d(method='clist',
-                       ordered=True,
-                       closed=False,
-                       clist=clist,
-                       make_mp=True, make_emp=True,
-                       lean='ignore', plean='ignore', mplean='ignore',
-                       elean='ignore', melean='ignore'
-                       )
-        me.points
-        n = [0, 2, 4, 6]
-        me.pop_points_by_indices(n)
-        me.points
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00],
+                     [1.50, 0.50], [1.00, 1.01], [2.00, 2.00], [2.50, 0.00]]
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=clist, make_mp=True, make_emp=True,
+                           lean='ignore', plean='ignore', mplean='ignore',
+                           elean='ignore', melean='ignore')
+            n = [0, 2, 4, 6]
+            me.pop_points_by_indices(n)
         """
         if type(n) not in dth.dt.ITERABLES:
             n = [n]
@@ -1213,7 +1207,7 @@ class muledge2d():
 
         Parameters
         ----------
-        coord : list/tuple/deque/numpy array
+        coord : list, tuple, deque, or numpy.ndarray
             A single co-ordinate pair
 
         Returns
@@ -1222,14 +1216,16 @@ class muledge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.muledge2d import muledge2d
-        >>> clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00],
-        ...          [1.50, 0.50], [1.00, 1.01], [2.00, 2.00], [2.50, 0.00]]
-        >>> me = muledge2d(method='clist', ordered=True, closed=False,
-        ...                clist=clist, make_mp=True, make_emp=True,
-        ...                lean='ignore', plean='ignore', mplean='ignore',
-        ...                elean='ignore', melean='ignore')
-        >>> me.pop_point_by_coord(coord=[0.1, 0.0], tdist=1.0)
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            clist = [[0.00, 0.00], [0.50, 0.00], [1.00, 0.00],
+                     [1.50, 0.50], [1.00, 1.01], [2.00, 2.00], [2.50, 0.00]]
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=clist, make_mp=True, make_emp=True,
+                           lean='ignore', plean='ignore', mplean='ignore',
+                           elean='ignore', melean='ignore')
+            me.pop_point_by_coord(coord=[0.1, 0.0], tdist=1.0)
         """
         _point_ = point2d(x=coord[0], y=coord[1], lean='ignore')
         equalities = list(_point_.__eq__(self.points,
@@ -1273,11 +1269,13 @@ class muledge2d():
 
         Examples
         --------
-        >>> from muledge2d import muledge2d
-        >>> from upxo.geoEntities.point2d import point2d
-        >>> clist = [[0, 0], [0.5, 0], [1, 0], [1.5, 0.5]]
-        >>> me = muledge2d(method='clist', ordered=True, clist=clist, lean='ignore')
-        >>> me.insert_point_by_index(point2d(0, 5), index=1)
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            from upxo.geoEntities.point2d import Point2d
+            clist = [[0, 0], [0.5, 0], [1, 0], [1.5, 0.5]]
+            me = muledge2d(method='clist', ordered=True, clist=clist, lean='ignore')
+            me.insert_point_by_index(Point2d(0, 5), index=1)
         """
         # Check validity of input
         input_valid = False
@@ -1358,10 +1356,12 @@ class muledge2d():
 
         Examples
         --------
-        >>> from muledge2d import muledge2d
-        >>> me = muledge2d(method='clist', ordered=True,
-        ...                clist=[[0, 0], [1, 0], [2, 0]], lean='ignore')
-        >>> me.fine(level=1)
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            me = muledge2d(method='clist', ordered=True,
+                           clist=[[0, 0], [1, 0], [2, 0]], lean='ignore')
+            me.fine(level=1)
         """
         if type(level) == int and level >= 0 and level <= 2:
             for _ in range(level):
@@ -1406,13 +1406,15 @@ class muledge2d():
 
         Examples
         --------
-        >>> from point2d import point2d
-        >>> from muledge2d import muledge2d
-        >>> clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0], [1.5, 0.5]]
-        >>> me = muledge2d(method='clist', ordered=True, closed=False,
-        ...                clist=clist, make_mp=True, make_emp=True,
-        ...                lean='ignore')
-        >>> me.insert_point(point2d(0.25, 0.0), index=1)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.muledge2d import muledge2d
+            clist = [[0.0, 0.0], [0.5, 0.0], [1.0, 0.0], [1.5, 0.5]]
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=clist, make_mp=True, make_emp=True,
+                           lean='ignore')
+            me.insert_point(Point2d(0.25, 0.0), index=1)
         """
         # ---------------------------
         # Number of points in the me.mpoint

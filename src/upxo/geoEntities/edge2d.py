@@ -365,10 +365,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(method='xy_list', xlist=[0.0, 1.0], ylist=[0.0, 0.0])
-        >>> e1.update_point(1, [1.0, 1.01], method='coord')
-        >>> e1.length  # updated
+        .. code-block:: python
+
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(method='xy_list', xlist=[0.0, 1.0], ylist=[0.0, 0.0])
+            e1.update_point(1, [1.0, 1.01], method='coord')
+            e1.length  # updated
         """
         if index in (0, 'a'):
             if method == 'up2d':
@@ -419,14 +421,16 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
-        >>> p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
-        >>> e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
-        >>> e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
-        >>> e3 = edge2d(method='up2d', pnta=p3, pntb=p1)
-        >>> e1.compare_length([e1, e2, e3])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+            p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
+            e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
+            e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
+            e3 = edge2d(method='up2d', pnta=p3, pntb=p1)
+            e1.compare_length([e1, e2, e3])
         """
         # Test and make unique the input edges data
         edges = dth.make_list(edges, force_list=False)
@@ -500,16 +504,18 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1 = Point2d(x=0.0, y=0.0)
-        >>> p2 = Point2d(x=1.0, y=0.0)
-        >>> p3 = Point2d(x=0.0, y=1.0)
-        >>> p11 = Point2d(x=2.0, y=0.0)
-        >>> e1 = edge2d(pnta=p1, pntb=p2)
-        >>> e2 = edge2d(pnta=p1, pntb=p3)
-        >>> e10 = edge2d(pnta=p1, pntb=p11)
-        >>> e1.__eql__([e1, e2, e10])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1 = Point2d(x=0.0, y=0.0)
+            p2 = Point2d(x=1.0, y=0.0)
+            p3 = Point2d(x=0.0, y=1.0)
+            p11 = Point2d(x=2.0, y=0.0)
+            e1 = edge2d(pnta=p1, pntb=p2)
+            e2 = edge2d(pnta=p1, pntb=p3)
+            e10 = edge2d(pnta=p1, pntb=p11)
+            e1.__eql__([e1, e2, e10])
         """
         LCOMP, _ = self.compare_length(edges,
                                        use_self_length_eps=use_self_length_eps,
@@ -563,13 +569,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
-        >>> p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
-        >>> e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
-        >>> e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
-        >>> e1.compare_slope([e1, e2])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+            p3, p4 = Point2d(x=1, y=1), Point2d(x=1, y=0.1)
+            e1 = edge2d(method='up2d', pnta=p1, pntb=p2)
+            e2 = edge2d(method='up2d', pnta=p2, pntb=p3)
+            e1.compare_slope([e1, e2])
         """
         # Test and make unique the input edges data
         edges = dth.make_list(edges, force_list=False)
@@ -828,13 +836,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1, p2 = Point2d(x=0.0, y=0.0), Point2d(x=1.0, y=0.0)
-        >>> p3 = Point2d(x=0.0, y=1.0)
-        >>> e1 = edge2d(pnta=p1, pntb=p2)
-        >>> e2 = edge2d(pnta=p1, pntb=p3)
-        >>> e1.__eqs__([e1, e2])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1, p2 = Point2d(x=0.0, y=0.0), Point2d(x=1.0, y=0.0)
+            p3 = Point2d(x=0.0, y=1.0)
+            e1 = edge2d(pnta=p1, pntb=p2)
+            e2 = edge2d(pnta=p1, pntb=p3)
+            e1.__eqs__([e1, e2])
         """
         _ugst = use_global_slope_thresholds
         SCOMP, _ = self.compare_slope(edges,
@@ -893,13 +903,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
-        >>> p3 = Point2d(x=0, y=1)
-        >>> e1 = edge2d(pnta=p1, pntb=p2)
-        >>> e2 = edge2d(pnta=p1, pntb=p3)
-        >>> e1.__eq__([e1, e2])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+            p3 = Point2d(x=0, y=1)
+            e1 = edge2d(pnta=p1, pntb=p2)
+            e2 = edge2d(pnta=p1, pntb=p3)
+            e1.__eq__([e1, e2])
         """
         if comparator not in dth.dt.ALL_COMPARATORS:
             print('UNKNOWN COMPARATOR INPUT')
@@ -1133,11 +1145,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
-        >>> e = edge2d(pnta=p1, pntb=p2)
-        >>> e.__add__([1.0], saa=True, throw=False)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            p1, p2 = Point2d(x=0, y=0), Point2d(x=1, y=0)
+            e = edge2d(pnta=p1, pntb=p2)
+            e.__add__([1.0], saa=True, throw=False)
         """
         addto, addtocoord = str(addto).lower(), str(addtocoord).lower()
         if toadd in dth.dt.NUM_UPXOE2D_SHLS:
@@ -1769,10 +1783,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(pnta=Point2d(1, 0), pntb=Point2d(2, 0))
-        >>> e2 = e * 3.0
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(pnta=Point2d(1, 0), pntb=Point2d(2, 0))
+            e2 = e * 3.0
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -1802,10 +1818,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(pnta=Point2d(2, 0), pntb=Point2d(4, 0))
-        >>> e2 = e / 2.0
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(pnta=Point2d(2, 0), pntb=Point2d(4, 0))
+            e2 = e / 2.0
         """
         return edge2d(edge_lean=self.edge_lean,
                       points_lean=self.points_lean,
@@ -2313,11 +2331,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
-        >>> e1.move_a_to([10, 10], method='update')
-        >>> e1.move_a_to(Point2d(10, 10), method='replace')
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+            e1.move_a_to([10, 10], method='update')
+            e1.move_a_to(Point2d(10, 10), method='replace')
         """
         if type(obj) in dth.dt.ITERABLES:
             # obj is a coordinate pair
@@ -2362,11 +2382,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
-        >>> e1.move_b_to([10, 10], method='update')
-        >>> e1.move_b_to(Point2d(10, 10), method='replace')
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+            e1.move_b_to([10, 10], method='update')
+            e1.move_b_to(Point2d(10, 10), method='replace')
         """
         if type(obj) in dth.dt.ITERABLES:
             # obj is a coordinate pair
@@ -2444,11 +2466,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
-        >>> e2 = edge2d(pnta=Point2d(-0.5, 0.0), pntb=Point2d(0.5, 0.0))
-        >>> e1.overlaps(obj=e2)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(pnta=Point2d(-1.0, 0.0), pntb=Point2d(1.0, 0.0))
+            e2 = edge2d(pnta=Point2d(-0.5, 0.0), pntb=Point2d(0.5, 0.0))
+            e1.overlaps(obj=e2)
         """
         if not str(type(obj)) == "<class 'UPXO-edge.edge2d'>":
             print('Please input correct geometry object')
@@ -2481,10 +2505,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
-        >>> e.swap_points()
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
+            e.swap_points()
         """
         self.pnta, self.pntb = self.pntb, self.pnta
 
@@ -2508,12 +2534,14 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
-        >>> e.reverse()
-        >>> e.reverse(reverse_pmid=False)
-        >>> e.reverse(make_new_points=True)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 2), pntb=Point2d(10, 12))
+            e.reverse()
+            e.reverse(reverse_pmid=False)
+            e.reverse(make_new_points=True)
         """
         if reverse_pmid:
             self.swap_points()
@@ -2582,11 +2610,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e12 = edge2d(pnta=Point2d(-1, 0), pntb=Point2d(0, 1))
-        >>> e34 = edge2d(pnta=Point2d(0, -1), pntb=Point2d(0, 1))
-        >>> e12.intersect_with_edges2d([e34])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e12 = edge2d(pnta=Point2d(-1, 0), pntb=Point2d(0, 1))
+            e34 = edge2d(pnta=Point2d(0, -1), pntb=Point2d(0, 1))
+            e12.intersect_with_edges2d([e34])
         """
         if type(edges) not in dth.dt.ITERABLES:
             edges = [edges]
@@ -2633,13 +2663,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
-        >>> pts, ratios = e1.edge2d_intersection(e2, return_ratios=True)
-        >>> e3 = edge2d(method='up2d', pnta=Point2d(0.1, -1), pntb=Point2d(0.9, 5))
-        >>> e1.edge2d_intersection(e3)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
+            pts, ratios = e1.edge2d_intersection(e2, return_ratios=True)
+            e3 = edge2d(method='up2d', pnta=Point2d(0.1, -1), pntb=Point2d(0.9, 5))
+            e1.edge2d_intersection(e3)
         """
         __PRINT_INTERSECTION_POINTS = False
         # -------------------------------------
@@ -2798,12 +2830,14 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
-        >>> e3 = edge2d(method='up2d', pnta=Point2d(0.2, -2), pntb=Point2d(0.8, 2))
-        >>> e1.edge2d_intersections([e2, e3], return_ratios=True)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e1 = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            e2 = edge2d(method='up2d', pnta=Point2d(0.2, 0), pntb=Point2d(0.8, 0))
+            e3 = edge2d(method='up2d', pnta=Point2d(0.2, -2), pntb=Point2d(0.8, 2))
+            e1.edge2d_intersections([e2, e3], return_ratios=True)
         """
         # Make list if already not
         if type(edges) not in dth.dt.ITERABLES:
@@ -2837,13 +2871,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> from upxo.geoEntities.muledge2d import muledge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0.8, 0.2), pntb=Point2d(0.2, 0.8))
-        >>> me = muledge2d(method='clist', ordered=True, closed=False,
-        ...                clist=[[1, 0], [0, 1], [-1, 0], [0, -1]])
-        >>> e.muledge2d_intersections(me)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            from upxo.geoEntities.muledge2d import muledge2d
+            e = edge2d(method='up2d', pnta=Point2d(0.8, 0.2), pntb=Point2d(0.2, 0.8))
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=[[1, 0], [0, 1], [-1, 0], [0, -1]])
+            e.muledge2d_intersections(me)
         """
         intersections = self.edge2d_intersections(me.edges, return_ratios=True)
         return intersections
@@ -2874,11 +2910,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(1, 0), pntb=Point2d(0, 0))
-        >>> new_edge = e.split_at_point(Point2d(0.5, 0), new_edge_location=0)
-        >>> new_edge = e.split_at_point(Point2d(0.1, 0), new_edge_location=0)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(1, 0), pntb=Point2d(0, 0))
+            new_edge = e.split_at_point(Point2d(0.5, 0), new_edge_location=0)
+            new_edge = e.split_at_point(Point2d(0.1, 0), new_edge_location=0)
         """
         if type(obj) in dth.dt.ITERABLES:
             # If obj is entered as a coordinate pair
@@ -2955,10 +2993,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> new_edge = e.split_by_ratio(0.5, new_edge_location=0)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            new_edge = e.split_by_ratio(0.5, new_edge_location=0)
         """
         if ratio > 0 and ratio < 1:
             point = point2d(self.pnta.x + ratio*(self.pntb.x - self.pnta.x),
@@ -2989,10 +3029,12 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> new_edge = e.split_at_outside_point(Point2d(0.5, 0.5))
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            new_edge = e.split_at_outside_point(Point2d(0.5, 0.5))
         """
         new_edge, self.pntb = edge2d(pnta=point,
                                      pntb=self.pntb,
@@ -3064,13 +3106,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
-        >>> xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='a')
-        >>> xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='c1')
-        >>> xy = e.gen_npoints(50, distribution='random',
-        ...                    constraints=[0.05, 0.05, 0.5, -1, 'uniform'])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
+            xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='a')
+            xy = e.gen_npoints(25, distribution='polynomial', coeff=[0, 1, 1, 1], start='c1')
+            xy = e.gen_npoints(50, distribution='random',
+                               constraints=[0.05, 0.05, 0.5, -1, 'uniform'])
         """
         if type(n) == int:
             pass
@@ -3418,13 +3462,15 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
-        >>> edges = e.split_nparts(15, distribution='polynomial',
-        ...                        coeff=[0, 1, 10, -10, 1], start='c1_0.5')
-        >>> edges = e.split_nparts(10, distribution='random',
-        ...                        constraints=[0.05, 0.05, 0.05, -1, 'uniform'])
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(-2, -1), pntb=Point2d(1, 3))
+            edges = e.split_nparts(15, distribution='polynomial',
+                                   coeff=[0, 1, 10, -10, 1], start='c1_0.5')
+            edges = e.split_nparts(10, distribution='random',
+                                   constraints=[0.05, 0.05, 0.05, -1, 'uniform'])
         """
         # Make empty dictionary to store data
         edges_data = {}
@@ -3521,15 +3567,17 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> other = edge2d(method='up2d', pnta=Point2d(0.5, -1), pntb=Point2d(0.5, 1))
-        >>> splits = e.split_edge2d_intersection(other)
-        >>> print(splits['primary'])
-        >>> print(splits['secondary'])
-        >>> other2 = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(0.1, 0))
-        >>> splits2 = e.split_edge2d_intersection(other2)
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            other = edge2d(method='up2d', pnta=Point2d(0.5, -1), pntb=Point2d(0.5, 1))
+            splits = e.split_edge2d_intersection(other)
+            print(splits['primary'])
+            print(splits['secondary'])
+            other2 = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(0.1, 0))
+            splits2 = e.split_edge2d_intersection(other2)
         """
         # e = edge2d(method='up2d', pnta=point2d(0, 0), pntb=point2d(1, 0))
         # edge = edge2d(method='up2d', pnta=point2d(-0.8, 0), pntb=point2d(-0.2, 0))
@@ -3732,11 +3780,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(1, 0))
-        >>> e.contains_point([-0.5, 0])
-        >>> e.contains_point(Point2d(-1.1, 0))
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(-1, 0), pntb=Point2d(1, 0))
+            e.contains_point([-0.5, 0])
+            e.contains_point(Point2d(-1.1, 0))
         """
         SQRT = math.sqrt
         if dth.IS_CPAIR(obj):
@@ -3842,12 +3892,14 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(4, -1))
-        >>> e.contains_points([[-0.5, 0], [0, 0], [1, 0]], otype='cpair_list')
-        >>> pts = [Point2d(-0.5, 0), Point2d(0, 0), Point2d(-1.1, 0)]
-        >>> e.contains_points(pts, otype='up2d_list')
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(4, -1))
+            e.contains_points([[-0.5, 0], [0, 0], [1, 0]], otype='cpair_list')
+            pts = [Point2d(-0.5, 0), Point2d(0, 0), Point2d(-1.1, 0)]
+            e.contains_points(pts, otype='up2d_list')
         """
         if dth.IS_ITER(obj):
             obj = np.array(obj)
@@ -3953,11 +4005,13 @@ class edge2d():
 
         Examples
         --------
-        >>> from upxo.geoEntities.point2d import Point2d
-        >>> from upxo.geoEntities.edge2d import edge2d
-        >>> e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
-        >>> k = e.contains_edge(obj=[[0.2, 0], [0.8, 0]], otype='clist')
-        >>> k = e.contains_edge(obj=e, otype='ue2d')
+        .. code-block:: python
+
+            from upxo.geoEntities.point2d import Point2d
+            from upxo.geoEntities.edge2d import edge2d
+            e = edge2d(method='up2d', pnta=Point2d(0, 0), pntb=Point2d(1, 0))
+            k = e.contains_edge(obj=[[0.2, 0], [0.8, 0]], otype='clist')
+            k = e.contains_edge(obj=e, otype='ue2d')
         """
         if obj:
             if otype == 'clist':
