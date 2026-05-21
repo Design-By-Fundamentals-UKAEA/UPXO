@@ -68,14 +68,16 @@ class ring2d():
 
         Examples
         --------
-        >>> from muledge2d import muledge2d
-        >>> from ring2d import ring2d
-        >>> clist = [[-1, 0], [-1, 0.5], [0, 0.5], [1, 0.5],
-        ...          [1, 0], [1, -0.5], [0, -0.5], [-0.5, -0.5]]
-        >>> me = muledge2d(method='clist', ordered=True, closed=False,
-        ...                clist=clist, lean='ignore')
-        >>> ring = ring2d(me=me, lean='ignore')
-        >>> ring.centroids
+        .. code-block:: python
+
+            from upxo.geoEntities.muledge2d import muledge2d
+            from upxo.geoEntities.ring2d import ring2d
+            clist = [[-1, 0], [-1, 0.5], [0, 0.5], [1, 0.5],
+                     [1, 0], [1, -0.5], [0, -0.5], [-0.5, -0.5]]
+            me = muledge2d(method='clist', ordered=True, closed=False,
+                           clist=clist, lean='ignore')
+            ring = ring2d(me=me, lean='ignore')
+            ring.centroids
         """
         # ---------------------------------------------------------------------
         # Check if entered multi-edge is ordered and continous
