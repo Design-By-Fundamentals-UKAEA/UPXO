@@ -41,7 +41,6 @@ import matplotlib.cm as cm
 import numpy as np
 from scipy.interpolate import griddata
 # import scipy.stats as stats
-import cv2
 from skimage.measure import label as skim_label
 # from point2d import point2d
 # from mulpoint2d import mulpoint2d
@@ -151,6 +150,7 @@ class grid():
                  study='independent',
                  input_dashboard='input_dashboard.xls',
                  ):
+        """Initialise the instance."""
         self.study = study
         self.__info_message_display_level__ = 'detailed'
         if study == 'independent':
@@ -175,10 +175,12 @@ class grid():
             pass
 
     def __iter__(self):
+        """Return an iterator over this instance."""
         self.index = 0
         return self
 
     def __next__(self):
+        """Return the next item from this iterator."""
         if self.index < len(self.gs.keys()):
             _m_grain_str_pair_ = list(self.gs.values())[self.index]
             self.index += 1
@@ -187,6 +189,7 @@ class grid():
             raise StopIteration
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         self.__info_message_display_level__ = 'detailed'
         if self.__info_message_display_level__ == 'simple':
             if self.uigrid.dim == 2:
@@ -228,6 +231,7 @@ class grid():
                    read_from_file=False,
                    filename=None
                    ):
+        """Set or update uigrid."""
         from ..interfaces.user_inputs import _manual_uidata_mcgs_gridding_definitions_
         self.uigrid = _manual_uidata_mcgs_gridding_definitions_(domain_size=domain_size,
                                                     read_from_file=read_from_file,
@@ -240,6 +244,7 @@ class grid():
                   read_from_file=False,
                   filename=None
                   ):
+        """Set or update uisim."""
         from ..interfaces.user_inputs import _manual_uidata_mcgs_simpar_ as _muisimpar_
         self.uisim = _muisimpar_(n=n,
                                  sim_parameters=sim_parameters,
@@ -268,6 +273,7 @@ class grid():
                   read_from_file=False,
                   filename=None
                   ):
+        """Set or update uigsc."""
         from ..interfaces.user_inputs import _manual_uidata_mcgs_gsc_par_
         self.uigsc = _manual_uidata_mcgs_gsc_par_(char_grains=char_grains,
                                                   char_stage=char_stage,
@@ -302,6 +308,7 @@ class grid():
                        read_from_file=False,
                        filename=None
                        ):
+        """Set or update uigeomrepr."""
         from ..interfaces.user_inputs import _manual_uidata_mcgs_generate_geom_reprs_ as gr
         self.uigeomrepr = gr(make_mp_grain_centoids=make_mp_grain_centoids,
                              make_mp_grain_points=make_mp_grain_points,
@@ -358,6 +365,7 @@ class grid():
                                            )
 
     def set_tex(self, tc=None):
+        """Set or update tex."""
         fcc_tex_type = 'rolled'
         fcc_e1max, fcc_e2max, fcc_e3max = 90, 90, 90
         fcc_w = np.array([0, 0, 0], dtype=float)  # Cube
@@ -417,6 +425,7 @@ class grid():
         self.tex = tex
 
     def initiate(self):
+        """Initiate."""
         self._mcsteps_ = [self.uisim.S]
         # -------------------------------------------
         if self.uigrid.dim == 2:
@@ -487,6 +496,7 @@ class grid():
         self.display_messages = True
 
     def build_ea(self):
+        """Build and return  ea."""
         ea1, ea2, ea3 = np.random.uniform([0, 0, 0],
                                           [360, 180, 360],
                                           (self.uisim.S, 3)).T
@@ -1119,6 +1129,7 @@ class grid():
                                        m=None,
                                        dim=None,
                                        study='independent'):
+        """Add or insert gs data structure template."""
         if study == 'independent':
             if m == 0:
                 self.gs = {m: _GS_(m=m,
@@ -1408,6 +1419,7 @@ class grid():
              xbounds=[0, 50],
              ybounds=[0, 0.2]
              ):
+        """Hist."""
 
         # Set null-hypothesis flag to exit hist computation
         exit_hist = False
@@ -1667,6 +1679,7 @@ class grid():
               ParentStateMatrix,
               Factor,
               InterpMethod):
+        """Finer."""
         # Use to increase resolution
         # Unpack parent grid parameters
         xmin, xmax, xinc = Grid_Data['xmin'], Grid_Data['xmax'], Grid_Data['xinc']
@@ -1708,6 +1721,7 @@ class grid():
                 ParentStateMatrix,
                 Factor,
                 InterpMethod):
+        """Coarser."""
         # Use to decrease resolution
         # Unpack parent grid parameters
         xmin, xmax, xinc = Grid_Data['xmin'], Grid_Data['xmax'], Grid_Data['xinc']
@@ -1806,14 +1820,17 @@ class grid():
 
     @property
     def pxtal_length(self):
+        """Pxtal length."""
         return self.uigrid.xmax-self.uigrid.xmin
 
     @property
     def pxtal_height(self):
+        """Pxtal height."""
         return self.uigrid.ymax-self.uigrid.ymin
 
     @property
     def pxtal_area(self):
+        """Pxtal area."""
         return self.pxtal_length*self.pxtal_height
 # ---------------------------------------------------------------------
 
@@ -1824,6 +1841,7 @@ class mcgs(grid):
                  study='independent',
                  info_message_display_level='detailed'
                  ):
+        """Initialise the instance."""
         super().__init__(study=study)
 
     def __str__(self):
@@ -1846,9 +1864,11 @@ class mcgs(grid):
         # return string_1
 
     def __att__(self):
+        """Return a string listing of all attributes."""
         return gops.att(self)
 
     def simulate(self):
+        """Simulate."""
         self.algo_hop = False
         # Initiate the grain-structure data-structure
         self.add_gs_data_structure_template(m=0,
@@ -1874,6 +1894,7 @@ class mcgs(grid):
                 self.start_algo3d_without_hops()
 
     def start_algo2d_without_hops(self):
+        """Start algo2d without hops."""
         _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
         _dm_ = self.display_messages
         if self.uisim.mcalg == '200':
@@ -1940,9 +1961,11 @@ class mcgs(grid):
             self.tslices = list(self.gs.keys())
 
     def start_algo2d_with_hops(self):
+        """Start algo2d with hops."""
         pass
 
     def start_algo3d_without_hops(self):
+        """Start algo3d without hops."""
         if self.uisim.mcalg == '300':
             print("Using ALG-300")
             print('////////////////////////////////')
@@ -2078,6 +2101,7 @@ class mcgs(grid):
 
 
     def NLM_elements(self):
+        """Nlm elements."""
         # Build the Non-Locality Matrix
         _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
         NLM_00, NLM_01, NLM_02 = _a  # Unpack 3 colms of 1st row

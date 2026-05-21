@@ -1,6 +1,5 @@
 import numpy as np
 # import pandas as pd
-import cv2
 
 def detect_features(mcStateArray, connectivity=18, delta=0):
     """
@@ -102,21 +101,20 @@ def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
     if make_skprops:
         from skimage.measure import regionprops
     for fid in fids:
-        _, L = cv2.connectedComponents(np.array(labelled_image == fid,
-                                                dtype=np.uint8))
-        loc_ = np.where(L == 1)
+        mask = (labelled_image == fid).astype(np.uint8)
+        loc_ = np.where(mask)
         rmin, rmax = loc_[0].min(), loc_[0].max()+1
         cmin, cmax = loc_[1].min(), loc_[1].max()+1
-        Rlab, Clab = L.shape
+        Rlab, Clab = mask.shape
         rmin_ex, rmax_ex = rmin-int(rmin != 0), rmax+int(rmin != Rlab)
         cmin_ex, cmax_ex = cmin-int(cmin != 0), cmax+int(cmax != Clab)
-        bbox_ex = np.array(L[rmin_ex:rmax_ex, cmin_ex:cmax_ex], dtype=np.uint8)
+        bbox_ex = mask[rmin_ex:rmax_ex, cmin_ex:cmax_ex].copy()
         if throw_bounding_box:
             bbox_limits_ex[fid] = [rmin_ex, rmax_ex, cmin_ex, cmax_ex]
             bboxes_ex[fid] = bbox_ex
         if extract_coords:
             coords_dict[fid] = np.array([[Xgrid[ij[0], ij[1]], Ygrid[ij[0], ij[1]]]
-                            for ij in np.argwhere(L == 1)])
+                            for ij in np.argwhere(mask)])
         if make_skprops:
             skprops[fid] = regionprops(bbox_ex, cache=False)[0]
     return skprops, bbox_limits_ex, bboxes_ex, coords_dict
@@ -124,6 +122,7 @@ def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
 def charecterise_features_in_image_v2(labelled_image, Xgrid=None, Ygrid=None, 
                                     make_skprops=True, extract_coords=True, 
                                     throw_bounding_box=True):
+    """Charecterise features in image v2."""
     if Xgrid is None or Ygrid is None:
         h, w = labelled_image.shape
         indices = np.indices((h, w))

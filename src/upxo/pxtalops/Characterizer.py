@@ -1,7 +1,6 @@
 from upxo._sup import dataTypeHandlers as dth
 from skimage.measure import label as skim_label
 import numpy as np
-import cv2
 import itertools
 import matplotlib.pyplot as plt
 
@@ -27,38 +26,34 @@ class mcgs_mchar_2d():
                  'ngrains')
 
     def __init__(self, xgr=None, ygr=None, mcstates=None):
+        """Initialise the instance."""
         self.xgr, self.ygr = xgr, ygr
 
     def __repr__(self):
+        """Return a string representation of this instance."""
         return 'Characterized pxt.'
 
     def set_fmat(self, fmat, fmin, fmax):
+        """Set or update fmat."""
         self.fmat = fmat
         self.fmin = fmin
         self.fmax = fmax
 
     def make_fmat_subsets(self, hsize=None, vsize=None):
+        """Build and return fmat subsets."""
         get_subsets = np.lib.stride_tricks.sliding_window_view
         fmats = get_subsets(self.fmat, (hsize, vsize))[::hsize, ::vsize]
         return fmats
 
     def find_grains(self,
-                    library='opencv',
+                    library='skimage',
                     fmat=None,  # Field matrix: state values
                     kernel_order=2):
-        if library in dth.opt.ocv_options:
-            # Acceptable values for opencv: 4, 8
+        """Find grains."""
+        if library in dth.opt.ocv_options or library in dth.opt.ski_options:
+            # Map kernel_order to scikit-image connectivity (1=4-conn, 2=8-conn)
             if kernel_order in (4, 8):
-                KO = kernel_order
-            elif kernel_order in (1, 2):
-                KO = 4*kernel_order
-            else:
-                raise ValueError("Input must be in (1, 2, 4, 8)."
-                                 f" Recieved {kernel_order}")
-        elif library in dth.opt.ski_options:
-            # Acceptable values for opencv: 1, 2
-            if kernel_order in (4, 8):
-                KO = int(kernel_order/4)
+                KO = kernel_order // 4
             elif kernel_order in (1, 2):
                 KO = kernel_order
             else:
@@ -76,10 +71,7 @@ class mcgs_mchar_2d():
             # -----------------------------------------
             # Identify the grains belonging to this state
             BI = (_S_ == _s_).astype(np.uint8)  # Binary image
-            if library in dth.opt.ocv_options:
-                _, labels = cv2.connectedComponents(BI*255,
-                                                              connectivity=KO)
-            elif library in dth.opt.ski_options:
+            if library in dth.opt.ski_options or library in dth.opt.ocv_options:
                 labels, _ = skim_label(BI, return_num=True,
                                                  connectivity=KO)
             # -----------------------------------------
@@ -120,17 +112,19 @@ class mcgs_mchar_2d():
         return char_gs
 
     def characterize_all_subsets(self, fmats):
+        """Characterize all subsets."""
         characterized_subsets_all = [[None for h in range(fmats.shape[0])] for v in range(fmats.shape[1])]
         for v in range(fmats.shape[1]):
             for h in range(fmats.shape[0]):
                 print(40*'-')
                 print(f'Characterizing subset: ({h}, {v})')
                 print('')
-                char_gs = self.find_grains(library='opencv', fmat=fmats[h][v])
+                char_gs = self.find_grains(library='skimage', fmat=fmats[h][v])
                 characterized_subsets_all[h][v] = char_gs
         return characterized_subsets_all
 
     def characterize_subsets(self, fmats, alongh, alongv):
+        """Characterize subsets."""
         if type(alongh) not in ITERABLES+NUMBERS:
             raise TypeError('Invalid alongh type')
         if type(alongv) not in ITERABLES+NUMBERS:
@@ -146,6 +140,6 @@ class mcgs_mchar_2d():
         characterized_subsets = [[None for v in alongv] for h in alongh]
         for v in alongv:
             for h in alongh:
-                char_gs = self.find_grains(library='opencv', fmat=fmats[h][v])
+                char_gs = self.find_grains(library='skimage', fmat=fmats[h][v])
                 characterized_subsets[h][v] = char_gs
         return characterized_subsets_indices, characterized_subsets
