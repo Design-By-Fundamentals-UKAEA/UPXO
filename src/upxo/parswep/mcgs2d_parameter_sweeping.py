@@ -1,3 +1,5 @@
+import numpy as np
+
 class parameter_sweep():
     """
     This is a core UPXO class. Use to generate and work with multiple mcgs
