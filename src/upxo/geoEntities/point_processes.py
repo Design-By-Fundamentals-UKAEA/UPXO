@@ -33,10 +33,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from scipy.spatial import KDTree
-from ripleyk import calculate_ripley
-import pointpats
-from pointpats import PointPattern, window
-from pointpats.distance_statistics import k
+try:
+    from ripleyk import calculate_ripley
+    _RIPLEYK_AVAILABLE = True
+except ImportError:
+    _RIPLEYK_AVAILABLE = False
+
+try:
+    import pointpats
+    from pointpats import PointPattern, window
+    from pointpats.distance_statistics import k
+    _POINTPATS_AVAILABLE = True
+except ImportError:
+    _POINTPATS_AVAILABLE = False
 
 @dataclass
 class Window:
@@ -48,14 +57,17 @@ class Window:
     
     @property
     def width(self) -> float:
+        """Width of the bounding window (``xmax - xmin``)."""
         return self.xmax - self.xmin
-    
+
     @property
     def height(self) -> float:
+        """Height of the bounding window (``ymax - ymin``)."""
         return self.ymax - self.ymin
-    
+
     @property
     def area(self) -> float:
+        """Area of the bounding window (``width * height``)."""
         return self.width * self.height
     
     @classmethod
