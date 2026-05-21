@@ -71,6 +71,8 @@ src/upxo/ggrowth/mcgs_bu.py
 src/upxo/pxtal/mcgs3_temporal_slice - bu18102025.py
 src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
 /admin/
+docs/_build/
+docs/docs/srcAPIdocs/
 /data/upxo_performance
 /data/images
 src/upxo/Important links.md
