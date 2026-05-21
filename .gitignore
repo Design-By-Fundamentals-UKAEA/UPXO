@@ -61,6 +61,9 @@ temp/
 # Project-specific ignored paths
 # -----------------------------
 src/upxo/meshing/mesher2d_ChrisHardie.py
+src/upxo/ggrowth/mcgs_bu.py
+src/upxo/pxtal/mcgs3_temporal_slice - bu18102025.py
+src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
 /admin/
 /data/upxo_performance
 /data/images
