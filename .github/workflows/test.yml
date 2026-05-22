@@ -2,7 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [dev, main]
+    branches: [dev]
   pull_request:
     branches: [main]
 
@@ -18,8 +18,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install upxo and pytest
+      - name: Install upxo and test dependencies
         run: |
+          pip install --upgrade pip
           pip install -e ".[all]"
           pip install pytest
 
