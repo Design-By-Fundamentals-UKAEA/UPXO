@@ -18,11 +18,23 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install upxo and test dependencies
+      - name: Install test dependencies
         run: |
           pip install --upgrade pip
-          pip install -e ".[all]"
-          pip install pytest
+          # Install the package in editable mode without optional extras.
+          # pyvista[jupyter] (which requires VTK/OpenGL) is excluded here
+          # because the test suite does not exercise any visualisation code.
+          pip install -e . --no-deps
+          pip install \
+            numpy scipy matplotlib pandas \
+            numba \
+            networkx \
+            scikit-image scikit-learn \
+            shapely \
+            tqdm seaborn colorama termcolor \
+            connected-components-3d \
+            xlrd openpyxl ipywidgets \
+            pytest
 
       - name: Run tests
         run: pytest tests/ -v
