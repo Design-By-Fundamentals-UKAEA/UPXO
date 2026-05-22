@@ -5,7 +5,6 @@ import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-import plotly.graph_objects as go
 from upxo._sup import dataTypeHandlers as dth
 from skimage.measure import label as skim_label
 from upxo.pxtalops import detect_grains_from_mcstates
@@ -1463,6 +1462,13 @@ class gsan2d():
     
     def see_correlation_temporal(self):
         """See correlation temporal."""
+        try:
+            import plotly.graph_objects as go
+        except ImportError:
+            raise ImportError(
+                "plotly is required for this method. "
+                "Install it with: pip install plotly"
+            )
         slices = sorted(self.dfs['temporal']['time_slice'].unique())
         num_slices = self.corr['temporal'].shape[0]
         corr_volume = self.corr['temporal']
