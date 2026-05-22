@@ -1,5 +1,6 @@
 #//////////////////////////////////////////////////////////////////////////////
 # Script information for the file.
+"""2D Voronoi tessellation polycrystal class for UPXO."""
 __name__ = "UPXO: UKAEA Poly-XTAL Operations"
 __authors__ = ["Vaasu Anandatheertha"]
 __lead_developer__ = ["Vaasu Anandatheertha"]
@@ -32,12 +33,12 @@ from upxo.pxtal.vt import _shapely
 from upxo.statops.distr_01 import distribution
 #//////////////////////////////////////////////////////////////////////////////
 class INSTANCES():
-    '''
-    # Read a excel file to load parameter values
-    INSTANCE PARMATER SET:
-            1. instance dimension
-            2. parameter names and their values
-    '''
+    """
+    Instance parameter set container.
+
+    Holds instance dimension and parameter names and their values.
+    Read from an Excel file to load parameter values.
+    """
     __slots__ = ('D1_name',
                  'D1_par1name',
                  'D1_par1values',
@@ -49,6 +50,7 @@ class INSTANCES():
 
 #//////////////////////////////////////////////////////////////////////////////
 class vtpolyxtal2d():
+    """2D Voronoi tessellation polycrystal built from Shapely or SciPy."""
     # TODO: change the following names to:
         # 1. areas_polygonal_exterior: L0_x_ape
     def __init__(self,
@@ -110,26 +112,15 @@ class vtpolyxtal2d():
                 #    -    -    -    -    -
         #.......................
         if gsgen_method.lower() in ('shapely_pxtal_load'):
-            """
-            Example
-            -------
-            from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
-
-            gtess = vtpxtal(gsgen_method = 'shapely_pxtal_load',
-                            vt_base_tool = 'shapely',
-                            pxtal = pxtal,
-                            points = None,
-                            point_method = None,
-                            point_object_deque = None,
-                            mulpoint_object = None,
-                            locx_list = None,
-                            locy_list = None,
-                            xbound = None,
-                            ybound = None,
-                            vis_vtgs = False,
-                            lean = 'no',
-                            INSTANCE = None)
-            """
+            # Examples:
+            #   from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
+            #   gtess = vtpxtal(gsgen_method='shapely_pxtal_load',
+            #                   vt_base_tool='shapely', pxtal=pxtal,
+            #                   points=None, point_method=None,
+            #                   point_object_deque=None, mulpoint_object=None,
+            #                   locx_list=None, locy_list=None,
+            #                   xbound=None, ybound=None,
+            #                   vis_vtgs=False, lean='no', INSTANCE=None)
             self.L0.vt_base_tool = vt_base_tool
             self.L0.pxtal = pxtal
             self.L0.xtals = list(self.L0.pxtal.geoms)
@@ -140,30 +131,30 @@ class vtpolyxtal2d():
                bID = 0,
                qualification_metrics_and_values = {},
                ):
-        '''
+        """
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
-        '''
+        """
         raise NotImplementedError("__eq__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __gt__(self,
                bID = 0,
                qualification_metrics_and_values = {},
                ):
-        '''
+        """
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
-        '''
+        """
         raise NotImplementedError("__gt__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __lt__(self,
                bID = 0,
                qualification_metrics_and_values = {},
                ):
-        '''
+        """
         bID: behaviour ID
         @ bID = 0: Compare mean grain sizes
-        '''
+        """
         raise NotImplementedError("__lt__ is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def __iter__(self):
@@ -388,13 +379,16 @@ class vtpolyxtal2d():
                      progress_fraction = None,
                      color = colorama.Fore.WHITE,
                      ):
-        '''
-        Credits:
-            Basic technique is borrowed from the below youtube video.
-            https://www.youtube.com/watch?v=x1eaT88vJUA&t=79s
-            Current class method has been modified. Method name, being accurate, has been
-            retained as is in the YT video.
-        '''
+        """
+        Display a progress bar on the console.
+
+        Notes
+        -----
+        Progress bar technique adapted from:
+        https://www.youtube.com/watch?v=x1eaT88vJUA&t=79s
+        The method name has been retained; the implementation has been
+        modified for use as a class method.
+        """
         import colorama
         percent = 100 * progress_fraction
         if first_call:
@@ -407,12 +401,7 @@ class vtpolyxtal2d():
             print(final_message + 2*'\n')
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def find_neighs(self):
-        '''
-        Find neighbouring grains
-        # TODO: THERE IS NO NEED FOR DICTIONARY. JUST USE A LIST INSTEAD
-        # TODO: USE MULTI-PROCESSING MODULE AND CRANK UP THE SPEED
-        # NOTE: Leave this as is
-        '''
+        """Find neighbouring grains for all xtals in the polycrystal."""
         import colorama
         __neigh = {GRn: ['L0GRAIN-%07d'%GRn, 0] for GRn in range(len(self.L0.xtals))}
         self.progress_bar(first_call = True,
@@ -442,11 +431,15 @@ class vtpolyxtal2d():
     def order_points_cw(self,
                         pts
                         ):
-        '''
-        Order a group of points clockwise
-        Credit: https://gist.github.com/flashlib/e8261539915426866ae910d55a3f9959
-        NOTE: The original code structure has been edited for compactness
-        '''
+        """
+        Order a group of 2D points clockwise.
+
+        Notes
+        -----
+        Algorithm adapted from:
+        https://gist.github.com/flashlib/e8261539915426866ae910d55a3f9959
+        The original code structure has been edited for compactness.
+        """
         # sort the points based on their x-coordinates
         xSorted = pts[np.argsort(pts[:, 0]), :]
         # grab the left-most and right-most points from the sorted
@@ -477,9 +470,7 @@ class vtpolyxtal2d():
                                make_unique = True,
                                throw = True
                                ):
-        '''
-        make_unique: True/False: Applies only to
-        '''
+        """Extract Shapely coordinates for the specified feature."""
         if shapely_grains_list is None:
             grain_list = self.L0.xtals
         elif type(shapely_grains_list) in (list, tuple):
@@ -536,10 +527,7 @@ class vtpolyxtal2d():
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_coord_list_as_unique(self, xcoord = None,
                                   ycoord = None):
-        '''
-        # Build x and y coordinste lists
-        # TODO: Replace the below nested for loop with nested list comprehension
-        '''
+        """Build a unique (x, y, xy) coordinate list from nested coordinate lists."""
         x, y = [], []
         for _x, _y in zip(xcoord, ycoord):
             for __x, __y in zip(_x, _y):
@@ -555,9 +543,7 @@ class vtpolyxtal2d():
                        data_structure = 'shapely',
                        make_unique = True
                        ):
-        '''
-        Build the unique coordinate list for vertices of the L0 VTGS
-        '''
+        """Build the unique coordinate list for vertices of the L0 VTGS."""
         #if hasattr(self, 'locx_gvert_list'):
         #    print('vertices list exit')
         if data_structure == 'shapely':
@@ -575,27 +561,23 @@ class vtpolyxtal2d():
                               recalculate = False,
                               data_structure = 'shapely'
                               ):
-        '''
-        Count the total numebr of xtal primary boundary junction points
-        CAUTION: only use after vertices list have been uniqued
-        '''
+        """Count the total number of xtal primary boundary junction points.
+
+        Only call after the vertices list has been uniqued.
+        """
         if recalculate:
             self.build_vertices(data_structure = data_structure)
         self.L0.n_vert = len(self.L0.xtal_coord_vertices_x)
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_seed_points_xy(self):
-        '''
-        Extracts the seed points coordinates as two lists for VTGS
-        '''
+        """Extract the seed point coordinates as two lists for the VTGS."""
         return self.L0.mpo_seeds.locx, self.L0.mpo_seeds.locy
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_centroid_points_xy(self,
                                 make_point_objects_upxo = True,
                                 throw = True
                                 ):
-        '''
-        Documentation
-        '''
+        """Extract centroid coordinates as lists and optionally build a mulpoint2d."""
         _, __ = zip(*[_.centroid.xy for _ in self.L0.xtals])
         cenx, ceny = zip(*[[_[0], __[0]] for (_, __) in zip(_, __)])
         if make_point_objects_upxo:
@@ -606,9 +588,7 @@ class vtpolyxtal2d():
                            make_point_objects_upxo = True,
                            throw = True
                            ):
-        '''
-        Documentation
-        '''
+        """Extract representative point coordinates and optionally build a mulpoint2d."""
         self.extract_shapely_coords
         _, __ = zip(*[_.representative_point().xy for _ in self.L0.xtals])
         repx, repy = zip(*[[_[0], __[0]] for (_, __) in zip(_, __)])
@@ -620,17 +600,13 @@ class vtpolyxtal2d():
                 locx,
                 locy
                 ):
-        '''
-        Documentation
-        '''
+        """Zip x and y coordinate lists into a list of [x, y] pairs."""
         return [[_x, _y] for (_x, _y) in zip(locx, locy)]
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_tree_vt_base_seeds(self,
                                   recalculate = True
                                   ):
-        '''
-        Documentation
-        '''
+        """Build a cKDTree from Voronoi seed point coordinates."""
         #if hasattr(self.L0, 'tree_seeds'):
         #if not recalculate:
         #    print('The tree exists.')
@@ -661,12 +637,7 @@ class vtpolyxtal2d():
                                                  )
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_mpo_L0_vertices_unique(self):
-        '''
-        self.L0.mpo_xtals_vertices:
-            MPO. Multi-Point Object
-            L0. Level 0
-            _xtals_vertices. vertices of xtals
-        '''
+        """Build and store a mulpoint2d of unique L0 xtal vertex points."""
         # Create point2d objects for every vertex
         if not hasattr(self.L0, 'xtal_coord_vertices_x'):
             self.build_vertices(data_structure = 'shapely',
@@ -701,10 +672,16 @@ class vtpolyxtal2d():
                       base_data_structure = 'shapely',
                       feature = 'L0_xtals_reppoints',
                       ):
-        '''
-        self.extract_coord(feature = 'L0_xtals_reppoints')
-        self.extract_coord(feature = 'L0_xtals_centroids')
-        '''
+        """
+        Extract and store coordinates for the given feature.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            self.extract_coord(feature='L0_xtals_reppoints')
+            self.extract_coord(feature='L0_xtals_centroids')
+        """
         if base_data_structure == 'shapely' and feature == 'L0_xtals_reppoints':
             self.extract_shapely_coords(shapely_grains_list = None,
                                         coord_of = 'L0_xtals_reppoints',
@@ -723,9 +700,7 @@ class vtpolyxtal2d():
     def make_tree_xtals_centroids(self,
                                   recalculate = True
                                   ):
-        '''
-        Documentation
-        '''
+        """Build a cKDTree from xtal centroid coordinates."""
         #if hasattr(self.L0, 'tree_centroids'):
         #    if not recalculate:
         #        print('The tree exists.')
@@ -751,9 +726,7 @@ class vtpolyxtal2d():
     def make_tree_xtals_reppoints(self,
                              recalculate = True
                              ):
-        '''
-        Documentation
-        '''
+        """Build a cKDTree from xtal representative point coordinates."""
         #if hasattr(self.L0, 'tree_rep_points'):
         #    if not recalculate:
         #        print('The tree exists.')
@@ -781,9 +754,7 @@ class vtpolyxtal2d():
                              recalculate = True,
                              vertex_type = 'L0_xtals_pbjp',
                              ):
-        '''
-        Documentation
-        '''
+        """Build a cKDTree from xtal primary boundary junction point coordinates."""
         if vertex_type == 'L0_xtals_pbjp':
             #if hasattr(self.L0, 'tree_L0_grain_vertices'):
             #    if not recalculate:
@@ -807,17 +778,21 @@ class vtpolyxtal2d():
                                      )
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_tree_triple_point_junctions(self):
-        '''
-        Documentation
-        '''
+        """Build a cKDTree from triple point junction coordinates."""
         raise NotImplementedError("make_tree_triple_point_junctions is not yet implemented.")
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_tree(self,
                  tree = 'L0.xtal.centroids',
                  ):
-        '''
-        tree: centroids, rep_points, seed_points
-        '''
+        """
+        Build or retrieve the specified KD-tree.
+
+        Parameters
+        ----------
+        tree : str
+            Tree target. One of ``'seed_points'``, ``'L0.xtal.centroids'``,
+            ``'L0.xtal.reppoints'``, or ``'L0.xtal.pbjp'``.
+        """
         if tree == 'seed_points':
             try:
                 _ = self.L0.tree_seeds
@@ -851,12 +826,16 @@ class vtpolyxtal2d():
                                 n_near_neighbours: int = 2,
                                 cut_off_distance: float = 0.2
                                 ):
-        '''
-        methods: from_grain_list, shapely_STRtree, shapely_,
-                 from_centroid_tree, from_rep_point_tree,
-                 from_seed_point_tree
-        NOTE TO DEVELOPER: PLEASE LEAVE THIS UNTOUCHED
-        '''
+        """
+        Return neighbour xtal IDs for the given central grains.
+
+        Parameters
+        ----------
+        method : str
+            Query method. One of ``'from_grain_list'``, ``'shapely_STRtree'``,
+            ``'from_centroid_tree'``, ``'from_rep_point_tree'``,
+            ``'from_seed_point_tree'``.
+        """
         # First build the neighbours database if self.L0.neigh_all does'nt exist already.
         # if isinstance('neigh', polyxtal) == False:
         if rebuild_neigh_database:
@@ -930,9 +909,7 @@ class vtpolyxtal2d():
                               viz = True,
                               throw = False
                               ):
-        '''
-        Identify the grains lying on he boundary of the domain.
-        '''
+        """Identify the grains lying on the boundary of the domain."""
         if hasattr(self, 'locxy_gvert_list'):
             pass
         else:
@@ -980,14 +957,19 @@ class vtpolyxtal2d():
                                            compute_distribution = True,
                                            throw = False
                                            ):
-        '''
-        CALL:
-            pxtal.build_scalar_fields_from_xtal_list(scalar_field = 'areas_polygonal_exterior',
-                                                     xtal_list = pxtal.boundary_xtals,
-                                                     save_to_attribute = True,
-                                                     throw = False
-                                                     )
-        '''
+        """
+        Build scalar fields from the given xtal list.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxtal.build_scalar_fields_from_xtal_list(
+                scalar_field='areas_polygonal_exterior',
+                xtal_list=pxtal.boundary_xtals,
+                save_to_attribute=True,
+                throw=False)
+        """
         if xtal_list is not None:
             if type(xtal_list) in (np.ndarray, list, tuple):
                 if scalar_field == 'ape':
@@ -1010,9 +992,7 @@ class vtpolyxtal2d():
     def _data_container(self,
                         feature = 'xtal_list',
                         ):
-        '''
-        Start a dataclass with required fields
-        '''
+        """Start a dataclass with required fields."""
         @dataclass(repr = False)
         class data_container():
             pass
@@ -1088,7 +1068,7 @@ class vtpolyxtal2d():
     def __identify_xtals_with_coordinates(self,
                                           xy_coords = []
                                           ):
-        """  identify xtals with coordinates."""
+        """Identify xtal IDs that contain the given xy boundary coordinates."""
         self.progress_bar(first_call = True,
                           first_message = 'Identifying boundary grains',
                           progress_fraction = 0,
@@ -1119,15 +1099,16 @@ class vtpolyxtal2d():
                                    vis_dpi = 150,
                                    throw = False
                                    ):
-        '''
+        """
         Identify grains lying on the boundary of the domain.
-        CALL:
-            pxt.identify_L0_xtals_boundary(domain_shape = 'rectangular',
-                                        viz = True,
-                                        vis_dpi = 150,
-                                        throw = False
-                                        )
-        '''
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxt.identify_L0_xtals_boundary(domain_shape='rectangular',
+                                           viz=True, vis_dpi=150, throw=False)
+        """
         if not hasattr(self.L0, 'xtal_coord_vertices_xy'):
             self.build_vertices(data_structure = base_data_structure_to_use
                                 )
@@ -1210,11 +1191,16 @@ class vtpolyxtal2d():
                                    vis_dpi = 150,
                                    throw = False
                                    ):
-        '''
-        pxt.identify_internal_xtals(save_as_attribute = True,
-                                    viz = False,
-                                    throw = False)
-        '''
+        """
+        Identify grains lying in the interior of the domain.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxt.identify_L0_xtals_internal(domain_shape='rectangular',
+                                           viz=False, throw=False)
+        """
         #------------------------
         if hasattr(self, 'boundary_xtals'):
             pass
@@ -1319,10 +1305,7 @@ class vtpolyxtal2d():
                         par = 'boundary_and_internal',
                         tolerance = 10**-6
                         ):
-        '''
-        check_n: check on whether the number of xtal_collection objects agree
-                 on the number of xtals in the pxtals
-        '''
+        """Check that boundary and internal xtal counts and areas sum correctly."""
         console_seperator(seperator = '-*', repetitions = 25)
         if par == 'boundary_and_internal':
             n, a, af = 'FAIL', 'FAIL', 'FAIL'
@@ -1357,18 +1340,17 @@ class vtpolyxtal2d():
         console_seperator(seperator = '-*', repetitions = 25)
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def make_shapely_xtals_prepared(self):
-        '''
-        Documentation
-        '''
+        """Return a deque of Shapely-prepared xtal polygon objects."""
         from shapely.prepared import prep
         return deque([prep(_xtal) for _xtal in self.L0.xtals])
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def correlate_L0_xtal_id_seed_id(self):
-        '''
-        # TODO: TO BE DEPREACTED? BUGGY AND INCOMPLETE.
+        """
+        Correlate VTGS grain ID number to the corresponding seed ID.
 
-        correlate VTGS grain ID number to the corresponding seed ID
-        '''
+        .. deprecated::
+            This method is buggy and incomplete; to be removed in a future release.
+        """
         from shapely.geometry import Point
         #seed_points_x, seed_points_y = self.make_seed_points_xy()
         seeds_shapely_points = [Point(_x,_y) for (_x,_y) in zip(pxtal.L0.coord_seeds_x, pxtal.L0.coord_seeds_y)]
@@ -1390,13 +1372,12 @@ class vtpolyxtal2d():
     def write_abapy_input_coords(self,
                                  identification_point_type = 'L0_xtals_reppoints',
                                  ):
-        '''
-        x and y coordinstes of the voronoi tessellation are contained in:
-            self.L0.xtal_coord_vertices_x   and
-            self.L0.xtal_coord_vertices_y
-        Creation: 131022va
-        Edit history: 221022va, 271022va
-        '''
+        """
+        Write Abaqus input coordinate files for the Voronoi tessellation.
+
+        Vertex coordinates are stored in ``self.L0.xtal_coord_vertices_x``
+        and ``self.L0.xtal_coord_vertices_y``.
+        """
         xtal_coordinates = self.extract_shapely_coords(shapely_grains_list = None,
                                                        coord_of = 'L0_xtal_vertices_pbjp_xtalwise',
                                                        save_to_attribute = False,
@@ -1474,21 +1455,23 @@ class vtpolyxtal2d():
                           level = 0,
                           length_type = 'xtal.polygonal.pbjp'
                           ):
-        '''
-        Documentation
-        pxtal.L0.xtal_ble_val
+        """
+        Calculate and store xtal boundary lengths.
 
-        if length_type == 'xtal.polygonal.pbjp':
-            lengths of all boundaries in each xtal
+        Results are stored in ``pxtal.L0.xtal_ble_val``.
 
-        if length_type == 'xtal.polygonal.perimeter':
-            lengths of all boundaries in each xtal
+        Notes
+        -----
+        ``length_type='xtal.polygonal.pbjp'``: lengths between consecutive
+        boundary junction points of each xtal.
 
+        ``length_type='xtal.polygonal.perimeter'``: total perimeter of each xtal.
 
+        Stored attributes:
 
-            _.xtal_ble_val: list = [] # xtal boundary length exterior
-            _.xtal_pe_val: list = [] # xtal perimeter exterior
-        '''
+        - ``xtal_ble_val``: xtal boundary length exterior (list)
+        - ``xtal_pe_val``: xtal perimeter exterior (list)
+        """
         if level == 0:
             if length_type == 'xtal.polygonal.pbjp':
                 #----------------------
@@ -1530,9 +1513,7 @@ class vtpolyxtal2d():
     def calculate_areas(self,
                         area_type = 'polygonal'
                         ):
-        '''
-        Documentation
-        '''
+        """Calculate and store polygonal areas for all xtals."""
         if area_type == 'polygonal':
             if self.L0.vt_base_tool == 'shapely':
                 if len(self.L0.xtal_ape_val) == 0:
@@ -1557,24 +1538,18 @@ class vtpolyxtal2d():
             pass
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def calculate_perimeter(self,length_type = 'perimeter', level = 0):
-        '''
-        Documentation
-        '''
+        """Calculate and store polygonal perimeters for all xtals."""
         self.lengths_polygonal_exterior = [self.L0.xtals[0].exterior.length for xtal_count in range(self.L0.xtals_n)]
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def calc_distributions(self, data_name = 'area', ):
-        '''
-        Documentation
-        '''
+        """Calculate and store statistical distributions for the given field."""
         from distr_01 import distribution
         self.areas_polygonal_exterior_distribution = distribution(data_name = data_name,
                                                                   data = pxt.areas_polygonal_exterior,
                                                                   )
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def plot_histogram(self, data_name = 'area'):
-        '''
-        Documentation
-        '''
+        """Plot a histogram of the specified data field."""
         if data_name == 'area':
             self.areas_polygonal_exterior_distribution.plot_histogram()
    #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -1588,27 +1563,33 @@ class vtpolyxtal2d():
                                              save_as_attribute = True,
                                              throw = True
                                              ):
-        '''
-        This method helps extract the grain number and the actual values of field variable which
-        fit the threshold specification
-        ----CALL----:
-        pxt.identify_grains_from_field_threshold(field_name = 'areas_polygonal_exterior',
-                                                 threshold_definition = 'percentiles',
-                                                 threshold_limits_values = [[0.0, 0.05], [0.08, 0.20]],
-                                                 threshold_limits_percentiles = [[0, 10], [10, 90], [90, 100]],
-                                                 inequality_definitions = [['>=', '<='], ['>=', '<='], ['>=', '<=']],
-                                                 exclude_grains = [None]
-                                                 )
-        ----FIELD NAMES----
-            n. NAME: DESCRIPTION: APPLICABLE LEVELS ---> see below
-            1. a_pol: AREA POLYGONAL: L0, L1, L2, L3
-            2. a_pix: AREA PIXELATED: L0, L1, L2, L3
-            2. a_pol_ext: to replace areas_polygonal_exterior: L0, L1, L2, L3
-            2. p_pol_ext: PERIMETER POLYGONAL EXTERIOR: L0 ,L1, L2, L3
-            3. diag_max: MAXIMUM DIAGONAL: L0, L1, L2, L3
-            4. diag_min: MINIMUM DIAGONAL: L0, L1, L2, L3
-            5. eqdia_ext: EQUIVALENT DIAMETER EXTERNAL
-        '''
+        """
+        Extract grain IDs and field values that satisfy the threshold specification.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxt.identify_grains_from_field_threshold(
+                field_name='areas_polygonal_exterior',
+                threshold_definition='percentiles',
+                threshold_limits_values=[[0.0, 0.05], [0.08, 0.20]],
+                threshold_limits_percentiles=[[0, 10], [10, 90], [90, 100]],
+                inequality_definitions=[['>=', '<='], ['>=', '<='], ['>=', '<=']],
+                exclude_grains=[None])
+
+        Notes
+        -----
+        Available field names:
+
+        1. ``a_pol``: area polygonal (L0, L1, L2, L3)
+        2. ``a_pix``: area pixelated (L0, L1, L2, L3)
+        3. ``a_pol_ext``: replaces ``areas_polygonal_exterior`` (L0–L3)
+        4. ``p_pol_ext``: perimeter polygonal exterior (L0–L3)
+        5. ``diag_max``: maximum diagonal (L0–L3)
+        6. ``diag_min``: minimum diagonal (L0–L3)
+        7. ``eqdia_ext``: equivalent diameter external
+        """
         if field_name == 'areas_polygonal_exterior':
             _base_data = self.L0.xtal_ape_val
         #  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..  ..
@@ -1680,10 +1661,15 @@ class vtpolyxtal2d():
                            'clr_axis': [1, 1, 1],
                            }
                     ):
-        '''
-        pxt.define_cmap()
-        # TODO: Includ the default cmap option available in matplotlib
-        '''
+        """
+        Define a custom colour map array based on the specified field.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxt.define_cmap()
+        """
         # .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..
         # Determine normalized array based on the field of interest
         if field in ('areas_polygonal_exterior'):
@@ -1737,9 +1723,7 @@ class vtpolyxtal2d():
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def _help_(self,
                topic = 'all'):
-        '''
-        A small cheat-sheet to help in PXTAL data access.
-        '''
+        """A small cheat-sheet to help with PXTAL data access."""
         if topic == 'all':
             self._help_('info')
             self._help_('top_level')
@@ -1896,9 +1880,7 @@ class vtpolyxtal2d():
                                  'alpha': 0.5,
                                  },
              ):
-        '''
-        Documentation
-        '''
+        """Plot the polycrystal using Matplotlib."""
         #------------------------------------------------------
         if xtal_clr_field:
             clr = self.define_cmap(field = field_variable,
@@ -2112,19 +2094,13 @@ class vtpolyxtal2d():
             _point_.polygonal_area = _xtal_.area
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def plot_neigh_0(self):
-        '''
-        Documentation
-        '''
+        """Plot the zeroth-order neighbour grains."""
         raise NotImplementedError("plot_neigh_0 is not yet implemented.")
     def plot_neigh_1(self):
-        '''
-        Documentation
-        '''
+        """Plot the first-order neighbour grains."""
         raise NotImplementedError("plot_neigh_1 is not yet implemented.")
     def plot_neigh_2(self):
-        '''
-        Documentation
-        '''
+        """Plot the second-order neighbour grains."""
         raise NotImplementedError("plot_neigh_2 is not yet implemented.")
     def get_L0_ng(self):
         """Return the L0 ng."""
@@ -2174,7 +2150,7 @@ class vtpolyxtal2d():
         # 7. by quartiles of the max angle
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def get_xcoord_vtseeds(self, level = 0, instance = 0):
-        '''Instance to be included later. THIS APPLIES TO ALL SIMILAR GETTERS'''
+        """Return the x-coordinates of the Voronoi seed points at the given level."""
         if level == 0:
             return self.L0.coord_seeds_x
     def get_ycoord_vtseeds(self, level = 0, instance = 0):
@@ -2193,7 +2169,7 @@ class vtpolyxtal2d():
                 _2 = self.get_ycoord_vtseeds(self, level = level, instance = instance)
                 return _1, _2
     def get_xcoord_centroid(self, level = 0, instance = 0):
-        '''Instance to be included later. THIS APPLIES TO ALL SIMILAR GETTERS'''
+        """Return the x-coordinates of xtal centroids at the given level."""
         if level == 0:
             return self.L0.xtal_coord_centroid_x
     def get_ycoord_centroid(self, level = 0, instance = 0):
@@ -2212,7 +2188,7 @@ class vtpolyxtal2d():
                 _2 = self.get_ycoord_centroid(self, level = level, instance = instance)
                 return _1, _2
     def get_xcoord_reppoint(self, level = 0, instance = 0):
-        '''Instance to be included later. THIS APPLIES TO ALL SIMILAR GETTERS'''
+        """Return the x-coordinates of xtal representative points at the given level."""
         if level == 0:
             return self.L0.xtal_coord_reppoint_x
     def get_ycoord_reppoint(self, level = 0, instance = 0):
@@ -2231,7 +2207,7 @@ class vtpolyxtal2d():
                 _2 = self.get_ycoord_reppoint(self, level = level, instance = instance)
                 return _1, _2
     def get_xcoord_vertices(self, level = 0, instance = 0):
-        '''Instance to be included later. THIS APPLIES TO ALL SIMILAR GETTERS'''
+        """Return the x-coordinates of xtal vertices at the given level."""
         if level == 0:
             return self.L0.xtal_coord_vertices_x
     def get_ycoord_vertices(self, level = 0, instance = 0):
