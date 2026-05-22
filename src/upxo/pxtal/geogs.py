@@ -38,7 +38,7 @@ class geogs2d():
         pass
 
     def __eq__(self):
-        """Representativeness qualificatipon."""
+        """Representativeness qualification."""
         pass
 
     def check_closures(self):

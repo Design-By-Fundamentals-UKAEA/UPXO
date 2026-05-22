@@ -131,9 +131,11 @@ class IMAGE_3D:
                 Grain ids to be cropped from neigh_gid. Value could be any in
                 dth.dt.ITERABLES or of any integrer type in dth.dt.INTEGERS.
                 Defaults to None.
-            Example
-            -------
-            gstlice.crop_neigh_gid(neigh_gid='O(1)', gids_to_crop=[1])
+            Examples
+            --------
+            .. code-block:: python
+
+                gstlice.crop_neigh_gid(neigh_gid='O(1)', gids_to_crop=[1])
             """
             # User input validations
             if type(neigh_gid) != dict:

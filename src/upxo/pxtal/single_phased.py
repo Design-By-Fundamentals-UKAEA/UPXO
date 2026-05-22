@@ -79,11 +79,17 @@ class OFHC_Cu_vox():
         
     def add_to_fdb(self, name, value):
         """
-        value = {'lgi': lgi, 
-                 'ea': ea, 
-                 'mprops': None,
-                 'neigh_fid': None}
-        pxtal.add_to_fdb('base', value)
+        Add or update a named entry in the feature data base.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            value = {'lgi': lgi,
+                     'ea': ea,
+                     'mprops': None,
+                     'neigh_fid': None}
+            pxtal.add_to_fdb('base', value)
         """
         if name == "base":
             if "lgi" in value and value["lgi"]:
@@ -146,26 +152,24 @@ class OFHC_Cu_vox():
         
     def add_fdb(self, *, fname, dnames, datas, info):
         """
-        Add ferature data base.
+        Add feature data base entry.
 
-        Parameters
-        ----------
-        None
-
-        Return
-        ------
-        None
-
-        Example
+        Returns
         -------
-        self.add_fdb(fname='twin_01',
-                     dnames='fid',
-                     datas=123,
-                     info={'a': 1, 'b': 2})
+        None
+
+        Examples
+        --------
+        .. code-block:: python
+
+            self.add_fdb(fname='twin_01',
+                         dnames='fid',
+                         datas=123,
+                         info={'a': 1, 'b': 2})
 
         Notes
         -----
-        1. Intended for internal use.
+        Intended for internal use.
         """
         # initial Validations for fname
         # -----------------------------------------

@@ -1,9 +1,9 @@
 """
-Gometric tessellation class. This has the follwing components.
+Geometric tessellation class. This has the following components.
 
     1. class geotess2d for 2D voronoi tessellation grain structures.
     2. class vtess2d, inheriting from geotess2d
-    3. class regtess2d, inheriting frm geotess2d
+    3. class regtess2d, inheriting from geotess2d
     4. class semiregtess2d, inheriting from geotess2d
     5. class demiregtess2d, inheriting from geotess2d
 
@@ -53,7 +53,7 @@ from upxo.pxtal.polyxtal import vtpolyxtal2d as polyxtal
 
 class geotess2d():
     """
-    Voronoi Tessellation grain structure in 3D.
+    Voronoi Tessellation grain structure in 2D.
 
     Attributes
     ----------
@@ -90,7 +90,7 @@ class geotess2d():
         self.__initiate_variables(from_mcgs=from_mcgs)
 
     def __initiate_variables(self, from_mcgs=False):
-        """  initiate variables."""
+        """Initialise instance variables."""
         self.bounds = None
         self.seeds = None
         self.xtals = []
