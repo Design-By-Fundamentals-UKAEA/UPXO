@@ -28,6 +28,12 @@ env/
 .idea/
 
 # -----------------------------
+# AI tool artifacts
+# -----------------------------
+**/.claude/
+*.claude
+
+# -----------------------------
 # Logs and temporary files
 # -----------------------------
 logs/
@@ -51,6 +57,15 @@ temp/
 *.odb
 *.npy
 *.npz
+
+# -----------------------------
+# One-off utility scripts
+# -----------------------------
+add_missing_docstrings.py
+fix_bare_examples.py
+fix_example_sections.py
+fix_oneliner_props.py
+fix_type_desc.py
 
 # -----------------------------
 # Project-specific ignored paths
