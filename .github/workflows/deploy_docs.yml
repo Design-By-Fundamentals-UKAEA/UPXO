@@ -37,6 +37,46 @@ jobs:
         run: |
           sphinx-apidoc -o docs/docs/srcAPIdocs src/upxo --force --separate
 
+      - name: Patch upxo.rst — move module docstring to top
+        run: |
+          python - <<'EOF'
+          import re, pathlib
+
+          path = pathlib.Path("docs/docs/srcAPIdocs/upxo.rst")
+          text = path.read_text(encoding="utf-8")
+
+          # ── extract the "Module contents" block ──────────────────────────
+          # matches from the "Module contents\n---------..." heading down to
+          # (but not including) the next heading or end-of-file
+          mc_pattern = re.compile(
+              r"(Module contents\n-+\n\n(?:.*\n)*?)"
+              r"(?=\n\S.*\n[-=~^]+\n|\Z)",
+              re.MULTILINE,
+          )
+          m = mc_pattern.search(text)
+          if not m:
+              print("WARNING: 'Module contents' block not found – skipping patch")
+              raise SystemExit(0)
+
+          module_block = m.group(1).rstrip("\n") + "\n\n"
+
+          # Remove it from its original position
+          text_without = text[:m.start()] + text[m.end():]
+
+          # ── find the end of the title underline (first two lines) ────────
+          lines = text_without.splitlines(keepends=True)
+          insert_at = 0
+          for i, line in enumerate(lines):
+              if i > 0 and set(line.strip()) <= set("=-~^"):
+                  insert_at = i + 1   # line after the underline
+                  break
+
+          # ── insert module block right after the title ─────────────────────
+          lines.insert(insert_at, "\n" + module_block + "\n----\n\n")
+          path.write_text("".join(lines), encoding="utf-8")
+          print("Patched upxo.rst: module docstring moved to top.")
+          EOF
+
       - name: Compile Sphinx HTML
         run: |
           sphinx-build -b html docs docs/_build/html
