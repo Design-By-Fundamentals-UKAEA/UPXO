@@ -11,7 +11,7 @@ classifiers = [
 ]
 setup(
     name="upxo",
-    version="1.0.0",
+    version="1.0.1",
     author="Dr. Sunil Anandatheertha",
     author_email="vaasu.anandatheertha@ukaea.uk, sunilanandatheertha@gmail.com",
     description="An open-source Python package for generation, analysis, assessment, visualisation, meshing, and export of representative polycrystalline grain structures.",
