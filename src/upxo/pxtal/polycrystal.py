@@ -5,6 +5,14 @@ import string
 from upxo.material.Material import *
 
 class PolyXTAL():
+    """
+    Top-level polycrystal data container for UPXO.
+
+    Holds grain structure data (GSD), material property data (MPD), feature ID
+    databases, flag arrays, and geometric parameter tables for multi-level
+    (L0/L1/L2) hierarchical grain structures including twins, grain-boundary
+    zones, prior-austenitic packets, and laths.
+    """
     #**************************
     PXID     = None # Few high level ID of the poly-crystal
     MPD      = None # Material property data
@@ -47,7 +55,6 @@ class PolyXTAL():
     @property
     def setcmdlHouseKeepingRules(self):
         """House keeping rules related values."""
-        """Usage: gs.setcmdlHouseKeepingRules"""
         self.cmdSep      = '_'
         self.cmdSepCount = 40
     #------------------------------------------------------------------
@@ -102,11 +109,6 @@ class PolyXTAL():
     @property
     def setupL1GS(self):
         """Set details of the Level 1 poly-xtal."""
-        """Usage:
-                 setupL1GS()
-        Dev. history: 
-            09-05-2022 - Working
-        """
         if int(PolyXTAL.GSD['gslevel']) >= 1:
             print(self.cmdSepCount*self.cmdSep)
             print('SET L1-GS DETAILS')

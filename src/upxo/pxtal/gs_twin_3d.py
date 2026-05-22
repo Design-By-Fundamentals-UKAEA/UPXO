@@ -1,9 +1,4 @@
-﻿# -*- coding: utf-8 -*-
-"""
-Created on Tue Oct 21 11:47:44 2025
-
-@author: Dr. Sunil Anandatheertha
-"""
+﻿"""OFHC copper grain structure extending ``mcgs3_grain_structure``."""
 
 from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
 

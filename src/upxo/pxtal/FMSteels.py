@@ -1,9 +1,4 @@
-﻿# -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 10 22:16:24 2025
-
-@author: Dr. Sunil Anandatheertha
-"""
+﻿"""Ferritic-martensitic steel grain structures for UPXO."""
 
 class fmsgs():
     __slots__ = ('gs', 'tx', 'clset', 'lpaci', 'lpagi', '')
