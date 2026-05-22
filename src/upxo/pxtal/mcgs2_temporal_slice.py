@@ -6393,20 +6393,16 @@ class mcgs2_grain_structure():
 
     def import_ctf(self, filePath, fileName, convertUPXOgs=True):
         """Import a CTF file into the grain-structure workflow."""
-        # Use DefDAP to get the job done here
         pass
 
     def import_crc(self, filePath, fileName, convertUPXOgs=True):
         """Import a CRC file into the grain-structure workflow."""
-        # Use DefDAP to get the job done here
         pass
 
     def clean_exp_gs(self, minGrainSize=10):
         """Clean imported experimental grain-structure data."""
-        # Use DefDAP to get the job done here
         pass
 
     def import_dream3d(self, filePath, fileName, convertUPXOgs=True):
         """Import a Dream3D file into the grain-structure workflow."""
-        # Use DefDAP to get the job done here
         pass
