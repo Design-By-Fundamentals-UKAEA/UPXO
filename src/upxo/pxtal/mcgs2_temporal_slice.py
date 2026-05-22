@@ -231,23 +231,21 @@ class mcgs2_grain_structure():
                           'moments_weighted', 'moments_weighted_central', 'moments_weighted_hu',
                           'moments_weighted_normalized', 'num_pixels', 'orientation', 'perimeter',
                           'perimeter_crofton', 'slice', 'solidity']
-    '''
-    Global Topological Invariants
-        euler_characteristic: Chi = V - E + G (usually 1)
-        avg_nneigh: Average number of neighbors (\bar{n})
-    Grain-Specific Properties (Per Grain)
-        nneigh: Number of neighbors (or edges, n) for a grain
-    Junction/Vertex Counts (Global)
-        n_vertices: Total number of vertices (V)
-        n_boundaries: Total number of grain boundaries (E)
-        ntjp: Number of triple junctions (V3)
-        nqp: Number of quad junctions (V4, relevant during T1 events)
-    Statistical & Correlation Properties
-        nneigh_dist_P_n: The probability distribution P(n)
-        aboav_weaire_params: Parameters describing the Aboav-Weaire correlation. 
-        They quantify the topological correlation between a grain's size and the 
-        average size of its neighbors.
-    '''
+    # Global Topological Invariants
+    #     euler_characteristic: Chi = V - E + G (usually 1)
+    #     avg_nneigh: Average number of neighbors (\bar{n})
+    # Grain-Specific Properties (Per Grain)
+    #     nneigh: Number of neighbors (or edges, n) for a grain
+    # Junction/Vertex Counts (Global)
+    #     n_vertices: Total number of vertices (V)
+    #     n_boundaries: Total number of grain boundaries (E)
+    #     ntjp: Number of triple junctions (V3)
+    #     nqp: Number of quad junctions (V4, relevant during T1 events)
+    # Statistical & Correlation Properties
+    #     nneigh_dist_P_n: The probability distribution P(n)
+    #     aboav_weaire_params: Parameters describing the Aboav-Weaire correlation.
+    #     They quantify the topological correlation between a grain's size and the
+    #     average size of its neighbors.
     valid_topo_props = ['euler_characteristic', 'avg_nneigh', 'nneigh',
                         'n_vertices', 'n_boundaries', 'ntjp', 'nqp',
                         'nneigh_dist_P_n', 'aboav_weaire_params']
@@ -357,7 +355,7 @@ class mcgs2_grain_structure():
 
     @property
     def get_px_size(self):
-        '''Get size of the pixel.'''
+        """Get size of the pixel."""
         return self.px_size
 
     def set__s_n(self, S_total,):
@@ -392,7 +390,7 @@ class mcgs2_grain_structure():
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
-        '''Set up empty list. This would contain list of s values for every gid.'''
+        """Set up empty list. This would contain list of s values for every gid."""
         self.gid_s = []
 
     def set__spart_flag(self, S_total):
@@ -448,7 +446,7 @@ class mcgs2_grain_structure():
         - props_gids: dict
             Dictionary with property names as keys and lists of grain IDs that meet the threshold criteria.
         
-        Example
+        Examples
         --------
         pnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
         mprops = gsan.gsstack[gsid].get_mprops(pnames, set_missing_mprop=True)
@@ -663,8 +661,8 @@ class mcgs2_grain_structure():
         -------
         None
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',
                      input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
@@ -820,8 +818,8 @@ class mcgs2_grain_structure():
         mprops : dict
             Dictionary with property names as keys and their corresponding values as numpy arrays.
 
-        Example
-        -------
+        Examples
+        --------
         skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
                                        make_skprops=True, extract_coords=True,
                                        throw_bounding_box=True
@@ -900,8 +898,8 @@ class mcgs2_grain_structure():
         tuple or list
             Neighbouring grain IDs.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',
                      input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
@@ -935,8 +933,8 @@ class mcgs2_grain_structure():
         dict
             Dictionary with grain IDs as keys and their neighbouring grain IDs as values.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',
                      input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
@@ -982,8 +980,8 @@ class mcgs2_grain_structure():
         list, np.ndarray, or set
             Neighbors of the specified order.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         # pxtal = mcgs(study='independent', input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
         pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
@@ -1056,8 +1054,8 @@ class mcgs2_grain_structure():
         list
             A list containing the nth order neighbors.
         
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -1152,8 +1150,8 @@ class mcgs2_grain_structure():
         dict
             Dictionary with grain IDs as keys and their neighbors of specified order as values.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -1299,8 +1297,8 @@ class mcgs2_grain_structure():
         dict
             Dictionary with grain IDs as keys and their neighbors of specified order as values.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxt = mcgs()
         pxt.simulate()
@@ -2047,8 +2045,8 @@ class mcgs2_grain_structure():
         """
         Calculate at random, two neighbouring O(1) grains.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
         mcgs.simulate()
@@ -2077,14 +2075,14 @@ class mcgs2_grain_structure():
         return_gids: bool
             Flag to return the random neigh gid numbers. Defaults to True.
 
-        Return
-        ------
+        Returns
+        -------
         rand_neigh_gids: list
             random neigh gid numbers. Will be gids if return_gids is True.
             Else, will be [None, None].
 
-        Example
-        -------
+        Examples
+        --------
         Please refer to use in the example provided for the definition,
         get_two_rand_o1_neighs()
         """
@@ -2129,8 +2127,8 @@ class mcgs2_grain_structure():
             - 'method': The method used for filtering.
             - 'gids': Numpy array of grain IDs that meet the specified criteria.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
         pxt.simulate()
@@ -2319,16 +2317,12 @@ class mcgs2_grain_structure():
         # recursive_search_and_merge
         # post_merge_ops_frequency
         if method == 'merge':
-            '''
-            Perform grain merges based on identified sinks.
-
-            Example
-            -------
-            self.apply_lath(lath=1.0, sink_metric='mean', method='merge',
-                   recalculate_area=True, ineq_spec_ub='<=', recalculate_neigh='all',
-                   update_grain_object=False, validate_ui=True, sink_select_uncertainty=[-5, 5],
-                   post_merge_ops_frequency=1, recursive_search_and_merge=True)
-            '''
+            # Perform grain merges based on identified sinks.
+            # Example:
+            # self.apply_lath(lath=1.0, sink_metric='mean', method='merge',
+            #        recalculate_area=True, ineq_spec_ub='<=', recalculate_neigh='all',
+            #        update_grain_object=False, validate_ui=True, sink_select_uncertainty=[-5, 5],
+            #        post_merge_ops_frequency=1, recursive_search_and_merge=True)
             for other_gid, parent_gid in NG_sinks.items():
                 self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
 
@@ -2370,22 +2364,22 @@ class mcgs2_grain_structure():
         # -----------------------------------------
 
     def _merge_two_grains_(self, parent_gid, other_gid, print_msg=False):
-        """Low level merge operartion. No checks done. Just merging.
+        """Low level merge operation. No checks done. Just merging.
 
         Parameters
         ----------
         parent_gid: int
             Parent grain ID number.
         other_gid: int
-            Otrher grain ID number.
+            Other grain ID number.
         print_msg: bool
-            Defgaults to False.
+            Defaults to False.
 
         Returns
         -------
         None
 
-        Usage
+        Notes
         -----
         Internal use only.
         """
@@ -2398,8 +2392,8 @@ class mcgs2_grain_structure():
         """
         Merge other_gid grain to the parent_gid grain.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         parent_gid:
             Grain ID of the parent.
         other_gid:
@@ -3917,8 +3911,8 @@ class mcgs2_grain_structure():
         lgi_internal: Numpy array of Local Grain Index (LGI) with only internal
             grains.
 
-        Example
-        -------
+        Examples
+        --------
         border_gids, internal_gids, lgi_border, lgi_internal = find_border_internal_grains_fast()
 
         plt.figure()
@@ -3950,23 +3944,23 @@ class mcgs2_grain_structure():
         """
         Quickly find the grain sizes without doing anything else.
 
-        Explanations
-        ------------
+        Notes
+        -----
         Order of grain_sizes is that of pxtal.gs[m].gid
 
         Parameters
         ----------
-        metric: Specify which ares metric is needed. Optoins include:
+        metric: Specify which ares metric is needed. Options include:
             * 'npixels': Number of pixels
             * 'pxarea': Pixel wise calculated area
             * 'eq_dia': Equivalent diameter
 
-        Return
-        ------
+        Returns
+        -------
         grain_sizes: Numpy array of grain areas.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -3997,18 +3991,18 @@ class mcgs2_grain_structure():
 
         Parameters
         ----------
-        metric: Specify which ares metric is needed. Optoins include:
+        metric: Specify which ares metric is needed. Options include:
             * 'npixels': Number of pixels
             * 'pxarea': Pixel wise calculated area
             * 'eq_dia': Equivalent diameter
 
-        Return
-        ------
+        Returns
+        -------
         border_grain_npixels: Numpy array of number of pixels in each border
             grain.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -4038,18 +4032,18 @@ class mcgs2_grain_structure():
 
         Parameters
         ----------
-        metric: Specify which ares metric is needed. Optoins include:
+        metric: Specify which ares metric is needed. Options include:
             * 'npixels': Number of pixels
             * 'pxarea': Pixel wise calculated area
             * 'eq_dia': Equivalent diameter
 
-        Reyturn
+        Returns
         -------
         internal_grain_npixels: Numpy array of number of pixels in each
             internal grain.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -4110,8 +4104,8 @@ class mcgs2_grain_structure():
         ags: float
             Average grain size based on the specified criteria.
 
-        Example
-        -------
+        Examples
+        --------
         from upxo.ggrowth.mcgs import mcgs
         pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
         pxtal.simulate()
@@ -4509,8 +4503,8 @@ class mcgs2_grain_structure():
         """
         Calculates ths statistics of a property in the 'prop' attribute.
 
-        NOTE
-        ----
+        Notes
+        -----
         Input data is not sanitised before calculating the statistics.
         Will results in an error if invalid entries are found.
 
@@ -4548,9 +4542,9 @@ class mcgs2_grain_structure():
         metrics : TYPE
             DESCRIPTION.
 
-        Metrics calculated
-        ---------------------
-        Following stastical metrics will be calculated:
+        Notes
+        -----
+        Following statistical metrics will be calculated:
             count: Data count value
             mean: Mean of the data
             std: Standard deviation of the data
@@ -4567,8 +4561,8 @@ class mcgs2_grain_structure():
             nunique: Number of unique values in the data
             sem: Standard error of the mean of the data
 
-        Example call
-        ------------
+        Examples
+        --------
             PXGS.gs[4].extract_statistics_prop('area')
         """
         # Extract the values of the PROP_NAME
@@ -4629,7 +4623,7 @@ class mcgs2_grain_structure():
 
         """
         if not PROP_df_column:
-            # TYhis means internal data in prop atrtribute is to be cleaned
+            # This means internal data in prop atrtribute is to be cleaned
             if hasattr(self, 'prop'):
                 if PROP_NAME in self.prop.columns:
                     _prop_size_ = self.prop[PROP_NAME].size
@@ -4716,7 +4710,7 @@ class mcgs2_grain_structure():
                            percentage_range=[0, 20],
                            rank_range=[60, 90],
                            pivot=None):
-        '''
+        """
         Get GIDs of grains whose property values fall within a specified
         range.
 
@@ -4755,8 +4749,8 @@ class mcgs2_grain_structure():
         A_B_indices : pd.Index
             Pandas Index of the selected GIDs.
         
-        Explanation of the data and sub-selection procedure
-        --------------------------------------------------------
+        Notes
+        -----
         To understand how the sub-selection is done, consider the following
         illustration of the property distribution:
 
@@ -4765,19 +4759,15 @@ class mcgs2_grain_structure():
             2. Then subselect from A to PROP_max
             3. Then subselect from A to B, which is what we need
 
-        Example-1
-        ---------
+        Examples
+        --------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
                                     range_type='rank', value_range=[80, 100])
-        Example-2
-        ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='area',
                                     range_type='percentage', value_range=[80, 100])
-        Example-3
-        ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
                                     range_type='value', value_range=[2, 2.5])
-        '''
+        """
         gids, A_B_values, A_B_indices = [], [], []
         if PROP_NAME in self.prop.columns:
             PROPERTY = self.prop[PROP_NAME].replace([-np.inf, np.inf],
@@ -5067,11 +5057,10 @@ class mcgs2_grain_structure():
         -------
         None.
 
-        Example-1
-        ---------
+        Examples
+        --------
         After acquiring gids for aspect_ratio between ranks 80 and 100,
         we will visualize those grains.
-        . . . . . . . . . . . . . . . . . . . . . . . . . .
         As we are only interested in gid, we will not use the other
         two values returned by PXGS.gs[n].get_gid_prop_range() method:
 
@@ -5079,7 +5068,6 @@ class mcgs2_grain_structure():
                                                     range_type='rank',
                                                     rank_range=[80, 100]
                                                     )
-        . . . . . . . . . . . . . . . . . . . . . . . . . .
         Now, pass gid as input for the PXGS.gs[n].plot_grains_gids(),
         which will then plot the grain strucure with only these values:
 
@@ -5136,7 +5124,7 @@ class mcgs2_grain_structure():
         PROP_NAME : str, optional
             Name of the grain structure property. The default is 'area'.
         range_type : str, optional
-            Range descript9ion type. The default is 'percentage'.
+            Range description type. The default is 'percentage'.
         value_range : iterable, optional
             Range of the actual PROP_NAME values. The default is [1, 2].
         percentage_range : iterable, optional
@@ -5244,7 +5232,7 @@ class mcgs2_grain_structure():
 
     def plot(self, PROP_NAME=None, title='auto', cmap='CMRmap_r',
              vmin = 1, vmax = 5, ):
-        '''
+        """
         Plot the grain structure based on user input property name
 
         Parameters
@@ -5264,7 +5252,7 @@ class mcgs2_grain_structure():
         Notes
         -----
         1. if no kwargs: plot the entire greain structure: just use plotgs()
-        '''
+        """
         if not PROP_NAME:
             plt.imshow(self.s, cmap=cmap)
         elif PROP_NAME in ('npixels', 'area', 'aspect_ratio',
@@ -5329,8 +5317,10 @@ class mcgs2_grain_structure():
         grain_plot : bool
             matplotlib.plt.imshow object
 
-        Example call
-        ------------
+        Examples
+        --------
+        .. code-block:: python
+
             PXGS.gs[4].plot_grain(3, filename='t4_ng3.png'
 
         # TODO
@@ -5387,8 +5377,8 @@ class mcgs2_grain_structure():
         gids : iterable
             An iterable containing grain index numbers
 
-        Example
-        -------
+        Examples
+        --------
         self.plot_grains([1, 2, 3, 4])
         """
         if not isinstance(gids, Iterable):
@@ -5438,8 +5428,8 @@ class mcgs2_grain_structure():
         -------
         None.
 
-        Example
-        -------
+        Examples
+        --------
         PXGS.gs[tslice].plot_grains_at_position(position='boundary')
         """
         LGI = deepcopy(self.lgi)
@@ -5476,7 +5466,7 @@ class mcgs2_grain_structure():
              auto_xbounds=True, auto_ybounds=True,
              xbounds=[0, 50], ybounds=[0, 0.2], peaks=False, height=0,
              prominance=0.2, __stack_call__=False, __tslice__=None, ):
-        '''
+        """
         Plot histogram of grain property distribution
 
         Parameters
@@ -5523,7 +5513,7 @@ class mcgs2_grain_structure():
         Returns
         -------
         None.
-        '''
+        """
         if self.are_properties_available:
             if PROP_NAME in self.prop.columns:
                 self.prop[PROP_NAME].replace([-np.inf, np.inf],
@@ -5590,7 +5580,7 @@ class mcgs2_grain_structure():
             print(f"PROP_NAME: {PROP_NAME} has not yet been caluclated. Skipped")
 
     def kde(self, PROP_NAMES, bw_adjust, ):
-        '''
+        """
         Plot kernel density estimate (KDE) of grain property distribution
 
         Parameters
@@ -5603,7 +5593,7 @@ class mcgs2_grain_structure():
         Returns
         -------
         None.
-        '''
+        """
         print(PROP_NAMES)
         for PROP_NAME in PROP_NAMES:
             if PROP_NAME in self.prop.columns:
@@ -5643,7 +5633,7 @@ class mcgs2_grain_structure():
                 ncolumns=ncolumns, ylabel=ylabel)
 
     def femesh(self, saa=True, throw=False, ):
-        '''
+        """
         Set up finite element mesh of the poly-xtal
 
         Parameters
@@ -5664,7 +5654,7 @@ class mcgs2_grain_structure():
         Use saa=True to update grain structure mesh atttribute
         Use saa=True and throw=True to update and return mesh
         Use saa=False and throw=True to only return mesh
-        '''
+        """
         # from mcgs import _uidata_mcgs_gridding_definitions_
         # uigrid = _uidata_mcgs_gridding_definitions_(self.uinputs)
         # from mcgs import _uidata_mcgs_mesh_
