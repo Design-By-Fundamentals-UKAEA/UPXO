@@ -446,7 +446,32 @@ class mcgs3_grain_structure():
                  uigrid=None, uimesh=None, ndimg_label_pck=None,
                  iroute='regular',
                  udata=None, udata_name='s'):
-        """Initialise the instance."""
+        """
+        Initialise a 3D grain-structure temporal slice.
+
+        Parameters
+        ----------
+        dim : int, optional
+            Spatial dimensionality.
+        m : int, optional
+            Monte-Carlo step or temporal slice index.
+        uidata : object, optional
+            User input data bundle.
+        vox_size : float or tuple, optional
+            Voxel size.
+        S_total : int, optional
+            Total number of state values.
+        uigrid, uimesh : object, optional
+            Grid and mesh metadata.
+        ndimg_label_pck : callable, optional
+            Labeling function used to detect grains.
+        iroute : str, optional
+            Construction route to use.
+        udata : numpy.ndarray, optional
+            Input state or label array.
+        udata_name : str, optional
+            Name of the supplied input data.
+        """
         # Dictionary to contain controls.
         self.ctrls = {}
         self.ctrls['iroute'] = iroute
@@ -570,16 +595,16 @@ class mcgs3_grain_structure():
         self.tc_info = {}
 
     def __iter__(self):
-        """Return an iterator over this instance."""
+        """Return an iterator over the grains in this structure."""
         self.__gi__ = 1
         return self
 
     def __repr__(self):
-        """Return a string representation of this instance."""
+        """Return a short string representation of the structure."""
         return f'UPXO. gs-tslice.3d. {id(self)}'
 
     def __next1__(self):
-        """__next1__ special method."""
+        """Return the next grain-pixel coordinate set for iteration helpers."""
         if self.n:
             if self.__gi__ <= self.n:
                 grain_pixel_indices = np.argwhere(self.lgi == self.__gi__)
@@ -589,7 +614,7 @@ class mcgs3_grain_structure():
                 raise StopIteration
 
     def __next__(self):
-        """Return the next item from this iterator."""
+        """Return the next grain object from this iterator."""
         if self.n:
             if self.__gi__ <= self.n:
                 thisgrain = self.g[self.__gi__]['grain']
@@ -599,19 +624,19 @@ class mcgs3_grain_structure():
                 raise StopIteration
 
     def __att__(self):
-        """Return a string listing of all attributes."""
+        """Return a formatted listing of all attributes."""
         return att(self)
 
     @property
     def get_vox_size(self):
-        """Return the size of voxel."""
+        """Return the voxel size used by the current grid."""
         return self.vox_size
 
     @classmethod
     def by_parameters(cls, xmin=0.0, xinc=1.0, xmax=100.0,
                       ymin=0.0, yinc=1.0, ymax=100.0, zmin=0.0, zinc=1.0,
                       zmax=100.0, S_total=-1, MCsteps=10, alg='300b'):
-        """By parameters."""
+        """Create a structure from grid parameters."""
         raise NotImplementedError("by_parameters is not yet implemented.")
 
     @classmethod
@@ -621,207 +646,100 @@ class mcgs3_grain_structure():
                 zmax=100.0, S_total=-1, nvoxels_max=1.01E9,
                 reindex_labels=True):
         r"""
-        Instantiate temporal slice using just 3D Monte-Carlo state value array.
-
-        This allows you to exploit the entire module for the input s-array. You
-        can start off another branch of simulations from this, enabling the
-        following things:
-            1. Switching across algorithms.
-            2. Differently evolve a local subdomain and plug it back into the
-               parent domain.
+        Instantiate a temporal slice from a 3D state or label array.
 
         Parameters
         ----------
-        sf_data: numpy.ndarray
-            3D grain structure image data.
+        sf_data : numpy.ndarray
+            3D grain-structure or state data.
 
-        dim: int, optional
-            Dimensionality of the problem. Defaults to 3.
+        sf_name : str, optional
+            Name of the supplied data field.
 
-        m: int, optional
-            A user desired value of temporal slice number. This is to ensure
-            we have a starting point for a new Monte-Carlo simulation to
-            start off from this grain structure (as specified by data) as the
-            starting point. Defaults to 0.
+        dim : int, optional
+            Dimensionality of the problem.
 
-        xmin: float, optional
-            Starting point of x-axis. Defaults to 0.0
+        m : int, optional
+            Temporal-slice index.
 
-        xinc: float, optional
-            Increment step of x-axis. Defaults to 1.0
+        xmin, xinc, xmax, ymin, yinc, ymax, zmin, zinc, zmax : float, optional
+            Domain bounds and increments.
 
-        xmax: float, optional
-            Ending point of x-axis. Defaults to 100.0
+        S_total : int, optional
+            Total number of discrete state values.
 
-        ymin: float, optional
-            Starting point of y-axis. Defaults to 0.0
+        nvoxels_max : int, optional
+            Maximum number of voxels allowed.
 
-        yinc: float, optional
-            Increment step of y-axis. Defaults to 1.0
+        reindex_labels : bool, optional
+            Reindex labels when ``sf_name`` is ``'base'`` or ``'lgi'``.
 
-        ymax: float, optional
-            Ending point of y-axis. Defaults to 100.0
+        Examples
+        --------
+        .. code-block:: python
 
-        zmin: float, optional
-            Starting point of z-axis. Defaults to 0.0
+            from upxo.ggrowth.mcgs import mcgs
 
-        zinc: float, optional
-            Increment step of z-axis. Defaults to 1.0
+            pxt = mcgs(input_dashboard='input_dashboard.xls')
+            pxt.simulate(verbose=False)
+            tslice = 10
+            gstslice = pxt.gs[tslice]
+            gstslice.char_morphology_of_grains(label_str_order=1,
+                                               find_grain_voxel_locs=True,
+                                               find_spatial_bounds_of_grains=True,
+                                               force_compute=True)
 
-        zmax: float, optional
-            Ending point of z-axis. Defaults to 100.0
+            gstslice.set_mprops(volnv=True, eqdia=False,
+                                eqdia_base_size_spec='volnv',
+                                arbbox=False, arbbox_fmt='gid_dict',
+                                arellfit=False, arellfit_metric='max',
+                                arellfit_calculate_efits=False,
+                                arellfit_efit_routine=1,
+                                arellfit_efit_regularize_data=False,
+                                solidity=False, sol_nan_treatment='replace',
+                                sol_inf_treatment='replace',
+                                sol_nan_replacement=-1, sol_inf_replacement=-1)
 
-        S_total: int, optional
-            Total number of discrete MC state values. Defaults to -1.
+            p, q, r = 5, 5, 10
+            A = gstslice.extract_subdomains_random(p=p, q=q, r=r, n=2,
+                                                   feature_name='s',
+                                                   make_pvgrids=False)
 
-        nvoxels_max: int, optional
-            Maximum number of voxels. Defaults to 1.01E9
+            from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
+            sf_data = A['sd'][0]
+            sd = mcgs3_grain_structure.by_data(sf_data, sf_name='s',
+                                               dim=3, m=tslice,
+                                               xmin=0.0, xinc=1.0, xmax=r,
+                                               ymin=0.0, yinc=1.0, ymax=q,
+                                               zmin=0.0, zinc=1.0, zmax=p,
+                                               S_total=gstslice.S,
+                                               nvoxels_max=1.01E9)
 
-        pxt = mcgs(input_dashboard='input_dashboard.xls')
-        pxt.simulate(verbose=False)
-        tslice = 10
-        gstslice = pxt.gs[tslice]
-        gstslice.char_morphology_of_grains(label_str_order=1,
-                           find_grain_voxel_locs=True,
-                           find_spatial_bounds_of_grains=True,
-                           force_compute=True)
+            sdraw = gstslice.extract_subdomains_random(p=p, q=q, r=r, n=5,
+                                                       feature_name='base',
+                                                       make_pvgrids=False)
 
-        gstslice.set_mprops(volnv=True, eqdia=False,
-                    eqdia_base_size_spec='volnv',
-                    arbbox=False, arbbox_fmt='gid_dict',
-                    arellfit=False, arellfit_metric='max',
-                    arellfit_calculate_efits=False,
-                    arellfit_efit_routine=1,
-                    arellfit_efit_regularize_data=False,
-                    solidity=False, sol_nan_treatment='replace',
-                    sol_inf_treatment='replace',
-                    sol_nan_replacement=-1, sol_inf_replacement=-1)
+            for udata in sdraw['sd']:
+                sd = mcgs3_grain_structure.by_data(udata, sf_name='lgi',
+                                                   dim=3, m=tslice,
+                                                   xmin=0.0, xinc=1.0, xmax=r,
+                                                   ymin=0.0, yinc=1.0, ymax=q,
+                                                   zmin=0.0, zinc=1.0, zmax=p,
+                                                   S_total=gstslice.S,
+                                                   nvoxels_max=1.01E9)
 
-        # ------------------------------------------------------
-        # Example - 1. Using MC state values as udata
-
-        p, q, r = 5, 5, 10
-
-        A = gstslice.extract_subdomains_random(p=p, q=q, r=r, n=2,
-                               feature_name='s',
-                               make_pvgrids=False
-                               )
-
-        from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
-
-        sf_data = A['sd'][0]
-        sd = mcgs3_grain_structure.by_data(sf_data, sf_name='s',
-                           dim=3, m=tslice,
-                           xmin=0.0, xinc=1.0, xmax=r,
-                           ymin=0.0, yinc=1.0, ymax=q,
-                           zmin=0.0, zinc=1.0, zmax=p,
-                           S_total=gstslice.S,
-                           nvoxels_max=1.01E9,)
-        sd.char_morphology_of_grains(label_str_order=1,
-                        find_grain_voxel_locs=True,
-                        find_spatial_bounds_of_grains=True,
-                        find_grain_locations=True,
-                        find_neigh=[True, [1]],
-                        force_compute=True)
-
-        sd.lgi
-
-        # ------------------------------------------------------
-        # Example - 2. Using fid as udata
-
-        p, q, r = 5, 5, 10
-
-        sdraw = gstslice.extract_subdomains_random(p=p, q=q, r=r, n=5,
-                               feature_name='base',
-                               make_pvgrids=False)
-
-        subdomains = []
-        for udata in sdraw['sd']:
-            sd = mcgs3_grain_structure.by_data(sf_data, sf_name='lgi',
-                               dim=3, m=tslice,
-                               xmin=0.0, xinc=1.0, xmax=r,
-                               ymin=0.0, yinc=1.0, ymax=q,
-                               zmin=0.0, zinc=1.0, zmax=p,
-                               S_total=gstslice.S,
-                               nvoxels_max=1.01E9,)
-            subdomains.append(sd)
-        # ------------------------------------------------------
-        # Example - 3. Including twins
-
-        p, q, r, n = 40, 40, 40, 1
-
-        A = gstslice.extract_subdomains_random(p=p, q=q, r=r, n=n,
-                               feature_name='s',
-                               make_pvgrids=False
-                               )
-
-        from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
-
-        udata = A['sd'][0]
-        sd = mcgs3_grain_structure.by_data(sf_data, sf_name='s',
-                           dim=3, m=tslice,
-                           xmin=0.0, xinc=1.0, xmax=r,
-                           ymin=0.0, yinc=1.0, ymax=q,
-                           zmin=0.0, zinc=1.0, zmax=p,
-                           S_total=gstslice.S,
-                           nvoxels_max=1.01E9,)
-        sd.char_morphology_of_grains(label_str_order=1,
-                        find_grain_voxel_locs=True,
-                        find_spatial_bounds_of_grains=True,
-                        find_grain_locations=True,
-                        find_neigh=[True, [1]],
-                        force_compute=True)
-
-        sd.set_mprops(volnv=True, eqdia=False,
-                            eqdia_base_size_spec='volnv',
-                            arbbox=False, arbbox_fmt='gid_dict',
-                            arellfit=False, arellfit_metric='max',
-                            arellfit_calculate_efits=False,
-                            arellfit_efit_routine=1,
-                            arellfit_efit_regularize_data=False,
-                            solidity=False, sol_nan_treatment='replace',
-                            sol_inf_treatment='replace',
-                            sol_nan_replacement=-1, sol_inf_replacement=-1)
-
-        mprops = {'volnv': {'use': True, 'reset': False,
-                            'k': [.02, 1.0], 'min_vol': 4,},
-                  'rat_sanv_volnv': {'use': True, 'reset': False,
-                                     'k': [0.0, .8], 'sanv_N': 26},}
-        twspec = {'n': [5, 10, 3],
-                'tv': np.array([5, -3.5, 5]),
-                'dlk': np.array([1.0, -1.0, 1.0]),
-                'dnw': np.array([0.5, 0.5, 0.5]),
-                'dno': np.array([0.5, 0.5, 0.5]),
-                'tdis': 'normal',
-                'tpar': {'loc': 1.12, 'scale': 0.1, 'val': 1},
-                'vf': [0.05, 1.00], 'sep_bzcz': False}
-        twgenspec = {'seedsel': 'random_gb', 'K': 20,
-                   'bidir_tp': False, 'checks': [True, True],}
-
-        sd.instantiate_twins(ninstances=4,
-                                   base_gs_name_prefix='twin.',
-                                   twin_setup={'nprops': 2, 'mprops': mprops},
-                                   twspec=twspec,
-                                   twgenspec=twgenspec,
-                                   reset_fdb=True, )
-
-        sd.mask_fid_and_plot(feature='twins',
-                                   instance_names=sd.fdb.keys(),
-                                   fid_mask_value=-32,
-                                   non_fid_mask=True,
-                                   non_fid_mask_value=-31,
-                                   write_to_disk=False,
-                                   write_sparse=True,
-                                   throw=True,
-                                   cmap_specs=(['white', 'yellow', 'grey', 'red'], 2),
-                                   show_edges=False,
-                                   opacity=1.0, rmax_sp=2, cmax_sp=2,
-                                   thresholding=False,
-                                   threshold_value=-32)
+            A = gstslice.extract_subdomains_random(p=40, q=40, r=40, n=1,
+                                                   feature_name='s',
+                                                   make_pvgrids=False)
+            udata = A['sd'][0]
+            sd = mcgs3_grain_structure.by_data(udata, sf_name='s',
+                                               dim=3, m=tslice,
+                                               xmin=0.0, xinc=1.0, xmax=40,
+                                               ymin=0.0, yinc=1.0, ymax=40,
+                                               zmin=0.0, zinc=1.0, zmax=40,
+                                               S_total=gstslice.S,
+                                               nvoxels_max=1.01E9)
         """
         uigrid = make_belief.uigrid(dim=dim,
                                     npixels_max=nvoxels_max,
@@ -875,62 +793,37 @@ class mcgs3_grain_structure():
 
     @property
     def lfi(self):
-        """Lfi."""
+        """Return the local feature image / labelled grain image."""
         return self.lgi
 
     def set__s_n(self,
                  S_total,
                  ):
-        """
-        nth value represents the number of grains in the nth state
-
-        Parameters
-        ----------
-        S_total : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-        """
-
+        """Initialise the per-state grain-count list."""
         self.s_n = [0 for s in range(1, S_total+1)]
 
     def set__s_gid(self, S_total,):
-        """
-        Sets the `s_gid` attribute with a dictionary where keys are integers from 1 to `S_total` and values are None.
-
-        Parameters:
-        -----------
-        S_total : int
-            The total number of elements to include in the `s_gid` dictionary. Must be an integer.
-
-        Raises:
-        -------
-        ValueError
-            If `S_total` is not an integer.
-        """
-
+        """Initialise the state-to-grain-ID mapping dictionary."""
         if not isinstance(S_total, int):
             raise ValueError("S_total must be an integer.")
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
-        """Set or update  gid s."""
+        """Reset the grain-to-state mapping list."""
         self.gid_s = []
 
     def set__spart_flag(self, S_total,):
-        """Set or update  spart flag."""
+        """Initialise per-state partitioning flags to ``False``."""
         if not isinstance(S_total, int):
             raise ValueError("S_total must be an integer.")
         self.spart_flag = {_s_: False for _s_ in range(1, S_total+1)}
 
     def get_binaryStructure3D(self):
-        """Return the 3D binary structure."""
+        """Return the 3D binary structure used for labelling."""
         return self.binaryStructure3D
 
     def set_binaryStructure3D(self, n=3):
-        """Set value of the binary structure type for grain identification."""
+        """Set the binary structure used for grain identification."""
         if n in (1, 2, 3):
             self.binaryStructure3D = generate_binary_structure(3, n)
         else:
@@ -1205,7 +1098,7 @@ class mcgs3_grain_structure():
             self.set_mprops(**mprops_kwargs)
 
     def set_skimrp(self):
-        """Set the region properties of the scikit image."""
+        """Build and store scikit-image region properties for each grain."""
         from skimage.measure import regionprops
         self.skimrp = {}
         for gid in self.gid:
@@ -1329,7 +1222,7 @@ class mcgs3_grain_structure():
                                           verbosity=sanv_verbosity)
 
     def plot_mprop_correlations(self):
-        """Visualise mprop correlations using Matplotlib or PyVista."""
+        """Plot morphology-property correlations for the current slice."""
         # VALIDATIONS
         # -----------------------------
         g = sns.jointplot(x=tgt_npixels, y=tgt_nneigh_field, kind='hex', gridsize=25, cmap='viridis',
@@ -1353,21 +1246,18 @@ class mcgs3_grain_structure():
 
     def find_grains(self, label_str_order=1, pck=None):
         """
-        Detect grains in lgi.
+        Detect grains in ``self.s`` and populate ``self.lgi``.
 
         Parameters
         ----------
-        label_str_order : inr, optional
-            Provide the voxel connectivity order used for grain identification.
-            Defaults to a value of 1.
+        label_str_order : int, optional
+            Voxel connectivity order used for grain identification.
+        pck : callable, optional
+            Connected-component labelling function.
 
         Returns
         -------
-        None.
-
-        Explanations
-        ------------
-        Using the library 'scikit-image'.
+        None
         """
         # VALIDATIONS
         # -----------------------------
@@ -1408,28 +1298,28 @@ class mcgs3_grain_structure():
         print(f'No. of grains detected = {self.n}')
 
     def find_grains_lgi(self):
-        """Find grains lgi."""
+        """Find grains from the current labelled grain image."""
         # Call find_grains_img
         raise NotImplementedError("find_grains_lgi is not yet implemented.")
 
     def find_grains_img(self, img=None):
-        """Find grains img."""
+        """Find grains from an input image and populate the slice state."""
         raise NotImplementedError("find_grains_img is not yet implemented.")
 
     def _check_lgi_dtype_uint8(self,
                                lgi,
                                ):
         """
-        Validates and modifies (if needed) lgi user input data-type
+        Validate and coerce an ``lgi`` array to ``uint8`` when possible.
 
         Parameters
         ----------
         lgi : TYPE
-            DESCRIPTION.
+            Labelled grain image candidate.
 
         Returns
         -------
-        None.
+        None
 
         """
 
@@ -1442,22 +1332,22 @@ class mcgs3_grain_structure():
             self.lgi = None
 
     def set_gid(self):
-        """Set or update gid."""
+        """Set grain IDs from the current labelled image."""
         self.gid = list(range(1, np.unique(self.lgi).size+1))
 
     def calc_num_grains(self, throw=False):
         """
-        Calculate the total number of grains in this grain structure
+        Calculate the total number of grains in this grain structure.
 
         Parameters
         ----------
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
+        throw : bool, optional
+            Return the computed grain count when True.
 
         Returns
         -------
-        TYPE
-            DESCRIPTION.
+        int or None
+            Grain count when ``throw`` is True, otherwise ``None``.
 
         """
 
@@ -1470,7 +1360,12 @@ class mcgs3_grain_structure():
     @njit
     def find_neigh_gid_numba(lgi):
         """
-        Optimized function to compute neighboring grain IDs using numba.
+        Compute neighbouring grain IDs using a numba-friendly implementation.
+
+        Returns
+        -------
+        numba.typed.Dict
+            Grain ID to neighbouring grain ID arrays.
         """
         dxdydz = np.array([
             (-1, -1, -1), (-1, -1, 0), (-1, -1, 1), (-1,  0, -1),
@@ -1535,24 +1430,24 @@ class mcgs3_grain_structure():
 
         return neigh_gid
 
-    def find_neigh_gid_v1(self, verbose=False, verbosity=4):
+    def find_neigh_gid_v1(self):
         """
-        gstslice.find_neigh_gid_v1()
+        Populate ``self.neigh_gid`` using the numba-based neighbour lookup.
         """
         print("Calculating neigh_gid database.")
         self.neigh_gid = self.find_neigh_gid_numba(self.lgi)
 
-    def find_neigh_gid_V1(self, verbose=False, verbosity=4):
+    def find_neigh_gid_V1(self):
         """
-        gstslice.find_neigh_gid()
+        Populate ``self.neigh_gid`` using the numba-based neighbour lookup.
         """
         print("Calculating neigh_gid database.")
         _neigh_gid_ = self.find_neigh_gid_numba(self.lgi)
         self.neigh_gid = {key: value for key, value in _neigh_gid_.items()}
 
-    def find_neigh_gid(self, verbose=False, verbosity=4):
+    def find_neigh_gid(self):
         """
-        Set neighbouring gids of all grains (optimized).
+        Set neighbouring grain IDs for all grains.
         """
         print('Calculating 1st order neighbours.')
 
@@ -1569,12 +1464,12 @@ class mcgs3_grain_structure():
         ])
 
         nvox = unique_grains.size
-        verbosity = np.round(nvox/verbosity)
+        progress_interval = max(nvox // 4, 1)
         i = 1
         for grain_id in unique_grains:
             neighbours = np.unique(self.find_neigh_gid_core_numba(lgi, grain_id, dxdydz))
             neigh_gid[grain_id] = list(np.unique(neighbours))
-            if i%verbosity == 0:
+            if i % progress_interval == 0:
                 print(f'    {np.round(i*100/nvox)}% complete.')
             i += 1
 
@@ -1583,7 +1478,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def find_neigh_gid_core_numba(lgi, gid, dxdydz):
-        """Find neigh gid core numba."""
+        """Return neighbouring grain IDs for one grain ID."""
         shape_x, shape_y, shape_z = lgi.shape
         max_neighbors = 26  # Maximum possible neighbors in a 3D grid
 
@@ -1618,7 +1513,7 @@ class mcgs3_grain_structure():
     def find_neigh_fdb(self, feature_name='base', instance_name='lgi',
                        disp_msg=False, verbosity=500, save_to_neigh_gid=False):
         """
-        Set neighbouring fids of all features.
+        Set neighbouring feature IDs for all features.
         """
         print(f'Calculating 1st order neighbours: {feature_name}: {instance_name}')
 
@@ -1660,9 +1555,9 @@ class mcgs3_grain_structure():
             self.fdb[instance_name]['data']['neigh_fid'] = neigh_fid
         
 
-    def find_neigh_gid_01(self, verbose=False, verbosity=4):
+    def find_neigh_gid_01(self):
         """
-        Set neighbouring gids of all grains (optimized).
+        Set neighbouring grain IDs for all grains.
         """
         print('Calculating 1st order neighbours.')
 
@@ -1679,13 +1574,13 @@ class mcgs3_grain_structure():
         ])
 
         nvox = unique_grains.size
-        verbosity = np.round(nvox/verbosity)
+        progress_interval = max(nvox // 4, 1)
         i = 1
         for grain_id in unique_grains:
             # neighbors = set()
             neighbors = []
             grain_mask = (lgi == grain_id)
-            if i%verbosity == 0:
+            if i % progress_interval == 0:
                 print(f'    {np.round(i*100/nvox)}% complete.')
             for dx, dy, dz in dxdydz:
                 shifted_lgi = np.roll(lgi, shift=(dx, dy, dz), axis=(0, 1, 2))
@@ -1698,7 +1593,7 @@ class mcgs3_grain_structure():
 
     def check_for_neigh(self, parent_gid, other_gid):
         """
-        Check if other_gid is indeed a O(1) neighbour of parent_gid.
+        Check whether ``other_gid`` is a first-order neighbour of ``parent_gid``.
 
         Parameters
         ----------
@@ -1710,7 +1605,8 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        True if other_gid is a valid O(1) neighbour of parent_gid, else False.
+        bool
+            True when ``other_gid`` is a valid first-order neighbour.
         """
         return True if other_gid in self.neigh_gid[parent_gid] else False
 
@@ -1718,7 +1614,7 @@ class mcgs3_grain_structure():
                                      recalculate=False, include_parent=True,
                                      output_type='list'):
         """
-        Calculates 0th till nth order neighbors for a given gid.
+        Calculate neighbours up to the requested order for one grain ID.
 
         Parameters
         ----------
@@ -1737,13 +1633,10 @@ class mcgs3_grain_structure():
                 * nparray
                 * set
 
-        saa
-        ---
-        None
-
         Returns
         -------
-        A set containing the nth order neighbors.
+        list or numpy.ndarray or set
+            Neighbours up to the requested order.
 
         Example
         -------
@@ -1789,7 +1682,7 @@ class mcgs3_grain_structure():
     def get_nth_order_neighbors(self, grain_id, neigh_order, recalculate=False,
                                 include_parent=True):
         """
-        Calculate only the nth order neighbors for a given gid.
+        Calculate only the nth-order neighbours for one grain ID.
 
         Parameters
         ----------
@@ -1808,13 +1701,10 @@ class mcgs3_grain_structure():
                 * nparray
                 * set
 
-        saa
-        ---
-        None
-
         Returns
         -------
-        A set containing the nth order neighbors.
+        list
+            Neighbours exactly at the requested order.
 
         Example
         -------
@@ -1855,7 +1745,7 @@ class mcgs3_grain_structure():
                                                 include_parent=True,
                                                 output_type='list'):
         """
-        Calculate 0th till nth order neighbors of all gids in grain structure.
+        Calculate neighbours up to the requested order for every grain.
 
         Parameters
         ----------
@@ -1873,7 +1763,8 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        A set containing the nth order neighbors.
+        dict
+            Grain IDs mapped to their neighbours up to the requested order.
 
         Example
         -------
@@ -1899,7 +1790,7 @@ class mcgs3_grain_structure():
                                            recalculate=False,
                                            include_parent=True):
         """
-        Calculate only the nth order neighbors of all gids in grain structure.
+        Calculate only the nth-order neighbours for every grain.
 
         Parameters
         ----------
@@ -1914,14 +1805,10 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        neighs_nth_order
-
-        saa
-        ---
-        None
-
-        Exaplanations
-        -------------
+        Returns
+        -------
+        dict
+            Grain IDs mapped to their nth-order neighbours.
 
         Example
         -------
@@ -1951,7 +1838,7 @@ class mcgs3_grain_structure():
                                                      include_parent=False,
                                                      print_msg=False):
         """
-        Calculate 0th till nth order neigh of all gids with a probability.
+        Calculate neighbours for all grains with probabilistic order handling.
 
         Parameters
         ----------
@@ -1969,14 +1856,10 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        neighs_nth_order
-
-        saa
-        ---
-        None
-
-        Exaplanations
-        -------------
+        Returns
+        -------
+        dict
+            Grain IDs mapped to their selected neighbours.
 
         Pre-example calculations
         ------------------------
@@ -2042,7 +1925,7 @@ class mcgs3_grain_structure():
             raise ValueError('Invalid neigh_order')
 
     def __setup__positions__(self):
-        """Setup template dict with default spatial location keys for gids."""
+        """Set up the default spatial-position dictionary."""
         self.positions = {'front_top_left': [], 'front_bottom_left': [],
                           'front_bottom_right': [], 'front_top_right': [],
                           'front_pure_right': [], 'front_pure_bottom': [],
@@ -2062,7 +1945,7 @@ class mcgs3_grain_structure():
                           }
 
     def make_pvgrid(self):
-        """Make pyvista grid of the lgi."""
+        """Build the PyVista grid for the current labelled image."""
         print(40*'-', '\nSetting PyVista grid.')
         self.pvgrid = pv.ImageData()
         self.pvgrid.dimensions = np.array(self.lgi.shape) + 1
@@ -2071,7 +1954,7 @@ class mcgs3_grain_structure():
 
     def add_scalar_field_to_pvgrid(self, sf_name="lgi", sf_value=None):
         """
-        Add scalar variable to Py-Vista grid.
+        Add a scalar field to the PyVista grid.
 
         Parameters
         ----------
@@ -2081,12 +1964,9 @@ class mcgs3_grain_structure():
         sf_value : None, optional
             Default vlaue is None.
 
-        saa
-        ---
-        cell data in self.pvgrid
-
-        Explanations
-        ------------
+        Returns
+        -------
+        None
         """
         # Validations
         # ------------------------------
@@ -2105,20 +1985,16 @@ class mcgs3_grain_structure():
 
     def make_zero_non_gids_in_lgi(self, gids):
         """
-        Return a gids masked copy of lgi.
+        Return a copy of ``lgi`` masked to the supplied grain IDs.
 
         Paramaters
         ----------
         gids : list
 
-        saa
-        ---
-        None
-
         Returns
         -------
         masked_lgi : np.ndarray
-            Gids masked copy of lgi
+            Masked copy of ``lgi``.
         """
         _lgi_ = deepcopy(self.lgi)
         for gid in gids:
@@ -2129,20 +2005,16 @@ class mcgs3_grain_structure():
 
     def make_zero_non_gids_in_lgisubset(self, lgi_subset, gids):
         """
-        Return a gids masked copy of lgi_subset.
+        Return a copy of ``lgi_subset`` masked to the supplied grain IDs.
 
         Paramaters
         ----------
         gids : list
 
-        saa
-        ---
-        None
-
         Returns
         -------
         masked_lgi : np.ndarray
-            Gids masked copy of lgi_subset.
+            Masked copy of ``lgi_subset``.
         """
         _lgi_subset_ = deepcopy(lgi_subset)
         for gid in gids:
@@ -2157,7 +2029,7 @@ class mcgs3_grain_structure():
                       _yname_='Y: lgi[:,n,:]',
                       _zname_='X: lgi[n,:,:]', show_edges=False):
         """
-        Plot the grain structure as pyvista voxels.
+        Plot the grain structure as PyVista voxels.
 
         Parameters
         ----------
@@ -2168,8 +2040,8 @@ class mcgs3_grain_structure():
         _yname_ : str, optional
         _zname_ : str, optional
 
-        NOTE
-        ----
+        Notes
+        -----
         If cs_labels is not 'user':
             X on triad will be lgi[n, :, :] -- which is z of numpy array
             Y on triad will be lgi[n, :, :] -- which is z of numpy array
@@ -2199,7 +2071,7 @@ class mcgs3_grain_structure():
                              plot_points=False, points=None,
                              isolate_gid=False, gid_to_isolate=None):
         """
-        Plot subset of voxellated grain strucure in pyvista.
+        Plot a subset of the voxelated grain structure in PyVista.
 
         Parameters
         ----------
@@ -2245,7 +2117,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def _count_labels(lgi_flat, gid_to_idx):
-        """ count labels."""
+        """Count voxels per label index."""
         counts = np.zeros(gid_to_idx.max()+1, dtype=np.int64)
         for t in range(lgi_flat.size):
             g = lgi_flat[t]
@@ -2257,7 +2129,7 @@ class mcgs3_grain_structure():
     @staticmethod
     @njit
     def _fill_coords(lgi, gid_to_idx, counts):
-        """ fill coords."""
+        """Fill coordinate arrays for each label index."""
         nx, ny, nz = lgi.shape
         out_i = [np.empty(c, dtype=np.uint16) for c in counts]
         out_j = [np.empty(c, dtype=np.uint16) for c in counts]
@@ -2280,8 +2152,7 @@ class mcgs3_grain_structure():
     def find_grain_voxel_locs_v1(self, gids=None, disp_msg=False, verbosity=100,
                                  saa=True, throw=False, dtype=np.int32, use_uint16=True):
         """
-        Find voxel locations of grains in self.lgi (label grid).
-        Stores a dict: grain_id -> (N,3) array of voxel indices.
+        Find voxel locations of grains in ``self.lgi`` and store them.
         """
         print("\nFinding voxel locations of grains in lgi")
         if not gids:
@@ -2316,35 +2187,34 @@ class mcgs3_grain_structure():
                                 fids=None, disp_msg=False, verbosity=100,
                                 saa=True, throw=False, use_uint16=True):
         """
-        Find voxel locations of features in self.lgi (label grid).
-        Stores a dict: grain_id -> (N,3) array of voxel indices.
+        Find voxel locations of features in a labelled 3D array.
 
-        Example-1
-        ---------
-        gstslice.find_feat_voxel_locs_v1(feature_name='base',
-                                         instance_name='lgi',
-                                         fids=None,
-                                         disp_msg=False,
-                                         verbosity=100,
-                                         saa=True, throw=False)
-        Example-2
-        ---------
-        feat_locs = gstslice.find_feat_voxel_locs_v1(feature_name='twin',
-                                                     instance_name='twin.0',
-                                                     fids=None,
-                                                     disp_msg=False,
-                                                     verbosity=100,
-                                                     throw=True)
-        Example-3
-        ---------
-        feature_name, instance_name = 'twin', 'twin.0'
-        feat_ids = gstslice.fdb[instance_name]['data']['twin_id'][:2]
-        feat_locs = gstslice.find_feat_voxel_locs_v1(feature_name=feature_name,
-                                                     instance_name=instance_name,
-                                                     fids=feat_ids,
-                                                     disp_msg=False,
-                                                     verbosity=100,
-                                                     throw=True)
+        Examples
+        --------
+        .. code-block:: python
+
+            gstslice.find_feat_voxel_locs_v1(feature_name='base',
+                                             instance_name='lgi',
+                                             fids=None,
+                                             disp_msg=False,
+                                             verbosity=100,
+                                             saa=True, throw=False)
+
+            feat_locs = gstslice.find_feat_voxel_locs_v1(feature_name='twin',
+                                                         instance_name='twin.0',
+                                                         fids=None,
+                                                         disp_msg=False,
+                                                         verbosity=100,
+                                                         throw=True)
+
+            feature_name, instance_name = 'twin', 'twin.0'
+            feat_ids = gstslice.fdb[instance_name]['data']['twin_id'][:2]
+            feat_locs = gstslice.find_feat_voxel_locs_v1(feature_name=feature_name,
+                                                         instance_name=instance_name,
+                                                         fids=feat_ids,
+                                                         disp_msg=False,
+                                                         verbosity=100,
+                                                         throw=True)
         """
         print("\nFinding voxel locations of features.")
         # Validations
@@ -2469,8 +2339,16 @@ class mcgs3_grain_structure():
         """
         Find the spatial bounds of each grain in the grain structure.
 
-        saa
-        ---
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
         self.spbound : dict
             Keys and values are explained below:
                 * xmins : np.ndarray
@@ -2512,11 +2390,9 @@ class mcgs3_grain_structure():
                     Numpy array of maximum loose bound value of every grain
                     along z.
 
-        Explanations
-        ------------
-        self.spbound provide tight bounds for everyt grain.
+        self.spbound provides tight bounds for every grain.
 
-        self.spboundex provide loose bounds for every grain, where the bounds
+        self.spboundex provides loose bounds for every grain, where the bounds
         are extended in each direction by a unit voxel. In case of border
         grains, self.spboundex values along the corresponding directions will
         not be extended.
@@ -2766,24 +2642,35 @@ class mcgs3_grain_structure():
 
     def get_neigh_gid_subfield(self, neigh_gid, subfield='nneigh'):
         """
-        Example
+        Extract a neighbour-derived subfield from a neighbour-ID mapping.
+
+        Parameters
+        ----------
+        neigh_gid : dict
+            Grain ID to neighbour-ID mapping.
+        subfield : str, optional
+            Subfield to derive. Supported values include ``'nneigh'`` and
+            ``'vf'``.
+
+        Returns
         -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 49
-        gstslice = pxt.gs[tslice]
-        def_neigh = gstslice.get_upto_nth_order_neighbors_all_grains_prob
-        neigh_gid = def_neigh(1.0, recalculate=False, include_parent=True)
+        dict
+            Requested neighbour-derived values keyed by grain ID.
 
-        nneigh = gstslice.get_neigh_gid_subfield(neigh_gid, subfield='nneigh')
-        nneigh_vf = gstslice.get_neigh_gid_subfield(neigh_gid, subfield='vf')
+        Examples
+        --------
+        .. code-block:: python
 
-        sf_no = gstslice.map_scalar_to_lgi(nneigh_vf,
-                                           default_scalar=-1,
-                                           make_pvgrid=True)
-        sf_no['pvgrid'].plot()
+            def_neigh = gstslice.get_upto_nth_order_neighbors_all_grains_prob
+            neigh_gid = def_neigh(1.0, recalculate=False, include_parent=True)
+
+            nneigh = gstslice.get_neigh_gid_subfield(neigh_gid, subfield='nneigh')
+            nneigh_vf = gstslice.get_neigh_gid_subfield(neigh_gid, subfield='vf')
+
+            sf_no = gstslice.map_scalar_to_lgi(nneigh_vf,
+                                               default_scalar=-1,
+                                               make_pvgrid=True)
+            sf_no['pvgrid'].plot()
         """
         if subfield == 'nneigh':
             ngidsbfld = {gid: len(neighs)
@@ -2806,7 +2693,7 @@ class mcgs3_grain_structure():
         return ngidsbfld
 
     def remove_gid_from_neigh_gid(self, neigh_gid):
-        """Remove gid from neigh gid."""
+        """Remove the grain from its own neighbour list."""
         for gid, neigh in neigh_gid.items():
             if gid in neigh:
                 neigh.remove(gid)
@@ -3135,10 +3022,10 @@ class mcgs3_grain_structure():
     def merge_two_neigh_grains(self, parent_gid, other_gid,
                                check_for_neigh=True, simple_merge=True):
         """
-        Merge other_gid grain to the parent_gid grain.
+        Merge one neighbouring grain into another.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         parent_gid : int
             Grain ID of the parent.
 
@@ -3149,20 +3036,17 @@ class mcgs3_grain_structure():
             If True, other_gid will be checked if it can be merged to the
             parent grain. Defaults to True.
 
-        simple_merge : True, optional
-            If True, perform a simple merging operation, else open uip for
-            more complex merging opertations.
-
-        Explanations
-        ------------
+        simple_merge : bool, optional
+            If True, perform a direct merge; otherwise keep the hook for a
+            more complex merge path.
 
         Returns
         -------
-        merge_success: bool
-            True, if successfully merged, else False.
+        bool
+            True when the merge succeeds.
         """
         def MergeGrains():
-            """Mergegrains."""
+            """Perform the actual grain merge."""
             if simple_merge:
                 self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
                 merge_success = True
@@ -3186,11 +3070,12 @@ class mcgs3_grain_structure():
 
     def perform_post_grain_merge_ops(self, merged_gid):
         """
-        Perform necessary operations after performing a grain merger operation.
+        Perform follow-up updates after a grain merge.
 
         Parameters
         ----------
-        merged_gid
+        merged_gid : int
+            Grain ID that has just been merged.
 
         Operations done
         ---------------
@@ -3208,16 +3093,12 @@ class mcgs3_grain_structure():
 
     def renumber_gid_post_grain_merge(self, merged_gid):
         """
-        Renumber the grain ID numbers after grain merger operation.
+        Renumber grain IDs after a merge.
 
         Parameters
         ----------
         merged_gid : int
-            gid vale which has been merged.
-
-        Save as attribute
-        -----------------
-        gid
+            Grain ID that has been merged.
 
         Returns
         -------
@@ -3229,39 +3110,22 @@ class mcgs3_grain_structure():
 
     def recalculate_ngrains_post_grain_merge(self):
         """
-        Renumber the grain ID numbers after grain merger operation.
-
-        Parameters
-        ----------
-        merged_gid : int
-            gid vale which has been merged.
-
-        Save as attribute
-        -----------------
-        n
+        Recalculate the grain count after a merge.
 
         Returns
         -------
         None
-
-        Function order
-        --------------
-        Secondary. Involves call to a primary function.
         """
         self.calc_num_grains()
 
     def renumber_lgi_post_grain_merge(self, merged_gid):
         """
-        Renumber the lgi array after grain merger operation.
+        Renumber ``lgi`` after a merge.
 
         Parameters
         ----------
         merged_gid : int
-            gid vale which has been merged.
-
-        Save as attribute
-        -----------------
-        lgi
+            Grain ID that has been merged.
 
         Returns
         -------
@@ -3292,19 +3156,7 @@ class mcgs3_grain_structure():
 
     def plot_longest_grain(self):
         """
-        A humble method to just plot the longest grain in a temporal slice
-        of a grain structure
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None.
-
-        # TODO: WRAP THIS INSIDE A FIND_LONGEST_GRAIN AND HAVE IT TRHOW
-        THE GID TO THE USER
+        Plot the grain with the largest aspect ratio.
         """
         gid, _, _ = self.get_gid_prop_range(PROP_NAME='aspect_ratio',
                                             range_type='percentage',
@@ -3319,28 +3171,19 @@ class mcgs3_grain_structure():
 
     def mask_lgi_with_gids(self, gids, masker=-10):
         """
-        Mask lgi against user input grain indices with a masker value.
-
-        Mask the lgi (PXGS.gs[n] specific lgi array: lattice of grain IDs)
-        against user input grain indices, with a default UPXO-reserved
-        place-holder value of -10.
+        Mask ``lgi`` against the supplied grain IDs.
 
         Parameters
         ----------
         gids : int or list
-            Either a single grain index number or list of them
+            One grain ID or a list of grain IDs.
         masker : int, optional
-            An int value, preferably -10, but compulsorily less than -5.
-            Default UPXO-reserved place-holder value of -10.
+            Masking value used for the selected grains.
 
         Returns
         -------
-        s_masked : np.ndarray(dtype=int)
-            lgi masked against gid values
-
-        Internal calls (@dev)
-        ---------------------
-        None
+        tuple
+            Masked ``lgi`` array and the masker value used.
         """
         lgi_masked = deepcopy(self.lgi).astype(int)
         for gid in gids:
@@ -3353,30 +3196,22 @@ class mcgs3_grain_structure():
 
     def mask_s_with_gids(self, gids, masker=-10, force_masker=False):
         """
-        Mask the s against user input grain indices.
+        Mask ``s`` against the supplied grain IDs.
 
         Parameters
         ----------
-        gids : int/list
-            Either a single grain index number or list of them
-        kwargs:
-            masker:
-                An int value, preferably -10.
-            force_masker:
-                This is here to satisfy the tussle of future development needs
-                and user-readiness!! Please go with it for now.
-
-                If True, user value for masker will be forced to
-                masker variable, else the defaultr value of -10 will be used.
+        gids : int or list
+            One grain ID or a list of grain IDs.
+        masker : int, optional
+            Masking value used for the selected grains.
+        force_masker : bool, optional
+            If True, use the supplied masker value; otherwise fall back to the
+            default masker.
 
         Returns
         -------
-        lgi_masked : np.ndarray(dtype=int)
-            lgi masked against gid values
-
-        Internal calls (@dev)
-        ---------------------
-        self.mask_lgi_with_gids()
+        tuple
+            Masked ``s`` array and the masker value used.
 
         """
         # Validate suer supplied masker
@@ -3411,7 +3246,7 @@ class mcgs3_grain_structure():
                     axis_labels = ['z', 'y', 'x'], explode=0.0,
                     pvp=None, throw=False):
         """
-        Plot grains given some gids.
+        Plot one or more grains.
 
         Parameters
         ----------
@@ -3468,46 +3303,18 @@ class mcgs3_grain_structure():
             If True, pv.Plotter() instance shall be returned without actually
             plotting visually. Defaults to False.
 
-        Example-1
-        ---------
-        gids = gstslice.gpos['boundary']-gstslice.gpos['face']['top']
-        gstslice.plot_grains(gids, scalar='lgi',
-                             cmap='viridis',
-                             style='surface', show_edges=True, lw=1.0,
-                             opacity=1, view=None,
-                             scalar_bar_args=None,
-                             axis_labels = ['001', '010', '100'],
-                             throw=False)
+        Examples
+        --------
+        .. code-block:: python
 
-        Examples for extracting gids
-        ----------------------------
-        1. All corber grains
-           gids = gstslice.gpos['corner']['all']
-
-        2. All grains sharing atleast a pixel with bottom face.
-           gids = gstslice.gpos['face']['bottom']
-
-        3. All grains sharing atleast a pixel with all 4 edges of front face.
-           gids = gstslice.gpos['edges']['front']
-
-        4. All grains nt sharing even a single pixel with any of the 6 faces.
-           gids = gstslice.gpos['internal']
-
-        5. Grains which share atleast a pixel with any of the edges of each of
-           the 6 faces.
-           gids = gstslice.gpos['edges']['left'].union(
-               gstslice.gpos['edges']['right'],
-               gstslice.gpos['edges']['back'],
-               gstslice.gpos['edges']['front'],
-               gstslice.gpos['edges']['bottom'],
-               gstslice.gpos['edges']['top'])
-
-        6. Grains sharing atleast a pixel with each of the 6 face, but not
-           the 'bottom_front' and 'top_front' edges.
-           global_set = gstslice.gpos['boundary']
-           to_remove = [gstslice.gpos['edges']['bottom_front'],
-                        gstslice.gpos['edges']['top_front']]
-           gids =  global_set - to_remove[0].union(to_remove[1])
+            gids = gstslice.gpos['boundary'] - gstslice.gpos['face']['top']
+            gstslice.plot_grains(gids, scalar='lgi',
+                                 cmap='viridis',
+                                 style='surface', show_edges=True, lw=1.0,
+                                 opacity=1, view=None,
+                                 scalar_bar_args=None,
+                                 axis_labels=['001', '010', '100'],
+                                 throw=False)
         """
         if pvp is None or not isinstance(pvp, pv.Plotter):
             pvp = pv.Plotter()
@@ -3555,7 +3362,7 @@ class mcgs3_grain_structure():
                           title='Grain ID', add_outline=False, pvp=None,
                           throw=False):
         """
-        Browse grains in the grain structrure using a slider.
+        Browse grains in the grain structure using a slider.
 
         Parameters
         ----------
@@ -3625,7 +3432,7 @@ class mcgs3_grain_structure():
             pvp.add_mesh(self.pvgrid.outline())
         # -------------------------------------
         def create_mesh(gid):
-            """Build and return e mesh."""
+            """Build and return the mesh for one grain."""
             gid = int(gid)
             pvp.add_mesh(self.pvgrid.threshold([gid, gid],
                                                scalars='lgi'),
@@ -3645,7 +3452,7 @@ class mcgs3_grain_structure():
                        normal_rotation=True, add_outline=False, throw=False,
                        pvp=None):
         """
-        Visualize grain structure along a clip plane.
+        Visualize the grain structure along a clip plane.
 
         Parameters
         ----------
@@ -3685,13 +3492,15 @@ class mcgs3_grain_structure():
             PyVista plotter object to plot over. If no pvp has been provided,
             new pvp shall be created. Default value is None.
 
-        Example-1
-        ---------
-        Example with pvp None
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-2
-        ---------
-        Example with valid pvp input.
+            gstslice.viz_clip_plane(normal='x', origin=[5.0, 5.0, 5.0],
+                                    scalar='lgi', cmap='viridis',
+                                    invert=True, crinkle=True,
+                                    normal_rotation=True,
+                                    add_outline=False, throw=False)
         """
         if pvp is None or not isinstance(pvp, pv.Plotter):
             pvp = pv.Plotter()
@@ -3714,7 +3523,7 @@ class mcgs3_grain_structure():
                        cmap='viridis', normal_rotation=True, add_outline=False,
                        throw=False, pvp=None):
         """
-        Visualize grain structure along a slice plane.
+        Visualize the grain structure along a slice plane.
 
         Parameters
         ----------
@@ -3743,13 +3552,13 @@ class mcgs3_grain_structure():
             PyVista plotter object to plot over. If no pvp has been provided,
             new pvp shall be created. Default value is None.
 
-        Example-1
-        ---------
-        Example with pvp None
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-2
-        ---------
-        Example with valid pvp input.
+            gstslice.viz_mesh_slice(normal='x', origin=[5.0, 5.0, 5.0],
+                                    scalar='lgi', cmap='viridis',
+                                    add_outline=False, throw=False)
         """
         if pvp is None or not isinstance(pvp, pv.Plotter):
             pvp = pv.Plotter()
@@ -3768,10 +3577,10 @@ class mcgs3_grain_structure():
             pvp.show()
 
     def viz_mesh_slice_ortho(self, scalar='lgi', cmap='viridis',
-                             style='surface', add_outline=False,
-                             throw=False, pvp=None):
+                              style='surface', add_outline=False,
+                              throw=False, pvp=None):
         """
-        Viz. grain str. along three fundamental mutually orthogonal planes.
+        Visualize the grain structure along three orthogonal planes.
 
         Parameters
         ----------
@@ -3794,13 +3603,13 @@ class mcgs3_grain_structure():
             PyVista plotter object to plot over. If no pvp has been provided,
             new pvp shall be created. Default value is None.
 
-        Example-1
-        ---------
-        Example with pvp None
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-2
-        ---------
-        Example with valid pvp input.
+            gstslice.viz_mesh_slice_ortho(scalar='lgi', cmap='viridis',
+                                          style='surface',
+                                          add_outline=False, throw=False)
         """
         if pvp is None or not isinstance(pvp, pv.Plotter):
             pvp = pv.Plotter()
@@ -3826,7 +3635,7 @@ class mcgs3_grain_structure():
                         axis_labels=['001', '010', '100'], throw=False,
                         validate_data=True):
         """
-        Plot multiple prominant and non-prominant grains.
+        Plot multiple prominent and non-prominent grain sets.
 
         Parameters
         ----------
@@ -3899,31 +3708,11 @@ class mcgs3_grain_structure():
             Initially validate user inputs if True, skip if False. Defaults to
             True.
 
-        Example template for data
-        -------------------------
-        data = {'core': [1, 2, 3, 4], 'other': [[7, 6, 5], [12, 8, 10, 11]]}
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-1
-        ---------
-        Basic example
-
-        Example-2
-        ---------
-        Visualize additional coordinate points.
-
-        Example-3
-        ---------
-        Visualize core and non-core grains.
-
-        Example-4
-        ---------
-        Visualize core and non-core grains along with additional coordinate
-        points.
-
-        Example-5
-        ---------
-        Visualize a core grain along with additional coordinate point sets
-        proivided as a dict input format.
+            data = {'cores': [1, 2, 3, 4], 'others': [[7, 6, 5], [12, 8, 10, 11]]}
         """
         # Validations
         if validate_data:
@@ -4019,25 +3808,10 @@ class mcgs3_grain_structure():
         normal : list
             Define the normal vector of the slicing plane as [u, v, w].
 
-        Return
-        ------
-        lgi_array
-
-        saa
-        ---
-        None
-
-        Explanations
-        ------------
-        The returned array is a 1D numpy array of all scalar values. If the
-        unique set of valures is preferred use np.unique over the returned
-        value or use the get_scalar_array_in_plane_unique function having the
-        same input arguments.
-
-        Example
+        Returns
         -------
-        gstslice.find_scalar_array_in_plane(origin=[5, 4, 3], normal=[1, 2, 1],
-                                            scalar='lgi')
+        np.ndarray
+            Scalar values sampled from the plane.
         """
         lgi_array = self.pvgrid.slice(origin=origin,
                                       normal=normal).get_array('lgi')
@@ -4056,28 +3830,18 @@ class mcgs3_grain_structure():
         normal : list
             Define the normal vector of the slicing plane as [u, v, w].
 
-        Return
-        ------
-        lgi_array
-
-        saa
-        ---
-        None
-
-        Explanations
-        ------------
-        The returned array is a uniqued 1D numpy array of all scalar values.
-        If all valures is preferred use the get_scalar_array_in_plane_unique
-        function having the same input arguments.
+        Returns
+        -------
+        np.ndarray
+            Unique scalar values sampled from the plane.
 
         Examples
         --------
-        gstslice.find_scalar_array_in_plane(origin=[5, 4, 3], normal=[1, 2, 1],
-                                            scalar='lgi')
+        .. code-block:: python
 
-        Refer to the examples provided in the documentation of definition
-        plot_gids_along_plane for some applications of this function
-        get_scalar_array_in_plane_unique.
+            gstslice.find_scalar_array_in_plane(origin=[5, 4, 3],
+                                                normal=[1, 2, 1],
+                                                scalar='lgi')
         """
         gids = self.find_scalar_array_in_plane(origin=origin, normal=normal)
         gids = np.array(np.unique(gids).tolist())
@@ -4220,13 +3984,13 @@ class mcgs3_grain_structure():
     @staticmethod
     def _compute_volumes_with_bincount(lgi, n):
         """
-        Calculate the volume by number of voxels using Numba and bincount.
+        Calculate grain volumes by voxel count.
         """
         return np.bincount(lgi.ravel(), minlength=n+1)
 
     def set_mprop_volnv(self, msg=None):
         """
-        Calculate the volume by number of voxels.
+        Calculate grain volumes by voxel count and store them in ``mprop``.
         """
         if msg is not None:
             if isinstance(msg, int):
@@ -4242,16 +4006,16 @@ class mcgs3_grain_structure():
 
     def get_bbox_diagonal_vectors(self):
         """
-        Find the vector representing doiagonal of the bounding box.
+        Find the vector representing the diagonal of the bounding box.
         """
         raise NotImplementedError("get_bbox_diagonal_vectors is not yet implemented.")
 
     def get_bbox_aspect_ratio(self, gid):
-        """Return the bbox aspect ratio."""
+        """Return the bounding-box aspect ratio."""
         raise NotImplementedError("get_bbox_aspect_ratio is not yet implemented.")
 
     def get_bbox_volume(self, gid):
-        """Return the bbox volume."""
+        """Return the bounding-box volume."""
         raise NotImplementedError("get_bbox_volume is not yet implemented.")
 
     def set_mprop_volnv_old(self):
@@ -4269,20 +4033,17 @@ class mcgs3_grain_structure():
         self.mprop['pernv'] = None
 
     def get_voxel_volume(self):
-        """Return voxel volume from pvgrid data."""
+        """Return the voxel volume from the PyVista grid spacing."""
         return np.prod(self.pvgrid.spacing)
 
     def get_voxel_surfareas(self, ret_metric='mean'):
         """
-        Return voxel surface area from pvgrid data.
+        Return voxel surface area from the PyVista grid spacing.
 
         Parameters
         ----------
-        ret_metric:
-            Stands for return. Specifies which metric 8is to be returned.
-
-        Explanations
-        ------------
+        ret_metric : str, optional
+            Metric to return: ``'mean'``, ``'min'``, ``'max'`` or ``'all'``.
         """
         sp = self.pvgrid.spacing
         if ret_metric == 'mean':
@@ -4298,7 +4059,7 @@ class mcgs3_grain_structure():
                         use_skimrp=True, reset_skimrp=True,
                         measure='normal'):
         """
-        Calculate equivalent sphere diameter.
+        Calculate equivalent sphere diameter for each grain.
 
         Parameters
         ----------
@@ -4318,16 +4079,13 @@ class mcgs3_grain_structure():
             Defaults to 'volnv'.
 
         use_skimrp : bool, optional
-        Defaults to True.
+            Use scikit-image regionprops values when available.
 
         reset_skimrp : bool, optional
-        Defaults to True.
+            Recompute cached regionprops values before measuring.
 
         measure : str, optional
-        Defaults to 'normal'.
-
-        Explanations
-        ------------
+            Regionprop-based metric to use when ``use_skimrp`` is True.
         If base_size_spec in ('volnv', 'volsr', 'volch'), then the following
         procedure is used to calculate the equivakent diameter.
         V = (4/3) pi r^3 ==> r^3 = 3V/(4 pi) ==> r = cbrt(3V/(4 pi))
@@ -4379,7 +4137,7 @@ class mcgs3_grain_structure():
                            nan_treatment='replace', inf_treatment='replace',
                            nan_replacement=-1, inf_replacement=-1):
         """
-        Set solidity morphological property of all 3D grains.
+        Set the solidity morphological property for all grains.
 
         Parameters
         ----------
@@ -4437,12 +4195,12 @@ class mcgs3_grain_structure():
 
     def set_mprop_arbbox(self, fmt='gid_dict', normalize=True):
         """
-        Calculate aspect ratio of bounding box.
+        Calculate the bounding-box aspect ratio for each grain.
 
         Parameters
         ----------
-        fmt: str, optional
-            Specification of the data format.
+        fmt : str, optional
+            Output format for the stored values.
 
             Defaults to 'gid_dict' for which ar values
             of each boundring box will be stored against the corresponding gid
@@ -4455,7 +4213,7 @@ class mcgs3_grain_structure():
             added by 1 to match with gid numbering.
 
         normalize : bool, optional
-            Default value is True.
+            Normalize box dimensions before computing the aspect ratio.
         """
         print(40*"-", "\nSetting grain bbox AR (metric: 'arbbox').")
         bbox_sizes = [self.find_bounding_cube_gid(gid).shape
@@ -4504,10 +4262,8 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        None.
+        None
 
-        Explanations
-        ------------
         Routine 1: THis uses the codes available at the below GitHub link to
             calculate ellipsoid fits to grains. As stated there, the codes
             were ports from a similar MATLAB code available on the second link
@@ -4578,7 +4334,7 @@ class mcgs3_grain_structure():
     def set_mprop_arellfit(self, metric='max', calculate_efits=False,
                            efit_routine=1, efit_regularize_data=True):
         """
-        Calculate aspect ratio of grain using ellipsoidal fit.
+        Calculate aspect ratio from ellipsoidal fits.
 
         Parameters
         ----------
@@ -4592,26 +4348,18 @@ class mcgs3_grain_structure():
                 * xz / yz / y
 
         calculate_efits : bool, optional
-            Specify whether ellipsoidal fitting is to be perfoemed before
-            aspect ratio calculation. The default is True.
+            Fit ellipsoids before computing the aspect ratio.
 
         efit_routine : int, optional
-            If calculate_efits is specified True, then specifiy the routine
-            to use for aspect ratio claculation. Refer to documentation
-            (explanations) of the definition fit_ellipsoids for details.
+            Routine to use when fitting ellipsoids.
 
         efit_regularize_data : bool, optional
-            If calculate_efits is specified True, then specifiy whether data
-            regularization is to be performed before ellipsoids are fit to
-            grains. Refer to documentation (explanations) of the definition
-            fit_ellipsoids for details.
+            Regularize point clouds before fitting ellipsoids.
 
         Saved as attributes
         -------------------
         self.mprop['arellfit']
 
-        Explanations
-        ------------
         """
         # Validations
         # ------------------------------------
@@ -4661,7 +4409,7 @@ class mcgs3_grain_structure():
 
     def generate_bresenham_line_3d(self, i1, i2, i3, j1, j2, j3):
         """
-        Generate Bresenham line in 3d between two coordinate locations.
+        Generate a Bresenham line in 3D between two coordinate locations.
 
         Parameters
         ----------
@@ -4683,11 +4431,10 @@ class mcgs3_grain_structure():
         j3 : int
             Column index location of 2nd point in 3D array.
 
-        Return
-        ------
-        ListOfPoints: list of tuples
-            List of tuples, each containing index locations of the point
-            coordinates.
+        Returns
+        -------
+        list of tuple
+            Index locations of the points on the line.
 
         References
         ----------
@@ -4768,7 +4515,7 @@ class mcgs3_grain_structure():
 
     def get_values_along_line(self, loci, locj, scalars='lgi'):
         """
-        Get values in 3D array along line between loci and locj points.
+        Get values in the 3D array along the line between two locations.
 
         Parameters
         ----------
@@ -4781,10 +4528,10 @@ class mcgs3_grain_structure():
         scalars : str, optional
             Specify the scalar of interest. The default is 'lgi'.
 
-        Return
-        ------
-        locations : list
-            List of coord locations between the two user specified locations.
+        Returns
+        -------
+        np.ndarray
+            Scalar values sampled along the line.
         """
         # Validations
         # ----------------------------
@@ -4800,7 +4547,7 @@ class mcgs3_grain_structure():
 
     def get_igs_properties_along_line(self, loci, locj, scalars='lgi'):
         """
-        Measure intercept properties along line b/w two specified locations.
+        Measure intercept properties along a line between two locations.
 
         Parameters
         ----------
@@ -4813,14 +4560,10 @@ class mcgs3_grain_structure():
         scalars : str, optional
             Specify the scalar of interest. The default is 'lgi'.
 
-        Return
-        ------
-        igs: dict
-            Dictionary with the following keys.
-            * 'ng': Number of grains on the intercept line.
-            * 'nv': Number of voxels in every grain on the intercept line.
-            * 'igs': IDs of grain numbers on the intercept line.
-            * 'sv': Values of
+        Returns
+        -------
+        dict
+            Intercept statistics and the sampled scalar values.
         """
         # Validations
         # ----------------------------
@@ -5160,10 +4903,13 @@ class mcgs3_grain_structure():
             * var: list
                 List of variance values.
 
-        Example
-        -------
-        gstslice.get_lgi_along_lines(locsi, locsj, metric='mean', minimum=True,
-                                maximum=True, std=True, variance=True)
+        Examples
+        --------
+        .. code-block:: python
+
+            gstslice.get_igs_along_lines(metric='mean', minimum=True,
+                                         maximum=True, std=True,
+                                         variance=True)
         """
         # Validations
         # -------------------------
@@ -5197,8 +4943,7 @@ class mcgs3_grain_structure():
         for loci, locj in zip(locsi, locsj):
             _ = self.get_igs_along_line(loci, locj, metric=metric,
                                         minimum=minimum, maximum=maximum,
-                                        std=std, variance=variance,
-                                        verbose=False)
+                                        std=std, variance=variance)
             igs['igs'].append(_['igs'])
             if minimum:
                 igs['min'].append(_['min'])
@@ -5318,32 +5063,32 @@ class mcgs3_grain_structure():
         return cags_ratio
 
     def set_mprop_sol(self):
-        """Calculate solidity of grains."""
+        """Calculate grain solidity values."""
         print(40*"-", "\nSetting grain solidity values (metric: 'sol').")
         self.mprop['sol'] = None
 
     def set_mprop_ecc(self):
-        """Calculate eccentricity of grains."""
+        """Calculate grain eccentricity values."""
         print(40*"-", "\nSetting grain eccentricity values (metric: 'ecc').")
         self.mprop['ecc'] = None
 
     def set_mprop_com(self):
-        """Calculate compactness of grains."""
+        """Calculate grain compactness values."""
         print(40*"-", "\nSetting grain compactnes values (metric: 'com').")
         self.mprop['com'] = None
 
     def set_mprop_sph(self):
-        """Calculate sphericity of grains."""
+        """Calculate grain sphericity values."""
         print(40*"-", "\nSetting grain sphericity valkues (metric: 'sph').")
         self.mprop['sph'] = None
 
     def set_mprop_fn(self):
-        """Calculate flatness of grains."""
+        """Calculate grain flatness values."""
         print(40*"-", "\nSetting grain flatness values (metric: 'fn').")
         self.mprop['fn'] = None
 
     def set_mprop_rnd(self):
-        """Calculate roundness of grains."""
+        """Calculate grain roundness values."""
         print(40*"-", "\nSetting grain roundness values (metric: 'rnd').")
         self.mprop['rnd'] = None
 
@@ -5354,12 +5099,12 @@ class mcgs3_grain_structure():
 
     @property
     def nvoxels(self):
-        """Nvoxels."""
+        """Return the per-grain voxel counts."""
         return self.mprop['volnv']
 
     @property
     def nvoxels_values(self):
-        """Nvoxels values."""
+        """Return the stored per-grain voxel counts."""
         return np.array(list(self.mprop['volnv'].values()))
 
     def get_largest_gids(self):
@@ -5383,22 +5128,22 @@ class mcgs3_grain_structure():
         return np.where(self.nvoxels_values == self.nvoxels_values.min())[0]+1
 
     def get_s_gids(self, s):
-        """Return the s gids."""
+        """Return the grain IDs stored in ``s``."""
         return self.s_gid[s]
 
     @property
     def single_voxel_grains(self):
-        """Single voxel grains."""
+        """Return the grain IDs that contain a single voxel."""
         return np.where(self.nvoxels_values == 1)[0]+1
 
     @property
     def smallest_volume(self):
-        """Smallest volume."""
+        """Return the grain IDs with the smallest volume."""
         return self.nvoxels_values.min()
 
     @property
     def largest_volume(self):
-        """Largest volume."""
+        """Return the grain IDs with the largest volume."""
         return self.nvoxels_values.max()
 
     def small_grains(self, vth=2):
@@ -5409,15 +5154,15 @@ class mcgs3_grain_structure():
         return np.where(self.nvoxels_values <= vth)[0]+1
 
     def large_grains(self, vth=2):
-        """Large grains."""
+        """Return the grain IDs classified as large."""
         return np.where(self.nvoxels_values >= vth)[0]+1
 
     def find_grains_by_nvoxels(self, nvoxels=2):
-        """Find grains by nvoxels."""
+        """Find grains using voxel-count criteria."""
         return np.where(self.nvoxels_values == nvoxels)[0]+1
 
     def get_volnv_gids(self, gids):
-        """Return the volnv gids."""
+        """Return the grain IDs for the requested voxel-volume set."""
         # Validations
         return [floor(self.mprop['volnv'][gid]) for gid in gids]
 
@@ -6385,21 +6130,21 @@ class mcgs3_grain_structure():
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        """Load or import t ctf."""
+        """Load or import a CTF dataset."""
         raise NotImplementedError("import_ctf is not yet implemented.")
 
     def import_crc(self,
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        """Load or import t crc."""
+        """Load or import a CRC dataset."""
         # Use DefDAP to get the job done here
         raise NotImplementedError("import_crc is not yet implemented.")
 
     def clean_exp_gs(self,
                      minGrainSize=10
                      ):
-        """Clean exp gs."""
+        """Clean experimental grain-structure data."""
         # Use DefDAP to get the job done here
         raise NotImplementedError("clean_exp_gs is not yet implemented.")
 
@@ -6407,14 +6152,14 @@ class mcgs3_grain_structure():
                        filePath,
                        fileName,
                        convertUPXOgs=True):
-        """Load or import t dream3d."""
+        """Load or import a DREAM.3D dataset."""
         raise NotImplementedError("import_dream3d is not yet implemented.")
 
     def import_vtk(self,
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        """Load or import t vtk."""
+        """Load or import a VTK dataset."""
         raise NotImplementedError("import_vtk is not yet implemented.")
 
     def update_dream3d_ABQ_file(self):
@@ -6437,17 +6182,12 @@ class mcgs3_grain_structure():
         """
         raise NotImplementedError("update_dream3d_ABQ_file is not yet implemented.")
 
-    def set_grain_positions(self, verbose=False):
+    def set_grain_positions(self):
         """
         Set positions of grains relative to grain structure boundaries.
 
-        Parameters
-        ---------
-        verbose : bool, optional
-            Print messages if True, else False.
-
-        Developer notes
-        ---------------
+        Notes
+        -----
         Front face is defined by y=ymax.
         Back face is defined by y=0.
         Front to back face: Slice lgi along axis = 1
@@ -7060,7 +6800,7 @@ class mcgs3_grain_structure():
                     self.add_scalar_field_to_pvgrid(sf_name="lgi",
                                                     sf_value=self.lgi)
                 if find_neigh_every_iter:
-                    self.find_neigh_gid(verbose=False)
+                    self.find_neigh_gid()
                 if find_grvox_every_iter:
                     verbosity=int(self.n/20)
                     if self.domvol <= self.ctrls['numba_activation_nvox_threshold']:
@@ -7083,11 +6823,11 @@ class mcgs3_grain_structure():
             self.make_pvgrid()
             self.add_scalar_field_to_pvgrid(sf_name="lgi", sf_value=self.lgi)
         if not find_neigh_every_iter:
-            self.find_neigh_gid(verbose=False)
+            self.find_neigh_gid()
         if not find_grvox_every_iter:
             self.find_grain_voxel_locs()  # gstslice.grain_locs
         # --------------------------------
-        self.set_grain_positions(verbose=False)
+        self.set_grain_positions()
         self.set_skimrp()
         # ------------------------------------------------
         self.char_morphology_of_grains(label_str_order=1,
@@ -7179,7 +6919,7 @@ class mcgs3_grain_structure():
         raise NotImplementedError("clean_gs_GMD_by_source_erosion_v2 is not yet implemented.")
 
     def initiate_gbp(self):
-        """Initiate gbp."""
+        """Initialise grain-boundary points."""
         self.Lgbp_all = {gid: None for gid in self.gid}
         self.Ggbp_all = {gid: None for gid in self.gid}
 
@@ -7258,7 +6998,7 @@ class mcgs3_grain_structure():
                          for gid in self.gid}
 
     def create_neigh_gid_pair_ids(self):
-        """Build and return e neigh gid pair ids."""
+        """Build and return neighbour grain-ID pair identifiers."""
         print('\nCreating neigh_gid_pair_ids.')
         self.gid_pair_ids = {}
         pair_id = 1
@@ -7313,16 +7053,12 @@ class mcgs3_grain_structure():
         self.gbpstack = np.unique(self.gbpstack, axis=0)
 
     def build_gbpids(self):
-        """Build and return  gbpids."""
+        """Build and return grain-boundary point IDs."""
         self.gbpids = [i for i in range(self.gbpstack.shape[0])]
 
-    def build_gbp(self, verbose=False):
+    def build_gbp(self):
         """
         Consolidate processes to identify all grain boundary points.
-
-        Parameters
-        ----------
-        None
 
         Returns
         -------
@@ -7332,7 +7068,7 @@ class mcgs3_grain_structure():
         print('Initiating gbp data structure.')
         self.initiate_gbp()
         print('Setting local grain boundary points.')
-        self.set_Lgbp_all(verbose=verbose)
+        self.set_Lgbp_all()
         print('Globalising the local grain boundary points.')
         self.globalise_gbp()
         print('Building grain boundary point stack and ids.')
@@ -7421,7 +7157,7 @@ class mcgs3_grain_structure():
         # self.gbpstack[list(gbsurf_pids_vox[1])]
 
     def setup_gid_pair_gbp_IDs_DS(self):
-        """Setup gid pair gbp ids ds."""
+        """Set up the grain-pair boundary-point ID dictionary."""
         print(40*'-', '\nSetting up {gid pair id: gbp ID list} data structure')
         self.gid_pair_gbp_IDs = {k: None for k, v in self.gid_pair_ids.items()}
 
@@ -7516,31 +7252,17 @@ class mcgs3_grain_structure():
         # -----------------------------------------
         # self.gid_pair_gbp_coords = self.gbpstack[self.gid_pair_gbp_IDs]
 
-    def set_gid_pair_gbp_IDs(self, verbose=False, verbose_interval=2500):
+    def set_gid_pair_gbp_IDs(self):
         """
         Find the gbp IDs at the interface of all unique gidl and gidr pairs.
 
-        Parameteras
-        -----------
-        verbose: bool
-            True to be verbose, False to not print out any messages. Defaults
-            to False.
-
-        verbose_interval: int
-            Control how many times information gets printed. A higher number
-            porints less messages. Defaults to 2500.
-
-        Return
-        ------
+        Parameters
+        ----------
         None
 
-        saa
-        ---
-        self.gid_pair_gbp_IDs: dict
-            The
-
-        self.gid_pair_gbp_IDs[gid_pair_id] for gid_pair_id in
-        self.gid_pair_ids.values()
+        Returns
+        -------
+        None
 
         Developer notes by Dr. SA
         -------------------------
@@ -7554,11 +7276,8 @@ class mcgs3_grain_structure():
         We can then repeat this for every (gidl, gidr) pair in the dictionary
         gstslice.gid_pair_ids.
         """
-        verbose_interval = int(verbose_interval)
         for i, (gid_pair_id, gid_pairs) in enumerate(self.gid_pair_ids.items(),
                                                      start=1):
-            if verbose and i % verbose_interval == 0:
-                print(f'    Finding gid_pair_gbp_IDs[gid_pair_id={gid_pair_id}].')
             self.gid_pair_gbp_IDs[gid_pair_id] = self.find_gid_pair_gbp_IDs(*gid_pairs)
         print(f'    Finished finding {i} gid_pair_gbp_IDs[gid_pair_id] gbp ID lists.')
 
@@ -7566,12 +7285,16 @@ class mcgs3_grain_structure():
         """
         Build map between gid and IDs of all gid interface pairs (gid_gpid).
 
-        saa
-        ---
-        self.gid_gpid:   gid  --  gid-pair-IDs
+        Parameters
+        ----------
+        None
 
-        Explanations
-        ------------
+        Returns
+        -------
+        None
+
+        Notes
+        -----
         Example, if 10 be the gid and 12, 15, 17 be its O(1) neighbours,
         then the gid pairs are (10, 12), (10, 15) and (10, 17). These pairs
         have IDs as 10A, 10B and 10C. These IDs themselves are obtained from
@@ -7833,7 +7556,7 @@ class mcgs3_grain_structure():
                                  reset_sanv=False,
                                  N=26,
                                  verbosity=100):
-        """Set or update mprop rat sanv volnv."""
+        """Set or update the surface-area and volume metric ratios."""
         # --------------------------------
         print('\nCalculating mprop metric: rat_sanv_volnv')
         if reset_volnv or self.mprop['volnv'] == None:
@@ -7864,7 +7587,7 @@ class mcgs3_grain_structure():
         return boundary_coords
 
     def sep_gbzcore_from_bbgidmask(self, boundary_coords, BBLGI_mask):
-        """Sep gbzcore from bbgidmask."""
+        """Separate the grain-boundary core from the boundary mask."""
         # Update the mask to a new variable and seperate the grain boundary
         # from core
         BBLGI_mask_ = BBLGI_mask.astype(int)
@@ -7883,15 +7606,15 @@ class mcgs3_grain_structure():
         return masks, CORE_coords
 
     def get_grain_coords(self, gid):
-        """Return the grain coords."""
+        """Return grain coordinates."""
         return self.grain_locs[gid]
 
     def get_mp3d_ofcoords(self, coords):
-        """Return the mp3d ofcoords."""
+        """Return the mp3d coordinates."""
         return self._upxo_mp3d_.from_coords(coords)
 
     def get_grain_mp3d(self, gid):
-        """Return the grain mp3d."""
+        """Return the grain mp3d data."""
         return self.get_mp3d_ofcoords(self.get_grain_coords(gid))
 
     def get_points_in_feature_coord(self, feature_type='gb',
@@ -7967,11 +7690,11 @@ class mcgs3_grain_structure():
         return close_coords_core
 
     def setup_gid_twin(self, GIDS):
-        """Setup gid twin."""
+        """Set up twin grain IDs."""
         self.gid_twin = {gid: None for gid in GIDS}
 
     def copy_lgi_1(self):
-        """Copy lgi 1."""
+        """Return a copy of ``lgi`` with one-based indexing semantics."""
         self.lgi1 = deepcopy(self.lgi)
 
     def add_fdb(self, *, fname, dnames, datas, info):
@@ -8021,7 +7744,7 @@ class mcgs3_grain_structure():
         self.fdb[fname]['info'] = info
 
     def reset_fdb(self, fname, data, info, retain_info=False):
-        """Reset or clear fdb."""
+        """Reset or clear the feature database."""
         if fname in self.fdb.keys():
             pass
         else:
@@ -8192,7 +7915,7 @@ class mcgs3_grain_structure():
         return local_coord + self.get_local_global_coord_offset(gid)
 
     def get_cutoff_twvol(self, gid, cutoff_twin_vf):
-        """Return the cutoff twvol."""
+        """Return the twin-volume cutoff."""
         return NPA(cutoff_twin_vf)*self.mprop['volnv'][gid]
 
     def identify_twins_gid(self, gid,
@@ -9244,11 +8967,11 @@ class mcgs3_grain_structure():
         return pc_rem
 
     def extract_representative_voxel(self, instance_name='base', featname='grains',):
-        """Extract representative voxel."""
+        """Extract a representative voxel."""
         raise NotImplementedError("extract_representative_voxel is not yet implemented.")
 
     def break_disjoint_twins(self):
-        """Break disjoint twins."""
+        """Break disjoint twins into separate groups."""
         raise NotImplementedError("break_disjoint_twins is not yet implemented.")
 
     def extract_feat_coords(self,
@@ -9525,7 +9248,7 @@ class mcgs3_grain_structure():
 
     def validate_fids(self, instance_name='twin.0',
                       feature_name='twin', fids=None):
-        """Check or validate validate fids."""
+        """Check or validate feature IDs."""
         validated = False
         if type(fids) not in dth.dt.ITERABLES:
             if type(fids) not in dth.dt.NUMBERS:
@@ -9556,42 +9279,42 @@ class mcgs3_grain_structure():
 
     @property
     def gridx(self):
-        """Gridx."""
+        """Return the grid extent in x."""
         return np.arange(self.uigrid.xmin, self.uigrid.xmax, self.uigrid.xinc)
 
     @property
     def gridy(self):
-        """Gridy."""
+        """Return the grid extent in y."""
         return np.arange(self.uigrid.ymin, self.uigrid.ymax, self.uigrid.yinc)
 
     @property
     def gridz(self):
-        """Gridz."""
+        """Return the grid extent in z."""
         return np.arange(self.uigrid.zmin, self.uigrid.zmax, self.uigrid.zinc)
 
     @property
     def domsizex(self):
-        """Domsizex."""
+        """Return the domain size in x."""
         return self.gridx.size
 
     @property
     def domsizey(self):
-        """Domsizey."""
+        """Return the domain size in y."""
         return self.gridy.size
 
     @property
     def domsizez(self):
-        """Domsizez."""
+        """Return the domain size in z."""
         return self.gridz.size
 
     @property
     def domvol(self):
-        """Domvol."""
+        """Return the domain volume."""
         return self.domsizex*self.domsizey*self.domsizez
 
     @property
     def domsa(self):
-        """Domsa."""
+        """Return the domain surface area."""
         front = self.domainx*self.domainz
         right = self.domainy*self.domainz
         top = self.domainx*self.domainy
@@ -9759,7 +9482,7 @@ class mcgs3_grain_structure():
                                  write_to_disk=False,
                                  write_sparse=True,
                                  throw=True):
-        """Mask fid and make pvgrid."""
+        """Mask feature IDs and build a PyVista grid."""
         _data_ = self.mask_fid(feature=feature,
                                instance_name=instance_name,
                                fid_mask_value=fid_mask_value,
@@ -9996,7 +9719,7 @@ class mcgs3_grain_structure():
                 pvp.show()
 
     def get_np_from_dict(self, udata):
-        """Return the np from dict."""
+        """Return the numpy array extracted from a dictionary value."""
         return np.array(list(udata.values()))
 
     def extract_subdomains_random(self, p=5, q=5, r=5, n=2,
@@ -10113,7 +9836,7 @@ class mcgs3_grain_structure():
     def make_pvgrid_v1(self, feature_name='base', instance_name='lgi',
                        user_fid=None, scalar_name='lgi', pvgrid_origin=(0,0,0),
                        pvgrid_spacing=(1,1,1), perform_checks=True):
-        """Build and return pvgrid v1."""
+        """Build and return a PyVista grid."""
         if perform_checks:
             if feature_name == 'base':
                 if instance_name == 'lgi':
@@ -10284,7 +10007,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def cubic_Rz(a):
-        """Cubic rz."""
+        """Return the cubic z-rotation matrix."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[ c,-s, 0],
                          [ s, c, 0],
@@ -10292,7 +10015,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def cubic_Rx(a):
-        """Cubic rx."""
+        """Return the cubic x-rotation matrix."""
         c, s = np.cos(a), np.sin(a)
         return np.array([[1, 0, 0],
                          [0, c,-s],
@@ -11109,7 +10832,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def _axis_angle_to_R(axis, angle_rad):
-        """Rodrigues formula."""
+        """Apply Rodrigues' rotation formula."""
         ax = np.asarray(axis, dtype=float)
         n = np.linalg.norm(ax)
         if n < 1e-15 or abs(angle_rad) < 1e-15:
@@ -11124,7 +10847,7 @@ class mcgs3_grain_structure():
 
     @staticmethod
     def _rand_unit_vector(rng):
-        """Uniform random unit vector on S2."""
+        """Return a uniform random unit vector on S2."""
         # Method: normal distribution and normalize
         v = np.array([rng.gauss(0,1), rng.gauss(0,1), rng.gauss(0,1)], dtype=float)
         n = np.linalg.norm(v)
@@ -12048,7 +11771,7 @@ class mcgs3_grain_structure():
                             id_dict={'copper': [], 'brass': [], 's': [],
                                      'goss': [], 'cube': [], 'random': []},
                             invert_ids=True):
-        """Tc ori stack subset."""
+        """Return the texture-component orientation stack subset."""
         if invert_ids:
             for tc in id_dict:
                 if tc.lower() in ori_stack.keys():
@@ -12729,7 +12452,7 @@ class mcgs3_grain_structure():
         down (z < 0)"""
         sample_dirs = sample_dirs[sample_dirs[:, 2] >= 0]
 
-        """Projection."""
+        """Project directions into the sample frame."""
         X = sample_dirs[:, 0] / (1 + sample_dirs[:, 2])
         Y = sample_dirs[:, 1] / (1 + sample_dirs[:, 2])
 
@@ -13503,7 +13226,7 @@ class mcgs3_grain_structure():
                                       tcs=[1, 3, 4, 6, 7],
                                       tcp=[0.05, 0.25, 0.50, 0.15, 0.05],
                                       ninstances=1):
-        """Generate neigh clid instances."""
+        """Generate neighbour CIDs instances."""
         cluster_sets = {clsid+1: None for clsid in range(ninstances)}
         for clsid in range(ninstances):
             clusters, neigh_clid = self.generate_neigh_clid(neigh_gid, tcs=tcs, tcp=tcp)
@@ -15158,7 +14881,7 @@ class mcgs3_grain_structure():
         print(f"Unique feature IDs found: {list(elset_map.keys())}")
 
     def write_abaqus_sections_materials(self, f, unique_feature_ids, material_data):
-        """Generates *MATERIAL and *SOLID SECTION definitions."""
+        """Generate ``*MATERIAL`` and ``*SOLID SECTION`` definitions."""
 
         f.write("\n**\n** MATERIALS AND SECTIONS\n**\n")
 
@@ -15183,7 +14906,7 @@ class mcgs3_grain_structure():
             f.write(f"*SOLID SECTION, ELSET={elset_name}, MATERIAL={mat_name}\n")
 
     def write_abaqus_inp(self, filename, node_data, element_data, elset_map, unique_feature_ids, material_data):
-        """Formats and writes the data to an Abaqus .inp file."""
+        """Format and write the data to an Abaqus ``.inp`` file."""
 
         try:
             with open(filename, 'w') as f:
