@@ -11,6 +11,8 @@ grain structures.
 
    introduction
    getting_started
+   concepts
+   workflows
 
 .. toctree::
    :maxdepth: 4
