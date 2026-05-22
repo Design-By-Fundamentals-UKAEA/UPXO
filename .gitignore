@@ -53,6 +53,15 @@ temp/
 *.npz
 
 # -----------------------------
+# One-off utility scripts
+# -----------------------------
+add_missing_docstrings.py
+fix_bare_examples.py
+fix_example_sections.py
+fix_oneliner_props.py
+fix_type_desc.py
+
+# -----------------------------
 # Project-specific ignored paths
 # -----------------------------
 src/upxo/geoEntities/edge2d_old.py
