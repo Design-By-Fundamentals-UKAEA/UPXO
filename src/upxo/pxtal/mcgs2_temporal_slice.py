@@ -448,11 +448,13 @@ class mcgs2_grain_structure():
         
         Examples
         --------
-        pnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
-        mprops = gsan.gsstack[gsid].get_mprops(pnames, set_missing_mprop=True)
-        pvalue_thresholds = {'area': [10, None], 'aspect_ratio': [2.0, None],
-                            'perimeter': [15, None], 'solidity': [0.8, None]}
-        props_gids = self.get_propery_bounded_grains(mprops, pnames, pvalue_thresholds)
+        .. code-block:: python
+
+            pnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
+            mprops = gsan.gsstack[gsid].get_mprops(pnames, set_missing_mprop=True)
+            pvalue_thresholds = {'area': [10, None], 'aspect_ratio': [2.0, None],
+                                'perimeter': [15, None], 'solidity': [0.8, None]}
+            props_gids = self.get_propery_bounded_grains(mprops, pnames, pvalue_thresholds)
         """
         props_gids = {pname: None for pname in pnames}
         for pname in pnames:
@@ -506,18 +508,20 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent', input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 10
-        pxtal.gs[tslice].char_morph_2d(char_gb=True)
+        .. code-block:: python
 
-        pxtal.gs[tslice].find_neigh(include_central_grain=True)
-        pxtal.gs[tslice].neigh_gid[10]
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent', input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            tslice = 10
+            pxtal.gs[tslice].char_morph_2d(char_gb=True)
 
-        pxtal.gs[tslice].find_neigh(include_central_grain=False)
-        pxtal.gs[tslice].neigh_gid[10]
+            pxtal.gs[tslice].find_neigh(include_central_grain=True)
+            pxtal.gs[tslice].neigh_gid[10]
+
+            pxtal.gs[tslice].find_neigh(include_central_grain=False)
+            pxtal.gs[tslice].neigh_gid[10]
         """
         self.neigh_gid = {}
         if self.gid.size == 1:
@@ -663,18 +667,20 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',
-                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 10
-        pxtal.gs[tslice].assign_species(method='mc state partitioned global combined',
-                                        ignore_vf=True, vf={}, spid=1,
-                                        combineids=[[1,2],[3,4]], ninstances=5,
-                                        detect_features=True, bso=1, characterise_features=True,
-                                        make_feature_skprops=True, extract_feature_coords=True,
-                                        throw_feature_bounding_box=True)
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',
+                         input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            tslice = 10
+            pxtal.gs[tslice].assign_species(method='mc state partitioned global combined',
+                                            ignore_vf=True, vf={}, spid=1,
+                                            combineids=[[1,2],[3,4]], ninstances=5,
+                                            detect_features=True, bso=1, characterise_features=True,
+                                            make_feature_skprops=True, extract_feature_coords=True,
+                                            throw_feature_bounding_box=True)
         """
         if type(vf) != dict:
                 raise ValueError('Invalid vf type.')
@@ -820,16 +826,18 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
-                                       make_skprops=True, extract_coords=True,
-                                       throw_bounding_box=True
-                                       )
-        mprops = self.extract_feature_properties(skprops=skprops, area=True, eq_diameter=False,
-                                   feret_diameter=False, perimeter=False,  perimeter_crofton=False,
-                                   npixels_gb=False, gb_length_px=False, major_axis_length=True,
-                                   minor_axis_length=True, aspect_ratio=False, compactness=False,
-                                   solidity=False,  morph_ori=False, circularity=False,
-                                   eccentricity=False, euler_number=True, moments_hu=True,)
+        .. code-block:: python
+
+            skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
+                                           make_skprops=True, extract_coords=True,
+                                           throw_bounding_box=True
+                                           )
+            mprops = self.extract_feature_properties(skprops=skprops, area=True, eq_diameter=False,
+                                       feret_diameter=False, perimeter=False,  perimeter_crofton=False,
+                                       npixels_gb=False, gb_length_px=False, major_axis_length=True,
+                                       minor_axis_length=True, aspect_ratio=False, compactness=False,
+                                       solidity=False,  morph_ori=False, circularity=False,
+                                       eccentricity=False, euler_number=True, moments_hu=True,)
         """
         if len(skprops) == 0 or not isinstance(skprops, dict):
             raise ValueError('Invalid skprops specification')
@@ -900,13 +908,15 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',
-                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        np.unique(pxtal.gs[16].find_extended_bounding_box(10))
-        pxtal.gs[10].find_neigh_gid_fast(10)
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',
+                         input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            np.unique(pxtal.gs[16].find_extended_bounding_box(10))
+            pxtal.gs[10].find_neigh_gid_fast(10)
         """
         neighbours = list(np.unique(self.find_extended_bounding_box(gid)))
         if not include_parent:
@@ -935,14 +945,16 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',
-                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        np.unique(pxtal.gs[16].find_extended_bounding_box(10))
-        pxtal.gs[10].find_neigh_gid_fast_all_grains(include_parent=False)
-        pxtal.gs[10].neigh_gid
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',
+                         input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            np.unique(pxtal.gs[16].find_extended_bounding_box(10))
+            pxtal.gs[10].find_neigh_gid_fast_all_grains(include_parent=False)
+            pxtal.gs[10].neigh_gid
         """
         neigh_gid = {gid: self.find_neigh_gid_fast(gid, include_parent=include_parent)
                      for gid in self.gid}
@@ -982,25 +994,27 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        # pxtal = mcgs(study='independent', input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 18
-        pxtal.gs[tslice].char_morph_2d(char_gb=True)
-        neigh_order = 3
-        gid = 6
-        neighbours = pxtal.gs[tslice].get_upto_nth_order_neighbors(gid, neigh_order,
-                                                      fast_estimate=False,
-                                                      recalculate=True,
-                                                      include_parent=True,
-                                                      output_type='list')
-        pxtal.gs[tslice].neigh_gid[gid]
+        .. code-block:: python
 
-        pxtal.gs[tslice].plot_grains_gids(pxtal.gs[tslice].gid, gclr='color', title='')
-        pxtal.gs[tslice].plot_grains_gids([gid], gclr='color', title='parent gid: '+str(gid))
-        pxtal.gs[tslice].plot_grains_gids(neighbours, gclr='color', cmap_name='nipy_spectral')
+            from upxo.ggrowth.mcgs import mcgs
+            # pxtal = mcgs(study='independent', input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            tslice = 18
+            pxtal.gs[tslice].char_morph_2d(char_gb=True)
+            neigh_order = 3
+            gid = 6
+            neighbours = pxtal.gs[tslice].get_upto_nth_order_neighbors(gid, neigh_order,
+                                                          fast_estimate=False,
+                                                          recalculate=True,
+                                                          include_parent=True,
+                                                          output_type='list')
+            pxtal.gs[tslice].neigh_gid[gid]
+
+            pxtal.gs[tslice].plot_grains_gids(pxtal.gs[tslice].gid, gclr='color', title='')
+            pxtal.gs[tslice].plot_grains_gids([gid], gclr='color', title='parent gid: '+str(gid))
+            pxtal.gs[tslice].plot_grains_gids(neighbours, gclr='color', cmap_name='nipy_spectral')
         """
         # ---------------------------------------------------------------------
         if neigh_order == 0:
@@ -1108,18 +1122,20 @@ class mcgs2_grain_structure():
         dict
             Dictionary with grain IDs as keys and their neighbors of specified order as values.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',
-                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        neigh_order = 1
-        pxtal.gs[16].get_upto_nth_order_neighbors_all_grains(neigh_order,
-                                                             recalculate=False,
-                                                             include_parent=True,
-                                                             output_type='list')
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',
+                         input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            neigh_order = 1
+            pxtal.gs[16].get_upto_nth_order_neighbors_all_grains(neigh_order,
+                                                                 recalculate=False,
+                                                                 include_parent=True,
+                                                                 output_type='list')
         """
         neighs_upto_nth_order = {gid: self.get_upto_nth_order_neighbors(gid, neigh_order,
                                                                         fast_estimate=fast_estimate,
@@ -1299,19 +1315,21 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 10
-        def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+        .. code-block:: python
 
-        neigh0 = def_neigh(1, recalculate=False, include_parent=True)
-        neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
-        neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
-        neigh0[22]
-        neigh1[2][22]
-        neigh2[2][22]
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+
+            neigh0 = def_neigh(1, recalculate=False, include_parent=True)
+            neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
+            neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
+            neigh0[22]
+            neigh1[2][22]
+            neigh2[2][22]
         """
         # @dev:
             # no: neighbour order in these definitions.
@@ -2000,15 +2018,16 @@ class mcgs2_grain_structure():
         
         Examples
         --------
-        >>> from upxo.ggrowth.mcgs import mcgs
-        >>> pxt = mcgs(study='independent', 
-        ...            input_dashboard='input_dashboard.xls')
-        >>> pxt.simulate()
-        >>> pxt.detect_grains()
-        >>> tslice = 10
-        >>> pxt.gs[tslice].char_morph_2d(make_skim_prop=True)
-        >>> has_straight = pxt.gs[tslice].do_straightline_grains_exist()
-        >>> print(f"Straight-line grains present: {has_straight}")
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            pxt.gs[tslice].char_morph_2d(make_skim_prop=True)
+            has_straight = pxt.gs[tslice].do_straightline_grains_exist()
+            print(f"Straight-line grains present: {has_straight}")
         
         See Also
         --------
@@ -2047,15 +2066,17 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[35].char_morph_2d()
-        mcgs.gs[35].find_neigh()
-        mcgs.gs[35].neigh_gid
-        mcgs.gs[35].get_two_rand_o1_neighs()
-        mcgs.gs[35].plot_two_rand_neighs(return_gids=True)
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[35].char_morph_2d()
+            mcgs.gs[35].find_neigh()
+            mcgs.gs[35].neigh_gid
+            mcgs.gs[35].get_two_rand_o1_neighs()
+            mcgs.gs[35].plot_two_rand_neighs(return_gids=True)
         """
         if self.neigh_gid:
             rand_gid = random.sample(self.gid, 1)[0]
@@ -2083,8 +2104,10 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        Please refer to use in the example provided for the definition,
-        get_two_rand_o1_neighs()
+        .. code-block:: python
+
+            Please refer to use in the example provided for the definition,
+            get_two_rand_o1_neighs()
         """
         rand_neigh_gids = self.get_two_rand_o1_neighs()
         self.plot_grains_gids(rand_neigh_gids, cmap_name='viridis')
@@ -2129,22 +2152,24 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 10
-        pxt.gs[tslice].char_morph_2d()
-        # Find grains with area close to mean area
-        mean_area_gids = pxt.gs[tslice].find_gids_by_mprop(mprop='area',
-                                                           method='at',
-                                                           distr_loc='mean')
-        print("Grain IDs with area close to mean area:", mean_area_gids)
-        # Find grains with area within specified bounds
-        bounded_area_gids = pxt.gs[tslice].find_gids_by_mprop(mprop='area',
-                                                              method='bounded',
-                                                              bounds=[(50, 100), (200, 300)])
-        print("Grain IDs with area within specified bounds:", bounded_area_gids)
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            pxt.gs[tslice].char_morph_2d()
+            # Find grains with area close to mean area
+            mean_area_gids = pxt.gs[tslice].find_gids_by_mprop(mprop='area',
+                                                               method='at',
+                                                               distr_loc='mean')
+            print("Grain IDs with area close to mean area:", mean_area_gids)
+            # Find grains with area within specified bounds
+            bounded_area_gids = pxt.gs[tslice].find_gids_by_mprop(mprop='area',
+                                                                  method='bounded',
+                                                                  bounds=[(50, 100), (200, 300)])
+            print("Grain IDs with area within specified bounds:", bounded_area_gids)
         """
         # -----------------------------------------
         # Validations
@@ -2500,9 +2525,11 @@ class mcgs2_grain_structure():
             validations will be the values. The values will all be bool.
             If a property is a valid property, then True, else False.
 
-        Example
-        -------
-        self.validate_propnames(['area', 'perimeter', 'solidity'])
+        Examples
+        --------
+        .. code-block:: python
+
+            self.validate_propnames(['area', 'perimeter', 'solidity'])
         """
         _ = {pn: pn in self.valid_mprops.keys() for pn in mpnames}
         if return_type == 'dict':
@@ -2559,9 +2586,11 @@ class mcgs2_grain_structure():
             If True, self.g[gn]['grain'].coords will be updated, else not, for
             all gn in self.gid.
 
-        Example
-        -------
-        self.set_mprops(mpnames, recharacterize=True)
+        Examples
+        --------
+        .. code-block:: python
+
+            self.set_mprops(mpnames, recharacterize=True)
         """
         VALMPROPS = deepcopy(self.valid_mprops)
         # ----------------------------
@@ -2605,21 +2634,23 @@ class mcgs2_grain_structure():
             Dictionary with mpnames as keys and their corresponding values
             as numpy arrays.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[mcgs.m[-1]].char_morph_2d(bbox=True, bbox_ex=True,
-                                     area=True,aspect_ratio=True,
-                                     make_skim_prop=True,)
+        Examples
+        --------
+        .. code-block:: python
 
-        mpnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
-        mcgs.gs[mcgs.m[-1]].prop
-        mprop_values = mcgs.gs[mcgs.m[-1]].get_mprops(mpnames,
-                                                      set_missing_mprop=True)
-        mprop_values
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[mcgs.m[-1]].char_morph_2d(bbox=True, bbox_ex=True,
+                                         area=True,aspect_ratio=True,
+                                         make_skim_prop=True,)
+
+            mpnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
+            mcgs.gs[mcgs.m[-1]].prop
+            mprop_values = mcgs.gs[mcgs.m[-1]].get_mprops(mpnames,
+                                                          set_missing_mprop=True)
+            mprop_values
         """
         if not all(self.validate_propnames(mpnames, return_type='list')):
             raise ValueError('Invalid mpname values.')
@@ -2883,37 +2914,39 @@ class mcgs2_grain_structure():
             'lgi': Mapped LGI as a numpy array.
             'ax': Axis object if throw_axis is True, else None.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 10
-        def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+        Examples
+        --------
+        .. code-block:: python
 
-        neigh1 = def_neigh(1.38, recalculate=False, include_parent=True)
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
 
-        sf_no = pxt.gs[tslice]
+            neigh1 = def_neigh(1.38, recalculate=False, include_parent=True)
 
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
-                                  aspect_ratio=True,
-                                  make_skim_prop=True,)
-        GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['aspect_ratio', 'area'],
-                                              fx_stats=[np.mean, np.mean],
-                                              pdslh=[[50, 30], [50, 30]], plot_mprop=False
-                                              )
-        mcgs.gs[35].map_scalar_to_lgi(GIDs['presence'], default_scalar=-1,
-                              plot=True, throw_axis=True)
+            sf_no = pxt.gs[tslice]
 
-        gid_mprop_map = mcgs.gs[35].get_gid_mprop_map('aspect_ratio',
-                                                      GIDs['mpmapped']['aspect_ratio'])
-        MPLGIAX = mcgs.gs[35].map_scalar_to_lgi(gid_mprop_map, default_scalar=-1,
-                              plot=True, throw_axis=True)
+            from upxo.growth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
+                                      aspect_ratio=True,
+                                      make_skim_prop=True,)
+            GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['aspect_ratio', 'area'],
+                                                  fx_stats=[np.mean, np.mean],
+                                                  pdslh=[[50, 30], [50, 30]], plot_mprop=False
+                                                  )
+            mcgs.gs[35].map_scalar_to_lgi(GIDs['presence'], default_scalar=-1,
+                                  plot=True, throw_axis=True)
+
+            gid_mprop_map = mcgs.gs[35].get_gid_mprop_map('aspect_ratio',
+                                                          GIDs['mpmapped']['aspect_ratio'])
+            MPLGIAX = mcgs.gs[35].map_scalar_to_lgi(gid_mprop_map, default_scalar=-1,
+                                  plot=True, throw_axis=True)
         """
         # Validations
         self.validata_gids(scalars_dict.keys())
@@ -3226,28 +3259,30 @@ class mcgs2_grain_structure():
             Local Grain Index (LGI) array as a numpy array with twin regions
             marked as -1.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
-                                  aspect_ratio=True, perimeter=True, solidity=True,
-                                  make_skim_prop=True,)
-        mcgs.gs[35].prop.columns
-        mcgs.gs[35].find_neigh()
-        mcgs.gs[35].g[12]['grain'].coords
-        mcgs.gs[35].g[12]['grain'].centroid
-        GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['area'],
-                                              fx_stats=[np.mean],
-                                              pdslh=[[50, 50]],
-                                              plot_mprop=False
-                                              )
-        gids = GIDs['mpmapped']['area']
-        mcgs.gs[35].introduce_single_twins(GIDs=gids, full_twin=True,
-                                   throw_lgi=True, plotgs_original=False,
-                                   plotgs_twinned=True)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
+                                      aspect_ratio=True, perimeter=True, solidity=True,
+                                      make_skim_prop=True,)
+            mcgs.gs[35].prop.columns
+            mcgs.gs[35].find_neigh()
+            mcgs.gs[35].g[12]['grain'].coords
+            mcgs.gs[35].g[12]['grain'].centroid
+            GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['area'],
+                                                  fx_stats=[np.mean],
+                                                  pdslh=[[50, 50]],
+                                                  plot_mprop=False
+                                                  )
+            gids = GIDs['mpmapped']['area']
+            mcgs.gs[35].introduce_single_twins(GIDs=gids, full_twin=True,
+                                               throw_lgi=True, plotgs_original=False,
+                                               plotgs_twinned=True)
 
         Notes
         -----
@@ -3346,18 +3381,20 @@ class mcgs2_grain_structure():
         -------
         None
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20  # Temporal slice number
-        pxt.char_morph_2d(tslice)
-        pxt.gs[tslice].export_ctf(r'D:/export_folder', 'sunil')
-        path_filename_noext = r'D:/export_folder/sunil'
-        pxt.gs[tslice].set_pxtal(path_filename_noext=path_filename_noext)
-        pxt.gs[tslice].pxtal.map
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20  # Temporal slice number
+            pxt.char_morph_2d(tslice)
+            pxt.gs[tslice].export_ctf(r'D:/export_folder', 'sunil')
+            path_filename_noext = r'D:/export_folder/sunil'
+            pxt.gs[tslice].set_pxtal(path_filename_noext=path_filename_noext)
+            pxt.gs[tslice].pxtal.map
         """
         IN, _fn_ = instance_no, path_filename_noext
         _khfflag_, _khfmo_ = apply_kuwahara, kuwahara_misori
@@ -3572,23 +3609,24 @@ class mcgs2_grain_structure():
         
         Examples
         --------
-        >>> from upxo.ggrowth.mcgs import mcgs
-        >>> pxt = mcgs(study='independent', 
-        ...            input_dashboard='input_dashboard.xls')
-        >>> pxt.simulate()
-        >>> pxt.detect_grains()
-        >>> pxt.gs[10].char_grain_positions_2d()
-        >>> 
-        >>> # Access corner grains
-        >>> corner_grains = pxt.gs[10].positions['corner']
-        >>> 
-        >>> # Access internal grains
-        >>> internal_grains = pxt.gs[10].positions['internal']
-        >>> 
-        >>> # Get position of a specific grain
-        >>> grain_5_position = pxt.gs[10].g[5]['grain'].position
-        >>> print(f"Grain 5 centroid: ({grain_5_position[0]:.2f}, {grain_5_position[1]:.2f})")
-        >>> print(f"Grain 5 category: {grain_5_position[2]}")
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxt.simulate()
+            pxt.detect_grains()
+            pxt.gs[10].char_grain_positions_2d()
+
+            # Access corner grains
+            corner_grains = pxt.gs[10].positions['corner']
+
+            # Access internal grains
+            internal_grains = pxt.gs[10].positions['internal']
+
+            # Get position of a specific grain
+            grain_5_position = pxt.gs[10].g[5]['grain'].position
+            print(f"Grain 5 centroid: ({grain_5_position[0]:.2f}, {grain_5_position[1]:.2f})")
+            print(f"Grain 5 category: {grain_5_position[2]}")
         
         See Also
         --------
@@ -3826,23 +3864,24 @@ class mcgs2_grain_structure():
         
         Examples
         --------
-        >>> from upxo.ggrowth.mcgs import mcgs
-        >>> pxt = mcgs(study='independent', 
-        ...            input_dashboard='input_dashboard.xls')
-        >>> pxt.simulate()
-        >>> pxt.detect_grains()
-        >>> pxt.gs[10].char_grain_positions_2d()
-        >>> 
-        >>> # Access corner grains
-        >>> corner_grains = pxt.gs[10].positions['corner']
-        >>> 
-        >>> # Access internal grains
-        >>> internal_grains = pxt.gs[10].positions['internal']
-        >>> 
-        >>> # Get position of a specific grain
-        >>> grain_5_position = pxt.gs[10].g[5]['grain'].position
-        >>> print(f"Grain 5 category: {grain_5_position}[2]}")
-        >>> print(f"Grain 5 category: {grain_5_position[2]}")
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxt.simulate()
+            pxt.detect_grains()
+            pxt.gs[10].char_grain_positions_2d()
+
+            # Access corner grains
+            corner_grains = pxt.gs[10].positions['corner']
+
+            # Access internal grains
+            internal_grains = pxt.gs[10].positions['internal']
+
+            # Get position of a specific grain
+            grain_5_position = pxt.gs[10].g[5]['grain'].position
+            print(f"Grain 5 category: {grain_5_position}[2]}")
+            print(f"Grain 5 category: {grain_5_position[2]}")
         
         See Also
         --------
@@ -3913,13 +3952,15 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        border_gids, internal_gids, lgi_border, lgi_internal = find_border_internal_grains_fast()
+        .. code-block:: python
 
-        plt.figure()
-        plt.imshow(lgi_border)
+            border_gids, internal_gids, lgi_border, lgi_internal = find_border_internal_grains_fast()
 
-        plt.figure()
-        plt.imshow(lgi_internal)
+            plt.figure()
+            plt.imshow(lgi_border)
+
+            plt.figure()
+            plt.imshow(lgi_internal)
 
         """
         lgi = self.lgi
@@ -3961,11 +4002,13 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        grain_areas_all_grains = pxtal.gs[2].find_grain_size_fast(metric='npixels')
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            grain_areas_all_grains = pxtal.gs[2].find_grain_size_fast(metric='npixels')
         """
         if recalculate_gid:
             self.gid = np.unique(self.lgi)
@@ -4003,11 +4046,13 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        grain_areas_border_grains = pxtal.gs[2].find_npixels_border_grains_fast(metric='npixels')
+        .. code-block:: python
+
+            from upxo.growth.mcgs import mcgs
+            pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            grain_areas_border_grains = pxtal.gs[2].find_npixels_border_grains_fast(metric='npixels')
         """
         border_gids, _, __, ___ = self.find_border_internal_grains_fast()
         counts = np.bincount(self.lgi.ravel(), minlength=self.gid.max() + 1)
@@ -4044,11 +4089,13 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        grain_areas_internal_grains = pxtal.gs[2].find_npixels_internal_grains_fast(metric='npixels')
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            grain_areas_internal_grains = pxtal.gs[2].find_npixels_internal_grains_fast(metric='npixels')
         """
         _, internal_grains, __, ___ = self.find_border_internal_grains_fast()
         counts = np.bincount(self.lgi.ravel(), minlength=self.gid.max() + 1)
@@ -4106,14 +4153,16 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        ags_all = pxtal.gs[2].find_ags(grains_to_include='all', method='npixels')
-        ags_border = pxtal.gs[2].find_ags(grains_to_include='border', method='npixels')
-        ags_internal = pxtal.gs[2].find_ags(grains_to_include='internal', method='npixels')
-        ags_specific = pxtal.gs[2].find_ags(grains_to_include='gids', gids=[1,2,3], method='npixels')
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
+            pxtal.simulate()
+            pxtal.detect_grains()
+            ags_all = pxtal.gs[2].find_ags(grains_to_include='all', method='npixels')
+            ags_border = pxtal.gs[2].find_ags(grains_to_include='border', method='npixels')
+            ags_internal = pxtal.gs[2].find_ags(grains_to_include='internal', method='npixels')
+            ags_specific = pxtal.gs[2].find_ags(grains_to_include='gids', gids=[1,2,3], method='npixels')
         """
         if grains_to_include == 'all':
             pass
@@ -4563,6 +4612,8 @@ class mcgs2_grain_structure():
 
         Examples
         --------
+        .. code-block:: python
+
             PXGS.gs[4].extract_statistics_prop('area')
         """
         # Extract the values of the PROP_NAME
@@ -4761,12 +4812,14 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                    range_type='rank', value_range=[80, 100])
-        gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='area',
-                                    range_type='percentage', value_range=[80, 100])
-        gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                    range_type='value', value_range=[2, 2.5])
+        .. code-block:: python
+
+            gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
+                                        range_type='rank', value_range=[80, 100])
+            gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='area',
+                                        range_type='percentage', value_range=[80, 100])
+            gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
+                                        range_type='value', value_range=[2, 2.5])
         """
         gids, A_B_values, A_B_indices = [], [], []
         if PROP_NAME in self.prop.columns:
@@ -4999,17 +5052,19 @@ class mcgs2_grain_structure():
         -------
         None.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[35].plotgs(figsize=(6, 6), dpi=120, cmap='coolwarm',
-                           plot_centroid=True,
-                           centroid_kwargs={'marker':'o','mfc':'yellow',
-                                            'mec':'black','ms':2.5},
-                           plot_gid_number=True)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[35].plotgs(figsize=(6, 6), dpi=120, cmap='coolwarm',
+                               plot_centroid=True,
+                               centroid_kwargs={'marker':'o','mfc':'yellow',
+                                                'mec':'black','ms':2.5},
+                               plot_gid_number=True)
         """
         plt.figure(figsize=figsize, dpi=dpi)
         if custom_lgi is None:
@@ -5064,14 +5119,15 @@ class mcgs2_grain_structure():
         As we are only interested in gid, we will not use the other
         two values returned by PXGS.gs[n].get_gid_prop_range() method:
 
-        gid, _, __ = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                                    range_type='rank',
-                                                    rank_range=[80, 100]
-                                                    )
-        Now, pass gid as input for the PXGS.gs[n].plot_grains_gids(),
-        which will then plot the grain strucure with only these values:
+        .. code-block:: python
 
-        PXGS.gs[8].plot_grains_gids(gid, cmap_name='CMRmap_r')
+            gid, _, __ = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
+                                                        range_type='rank',
+                                                        rank_range=[80, 100]
+                                                        )
+            # Now, pass gid as input for the PXGS.gs[n].plot_grains_gids(),
+            # which will then plot the grain strucure with only these values:
+            PXGS.gs[8].plot_grains_gids(gid, cmap_name='CMRmap_r')
         """
         if not dth.IS_ITER(gids):
             gids = [gids]
@@ -5379,7 +5435,9 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        self.plot_grains([1, 2, 3, 4])
+        .. code-block:: python
+
+            self.plot_grains([1, 2, 3, 4])
         """
         if not isinstance(gids, Iterable):
             raise TypeError('gids should be an Iterable')
@@ -5430,7 +5488,9 @@ class mcgs2_grain_structure():
 
         Examples
         --------
-        PXGS.gs[tslice].plot_grains_at_position(position='boundary')
+        .. code-block:: python
+
+            PXGS.gs[tslice].plot_grains_at_position(position='boundary')
         """
         LGI = deepcopy(self.lgi)
         boundary_array = self.positions[position]
@@ -6171,23 +6231,25 @@ class mcgs2_grain_structure():
         -------
         None.
 
-        Example-1
-        ---------
-        xboundPer = (0, 100)
-        yboundPer = (0, 100)
-        zboundPer = (0, 100)
-        mlist = [0, 10, 20]
-        sliceStepSize = 1
-        sliceNormal = 'z'
-        xoriConsideration = {'method': 'random'}
-        exportDir = 'FULL PATH'
-        fileFormats = {'.ctf': {},
-                       '.vtk3d': {},
-                       }
-        overwrite = True
-        PXGS.export_slices(xboundPer, yboundPer, zboundPer, mlist,
-                           sliceStepSize, sliceNormal, exportDir,
-                           fileFormats, overwrite)
+        Examples
+        --------
+        .. code-block:: python
+
+            xboundPer = (0, 100)
+            yboundPer = (0, 100)
+            zboundPer = (0, 100)
+            mlist = [0, 10, 20]
+            sliceStepSize = 1
+            sliceNormal = 'z'
+            xoriConsideration = {'method': 'random'}
+            exportDir = 'FULL PATH'
+            fileFormats = {'.ctf': {},
+                           '.vtk3d': {},
+                           }
+            overwrite = True
+            PXGS.export_slices(xboundPer, yboundPer, zboundPer, mlist,
+                               sliceStepSize, sliceNormal, exportDir,
+                               fileFormats, overwrite)
         """
         xsz = math.floor((self.uigrid.xmax-self.uigrid.xmin)/self.uigrid.xinc)
         ysz = math.floor((self.uigrid.ymax-self.uigrid.ymin)/self.uigrid.yinc)
