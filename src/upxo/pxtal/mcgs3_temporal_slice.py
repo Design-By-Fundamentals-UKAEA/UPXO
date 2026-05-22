@@ -2453,9 +2453,8 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        lgisubset_loosebound : np.ndarray
-
-        gstslice.find_exbounding_cube_gid(1)
+        np.ndarray
+            Loose bounding cube for the requested grain.
         """
         xsl = slice(self.spboundex['xmins'][gid-1],
                     self.spboundex['xmaxs'][gid-1]+1)
@@ -2518,11 +2517,12 @@ class mcgs3_grain_structure():
 
     def validate_scalar_field_name(self, sf_name):
         """
-        Validate if user input sf_name is a valid sclar field name.
+        Validate whether ``sf_name`` is a supported scalar field name.
 
         Parameters
         ----------
-        sf_name
+        sf_name : str
+            Scalar field name to validate.
 
         Save as attribute
         -----------------
@@ -2532,9 +2532,9 @@ class mcgs3_grain_structure():
         -------
         None
 
-        Explanations
-        ------------
-        This definition is mainly for intewrnal use.
+        Notes
+        -----
+        This definition is mainly for internal use.
         """
         if sf_name not in self.valid_scalar_fields:
             print('Check self.valid_scalar_fields for valid sf names.')
@@ -2557,44 +2557,38 @@ class mcgs3_grain_structure():
         Parameters
         ----------
         sf_name : str, optional
+            Name of the scalar field to return.
+        sf_details : dict, optional
+            Configuration used when constructing derived scalar fields.
+        make_pvgrid : bool, optional
+            Return a PyVista grid alongside the scalar field when True.
 
         Returns
         -------
-        sf_value : np.ndarray / None
+        dict
+            Dictionary containing the scalar field and optional grid.
 
         Examples
         --------
-        * Pre-requisites
+        .. code-block:: python
 
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 49
-        gstslice = pxt.gs[tslice]
+            from upxo.ggrowth.mcgs import mcgs
 
-        Example - 1: We will build the neighbour of n(O), create the
-        scalr field by mapping across lgi and return a pvgrid if desired, all
-        in a single function call.
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 49
+            gstslice = pxt.gs[tslice]
 
-        sf = gstslice.get_scalar_field(sf_name='neigh',
-                                       sf_details={'name': 'nneigh.1',
-                                                   'valby': 'build',
-                                                   'norder': 1.5,
-                                                   'include_parent': False,
-                                                   'subfield': 'nneigh'
-                                                   },
-                                       make_pvgrid=True
-                                      )
-        pvgrid = gstslice.make_pvgrid_v1(feature_name='user',
-                                     instance_name='none',
-                                     user_fid=sf_no,
-                                     scalar_name='sf_no',
-                                     pvgrid_origin=(0, 0, 0),
-                                     pvgrid_spacing=(1, 1, 1),
-                                     perform_checks=False)
-        pvgrid.plot(cmap='nipy_spectral')
-
+            sf = gstslice.get_scalar_field(
+                sf_name='neigh',
+                sf_details={'name': 'nneigh.1',
+                            'valby': 'build',
+                            'norder': 1.5,
+                            'include_parent': False,
+                            'subfield': 'nneigh'},
+                make_pvgrid=True,
+            )
         """
         self.validate_scalar_field_name(sf_name)
 
@@ -2709,29 +2703,27 @@ class mcgs3_grain_structure():
                           make_pvgrid=False
                           ):
         """
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 49
-        gstslice = pxt.gs[tslice]
+        Map scalar values onto the grain-label image.
 
-        def_neigh = gstslice.get_upto_nth_order_neighbors_all_grains_prob
-        neigh = def_neigh(3.2, recalculate=False, include_parent=True)
-        nneigh = {gid: len(_nei_) for gid, _nei_ in neigh.items()}
-        sf_no = gstslice.map_scalar_to_lgi(nneigh, default_scalar=-1)
+        Parameters
+        ----------
+        scalars_dict : dict
+            Mapping from grain ID to scalar value.
+        default_scalar : float, optional
+            Value assigned to grains not present in ``scalars_dict``.
+        scalar_name : str, optional
+            Name used when storing the mapped scalar field.
+        saa : bool, optional
+            Store the mapped field on the instance when True.
+        throw : bool, optional
+            Return the mapped field dictionary when True.
+        make_pvgrid : bool, optional
+            Build a PyVista grid when True.
 
-        pvgrid = gstslice.make_pvgrid_v1(feature_name='user',
-                                     instance_name='none',
-                                     user_fid=sf_no,
-                                     scalar_name='sf_no',
-                                     pvgrid_origin=(0, 0, 0),
-                                     pvgrid_spacing=(1, 1, 1),
-                                     perform_checks=False)
-        pvgrid.plot(cmap='nipy_spectral')
-
-        slices = pvgrid.slice_orthogonal(x=25, y=25, z=25)
-        slices.plot(show_edges=True)
+        Returns
+        -------
+        dict or None
+            Scalar-field dictionary when ``throw`` is True; otherwise ``None``.
         """
         LGI = deepcopy(self.lgi)
 
@@ -4589,7 +4581,7 @@ class mcgs3_grain_structure():
                            maximum=True, std=True, variance=True,
                            verbose=True):
         """
-        Measure intercept properties along line b/w two specified locations.
+        Measure intercept properties along the line between two locations.
 
         Parameters
         ----------
@@ -4619,21 +4611,10 @@ class mcgs3_grain_structure():
             Flag to return variance. Return variance when True. Default is
             True.
 
-        Return
-        ------
-        igs: A dictionary having the following keys:
-            * igs: float
-                Intercept grain size metric.
-            * metric: str
-                Metric specified by the user.
-            * min: float
-                Minimum value.
-            * max: float
-                Maximum value.
-            * std: float
-                Standard deviation.
-            * var: float
-                Variance.
+        Returns
+        -------
+        dict
+            Intercept grain-size statistics for the sampled line.
         """
         # Validations
         if verbose:
@@ -4751,17 +4732,9 @@ class mcgs3_grain_structure():
             Applied if shift_starts is True. Explanations same as that for
             inclination_extent, with respect to ending point.
 
-        Explanations
-        ------------
-        Please refer to in-code explanations of this function.
-
-        Functionality order
-        -------------------
-        Tertiary
-
-        Author
-        ------
-        Dr. Sunil Anandatheertha, UKAEA. 24-08-2024
+        Notes
+        -----
+        Please refer to the inline comments in this function.
         """
         # Validations
         # ----------------------
@@ -4887,21 +4860,10 @@ class mcgs3_grain_structure():
             See self.get_opposing_points_on_gs_bound_planes function
             documentaiton for details.
 
-        Return
-        ------
-        igs: A dictionary having the following keys:
-            * igs: list
-                List of intercept grain size values.
-            * metric: str
-                Metric specified by the user.
-            * min: list
-                List of minimum values.
-            * max: list
-                List of maximum values.
-            * std: list
-                List of standard deviations.
-            * var: list
-                List of variance values.
+        Returns
+        -------
+        dict
+            Intercept grain-size statistics across all sampled lines.
 
         Examples
         --------
@@ -5023,10 +4985,10 @@ class mcgs3_grain_structure():
              'shift_starts': False, 'shift_ends': False,
              'start_shift': 0, 'end_shift': 0}
 
-        Return
-        ------
-        cags_ratio : float
-            Characteristic Average Grain Size ratio
+        Returns
+        -------
+        float
+            Characteristic average grain-size ratio.
         """
         temp1 = lines_kwargs1['inclination_extent']
         lines_kwargs1 = {'plane': lines_kwargs1['plane'],
@@ -5206,33 +5168,17 @@ class mcgs3_grain_structure():
             * 'le'
             * 'lt'
 
-        Example-1
-        ---------
-        We will use this function to querry the gids which have their volumes
-        calculated by number of voxels.
+        Examples
+        --------
+        .. code-block:: python
 
-        '''We can retireve the volume by number of voxels using the property,
-        nvoxels_values.'''
-        gstslice.nvoxels_values
-        # ------------------------
-        '''We can now querry for the gids having volnv between 10 and 15 as
-        below. We will include 10 and 15 in our calculations by specifying the
-        appropriate inequality.'''
-        gids = gstslice.find_grains_by_mprop_range(prop_name='volnv',
-                                            low=10, high=15,
-                                            low_ineq='ge', high_ineq='le')
-        # ------------------------
-        '''Since the propety used here is volume by number of voxels, we can
-        directly querry the values as below. Note that we need to subtract 1
-        to make sure that we are using python array indexing and not the grain
-        id number, which starts from 1.'''
-        gstslice.nvoxels_values[gids-1]
-        # ------------------------
-        '''We can also get the values using the actual morphological property
-        dictionary mprop by specifyng the property name. Note this wuld need
-        a small list comprehension thoguh.'''
-        [gstslice.mprop['volnv'][gid] for gid in gids]
-        # ------------------------
+            gstslice.nvoxels_values
+            gids = gstslice.find_grains_by_mprop_range(prop_name='volnv',
+                                                       low=10, high=15,
+                                                       low_ineq='ge',
+                                                       high_ineq='le')
+            gstslice.nvoxels_values[gids-1]
+            [gstslice.mprop['volnv'][gid] for gid in gids]
         """
         if low_ineq not in ('ge', 'gt'):
             low_ineq = 'ge'
@@ -5341,12 +5287,20 @@ class mcgs3_grain_structure():
         """
         Get a slice along one of the three fundamental planes.
 
-        Explanations
-        ------------
+        Parameters
+        ----------
+        slice_plane : str, optional
+            Plane to extract.
+        loc : int, optional
+            Slice index along the selected normal.
+        scalar : str or ndarray, optional
+            Scalar field or array to slice.
 
         Examples
         --------
-        scalar = gstslice.get_slice(slice_plane='xy', loc=0, scalar='lgi')
+        .. code-block:: python
+
+            scalar = gstslice.get_slice(slice_plane='xy', loc=0, scalar='lgi')
         """
         # Validations
         # ---------------------------
@@ -5380,8 +5334,11 @@ class mcgs3_grain_structure():
 
         Examples
         --------
-        lgi = gstslice.reset_slice_lgi(scalar_slice, library='scikit-image',
-                                       kernel_order=4)
+        .. code-block:: python
+
+            lgi = gstslice.reset_slice_lgi(scalar_slice,
+                                           library='scikit-image',
+                                           kernel_order=4)
         """
         # Validations
         # --------------------
@@ -5435,8 +5392,11 @@ class mcgs3_grain_structure():
         ----------
         lgi : np.ndarray
 
-        Example
-        -------
+        Examples
+        --------
+        .. code-block:: python
+
+            positions = gstslice.char_slice_gid_psitions(lgi)
         """
         # Validations
         # --------------------------
@@ -5498,14 +5458,16 @@ class mcgs3_grain_structure():
 
         Examples
         --------
-        gstslice.char_lgi_slice_morpho(slice_plane='xy', loc=0,
-                                       reset_lgi=True,
-                                       kernel_order=4,
-                                       mprop_names=['area', 'eqdia', 'fdia'],
-                                       ignore_border_grains_2d=True)
-        gstslice.lgi_slice['mprop']['eqdia']
-        gstslice.lgi_slice['mprop']['area']
-        gstslice.lgi_slice['mprop']['fdia']
+        .. code-block:: python
+
+            gstslice.char_lgi_slice_morpho(slice_plane='xy', loc=0,
+                                           reset_lgi=True,
+                                           kernel_order=4,
+                                           mprop_names=['area', 'eqdia', 'fdia'],
+                                           ignore_border_grains_2d=True)
+            gstslice.lgi_slice['mprop']['eqdia']
+            gstslice.lgi_slice['mprop']['area']
+            gstslice.lgi_slice['mprop']['fdia']
         """
         # Validations
         # ----------------------------
@@ -5636,12 +5598,12 @@ class mcgs3_grain_structure():
         save_plot2d_grains : bool, optional
             Defaults to True.
 
-        Return
-        ------
+        Returns
+        -------
         None
 
-        Explanations
-        ------------
+        Notes
+        -----
         None
 
         Notes
@@ -6659,10 +6621,10 @@ class mcgs3_grain_structure():
         reset_skimrp_every_iter : bool, optional
             Defaults to False.
 
-        saa
-        ---
-        Following attributres are automatically updated after each tnp has been
-        addressed.
+        Notes
+        -----
+        The following attributes are updated after each threshold has been
+        processed.
             * self.lgi
             * self.n
             * self.gid
@@ -6672,8 +6634,8 @@ class mcgs3_grain_structure():
             * self.spbound
             * self.spboundex
 
-        Return
-        ------
+        Returns
+        -------
         None
 
         Options for prop
@@ -6705,15 +6667,10 @@ class mcgs3_grain_structure():
         Phase properties:
             * 'pid': phase ID
 
-        Explanations
-        ------------
-        volnv, volsr, volch
-
-        Note @ developer
-        ----------------
-        v1 refers to version 1. This is the most basic version. Any
-        advancements to retain this and introduce the new ones as seperate
-        cvapabilities and choose v2, v3, etc.
+        Notes
+        -----
+        ``prop`` may reference volume, surface, or shape metrics. ``v1``
+        denotes the first version of this routine.
 
         Author
         ------
@@ -6860,10 +6817,9 @@ class mcgs3_grain_structure():
         parameter_metric:
         threshold:
 
-        saa
-        ---
-        Following attributres are automatically updated after each tnp has been
-        addressed.
+        Notes
+        -----
+        The following attributes are updated after each threshold is processed.
             * self.lgi
             * self.n
             * self.gid
@@ -6873,8 +6829,8 @@ class mcgs3_grain_structure():
             * self.spbound
             * self.spboundex
 
-        Return
-        ------
+        Returns
+        -------
         None
 
         Options for prop1, prop2, prop3, prop4
@@ -6906,11 +6862,9 @@ class mcgs3_grain_structure():
         Phase properties:
             * 'pid': phase ID
 
-        Explanations
-        ------------
-        v1 refers to version 1. This is the most basic version. Any
-        advancements to retain this and introduce the new ones as seperate
-        cvapabilities and choose v2, v3, etc.
+        Notes
+        -----
+        ``v2`` denotes a later revision of the erosion-based cleaning routine.
 
         Author
         ------
@@ -6925,12 +6879,24 @@ class mcgs3_grain_structure():
 
     def set_Lgbp_gid(self, gid, saa=True, throw=False, verbose=True):
         """
-        Return
-        ------
-        Lgbp_all: All the Local grain boudnary points. Local because, they
-            are defined againsdt the xmin, ymin, zmin of the grain and not the
-            grain structure. A translation would be needed for the return
-            value to align with the grain in grain structure.
+        Return the local grain-boundary points for ``gid`` or store them.
+
+        Parameters
+        ----------
+        gid : int
+            Grain ID.
+        saa : bool, optional
+            Store the result in ``self.Lgbp_all`` when True.
+        throw : bool, optional
+            Reserved for compatibility.
+        verbose : bool, optional
+            Emit progress output when True.
+
+        Returns
+        -------
+        numpy.ndarray or None
+            Local grain-boundary points when ``saa`` is False; otherwise
+            ``None``.
         """
         if verbose:
             if gid % 50 == 0:
@@ -6975,16 +6941,10 @@ class mcgs3_grain_structure():
         -------
         None
 
-        DEscripotion
-        ------------
-        This function uses the following steps.
-            1. Form gbpltv, the gbp local translation vector. This is 0.5 on
-                all sides. This is a consequence of skimage.segmentation ->
-                find_boundaries operations performed in the subpixel mode,
-                which has an effect of truncating the extreme sides of the
-                grain locations by half a pixel.
-            2. Form minextreme, the gbp global translation vector.
-            3. Update each local gbp by the total trnslation vector.
+        Notes
+        -----
+        The local boundary points are shifted by a half-voxel offset and the
+        grain-specific minimum extents to obtain global coordinates.
         """
         # Form the gbpltv, the gbp local translation vector
         gbpltv = np.array([0.5, 0.5, 0.5])
@@ -7120,26 +7080,11 @@ class mcgs3_grain_structure():
         -------
         None
 
-        Explanations
-        ------------
-        Grain boundary points of every grain is:   gstslice.Ggbp_all
-        All grain boundary pints are:   gstslice.gbpstack
-        All grain boundary point IDs are:   gstslice.gbpids
-
-        Grain boundaryt point coordinaes to gbp ID value mapping. Here, the
-        coordinates, written a tuple of 3 numbers form the key.
-        gstslice.gbp_id_maps
-
-        # Grain boundary point IDs for every gid.
-        gstslice.gbp_ids
-
-        # Coordinates of grain boundary points of each gid
-        gstslice.Ggbp_all
-
-        # Coordinates of all grain boundary points
-        gstslice.gbpstack[0]
-
-        gstslice.gbp_id_maps[tuple(gstslice.gbpstack[0])]
+        Notes
+        -----
+        ``self.Ggbp_all`` stores grain-boundary points for each grain,
+        ``self.gbpstack`` stores all unique grain-boundary points, and
+        ``self.gbp_id_maps`` maps coordinates to point IDs.
 
         """
         print(40*'-', '\nIdentifying gbp IDs of grain neigh pairs.')
@@ -7174,61 +7119,10 @@ class mcgs3_grain_structure():
         -------
         None
 
-        Explanations
-        ------------
-        # Step 1: Get core grain, which is actually, gidl.
-        # Step 2: Get gidr, which must be one of O(1) neighbours of gidl.
-        # Step 3: Get the grain boundary points of core grain.
-        # Step 3: Alternative: Get the grain boundary points of core grain.
-        # Step 4: Get the interface ID
-        # Step 5: Get the gid_pair interfacial grain boundary point IDs.
-        # Step 6: Get the coordinates of all grain boundary points of core_gid
-
-        ALTERNATIVELY, we can also do this manually:
-            # Step 1: Get core grain
-            gid_core = 1
-            # Step 2: Get one of its neighbours
-            gid_neigh = gstslice.neigh_gid[gid_core][2]
-            # Step 3: Get the grain boundary points of core grain.
-            gbp_ids_core_grain = list(gstslice.gbp_ids[gid_core])
-            gbp_coords_core_grain = gstslice.gbpstack[gbp_ids_core_grain]  # gbp_coords_core_grain.shape
-            # Step 3: Alternative: Get the grain boundary points of core grain.
-            gbp_coords_core_grain = gstslice.Ggbp_all[gid_core]  # gbp_coords_core_grain.shape
-            # Step 4: Get the interface ID
-            gid_pair = (gid_core, gid_neigh)
-            lrrl = gstslice.is_gid_pair_in_lr_or_rl(gid_pair)
-            if lrrl == 'lr':
-                # Things are correctr. Nothing more to do.
-                pass
-            elif lrrl == 'rl':
-                # gid_pair neede to be reversed.
-                gid_pair = (gid_neigh, gid_core)
-            interface_id = gstslice.gid_pair_ids_rev[gid_pair]
-            # Step 5: Get the gid_pair interfacial grain boundary point IDs.
-            gid_pair_gbp_IDs = list(gstslice.gbsurf_pids_vox[interface_id])
-            # Step 6: Get the coordinates of all grain boundary points of core_gid
-            gid_pair_gbp_coords = gstslice.gbpstack[gid_pair_gbp_IDs]
-            # Step 7: Plot gid pairs and all grain boundary points: Figure 1
-            data = {'cores': [gid_core], 'others': [gid_neigh]}
-            gstslice.plot_grain_sets(data=data, scalar='lgi', plot_coords=True,
-                                     coords=gbp_coords_core_grain,
-                                     opacities=[1.00, 0.90, 0.75, 0.50],
-                                     pvp=None, cmap='viridis',
-                                     style='wireframe', show_edges=True, lw=0.5,
-                                     opacity=1, view=None, scalar_bar_args=None,
-                                     axis_labels = ['001', '010', '100'], throw=False,
-                                     validate_data=False)
-
-            # Step 8: Plot gid pairs and interfacial grain boundary points: Figure 2
-            data = {'cores': [gid_core], 'others': [gid_neigh]}
-            gstslice.plot_grain_sets(data=data, scalar='lgi', plot_coords=True,
-                                     coords=gid_pair_gbp_coords,
-                                     opacities=[1.00, 0.90, 0.75, 0.50],
-                                     pvp=None, cmap='viridis',
-                                     style='wireframe', show_edges=True, lw=0.5,
-                                     opacity=1, view=None, scalar_bar_args=None,
-                                     axis_labels = ['001', '010', '100'], throw=False,
-                                     validate_data=False)
+        Notes
+        -----
+        The interface ID is resolved from the ordered grain-pair mapping and
+        the stored interfacial point-ID sets.
         """
         # gidl = 1
         # gidr = self.neigh_gid[gidl][2]
@@ -7323,69 +7217,12 @@ class mcgs3_grain_structure():
 
     def set_neigh_gid_interaction_pairs(self, verbose=True):
         """
-        Please refer to the explanations below.
+        Build grain-pair interaction triples from the neighbour map.
 
-        Explanations
-        ------------
-        Every gid has neigh_gid, accessed as gstslice.neigh_gid[gid].
-        Say this is a list [gid1, gi2, gid3,..., gidn]. A gid in this list
-        shares a grain boundary with atleast one of the other gids in this
-        list.
-
-        The current definition extracts this information, which is needed
-        in identifying those gbp which form one of the boundaries of a given
-        grain boundary interface surface. In other words, this helps extract
-        the IDs (and hence coordinates) of points which form the grain
-        boundary segments.
-
-        The end points oif these grain boundary segments are then be
-        used to calculate the greain boundary junction points.
-
-        Pre-development notes by Dr. Sunil Anandatheertha
-        -------------------------------------------------
-        gstslice.neigh_gid can be used to do this. Pick a gid in
-        gstslice.neigh_gid[GID].
-
-        For every gid, intersect the set
-        set(gstslice.neigh_gid[GID])-set(gid) with,
-        set(gstslice.neigh_gid[gid]). This will give the list of all grains
-        in gstslice.neigh_gid[GID] which are neighbouring grains of the
-        gid in question.
-
-        We will now have, for every gid in gstslice.neigh_gid[GID], a set of
-        grain IDs which are also neighbours of this gid. Let's say the elements
-        of this set are {g1, g2, g3, ..., gn}. We now have a bunch of triples
-        which can be put in a tuple (GID, gid, g1), (GID, gid, g2), etc, for
-        every gid in gstslice.neigh_gid[GID]. There will be as many bunches of
-        these triples as there are number of grains.
-
-        Say we have extracted a triple, T1 = (GID, gid, gn). We can use this
-        to extract the coordinates of the grain boundary junction lines as
-        follows.
-            Get the grain boundary point IDs of all gis in a triple.
-            That is, get the grain boundary poinyts IDs of GID, gid and the gn
-            under concern. They are:
-                gbp1 = gstslice.gbp_ids[GID]
-                gbp2 = gstslice.gbp_ids[gid]
-                gbp3 = gstslice.gbp_ids[gn]
-
-            Get the intersection of the three sets, gbp123 as,
-            gbp123 = gbp1.intersection(gbp2, gbp3).
-
-            gbp123 is the set of grain boundary point IDs which
-            form the grain boundary junctipon line segment, that we are after.
-
-            Associate an ID to gbp123 and sorte the triple. ID shopuld be key
-            and triple should be the value. This ID represents the grain
-            boundary junction line ID.
-
-            Associate to the same ID in another dictionary, the set gbp123.
-
-        Repeat for the next triple (GID, gid, g(n+1)), until we have
-        exhausted all the triples.
-
-        NOTE: the coordinates of each of the point can be obtained as
-        gstslice.gbpstack[gid123] for every triple.
+        Notes
+        -----
+        Each grain contributes neighbour relationships that are intersected
+        with the neighbour set of the core grain to form interaction triples.
         """
         print('Finding neighbour triples to gstslice.triples')
         triples = []
