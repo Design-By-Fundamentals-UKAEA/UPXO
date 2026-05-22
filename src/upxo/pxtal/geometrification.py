@@ -1,8 +1,4 @@
-"""
-Created on Thu Jul  4 16:45:03 2024
-
-@author: Dr. Sunil Anandatheertha
-"""
+"""Geometrification module for converting raster grain structures to polygon representations."""
 import numpy as np
 import rasterio
 from abc import ABC, abstractmethod
@@ -30,6 +26,7 @@ from scipy.ndimage import generic_filter
 
 
 class polygonised_grain_structure():
+    """Polygonised grain structure for geometrification of raster-format grain structures."""
 
     __slots__ = ('lgi', 'gid', 'n', 'polygons', 'pxtal', 'neigh_gid',
                  'gsmp', 'gbsegments_raw', 'gbsegments_mls', 'gbseg_smoothed',
@@ -70,13 +67,7 @@ class polygonised_grain_structure():
 
     def polygonize(self, user_lgi=False, lgi=None, user_gids=False, gids=None,
                    verbose=True):
-        """
-        Polygonizes grains in self.lgi
-        Parameters
-        ----------
-        Returns
-        -------
-        """
+        """Polygonize grains in self.lgi."""
         if verbose:
             print("Polygonizing the raster image of the grain structure.")
         if not user_lgi:
@@ -195,22 +186,23 @@ class polygonised_grain_structure():
             return self.expol + self.hlpol
 
     def set_polygons(self, verbose=True):
-        """
-        Set self.polygons list equal to all external polygon
-        """
+        """Set self.polygons to the list of external grain polygons."""
         if verbose:
             print("Setting up raw polygon data structure for the grain structure.")
         self.polygons = self.allpol
 
     def find_neighbors(self, verbose=True):
-        """Calculates neighboring polygon IDs for a list of polygons.
+        """Calculate neighbouring polygon IDs for all polygons in the grain structure.
 
-        Args:
-            polygons: A list of Shapely Polygon objects.
+        Parameters
+        ----------
+        polygons : list
+            A list of Shapely Polygon objects.
 
-        Returns:
-            A dictionary where keys are polygon IDs (0-based index) and values are lists of
-            neighboring polygon IDs.
+        Returns
+        -------
+        dict
+            Keys are polygon IDs (1-based) and values are lists of neighbouring polygon IDs.
         """
         if verbose:
             print("Finding neighboring grains based on polygon intersections.")
@@ -228,10 +220,13 @@ class polygonised_grain_structure():
         """
         Parameters
         ----------
-        pixl_gs_neigh_gid: neigh_gid dict of pixellated grain structure (i.e. mcgs)
-        Return
-        ------
-        bool, bool: True if validation, else False.
+        pixl_gs_neigh_gid : dict
+            neigh_gid dict of the pixellated grain structure (i.e. mcgs).
+
+        Returns
+        -------
+        bool, bool
+            True if validation passes, else False.
         """
         diffid, neighcount = [], []
         for n1, n2 in zip(pixl_gs_neigh_gid.values(), self.neigh_gid.values()):
@@ -268,14 +263,18 @@ class polygonised_grain_structure():
                                         for gbsegln in self.gbsegments_raw[pid]]
 
     def get_polygon_touch_lines(self, poly1, poly2):
-        """Calculates the lines or points where two Shapely polygons touch.
+        """Calculate the lines or points where two Shapely polygons touch.
 
-        Args:
-            poly1, poly2: The Shapely Polygon objects.
+        Parameters
+        ----------
+        poly1, poly2 : shapely.geometry.Polygon
+            The two polygon objects to test.
 
-        Returns:
-            A list of Shapely LineString objects (if the polygons share lines)
-            or a list of Shapely Point objects (if they touch at a single point).
+        Returns
+        -------
+        list
+            List of Shapely LineString objects if the polygons share edges, or
+            Shapely Point objects if they touch at a single point.
         """
         intersection = poly1.intersection(poly2)
         # -------------------------
@@ -294,13 +293,17 @@ class polygonised_grain_structure():
             return list(intersection.geoms)
 
     def get_multilinestring_touch_points(mls1, mls2):
-        """Calculates the point(s) where two Shapely MultiLineStrings touch.
+        """Calculate the point(s) where two Shapely MultiLineStrings touch.
 
-        Args:
-            mls1, mls2: The Shapely MultiLineString objects.
+        Parameters
+        ----------
+        mls1, mls2 : shapely.geometry.MultiLineString
+            The two MultiLineString objects to test.
 
-        Returns:
-            A list of Shapely Point objects representing the touch points, or an empty list if there are no touch points.
+        Returns
+        -------
+        list
+            List of Shapely Point objects at touch points, or empty list if none.
         """
         touch_points = []
         for line1 in mls1.geoms:  # Iterate through linestrings in mls1
@@ -314,26 +317,36 @@ class polygonised_grain_structure():
     def area_gid(self, gid, gsrepr='raw'):
         """
         Return area of gid grain. Valid values for gsrepr are self.gsmp.keys().
-        In anycase, the returned area will be geometric and not pixellated.
+        In any case, the returned area will be geometric and not pixellated.
 
-        Example
-        -------
-        self.area_gid(1, gsrepr='raw')
+        Examples
+        --------
+        .. code-block:: python
+
+            self.area_gid(1, gsrepr='raw')
         """
         return self.gsmp[gsrepr].geoms[gid-1].area
 
     def plot_linestrings(linestrings, ax=None, color='blue', linewidth=1, **kwargs):
-        """Plots a list of Shapely LineStrings and returns the axis.
+        """Plot a list of Shapely LineStrings and return the axis.
 
-        Args:
-            linestrings: A list of LineString or MultiLineString objects.
-            ax (optional): A Matplotlib Axes object to plot on. If None, a new figure and axis will be created.
-            color (optional): Color of the lines (default: 'blue').
-            linewidth (optional): Width of the lines (default: 1).
-            **kwargs: Additional keyword arguments to pass to plt.plot().
+        Parameters
+        ----------
+        linestrings : list
+            A list of LineString or MultiLineString objects.
+        ax : matplotlib.axes.Axes, optional
+            Axes object to plot on. If None, a new figure and axis are created.
+        color : str, optional
+            Line colour. Default is ``'blue'``.
+        linewidth : float, optional
+            Line width. Default is ``1``.
+        **kwargs
+            Additional keyword arguments passed to ``plt.plot()``.
 
-        Returns:
-            The Matplotlib Axes object on which the lines were plotted.
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The Axes object on which the lines were plotted.
         """
         if ax is None:
             fig, ax = plt.subplots()  # Create a figure and axis if not provided
@@ -359,16 +372,27 @@ class polygonised_grain_structure():
         """
         Plot multi-polygon form of the grain structure.
 
-        Args:
-            gsmp: A Shapely MultiPolygon object.
-            grid_array (optional): The original NumPy array of grid values for background visualization.
+        Parameters
+        ----------
+        raw : bool, optional
+            If True, plot the raw gsmp. Default is True.
+        overlay_on_lgi : bool, optional
+            If True, overlay the polygons on the lgi image. Default is False.
+        xoffset, yoffset : float, optional
+            Coordinate offsets applied before plotting. Default is 0.5.
+        ax : matplotlib.axes.Axes, optional
+            Axes object to plot on. If None, a new figure and axis are created.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
         """
         if ax is None:
             fig, ax = plt.subplots()
         if overlay_on_lgi:
             ax.imshow(self.lgi, cmap='viridis', origin='lower')
         # -----------------------------------
-        '''Access the grain structure multi-polygon object.'''
+        # Access the grain structure multi-polygon object.
         if raw or self.gsmp['smooth_1'] is not None:
             GSMP = self.gsmp['raw']
         if not raw and isinstance(self.gsmp['smooth_1'], MultiPolygon):
@@ -397,32 +421,26 @@ class polygonised_grain_structure():
         """
         Parameters
         ----------
-        gids : int/list
-            Either a single grain index number or list of them
-        title : TYPE, optional
-            DESCRIPTION. The default is "user grains".
-        gclr :
+        gids : int or list
+            Either a single grain index number or a list of them.
+        title : str, optional
+            Plot title. Default is ``"user grains"``.
+        gclr : str, optional
+            Colour mode. Options: ``'color'``, ``'binary'``, ``'grayscale'``.
 
         Returns
         -------
-        None.
+        matplotlib.axes.Axes
 
-        Example-1
-        ---------
-            After acquiring gids for aspect_ratio between ranks 80 and 100,
-            we will visualize those grains.
-            . . . . . . . . . . . . . . . . . . . . . . . . . .
-            As we are only interested in gid, we will not use the other
-            two values returned by PXGS.gs[n].get_gid_prop_range() method:
+        Examples
+        --------
+        .. code-block:: python
 
+            # After acquiring gids for aspect_ratio between ranks 80 and 100,
+            # visualize those grains.
             gid, _, __ = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                                       range_type='rank',
-                                                       rank_range=[80, 100]
-                                                       )
-            . . . . . . . . . . . . . . . . . . . . . . . . . .
-            Now, pass gid as input for the PXGS.gs[n].plot_grains_gids(),
-            which will then plot the grain strucure with only these values:
-
+                                                        range_type='rank',
+                                                        rank_range=[80, 100])
             PXGS.gs[8].plot_grains_gids(gid, cmap_name='CMRmap_r')
         """
         # Validations
@@ -473,8 +491,7 @@ class polygonised_grain_structure():
         raise NotImplementedError("set_minimum_nnodes_per_gbseg is not yet implemented.")
 
     def subdivide_gbsegments(self, method=1):
-        """
-        """
+        """Subdivide grain boundary segments by inserting additional nodes."""
         raise NotImplementedError("subdivide_gbsegments is not yet implemented.")
 
     def smooth_moving_avg(self, n=3):
@@ -506,7 +523,7 @@ class polygonised_grain_structure():
         raise NotImplementedError("heal_polygons is not yet implemented.")
 
     def write_abq_script_data(self):
-        """Export or convert to te abq script data."""
+        """Export or convert to the ABQ script data format."""
         raise NotImplementedError("write_abq_script_data is not yet implemented.")
 
     def set_mesh_properties(self):
@@ -522,13 +539,11 @@ class polygonised_grain_structure():
         raise NotImplementedError("assess_mesh_quality is not yet implemented.")
 
     def export_mesh(self):
-        """Export or convert to ort mesh."""
+        """Export the mesh data."""
         raise NotImplementedError("export_mesh is not yet implemented.")
 
     def set_grain_centroids_raw(self, verbose=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Set raw grain centroids computed from lgi pixel locations."""
         # Validations
         if verbose:
             print("Extracting grain boundary segments based on polygon intersections.")
@@ -542,9 +557,7 @@ class polygonised_grain_structure():
 
 
     def set_grain_centroids(self, verbose=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Set grain centroids from polygon coordinates."""
         # Validations
         self.centroids = []
         # To do
@@ -639,21 +652,19 @@ class polygonised_grain_structure():
 
     def get_bounds_from_grain_boundary_points(self):
         """
-        Get x and y bounds from grain boudnary points.
+        Get x and y bounds from grain boundary points.
 
-        Parameters
-        ----------
-        xyoffset: value to subtract from polygonization end coordinates in order to
-            align with MCGS 2d regults.
+        Notes
+        -----
+        Works on grain boundary points obtained from polygonization of the raster
+        image. ``self.xyoffset`` is subtracted from polygonization end coordinates
+        to align with MCGS 2D results.
 
-        Explanation
-        -----------
-        Works on grain boudnary points obtained from poliygonization of the raster
-        image.
+        Examples
+        --------
+        .. code-block:: python
 
-        Use
-        ---
-        xmin, xmax, ymin, ymax = self.get_bounds_from_grain_boundary_points()
+            xmin, xmax, ymin, ymax = self.get_bounds_from_grain_boundary_points()
         """
         for gid in self.gid:
             _ripolres_ = self.raster_img_polygonisation_results[gid-1][0][0]
@@ -695,7 +706,7 @@ class polygonised_grain_structure():
         # ----------------------------------
         xmin, xmax, ymin, ymax = self.get_bounds_from_grain_boundary_points()
         # ----------------------------------
-        '''LABEL GRAINS AS PER THEIR LOCATION IN THR GRAIN STRUCTUER'''
+        # Label grains by their location in the grain structure.
         border_grain_flags = [False for gid in self.gid]
         internal_grain_flags = [False for gid in self.gid]
         corner_grain_flags = [False for gid in self.gid]
@@ -880,9 +891,7 @@ class polygonised_grain_structure():
         self.JNP = np.unique(self.JNP, axis = 0)-self.xyoffset
 
     def extract_GBP(self, verbose=True):
-        """
-        Extarct grain boundary points data fdrom polygonization coord result.
-        """
+        """Extract grain boundary points data from polygonization coordinate results."""
         if verbose:
             print("Extracting grain boundary segments and junction points at the boundary of the grain structure.")
         postpolcoords = self.raster_img_polygonisation_results
@@ -902,7 +911,7 @@ class polygonised_grain_structure():
                         'GBS_reordering_success': None, }
 
     def get_bounds_from_GBP(self):
-        """Calculate the bounds of the po;lygonized grain structure."""
+        """Calculate the bounds of the polygonized grain structure."""
         xmin = self.GBP[:, 0].min()
         xmax = self.GBP[:, 0].max()
         ymin = self.GBP[:, 1].min()
@@ -910,9 +919,7 @@ class polygonised_grain_structure():
         return xmin, xmax, ymin, ymax
 
     def find_GBP_at_boundary(self, verbose=True):
-        """
-        Indeitify grain boundary points which are on the grain.
-        """
+        """Identify grain boundary points lying on the grain structure boundary."""
         if verbose:
             print("Finding grain boundary points at the boundary of the grain structure.")
         xmin, xmax, ymin, ymax = self.get_bounds_from_GBP()
@@ -934,7 +941,7 @@ class polygonised_grain_structure():
 
     def update_JNP_from_GBP_at_boundary(self, verbose=True):
         """
-        Update junctionm points with the grain boundary points which are on the
+        Update junction points with the grain boundary points which are on the
         boundaries of the poly-xtal.
         """
         if verbose:
@@ -970,7 +977,7 @@ class polygonised_grain_structure():
             _ = np.array(postpolcoords_gid[0][:-1]) - self.xyoffset
             self.gbp_all_coords.extend(_.tolist())
         self.gbp_all_coords = np.unique(self.gbp_all_coords, axis=0)
-        """Build UPXO points from gbp_all_coords data """
+        # Build UPXO points from gbp_all_coords data.
         self.gbp_all_upxo = np.array([Point2d(gbp[0], gbp[1])
                                       for gbp in self.gbp_all_coords])
         self.gbp_all_shapely = [ShPoint2d(gbp[0], gbp[1])
@@ -978,7 +985,7 @@ class polygonised_grain_structure():
         # gbp_all_upxo_mp = MPoint2d.from_upxo_points2d(gbp_all_upxo, zloc=0.0)
 
     def get_gbp_grain_wise_coords(self, verbose=True):
-        """Build coordinates of all points of grian boundary points, grain wese."""
+        """Build coordinates of all grain boundary points, grain-wise."""
         if verbose:
             print("Building grain boundary point objects based on grain-wise coordinates.")
         self.gbp_grain_wise_coords = {}
@@ -992,42 +999,27 @@ class polygonised_grain_structure():
         Build indices of jnp for every grain. Indices will be from jnp_all_coords.
         These indices relate to:
             * jnp_all_coords, jnp_all_upxo, jnp_all_shapely
-            * jnp_all_upxo_mp.points, jnp_all_upxo_mp.coortds
+            * jnp_all_upxo_mp.points, jnp_all_upxo_mp.coords
 
-        Use
-        ---
-        Data access:
+        Examples
+        --------
+        .. code-block:: python
+
+            # Data access:
             jnp_all_coords[jnp_grain_wise_indices[gid]]
             jnp_all_upxo[jnp_grain_wise_indices[gid]]
             jnp_all_upxo_mp.points[jnp_grain_wise_indices[gid]]
 
-        Verification
-        ------------
-        gid = 10
-        plt.imshow(geom.lgi)
-        coord = jnp_all_coords[jnp_grain_wise_indices[gid]]
-        plt.plot(coord[:, 0], coord[:, 1], 'ko')
+            # Verification:
+            gid = 10
+            plt.imshow(geom.lgi)
+            coord = jnp_all_coords[jnp_grain_wise_indices[gid]]
+            plt.plot(coord[:, 0], coord[:, 1], 'ko')
 
-        Note
-        ----
-        mid1 = id(jnp_all_upxo[jnp_grain_wise_indices[gid]][0])
-        mid2 = id(jnp_all_upxo_mp.points[jnp_grain_wise_indices[gid]][0])
-        mid1 == mid2
-
-        Note@dev
-        --------
-        gid = 1
-        jnp_all_coords[jnp_grain_wise_indices[gid]]
-        jnp_all_upxo[jnp_grain_wise_indices[gid]]
-        gbp_grain_wise_coords[gid]
-
-        Build indices of gbp for every grain. Indices will be from gbp_all_coords.
-        These indices relate to:
-            * gbp_all_coords, gbp_all_upxo, gbp_all_shapely
-            * gbp_all_upxo_mp.points, gbp_all_upxo_mp.coortds
-
-        id(gbp_all_upxo[0])
-        id(gbp_all_upxo_mp.points[0])
+        Notes
+        -----
+        jnp_all_upxo and jnp_all_upxo_mp.points share the same objects:
+        ``id(jnp_all_upxo[i]) == id(jnp_all_upxo_mp.points[i])``
         """
         if verbose:
             print("Building grain boundary point objects based on grain-wise coordinates.")
@@ -1079,8 +1071,7 @@ class polygonised_grain_structure():
             self.gbp_grain_wise_points[gid] = self.gbp_all_upxo[self.gbp_grain_wise_indices[gid]]
 
     def build_gbmullines_grain_wise(self, verbose=True):
-        '''We will start by first creating UPXO line objects for grain
-        boundaries.'''
+        """Build grain boundary multi-linestring objects from grain boundary point data."""
         if verbose:
             print("Building grain boundary multi-linestrings")
         # Build lines from gbp_grain_wise_coordinates.
@@ -1098,8 +1089,7 @@ class polygonised_grain_structure():
             jnp_indices_toinsert = []
             for i, jnp in enumerate(self.jnp_all_coords[self.jnp_grain_wise_indices[gid]]):
                 if not DO.is_a_in_b(jnp, self.gbp_grain_wise_coords[gid]):
-                    '''This means jnp should be inserted into
-                    self.gbp_grain_wise_coords[gid] at the right place.'''
+                    # This means jnp should be inserted into self.gbp_grain_wise_coords[gid].
                     jnp_indices_toinsert.append(i)
             jnps_to_insert = self.jnp_all_upxo[self.jnp_grain_wise_indices[gid]][jnp_indices_toinsert]
             # --------------------------
@@ -1237,7 +1227,7 @@ class polygonised_grain_structure():
                 plt.text(centroid[0], centroid[1], gid, color='white', fontsize=12)
 
     def find_quality_of_grain_boundary_segmentation(self, verbose=True):
-        """ Now, we will collect all grain boundary segments. """
+        """Assess quality of grain boundary segmentation by comparing segment counts per grain."""
         if verbose:
             print("Building sorted grain boundary segment objects after splicing at junction points.")
         GBSEG = []
@@ -1258,14 +1248,17 @@ class polygonised_grain_structure():
             print(f'Grain boundary segmentation quality measure 1: {quality} %')
 
     def create_neigh_gid_pair_ids(self, neigh_gid, verbose=True):
-        """Creates a dictionary mapping unique grain pairs to integer IDs.
+        """Create a dictionary mapping unique grain pairs to integer IDs.
 
-        Args:
-            neigh_gid (dict): A dictionary where keys are grain IDs and values are lists
-                              of neighboring grain IDs.
+        Parameters
+        ----------
+        neigh_gid : dict
+            Keys are grain IDs and values are lists of neighbouring grain IDs.
 
-        Returns:
-            dict: A dictionary where keys are integer pair IDs and values are tuples of grain IDs.
+        Returns
+        -------
+        dict
+            Keys are integer pair IDs and values are lists of two grain IDs.
         """
         if verbose:
             print("Setting up neighbor connectivity flags and consolidating grain boundary segments.")
@@ -1286,11 +1279,7 @@ class polygonised_grain_structure():
         self.gid_pair_ids_unique_rl = np.flip(self.gid_pair_ids_unique_lr, axis=1)
 
     def get_random_gbpoint_between_jnpoints(self, gbcoords, jnpcoords):
-        """
-        jnpcoords = jnp_all_sorted_coords[46][0:2]
-        gbcoords = gbmullines_grain_wise[46].get_node_coords()
-        get_random_gbpoint_between_jnpoints(gbcoords, jnpcoords)
-        """
+        """Return a random grain boundary point located between two junction points."""
         first = DO.find_coorda_loc_in_coords_arrayb(jnpcoords[0], gbcoords)
         last = DO.find_coorda_loc_in_coords_arrayb(jnpcoords[1], gbcoords)
         if last-first >= 2:
@@ -1299,11 +1288,7 @@ class polygonised_grain_structure():
             return None
 
     def get_random_gbpoints_between_jnpoints(self, gid):
-        """
-        jnpcoords = jnp_all_sorted_coords[46][0:2]
-        gbcoords = gbmullines_grain_wise[46].get_node_coords()
-        get_random_gbpoint_between_jnpoints(gbcoords, jnpcoords)
-        """
+        """Return random grain boundary points between junction points for a given grain."""
         gbcoords = self.gbmullines_grain_wise[gid].get_node_coords()
         seg_ends = self.extract_end_coordinates_of_grain_boundary_segments_grain_wise(gid)
         random_gb_points = {i: None for i in seg_ends.keys()}
@@ -1359,25 +1344,20 @@ class polygonised_grain_structure():
             self.nconn[tuple(pair)]['areas_raw'].append(self.area_gid(pair[1], gsrepr='raw'))
             # ====================================
             for gbseg1 in self.gbsegments[pair[0]]:
-                """iterating through all grian boundary segments of the centre
-                grain, which is pair[0].
-                """
+                # Iterate through all grain boundary segments of the centre grain (pair[0]).
                 # gbseg1 = gbsegments[pair[0]][0]
                 gbseg1_nnodes = gbseg1.nnodes  # Number of nodes
                 gbseg1_centroid = gbseg1.centroid_p2dl  # Centroidal point object
                 gbseg1_length = gbseg1.length  # Total lemngth
                 # ====================================
                 for gbseg2 in self.gbsegments[pair[1]]:
-                    """iterating through all grian boundary segments current
-                    neighbour grain, which is pair[1].
-                    """
+                    # Iterate through all grain boundary segments of the neighbour grain (pair[1]).
                     gbseg2_nnodes = gbseg2.nnodes
                     proceed = False
-                    '''Prepare for the nnodes equality test.'''
+                    # Prepare for the nnodes equality test.
                     nnodes_equality = gbseg1_nnodes == gbseg2_nnodes
                     if nnodes_equality:
-                        '''nnodes equality test passed.'''
-                        '''Prepare for the next test.'''
+                        # nnodes equality test passed. Prepare for the next test.
                         _fx_ = gbseg1_centroid.is_p2dl_within_cor
                         centroid_equality = _fx_(gbseg2.centroid_p2dl,
                                                  centroid_eq_EPS)
@@ -1385,8 +1365,7 @@ class polygonised_grain_structure():
                         continue
                     # ----------------------------
                     if centroid_equality:
-                        '''centroid equality test passed.'''
-                        '''Prepare for the next test.'''
+                        # centroid equality test passed. Prepare for the next test.
                         ldiff = abs(gbseg1_length - gbseg2.length)
                         length_equality = ldiff <= centroid_eq_EPS
                     else:
@@ -1404,16 +1383,23 @@ class polygonised_grain_structure():
 
     def get_unique_object_indices(self, nnodes, lengths, centroids, tol=1e-8):
         """
-        Finds indices of unique objects based on nnodes, lengths, and centroids.
+        Find indices of unique objects based on nnodes, lengths, and centroids.
 
-        Args:
-            nnodes (np.ndarray): 1D array of nnode values.
-            lengths (np.ndarray): 1D array of length values.
-            centroids (np.ndarray): 2D array of centroid coordinates.
-            tol (float, optional): Tolerance for centroid coordinate comparison. Defaults to 1e-6.
+        Parameters
+        ----------
+        nnodes : np.ndarray
+            1D array of nnode values.
+        lengths : np.ndarray
+            1D array of length values.
+        centroids : np.ndarray
+            2D array of centroid coordinates.
+        tol : float, optional
+            Tolerance for centroid coordinate comparison. Default is ``1e-8``.
 
-        Returns:
-            np.ndarray: 1D array of indices corresponding to unique objects.
+        Returns
+        -------
+        np.ndarray
+            1D array of indices corresponding to unique objects.
         """
         # Create a structured array for combined properties
         dtype = [('nnodes', nnodes.dtype),
@@ -1450,7 +1436,7 @@ class polygonised_grain_structure():
                 '''As we no longer need any duplicates, we will override the repeated
                 ones in ncoon as well.'''
                 self.nconn[tuple(pair)]['gbseg'] = [self.nconn[tuple(pair)]['gbseg'][_ui_] for _ui_ in ui]
-                ###########################################
+                # No longer need duplicates — override repeated ones in nconn as well.
                 self.nconn[tuple(pair)]['uniquified'] = True
                 # GBSEGMENTS[tuple(pair)] = _gbseg_[0]
                 ###########################################
@@ -1458,13 +1444,17 @@ class polygonised_grain_structure():
                 # [nconn[tuple((32, 36))]['gbseg'][_ui_] for _ui_ in ui]
 
     def consolidate_gbsegments(self, squeeze_segment_data_structure=False, verbose=True):
-        """Consolidates grain boundary segments by grain ID.
-        Args:
-            GBSEGMENTS (dict): A dictionary where keys are tuples of grain IDs (gid1, gid2)
-                               and values are grain boundary segments.
-        Returns:
-            dict: A dictionary where keys are grain IDs and values are lists of
-                  grain boundary segments associated with that grain.
+        """Consolidate grain boundary segments by grain ID.
+
+        Parameters
+        ----------
+        squeeze_segment_data_structure : bool, optional
+            If True, flatten nested segment lists. Default is False.
+
+        Returns
+        -------
+        dict
+            Keys are grain IDs and values are lists of grain boundary segments.
         """
         if verbose:
             print("Consolidating grain boundary segments and updating them with boundary grain IDs.")
@@ -1664,11 +1654,8 @@ class polygonised_grain_structure():
             # print(40*'-')
             # plt.imshow(geom.lgi==gid)
             if continuity:
-                '''If the segments are indeed continous, ring formation is
-                stright-forward.'''
-                # -------------
-                """segments=None, segids=None, segflips=None"""
-                # -------------
+                # If the segments are indeed continuous, ring formation is straightforward.
+                # segments=None, segids=None, segflips=None
                 NSEG_rng = range(len(gbsegs))
                 self.GB[gid] = ring2d(gbsegs, list(NSEG_rng), [False for _ in NSEG_rng])
                 # GB[gid].segments
@@ -1679,25 +1666,18 @@ class polygonised_grain_structure():
                     self.GB[gid].plot_segs(plot_centroid=True, centroid_text=gid,
                                            plot_coord_order=True, visualize_flip_req=True)
             if not continuity:
-                '''If the segments are not found to be continous, ring formation
-                requires the calculation of exact segids and segflip values. segids provide
-                the spatial order of segments in ring.segments and segflips provide the
-                boolean value indicating the need to flip a segment to ensure spatial
-                continuity of ending nodes of adjacent multi-line-segments.
-                '''
+                # If segments are not continuous, ring formation requires computing exact
+                # segids and segflip values to ensure spatial continuity of adjacent segment nodes.
                 self.quality['GBS_reordering_success'][gid] = False
                 # ------------------------
                 segids = list(range(len(gbsegs)))
-                '''segstart_flip to be set to True if current gbsegs[0] goes
-                counter-clockwise. Setting to False for now. Needs seperate
-                assessment.'''
+                # segstart_flip set to True if gbsegs[0] goes counter-clockwise.
+                # Setting to False for now — needs separate assessment.
                 segstart_flip = False
                 self.GB[gid] = ring2d([gbsegs[0]], [0], [segstart_flip])
-                '''
-                GB[gid].segments
-                GB[gid].segids
-                GB[gid].segflips
-                '''
+                # GB[gid].segments
+                # GB[gid].segids
+                # GB[gid].segflips
                 seg_num = 0
                 used_segids = [seg_num]
                 search_segids = set(segids)
@@ -1784,19 +1764,21 @@ class polygonised_grain_structure():
 
     def sort_subsets_by_original_order(self, CA, subsets):
         """
-        Sorts subsets of coordinates based on their original order in the CA array,
-        and returns the sorted subsets along with their indices.
+        Sort subsets of coordinates based on their original order in the CA array.
 
-        Args:
-            CA (np.ndarray): The original 2D coordinate array (N x 2).
-            subsets (list): A list of np.ndarrays, each representing a subset of coordinates.
+        Parameters
+        ----------
+        CA : np.ndarray
+            The original 2D coordinate array (N x 2).
+        subsets : list
+            A list of np.ndarrays, each representing a subset of coordinates.
 
-        Returns:
-            tuple: A tuple containing two elements:
-                - list: A list of np.ndarrays, where each subset is sorted according to the
-                        order of its points in the CA array.
-                - np.ndarray: A 1D array containing the original indices of the subsets
-                              in the input list, corresponding to the order of sorted subsets.
+        Returns
+        -------
+        list
+            Sorted np.ndarrays, each subset ordered according to its position in CA.
+        np.ndarray
+            1D array of the original subset indices in sorted order.
         """
 
         coord_to_index = {tuple(coord): idx for idx, coord in enumerate(CA)}
@@ -2051,6 +2033,8 @@ class polygonised_grain_structure():
 # =====================================================================================
 
 class VoronoiMasking(ABC):
+    """Abstract base class for Voronoi-based masking of a label field image (LFI)."""
+
     def __init__(self, lfi):
         """Initialise the instance."""
         self.lfi = lfi  # n x m (x o)
@@ -2112,6 +2096,8 @@ from shapely.ops import unary_union
 from collections import defaultdict
 
 class GrainManifold2D(VoronoiMasking):
+    """2D grain manifold constructed by Voronoi tessellation and label field sampling."""
+
     @classmethod
     def by_tessellation(cls, lfi, seeds, channel=0):
         """By tessellation."""
@@ -2317,7 +2303,7 @@ class GrainManifold2D(VoronoiMasking):
         return adj
 
     def _get_vertex_adjacency(self):
-        """ get vertex adjacency."""
+        """Build and return a shared-vertex adjacency map for all grain polygons."""
         from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
         from collections import defaultdict
         
@@ -2594,7 +2580,7 @@ class GrainManifold2D(VoronoiMasking):
         self._reconstruct_from_coords(coords)
 
     def _reconstruct_from_coords(self, smoothed_coords_map):
-        """ reconstruct from coords."""
+        """Reconstruct Shapely cell polygons from a smoothed coordinate map."""
         from shapely.geometry import Polygon
         from shapely.ops import unary_union
         from collections import defaultdict
