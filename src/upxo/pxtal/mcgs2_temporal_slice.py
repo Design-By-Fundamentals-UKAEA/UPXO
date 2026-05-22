@@ -5566,7 +5566,28 @@ class mcgs2_grain_structure():
             return None
 
     def plot_grains_prop_bounds_s(self, s, PROP_NAME=None, prop_min=0, prop_max='', ):
-        """Visualise grains within property bounds for a given state."""
+        """
+        Placeholder for plotting grains in a state by property bounds.
+
+        Parameters
+        ----------
+        s : int
+            State value to inspect.
+        PROP_NAME : str, optional
+            Property name used to filter grains.
+        prop_min : float, optional
+            Lower property bound.
+        prop_max : float or str, optional
+            Upper property bound.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This method is not yet implemented.
+        """
         pass
 
     def plot_grains_at_position(self, position='corner', overlay_centroids=True,
@@ -5619,7 +5640,13 @@ class mcgs2_grain_structure():
         plt.show()
 
     def detect_grain_boundaries(self):
-        """Placeholder for grain-boundary detection."""
+        """
+        Placeholder for grain-boundary detection logic.
+
+        Notes
+        -----
+        This method is not yet implemented.
+        """
         for label in np.unique(self.lgi):
             pass
 
@@ -6007,7 +6034,7 @@ class mcgs2_grain_structure():
 
     @property
     def plot_single_pixel_grains(self):
-        """Visualise single pixel grains using Matplotlib or PyVista."""
+        """Plot the grains that consist of a single pixel."""
         # Plot single pixel grains
         self.plot_grains_gids(self.single_pixel_grains)
 
@@ -6100,7 +6127,7 @@ class mcgs2_grain_structure():
         return (_ for _ in self)
 
     def make_mulpoint2d_grain_centroids(self):
-        """Build and return mulpoint2d grain centroids."""
+        """Build and store a mulpoint2d object from grain centroids."""
         # Create mulpoint2d object for grain centroids
         from upxo.geoEntities.mulpoint2d import MPoint2d
         self.mp['gc'] = MPoint2d.from_coords(self.centroids)
@@ -6108,7 +6135,11 @@ class mcgs2_grain_structure():
 
     def plot_mcgs_mpcentroids(self):
         """
-        Method to plot the mulpoint2d object of grain centroids
+        Plot the stored grain-centroid multipoint overlay on the slice image.
+
+        Returns
+        -------
+        None
         """
         plt.figure()
         # Plot the grain structure
@@ -6123,8 +6154,16 @@ class mcgs2_grain_structure():
 
     def vtgs2d(self, visualize=True):
         """
-        Method to generate voronoi tesselation grain structure from
-        mulpoint2d object of grain centroids
+        Build a 2D Voronoi tessellation from the grain centroids.
+
+        Parameters
+        ----------
+        visualize : bool, optional
+            Plot the tessellation after construction.
+
+        Returns
+        -------
+        None
         """
         # from polyxtal import polyxtal2d as polyxtal
         from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
@@ -6141,7 +6180,7 @@ class mcgs2_grain_structure():
 
     def ebsd_write_ctf(self, folder='upxo_ctf', file='ctf.ctf'):
         """
-        Method to write a sample ctf file for testing purposes
+        Write a small synthetic CTF file for testing purposes.
 
         Parameters
         ----------
@@ -6194,7 +6233,11 @@ class mcgs2_grain_structure():
 
     def export_vtk2d(self):
         """
-        Method to export the grain structure data to a VTK file for 2D visualization.
+        Placeholder for exporting the grain structure to a 2D VTK file.
+
+        Returns
+        -------
+        None
         """
         pass
 
@@ -6202,8 +6245,7 @@ class mcgs2_grain_structure():
             headerFileLocation='C:\\Development\\UPXO\\upxo_library\\src\\upxo\\_writer_data\\_ctf_header_CuCrZr_1.txt',
             factor=1, method='nearest'):
         """
-        Exports the grain structure data to a CTF file for use in MTEX or
-        Dream3D's h5ebsd reconstruction pipeline.
+        Export the grain structure to a CTF file for downstream EBSD tools.
 
         Parameters
         ----------
@@ -6226,27 +6268,11 @@ class mcgs2_grain_structure():
         -------
         None.
 
-        Example
-        -------
-        ctf.export_ctf('D:/export_folder', 'sunil')
+        Examples
+        --------
+        .. code-block:: python
 
-        CODES before the modication:
-
-            from upxo._sup.export_data import ctf
-            ctf = ctf()
-            ctf.load_header_file()
-            ctf.make_header_from_lines()
-            ctf.set_phase_name(phase_name='PHNAME')
-            # ------------------------------------
-            ctf.set_grid(self.xgr, self.ygr)
-            ctf.set_state(self.S, self.s)
-            # ------------------------------------
-            '''UPDATE TO BE MADE ASAP.'''
-            # ctf.set_ori(self.euler1, self.euler2, self.euler3)
-            ctf.set_grid_data()
-            # ndata = ctf.assemble_grid_data()
-            # ndata = ctf.assemble_grid_data_orix()
-            ctf.write_ctf_file_ORIX(folder, fileName)
+            ctf.export_ctf('D:/export_folder', 'sunil')
         """
         if method not in ('nearest', 'decimate'):
             raise ValueError('Invalid method provided. Valid: nearest or decimate')
@@ -6266,7 +6292,7 @@ class mcgs2_grain_structure():
         # ------------------------------------
         ctf.set_grid(XGRID, YGRID)
         ctf.set_state(self.S, SMATRIX)
-        """UPDATE TO BE MADE ASAP."""
+        """Orientation export hook reserved for future implementation."""
         # ctf.set_ori(self.euler1, self.euler2, self.euler3)
         ctf.set_grid_data()
         # ndata = ctf.assemble_grid_data()
