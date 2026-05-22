@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jun 18 12:27:59 2025
-
-@author: Dr. Sunil Anandatheertha
-"""
+"""3D Voronoi tessellation grain structure for UPXO."""
 import numpy as np
 import pyvoro
 import matplotlib.pyplot as plt
@@ -19,10 +14,10 @@ from upxo.geoEntities.mulpoint3d import MPoint3d as mp3d
 
 class gtess3d():
     """
-    ===========================================================================
-    @ dev notes by (Dr. Sunil Anandatheertha, )
-    ===========================================================================
-    ---------------> Instantiation <--------------------
+    3D Voronoi tessellation-based polycrystal grain structure.
+
+    Usage
+    -----
     from upxo.pxtal.vortess3d import gtess3d
     """
     _valid_gslevels_ = ('base', 'supset', 'tw', 'pap',
@@ -34,7 +29,7 @@ class gtess3d():
         * 'base'. The basic grain structure for all other hierarchically higher
         grain structures.
         * 'tw': Twinned grain structures.
-        * 'pap': Prior-austenetic packates.
+        * 'pap': Prior-austenitic packets.
         * 'pap.bl': Prior-austenitic packet blocks.
         * 'pap.bl.sbl': Prior-austenitic packets, block and sub-blocks.
         * 'pap.bl.lath': Prior-austenitic packets, blocks and laths.
@@ -53,7 +48,7 @@ class gtess3d():
                           'paps': 'fdb_paps'
                           }
     """
-    Exaplanation of _valid_gsnamemaps_. These are just simlified user input
+    Explanation of _valid_gsnamemaps_. These are just simplified user input
     strings which will correspond to different feature related variables in
     this class. These are used in definitions self.add_fdb, etc, under the
     name 'gslevel'.
@@ -69,7 +64,7 @@ class gtess3d():
                       'gc', 'sg', 'tw', 'paps', 'block', 'sub-blocks', 'laths',
                       'ppt', 'void', 'fbr', 'fbr-int')
     """
-    Explanation of _valid_fnames_. These are permitted names of featues.
+    Explanation of _valid_fnames_. These are permitted names of features.
     Values are strings and are below. Note that these are not necessarily
     morphological features. For example, 'ph' i.e. 'phase' has also been
     included for the purpose of simplicity of data structure.
@@ -301,8 +296,14 @@ class gtess3d():
                                divergence_control=True,
                                ):
         """
-        bounding_box = [[0, 12], [0, 12], [0, 12]]
-        points = generate_random_lattice_bounded(bounding_box, 100)
+        Construct from randomly distributed seed points.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            bounding_box = [[0, 12], [0, 12], [0, 12]]
+            points = generate_random_lattice_bounded(bounding_box, 100)
         """
         nprand = np.random.random
         x_vals = nprand((npnt, 1))*(xbound[1][1]-xbound[1][0])
@@ -524,33 +525,31 @@ class gtess3d():
         divergence_control=True,
         periodic=[False, False, False]
 
-        Example
-        -------
-        from upxo.pxtal.vortess3d import gtess3d
-        gt3d = gtess3d.from_seed_point_extrusion(sp_input='gen', seed_coords=None,
-                                      xbound=[0, 15], ybound=[0, 15], nsp=200,
-                                      n_instances=2, nsp_dev_ninstances=10,
-                                      sp_distr='random',
-                                      gr_tech='pds', smp_tech='bridson1',
-                                      randuni_calc='by_points', lean='veryhigh',
-                                      char_length=[3, 0], niter=500, ntrials=10,
-                                      k_char_length_inc=0.1, k_char_length_dec=0.2,
-                                      repr_prop={'vol': {'use': 'mean',
-                                                         'mean': {'val': 10,
-                                                                   'dev': 5, },
-                                                         'distr': {'filename': None,
-                                                                   'remol': True},
-                                                         'consider_boundary_grains': True}
-                                                },
-                                      make_point_objects=True, make_ckdtree=True,
-                                      char_length_mean=0.24598,
-                                          char_length_min=0.1111, char_length_max=0.9999,
-                                      nt=10, space='linear', nchecks=10, sdf=0.75,
-                                      divergence_control=True,
-                                      periodic=[False, False, False])
+        Examples
+        --------
+        .. code-block:: python
 
-        gt3d.visualize_multiple_voronoi_cells(1, cell_indices=None, colors=None,
-                                              alpha=1, edge_color='black')
+            from upxo.pxtal.vortess3d import gtess3d
+            gt3d = gtess3d.from_seed_point_extrusion(sp_input='gen', seed_coords=None,
+                xbound=[0, 15], ybound=[0, 15], nsp=200,
+                n_instances=2, nsp_dev_ninstances=10,
+                sp_distr='random',
+                gr_tech='pds', smp_tech='bridson1',
+                randuni_calc='by_points', lean='veryhigh',
+                char_length=[3, 0], niter=500, ntrials=10,
+                k_char_length_inc=0.1, k_char_length_dec=0.2,
+                repr_prop={'vol': {'use': 'mean',
+                                   'mean': {'val': 10, 'dev': 5},
+                                   'distr': {'filename': None, 'remol': True},
+                                   'consider_boundary_grains': True}},
+                make_point_objects=True, make_ckdtree=True,
+                char_length_mean=0.24598,
+                char_length_min=0.1111, char_length_max=0.9999,
+                nt=10, space='linear', nchecks=10, sdf=0.75,
+                divergence_control=True,
+                periodic=[False, False, False])
+            gt3d.visualize_multiple_voronoi_cells(1, cell_indices=None, colors=None,
+                alpha=1, edge_color='black')
         """
         ntrials = 100 if ntrials == -1 else ntrials
         pxtals, sps = {}, {}
@@ -767,25 +766,28 @@ class gtess3d():
                                     periodic=[False, False, False]
                                     ):
         """
-        Example
-        -------
-        from upxo.pxtal.vortess3d import gtess3d
-        pxtal = gtess3d._make_pxtal_single_instance(spinput='gen',
-                                        xbound=[0, 100], ybound=[0, 100],
-                                        zbound=[0, 100], nsp=600,
-                                        sp_distr='random',
-                                        gridding_technique='pds',
-                                        sampling_technique='bridson1',
-                                        randuni_calc='by_points',
-                                        lean='veryhigh', char_length=[3, 2],
-                                        niter=500, make_point_objects=True,
-                                        make_ckdtree=True,
-                                        char_length_mean=0.24598,
-                                        char_length_min=0.1111,
-                                        char_length_max=0.9999,
-                                        nt=10, space='linear', nchecks=10,
-                                        sdf=0.75,
-                                        )
+        Generate a single 3D Voronoi tessellation instance from seed point extrusion.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.pxtal.vortess3d import gtess3d
+            pxtal = gtess3d._make_pxtal_single_instance(spinput='gen',
+                xbound=[0, 100], ybound=[0, 100],
+                zbound=[0, 100], nsp=600,
+                sp_distr='random',
+                gridding_technique='pds',
+                sampling_technique='bridson1',
+                randuni_calc='by_points',
+                lean='veryhigh', char_length=[3, 2],
+                niter=500, make_point_objects=True,
+                make_ckdtree=True,
+                char_length_mean=0.24598,
+                char_length_min=0.1111,
+                char_length_max=0.9999,
+                nt=10, space='linear', nchecks=10,
+                sdf=0.75)
         """
         print('Creating base seed points.')
         sp = cls.create_2d_base_seedpoints(spinput=spinput, xbound=xbound,
@@ -911,7 +913,7 @@ class gtess3d():
                                   char_length_min=0.1111,
                                   char_length_max=0.9999,
                                   nt=10, space='linear'):
-        """Build and return e 2d base seedpoints."""
+        """Build and return 2D base seed points."""
         if sp_distr == 'random':
             if gridding_technique == 'random':
                 if sampling_technique == 'uniform':
@@ -1144,7 +1146,7 @@ class gtess3d():
 
         # Define an initial slicing plane
         def update_plane(normal, origin):
-            """Set or update te plane."""
+            """Set or update the plane."""
             sliced_mesh = tet_mesh.slice(normal=normal, origin=origin)
             plotter.add_mesh(sliced_mesh, color='blue', show_edges=True, line_width=1.5)
 
@@ -1160,7 +1162,7 @@ class gtess3d():
     # interactive_slice_view(tet_mesh)
 
     def compute_cell_quality(self, tet_mesh, metric="aspect_ratio"):
-        """Return the ute cell quality."""
+        """Return the computed cell quality."""
 
         quality_mesh = tet_mesh.compute_cell_quality(quality_measure=metric)
         quality_values = quality_mesh["CellQuality"]  # Extract computed cell quality values
@@ -1195,7 +1197,7 @@ class gtess3d():
         plotter.show()
 
     def compute_cell_quality(self, tet_mesh, metric="aspect_ratio"):
-        """Return the ute cell quality."""
+        """Return the computed cell quality."""
 
         quality_mesh = tet_mesh.compute_cell_quality(quality_measure=metric)
         quality_values = quality_mesh["CellQuality"]  # Extract computed cell quality values
