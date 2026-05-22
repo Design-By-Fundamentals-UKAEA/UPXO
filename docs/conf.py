@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath('../src'))
 
 # General project information
 project = 'UPXO: UKAEA Poly-XTAL Operations'
-copyright = '2024, UKAEA, Dr. Sunil Anandatheertha'
+copyright = '2024, UKAEA'
 author = 'Dr. Sunil Anandatheertha'
 version = '1.0.0'
 release = '1.0.0'
