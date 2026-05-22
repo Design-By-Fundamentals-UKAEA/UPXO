@@ -1805,8 +1805,6 @@ class mcgs3_grain_structure():
 
         Returns
         -------
-        Returns
-        -------
         dict
             Grain IDs mapped to their nth-order neighbours.
 
@@ -1861,29 +1859,29 @@ class mcgs3_grain_structure():
         dict
             Grain IDs mapped to their selected neighbours.
 
-        Pre-example calculations
-        ------------------------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 10
-        fx = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+        Examples
+        --------
+        .. code-block:: python
 
-        Example-1
-        ---------
-        neigh0 = fx(1, include_parent=True)
-        neigh0[22]
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            fx = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
 
-        Example-2
-        ---------
-        neigh1 = fx(1.06, include_parent=True)
-        neigh1[2][22]
+            neigh0 = fx(1, include_parent=True)
+            neigh0[22]
 
-        Example-3
-        ---------
-        neigh2 = fx(1.5, include_parent=True)
-        neigh2[2][22]
+        .. code-block:: python
+
+            neigh1 = fx(1.06, include_parent=True)
+            neigh1[2][22]
+
+        .. code-block:: python
+
+            neigh2 = fx(1.5, include_parent=True)
+            neigh2[2][22]
         """
         no = neigh_order
         on_neigh_all_grains_upto = self.get_upto_nth_order_neighbors_all_grains
@@ -2276,11 +2274,24 @@ class mcgs3_grain_structure():
 
     def find_grain_voxel_locs(self, disp_msg=False, verbosity=100, saa=True, throw=False):
         """
-        Find voxel locations of grains in lgi.
+        Find voxel locations of grains in ``self.lgi``.
 
-        saa
-        ---
-        grain_locs
+        Parameters
+        ----------
+        disp_msg : bool, optional
+            Print progress messages when True.
+        verbosity : int, optional
+            Progress-print interval.
+        saa : bool, optional
+            Store the result on the instance when True.
+        throw : bool, optional
+            Return the computed mapping when True.
+
+        Returns
+        -------
+        dict or None
+            Grain-ID to voxel-coordinate mapping when ``throw`` is True;
+            otherwise ``None``.
         """
         print('\nFinding voxel locations of grains in lgi.')
         ngrains = len(self.gid)
@@ -2301,11 +2312,28 @@ class mcgs3_grain_structure():
     def find_feature_voxel_locs(self, fname='lgi', fids=None, printmsg=True,
                                 verbosity=10, saa=True, throw=False):
         """
-        Find voxel locations of grains in lgi.
+        Find voxel locations for the requested feature IDs.
 
-        saa
-        ---
-        grain_locs
+        Parameters
+        ----------
+        fname : str, optional
+            Feature-field name.
+        fids : iterable or None, optional
+            Feature IDs to sample.
+        printmsg : bool, optional
+            Print progress messages when True.
+        verbosity : int, optional
+            Progress-print interval.
+        saa : bool, optional
+            Store the result on the instance when True.
+        throw : bool, optional
+            Return the computed mapping when True.
+
+        Returns
+        -------
+        dict or None
+            Feature-ID to voxel-coordinate mapping when ``throw`` is True;
+            otherwise ``None``.
         """
         if printmsg:
             print('\nFinding voxel locations of fids.')
@@ -2823,14 +2851,6 @@ class mcgs3_grain_structure():
         Returns
         -------
         None
-
-        Save as attribute
-        -----------------
-        None
-
-        Explanations
-        ------------
-        None
         """
         slices = self.pvgrid.slice_orthogonal(x=x, y=y, z=z)
         slices.plot(show_edges=False)
@@ -2843,8 +2863,8 @@ class mcgs3_grain_structure():
 
         Parameters
         ----------
-        sf_name : str or optional
-            Name of the scalr field. Defaults to 'lgi'.
+        sf_name : str, optional
+            Name of the scalar field. Defaults to 'lgi'.
 
         slice_normal : str or dth.dt.ITRERABLE, optional
             Either 'x', 'y' or 'z'. Defaults to 'x'.
@@ -2861,18 +2881,10 @@ class mcgs3_grain_structure():
         vmax : int or None, optional
             Defalts to None.
 
-        Return
-        ------
+        Returns
+        -------
         ax : object
             Matplotlib axis object.
-
-        Explanations
-        ------------
-        * 1.
-        * 2.
-
-        Examples
-        --------
         """
         sf_slice = self.get_scalar_field_slice(sf_name=sf_name,
                                                slice_normal=slice_normal,
@@ -2902,7 +2914,7 @@ class mcgs3_grain_structure():
         Parameters
         ----------
         sf_name : str, optional
-            Name of the scalr field. Defaults to 'lgi'.
+            Name of the scalar field. Defaults to 'lgi'.
 
         slice_normal : str or dth.dt.ITRERABLE, optional
             Either 'x', 'y' or 'z'. Defaults to 'x'.
@@ -4243,27 +4255,18 @@ class mcgs3_grain_structure():
         Saved as attributes
         -------------------
         ellfits : dict
-            ellfits is a dictionary havijng followingt keys .
-            * center : ellispoid or other conic center coordinates [xc; yc; zc]
-            * evecs : the radii directions as columns of the 3x3 matrix
-            * radii : ellipsoid or other conic radii [a; b; c]
-            * v : the 10 parameters describing the ellipsoid / conic
-                 algebraically: Ax^2 + By^2 + Cz^2 + 2Dxy + 2Exz +
-                     2Fyz + 2Gx + 2Hy + 2Iz + J = 0
-            * unfit_gid : list of gids for whcih ellipsoids could not be fit.
+            Ellipsoid-fit results keyed by ``center``, ``evecs``, ``radii``,
+            ``v``, and ``unfit_gid``.
 
         Returns
         -------
         None
 
-        Routine 1: THis uses the codes available at the below GitHub link to
-            calculate ellipsoid fits to grains. As stated there, the codes
-            were ports from a similar MATLAB code available on the second link
-            below. Explanations of the keys of ellfits dictionary provided
-            above have been taken verbatim from this MATLAB Files Exchanhge
-            link, except for the key unfit_gid.
-            https://github.com/aleksandrbazhin/ellipsoid_fit_python
-            https://uk.mathworks.com/matlabcentral/fileexchange/24693-ellipsoid-fit
+        Notes
+        -----
+        Routine 1 uses the external ``ellipsoid_fit_python`` implementation.
+        The fit dictionary keys are based on that implementation and the linked
+        MATLAB reference.
 
         Author credits
         --------------
@@ -4433,9 +4436,9 @@ class mcgs3_grain_structure():
         Codes in this function is taken verbatim from ther below link:
             https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
 
-        Explanations
-        ------------
-        This is needed to extract values along a line.
+        Notes
+        -----
+        This helper is used to sample values along a line.
         """
         x1, y1, z1, x2, y2, z2 = i1, i2, i3, j1, j2, j3
         ListOfPoints = []
@@ -4946,7 +4949,7 @@ class mcgs3_grain_structure():
                                                             'start_shift': 0,
                                                             'end_shift': 0},
                                              plot=True):
-        """Return the igs along lines multiple samples."""
+        """Return intercept grain-size statistics for multiple samples."""
         raise NotImplementedError("igs_along_lines_multiple_samples is not yet implemented.")
 
     def igs_sed_ratio(self, metric='mean', lines_gen_method=1,
@@ -5110,8 +5113,10 @@ class mcgs3_grain_structure():
 
     def small_grains(self, vth=2):
         """
-        vth: int, floar
-            Volume threshold
+        Parameters
+        ----------
+        vth : int or float
+            Volume threshold.
         """
         return np.where(self.nvoxels_values <= vth)[0]+1
 
@@ -8083,7 +8088,7 @@ class mcgs3_grain_structure():
         viz_flags: Specify various visualization flag values
         viz_steps: Specify7 visualization steps to help with large data
 
-        Exzample
+        Examples
         --------
         from upxo.ggrowth.mcgs import mcgs
 
