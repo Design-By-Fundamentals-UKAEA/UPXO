@@ -1,8 +1,4 @@
-"""
-Created on Fri Jun 28 09:32:49 2024
-
-@author: Dr. Sunil Anandatheertha
-"""
+"""Orientation map 2D polycrystal data class for UPXO."""
 import math
 import random
 from copy import deepcopy
@@ -96,10 +92,7 @@ class polyxtal2d():
               apply_kuwahara=False,
               kuwahara_misori=5,
               ):
-        """
-        Crystal Orientation Map. EBSD dataswt is one which can be loadsed.
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Load and set up a crystal orientation map from an EBSD dataset."""
         # Validate user inputs
         from upxo.interfaces.defdap.importebsd import ebsd_data
         UPXO_gstslice_EBSDmap = ebsd_data.load_ctf(path_filename_noext)
@@ -117,9 +110,7 @@ class polyxtal2d():
         self.map.buildQuatArray()
 
     def find_grains_gb(self, gb_misori=10, min_grain_size=1, print_msg=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Find grain boundaries and build neighbourhood network."""
         # Validate user inputs
         print_msg and print(40*'-', '\n Finding boundaries.')
         self.map.findBoundaries(boundDef=gb_misori)
@@ -129,9 +120,7 @@ class polyxtal2d():
         self.map.buildNeighbourNetwork()
 
     def port_essentials(self, print_msg=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Port essential data from the defDAP map to UPXO."""
         print_msg and print(40*'-', '\n Porting essential data to UPXO.')
         self.set_lgi()
         self.set_grains()
@@ -145,9 +134,7 @@ class polyxtal2d():
         print('Success.')
 
     def charecterize_mprops(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Compute and store morphological properties for all grains."""
         print(40*'-', '\n Calculating morphological properties.')
         self.set_n()
         self.set_grain_centroids(coord_source='upxo_lgi')
@@ -322,12 +309,8 @@ class polyxtal2d():
         """
         Determine the loss due to converting UPXO.MCGS2D to DefDAP map.
 
-        Parameters
-        ----------
-        None
-
-        Return
-        ------
+        Returns
+        -------
         cl_details: dict
             Conversion loss details
             Keys:
@@ -350,20 +333,14 @@ class polyxtal2d():
         self.closs = cl_details
 
     def set_bjp(self):
-        '''Boundary Junction Points.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Boundary Junction Points."""
         bjp = {gid: None for gid in self.gid}
         for i in self.gid:
             bjp[i] = np.argwhere(self.gbjp*(self.lgi == i))
         self.bjp = bjp
 
     def plot_bjp(self):
-        '''Plot boundary junction points overlaid on pxtal map.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot boundary junction points overlaid on pxtal map."""
         plt.figure(figsize=(5, 5), dpi=120)
         plt.imshow(self.lgi)
         for gid in self.bjp.keys():
@@ -374,15 +351,16 @@ class polyxtal2d():
                            retrieval_method='external',
                            chain_approximation='simple'):
         """
-        Example
-        -------
-        gid = 1
-        gstslice.pxtal[1].get_gbpoints_grain(gid,
-                                             retrieval_method='tree',
-                                             chain_approximation='none')
-        """
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
+        Return the grain boundary points for the given grain.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            gid = 1
+            gstslice.pxtal[1].get_gbpoints_grain(gid,
+                                                 retrieval_method='tree',
+                                                 chain_approximation='none')
         """
 
         from scipy.ndimage import binary_erosion
@@ -406,24 +384,17 @@ class polyxtal2d():
         return gb_points, ch
 
     def set_grains(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Populate the grain dictionary from the defDAP grain list."""
         self.g = {i: {'xo': None, 'grain': grain2d(), 'defdap': g}
                   for i, g in enumerate(self.map.grainList, start=1)}
 
     def set_lgi(self):
-        '''Returns the pixel - grain ID mapping.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the pixel-to-grain-ID mapping."""
         # ---- > Equivalent to pxt.gs[tslice].lgi
         self.lgi = deepcopy(self.map.grains)
 
     def shuffle_lgi_random_gid_wise(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Randomly permute grain IDs in the LGI array."""
         self.flags['gid_shuffle_lgi_method'] = 'random'
         self.set_gid(reset_lgi=False)
         gidshuffled = np.random.permutation(self.gid)
@@ -447,15 +418,11 @@ class polyxtal2d():
         self.g = g
 
     def reset_lgi(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Reset the LGI array to its original state."""
         self.set_lgi()
 
     def set_gid(self, reset_lgi=False):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Set or update the grain ID array from the current LGI."""
         if reset_lgi:
             self.reset_lgi()
         self.gid = np.unique(self.lgi)
@@ -467,15 +434,11 @@ class polyxtal2d():
 
 
     def set_n(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Set the grain count from the current grain ID array."""
         self.n = len(self.gid)
 
     def find_neigh(self, update_gid=True, reset_lgi=False):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Find O(1) neighbours for every grain and store in neigh_gid."""
         # Validations
         # FIND THE NEIGHBOURING GRAIN IDs OF EVERY GRAIN
         if update_gid:
@@ -501,9 +464,7 @@ class polyxtal2d():
         self.neigh_gid = grain_neighbors
 
     def find_gbseg1(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Find grain boundary segments between every pair of neighbours."""
         gbseg = {gid: {} for gid in self.gid}
         # 2D connectivity, direct neighbors
         struct = generate_binary_structure(2, 1)
@@ -531,12 +492,7 @@ class polyxtal2d():
 
     def extract_gb_discrete(self, retrieval_method='external',
                             chain_approximation='simple'):
-        """
-        Extract grain boundaries of every grain.
-        """
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Extract grain boundaries of every grain."""
         # Validations
         rm, ca = retrieval_method, chain_approximation
         self.gb_discrete = {gid: {} for gid in self.gid}
@@ -562,13 +518,14 @@ class polyxtal2d():
                               add_gid_text=True,
                               plot_gbseg=False
                               ):
-        '''
-        Example
-        -------
-        self.find_largest_grain
-        '''
         """
-        Parameters ---------- Returns ------- Example ------- Explanations
+        Find the LGI subset covering gid and all its O(1) neighbours.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            gstslice.pxtal[1].find_lgi_subset_neigh(gid)
         """
         # Validations
         _ = self.lgi == gid  # Mask of the grain
@@ -616,9 +573,9 @@ class polyxtal2d():
 
         Parameters
         ----------
-        mpnames: dth.dt.ITERABLES
+        mpnames : dth.dt.ITERABLES
             Property names to be validated.
-        return_type: str
+        return_type : str
             Type of function return. Valid choices: dict (default), list,
             tuple.
 
@@ -631,9 +588,11 @@ class polyxtal2d():
             validations will be the values. The values will all be bool.
             If a property is a valid property, then True, else False.
 
-        Example
-        -------
-        self.validate_propnames(['area', 'perimeter', 'solidity'])
+        Examples
+        --------
+        .. code-block:: python
+
+            self.validate_propnames(['area', 'perimeter', 'solidity'])
         """
         _ = {pn: pn in self.valid_mprops.keys() for pn in mpnames}
         if return_type == 'dict':
@@ -668,21 +627,22 @@ class polyxtal2d():
         """
         Get values of mpnames.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[mcgs.m[-1]].char_morph_2d(bbox=True, bbox_ex=True,
-                                     area=True,aspect_ratio=True,
-                                     make_skim_prop=True,)
+        Examples
+        --------
+        .. code-block:: python
 
-        mpnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
-        mcgs.gs[mcgs.m[-1]].prop
-        mprop_values = mcgs.gs[mcgs.m[-1]].get_mprops(mpnames,
-                                                      set_missing_mprop=True)
-        mprop_values
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[mcgs.m[-1]].char_morph_2d(bbox=True, bbox_ex=True,
+                                         area=True, aspect_ratio=True,
+                                         make_skim_prop=True)
+
+            mpnames = ['area', 'aspect_ratio', 'perimeter', 'solidity']
+            mcgs.gs[mcgs.m[-1]].prop
+            mprop_values = mcgs.gs[mcgs.m[-1]].get_mprops(mpnames,
+                                                          set_missing_mprop=True)
         """
         if not all(self.validate_propnames(mpnames, return_type='list')):
             raise ValueError('Invalid mpname values.')
@@ -715,9 +675,6 @@ class polyxtal2d():
                                   ):
         """
         pdslh: Percentages of distance from stat to minimum and stat to maximum.
-
-        Example
-        -------
         """
         # Validations
         # ---------------------------
@@ -800,33 +757,40 @@ class polyxtal2d():
                                      recalculate=False, include_parent=True,
                                      output_type='list', plot=False):
         """
-        Calculates the nth order neighbors for a given cell ID.
+        Return all neighbours up to the nth order for a given grain.
 
-        Args:
-            cell_id: The ID of the cell for which to find neighbors.
-            n: The order of neighbors to calculate (1st order, 2nd order, etc.).
+        Parameters
+        ----------
+        grain_id : int
+            Grain ID for which to find neighbours.
+        neigh_order : int
+            Order of neighbours to accumulate (1st, 2nd, …).
 
-        Returns:
-            A set containing the nth order neighbors.
-
-        Example
+        Returns
         -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20
-        gstslice = pxt.gs[tslice]
-        gstslice.export_ctf(r'D:\export_folder', 'sunil')
-        fname = r'D:\export_folder\sunil'
-        gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
-        IN, gid, neigh_order = 1, 1, 2
-        gstslice.pxtal[IN].get_upto_nth_order_neighbors(gid, neigh_order,
-                                                       recalculate=False,
-                                                       include_parent=True,
-                                                       output_type='list',
-                                                       plot=True)
-        # NOTE: In the above, IN refers to Instance number
+        list or numpy.ndarray or set
+            Neighbour grain IDs up to the specified order.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20
+            gstslice = pxt.gs[tslice]
+            gstslice.export_ctf(r'D:\export_folder', 'sunil')
+            fname = r'D:\export_folder\sunil'
+            gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
+            IN, gid, neigh_order = 1, 1, 2
+            gstslice.pxtal[IN].get_upto_nth_order_neighbors(gid, neigh_order,
+                                                           recalculate=False,
+                                                           include_parent=True,
+                                                           output_type='list',
+                                                           plot=True)
+            # NOTE: IN refers to Instance number
         """
         if neigh_order == 0:
             return grain_id
@@ -859,22 +823,26 @@ class polyxtal2d():
                                 recalculate=False, include_parent=True,
                                 plot=False):
         """
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20
-        gstslice = pxt.gs[tslice]
-        gstslice.export_ctf(r'D:\export_folder', 'sunil')
-        fname = r'D:\export_folder\sunil'
-        gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
-        IN, gid, neigh_order = 1, 1, 2
-        gstslice.pxtal[IN].get_nth_order_neighbors(gid, neigh_order,
-                                    recalculate=False, include_parent=True,
-                                    plot=True)
-        # NOTE: In the above, IN refers to Instance number
+        Return exactly the nth-order neighbours for a given grain.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20
+            gstslice = pxt.gs[tslice]
+            gstslice.export_ctf(r'D:\export_folder', 'sunil')
+            fname = r'D:\export_folder\sunil'
+            gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
+            IN, gid, neigh_order = 1, 1, 2
+            gstslice.pxtal[IN].get_nth_order_neighbors(gid, neigh_order,
+                                        recalculate=False, include_parent=True,
+                                        plot=True)
+            # NOTE: IN refers to Instance number
         """
         neigh_upto_n_minus_1 = self.get_upto_nth_order_neighbors(grain_id,
                                                                  neigh_order-1,
@@ -902,32 +870,36 @@ class polyxtal2d():
                                                 include_parent=True,
                                                 output_type='list'):
         """
-        Calculates the nth order neighbors for a given cell ID.
+        Return all neighbours up to the nth order for every grain.
 
-        Args:
-            cell_id: The ID of the cell for which to find neighbors.
-            n: The order of neighbors to calculate (1st order, 2nd order, etc.).
+        Parameters
+        ----------
+        neigh_order : int
+            Order of neighbours to accumulate.
 
-        Returns:
-            A set containing the nth order neighbors.
-
-        Example
+        Returns
         -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20
-        gstslice = pxt.gs[tslice]
-        gstslice.export_ctf(r'D:\export_folder', 'sunil')
-        fname = r'D:\export_folder\sunil'
-        gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
-        IN, neigh_order = 1, 2
-        gstslice.pxtal[IN].get_upto_nth_order_neighbors_all_grains(neigh_order,
-                                                             recalculate=False,
-                                                             include_parent=True,
-                                                             output_type='list')
-        # NOTE: In the above, IN refers to Instance number
+        dict
+            Mapping of grain ID to list of neighbour grain IDs.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20
+            gstslice = pxt.gs[tslice]
+            gstslice.export_ctf(r'D:\export_folder', 'sunil')
+            fname = r'D:\export_folder\sunil'
+            gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
+            IN, neigh_order = 1, 2
+            gstslice.pxtal[IN].get_upto_nth_order_neighbors_all_grains(
+                neigh_order, recalculate=False,
+                include_parent=True, output_type='list')
+            # NOTE: IN refers to Instance number
         """
         neighs_upto_nth_order = {gid: self.get_upto_nth_order_neighbors(gid,
                                                                         neigh_order,
@@ -942,22 +914,26 @@ class polyxtal2d():
                                            recalculate=False,
                                            include_parent=True):
         """
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20
-        gstslice = pxt.gs[tslice]
-        gstslice.export_ctf(r'D:\export_folder', 'sunil')
-        fname = r'D:\export_folder\sunil'
-        gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
-        IN, neigh_order = 1, 2
-        gstslice.pxtal[IN].get_nth_order_neighbors_all_grains(neigh_order,
-                                                        recalculate=False,
-                                                        include_parent=True)
-        # NOTE: In the above, IN refers to Instance number
+        Return exactly the nth-order neighbours for every grain.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20
+            gstslice = pxt.gs[tslice]
+            gstslice.export_ctf(r'D:\export_folder', 'sunil')
+            fname = r'D:\export_folder\sunil'
+            gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
+            IN, neigh_order = 1, 2
+            gstslice.pxtal[IN].get_nth_order_neighbors_all_grains(neigh_order,
+                                                            recalculate=False,
+                                                            include_parent=True)
+            # NOTE: IN refers to Instance number
         """
         neighs_nth_order = {gid: self.get_nth_order_neighbors(gid,
                                                               neigh_order,
@@ -972,19 +948,25 @@ class polyxtal2d():
                                                      include_parent=False,
                                                      print_msg=False):
         """
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 10
-        def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+        Return probabilistic nth-order neighbours for every grain.
 
-        neigh0 = def_neigh(1, recalculate=False, include_parent=True)
-        neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
-        neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
-        neigh0[22]
-        neigh1[2][22]
-        neigh2[2][22]
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 10
+            def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+
+            neigh0 = def_neigh(1, recalculate=False, include_parent=True)
+            neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
+            neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
+            neigh0[22]
+            neigh1[2][22]
+            neigh2[2][22]
         """
         # @dev:
             # no: neighbour order in these definitions.
@@ -1046,12 +1028,7 @@ class polyxtal2d():
         return True if other_gid in self.neigh_gid[parent_gid] else False
 
     def get_two_rand_o1_neighs(self):
-        """
-        Calculate at random, two neighbouring O(1) grains.
-
-        Example
-        -------
-        """
+        """Calculate at random, two neighbouring O(1) grains."""
         if self.neigh_gid:
             rand_gid = random.sample(self.gid, 1)[0]
             rand_neigh_rand_grain = random.sample(self.neigh_gid[rand_gid],
@@ -1070,16 +1047,18 @@ class polyxtal2d():
         return_gids: bool
             Flag to return the random neigh gid numbers. Defaults to True.
 
-        Return
-        ------
+        Returns
+        -------
         rand_neigh_gids: list
             random neigh gid numbers. Will be gids if return_gids is True.
             Else, will be [None, None].
 
-        Example
-        -------
-        Please refer to use in the example provided for the definition,
-        get_two_rand_o1_neighs()
+        Examples
+        --------
+        .. code-block:: python
+
+            # See get_two_rand_o1_neighs() for usage.
+            rand_gids = gstslice.pxtal[1].plot_two_rand_neighs(return_gids=True)
         """
         rand_neigh_gids = self.get_two_rand_o1_neighs()
         self.plot_grains_gids(rand_neigh_gids, cmap_name='viridis')
@@ -1089,24 +1068,20 @@ class polyxtal2d():
             return [None, None]
 
     def _merge_two_grains_(self, parent_gid, other_gid, print_msg=False):
-        """Low level merge operartion. No checks done. Just merging.
+        """Low level merge operation. No checks done. Just merging.
 
         Parameters
         ----------
         parent_gid: int
             Parent grain ID number.
         other_gid: int
-            Otrher grain ID number.
+            Other grain ID number.
         print_msg: bool
-            Defgaults to False.
+            Defaults to False.
 
         Returns
         -------
         None
-
-        Usage
-        -----
-        Internal use only.
         """
         self.lgi[self.lgi == other_gid] = parent_gid
         if print_msg:
@@ -1117,8 +1092,8 @@ class polyxtal2d():
         """
         Merge other_gid grain to the parent_gid grain.
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         parent_gid:
             Grain ID of the parent.
         other_gid:
@@ -1152,17 +1127,13 @@ class polyxtal2d():
         return merge_success
 
     def get_grain_pixel_coords(self, gid):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return pixel coordinates of the given grain."""
         # Validations
         locs = self.g[gid]['grain'].coordList
         return locs
 
     def set_grain_centroids(self, coord_source='upxo_lgi'):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Compute and store centroids for all grains."""
         # Validations
         centroids = []
         if coord_source == 'defdap_grain':
@@ -1178,9 +1149,7 @@ class polyxtal2d():
         self.centroids = np.array([[c[0], c[1]] for c in centroids])
 
     def get_grain_centroid(self, gid, recalculate=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the centroid of the given grain."""
         # Validate gid
         if recalculate:
             locs = self.get_grain_pixel_coords(gid)
@@ -1190,9 +1159,7 @@ class polyxtal2d():
         return centroid
 
     def find_largest_grain(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the grain ID of the grain with the most pixels."""
         return np.argmax(self.npixels) + 1
 
     def __setup__positions__(self):
@@ -1206,7 +1173,13 @@ class polyxtal2d():
 
     def plot_data_imshow_and_get_axis(self, data):
         """
-        fig, im, ax = self.plot_data_imshow_and_get_axis()
+        Plot data using imshow and return the figure, image and axis.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            fig, im, ax = self.plot_data_imshow_and_get_axis(data)
         """
         fig, ax = plt.subplots(1, figsize=(5, 5), dpi=120)
         im=ax.imshow(data)
@@ -1233,36 +1206,39 @@ class polyxtal2d():
             Dictionary with keys being a subset of self.gid. Each key must have
             a single numeric or bool value.
         default_scalar: int
-            Defauts to -1.
+            Defaults to -1.
 
-        Example
-        -------
-        from upxo.ggrowth.mcgs import mcgs
-        pxt = mcgs()
-        pxt.simulate()
-        pxt.detect_grains()
-        tslice = 20
-        pxt.char_morph_2d(tslice)
-        gstslice = pxt.gs[tslice]
-        gstslice.export_ctf(r'D:\export_folder', 'sunil')
-        # ---------------------------
-        fname = r'D:\export_folder\sunil'
-        gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
-        gstslice.pxtal[1].find_gbseg1()
-        GIDs, VALIND = gstslice.pxtal[1].get_gids_in_params_bounds(search_gid_source='all',
-                                                                   search_gids=None,
-                                                                   mpnames=['area', 'solidity'],
-                                                                   fx_stats=[np.mean,np.mean],
-                                                                   pdslh=[[20, 20], [5, 5]],
-                                                                   param_priority=[1, 2, 3, 2],
-                                                                   plot_mprop=False)
-        gstslice.pxtal[1].map_scalar_to_lgi(GIDs['presence'], default_scalar=-1,
-                                            plot=True, throw_axis=True)
+        Examples
+        --------
+        .. code-block:: python
 
-        gid_mprop_map = mcgs.gs[35].get_gid_mprop_map('aspect_ratio',
-                                                      GIDs['mpmapped']['aspect_ratio'])
-        MPLGIAX = mcgs.gs[35].map_scalar_to_lgi(gid_mprop_map, default_scalar=-1,
-                              plot=True, throw_axis=True)
+            from upxo.ggrowth.mcgs import mcgs
+            pxt = mcgs()
+            pxt.simulate()
+            pxt.detect_grains()
+            tslice = 20
+            pxt.char_morph_2d(tslice)
+            gstslice = pxt.gs[tslice]
+            gstslice.export_ctf(r'D:\export_folder', 'sunil')
+            # ---------------------------
+            fname = r'D:\export_folder\sunil'
+            gstslice.set_pxtal(instance_no=1, path_filename_noext=fname)
+            gstslice.pxtal[1].find_gbseg1()
+            GIDs, VALIND = gstslice.pxtal[1].get_gids_in_params_bounds(
+                search_gid_source='all', search_gids=None,
+                mpnames=['area', 'solidity'],
+                fx_stats=[np.mean, np.mean],
+                pdslh=[[20, 20], [5, 5]],
+                param_priority=[1, 2, 3, 2],
+                plot_mprop=False)
+            gstslice.pxtal[1].map_scalar_to_lgi(GIDs['presence'],
+                                                default_scalar=-1,
+                                                plot=True, throw_axis=True)
+
+            gid_mprop_map = mcgs.gs[35].get_gid_mprop_map(
+                'aspect_ratio', GIDs['mpmapped']['aspect_ratio'])
+            MPLGIAX = mcgs.gs[35].map_scalar_to_lgi(gid_mprop_map,
+                                  default_scalar=-1, plot=True, throw_axis=True)
         """
         # Validations
         self.validata_gids(scalars_dict.keys())
@@ -1309,168 +1285,114 @@ class polyxtal2d():
 
     @property
     def get_csym(self):
-        '''Get crystal symmetry.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get crystal symmetry."""
         return self.map.crystalSym
 
     @property
     def get_pphid(self):
-        '''Get primary phase ID.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get primary phase ID."""
         return self.map.primaryPhaseID
 
     @property
     def get_scale(self):
-        '''Get scale.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get scale."""
         return self.map.scale
 
     @property
     def get_shape(self):
-        '''Get shape of the map.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get shape of the map."""
         return self.map.shape
 
     @property
     def get_xdim(self):
-        '''Get xdim.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get xdim."""
         return self.map.xDim
 
     @property
     def get_ydim(self):
-        '''Get ydim.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get ydim."""
         return self.map.yDim
 
     @property
     def get_nph(self):
-        '''Get number of phases.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get number of phases."""
         return self.map.numPhases
 
     @property
     def get_glist(self):
-        '''Get grain list.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get grain list."""
         return self.map.grainList
 
     @property
     def get_bc(self):
-        '''Get band contra6t of map.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get band contrast of map."""
         return self.map.bandContrastArray
 
     @property
     def get_bs(self):
-        '''Get band slope.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get band slope."""
         return self.map.bandSlopeArray
 
     @property
     def get_boundaries(self):
-        '''Get grain boundaries.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get grain boundaries."""
         return self.map.boundaries
 
     @property
     def get_boundariesX(self):
-        '''Get x-grad identified grain boundatry points.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get x-grad identified grain boundary points."""
         return self.map.boundariesX
 
     @property
     def get_boundariesY(self):
-        '''Get y-grad identified grain boundatry points.'''
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Get y-grad identified grain boundary points."""
         return self.map.boundariesY
 
     @property
     def get_q(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the quaternion array from the map."""
         return self.map.quatArray
 
     @property
     def get_ea(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the Euler angle array from the map."""
         return self.map.eulerAngleArray
 
     @property
     def get_coord(self):
         # TODO: DEBUG THIS
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Return the coordinate list of the first grain."""
         return self.map.grainList[0].coordList
 
     def plot_grains(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the grain map."""
         self.map.plotGrainMap()
 
     def plot_gb(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the grain boundary map."""
         self.map.plotBoundaryMap()
 
     def plot_phase(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the phase map."""
         self.map.plotPhaseMap()
 
     def plot_bc(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the band contrast map."""
         self.map.plotBandContrastMap()
 
     def plot_ea(self):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the Euler angle map."""
         self.map.plotEulerMap()
 
     def plotIPFMap(self, direction):
-        '''
-        Example
-        -------
-        pxt.gs[tslice].xomap_plotIPFMap([1, 0, 0])
-        '''
         """
-        Parameters ---------- Returns ------- Example ------- Explanations
+        Plot the IPF map for the given direction.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            pxt.gs[tslice].xomap_plotIPFMap([1, 0, 0])
         """
         # Validations
         self.map.plotIPFMap(direction)
@@ -1590,22 +1512,16 @@ class polyxtal2d():
         -------
         None.
 
-        Example-1
-        ---------
-            After acquiring gids for aspect_ratio between ranks 80 and 100,
-            we will visualize those grains.
-            . . . . . . . . . . . . . . . . . . . . . . . . . .
-            As we are only interested in gid, we will not use the other
-            two values returned by PXGS.gs[n].get_gid_prop_range() method:
+        Examples
+        --------
+        .. code-block:: python
 
-            gid, _, __ = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                                       range_type='rank',
-                                                       rank_range=[80, 100]
-                                                       )
-            . . . . . . . . . . . . . . . . . . . . . . . . . .
-            Now, pass gid as input for the PXGS.gs[n].plot_grains_gids(),
-            which will then plot the grain strucure with only these values:
-
+            # Acquire gids for aspect_ratio between ranks 80 and 100,
+            # then visualize those grains.
+            gid, _, __ = PXGS.gs[8].get_gid_prop_range(
+                PROP_NAME='aspect_ratio',
+                range_type='rank',
+                rank_range=[80, 100])
             PXGS.gs[8].plot_grains_gids(gid, cmap_name='CMRmap_r')
         """
         # Validations
@@ -1665,15 +1581,21 @@ class polyxtal2d():
                label_kwargs={'fontsize': 10}
                ):
         """
-        from upxo.ggrowth.mcgs import mcgs
-        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
-        mcgs.simulate()
-        mcgs.detect_grains()
-        mcgs.gs[35].plotgs(figsize=(6, 6), dpi=120, cmap='coolwarm',
-                           plot_centroid=True,
-                           centroid_kwargs={'marker':'o','mfc':'yellow',
-                                            'mec':'black','ms':2.5},
-                           plot_gid_number=True)
+        Plot the grain structure LGI map.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.ggrowth.mcgs import mcgs
+            mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+            mcgs.simulate()
+            mcgs.detect_grains()
+            mcgs.gs[35].plotgs(figsize=(6, 6), dpi=120, cmap='coolwarm',
+                               plot_centroid=True,
+                               centroid_kwargs={'marker': 'o', 'mfc': 'yellow',
+                                                'mec': 'black', 'ms': 2.5},
+                               plot_gid_number=True)
         """
         # Validations
         if custom_lgi is None:
@@ -1711,9 +1633,7 @@ class polyxtal2d():
                          simple_all_preference='simple',
                          add_centroids=True, add_gid_text=True,
                          return_axis=False, ):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot grain boundary contours on the LGI map."""
         # Validations
         _marker_, _mfc_ = bjp_kwargs['marker'], bjp_kwargs['mfc']
         _mec_, _ms_ = bjp_kwargs['mec'], bjp_kwargs['ms']
@@ -1738,9 +1658,7 @@ class polyxtal2d():
                                 new_fig=True, ax=None,
                                 bjp_kwargs={'marker': 'o', 'mfc': 'yellow',
                                             'mec': 'black', 'ms': 2.5}):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot contour boundaries for all grains."""
         # Validations
         self.plot_contour_grains_gids(self.gid,
                                       simple_all_preference=simple_all_preference,
@@ -1755,9 +1673,7 @@ class polyxtal2d():
                                  new_fig=True, ax=None,
                                  bjp_kwargs={'marker': 'o', 'mfc': 'yellow',
                                              'mec': 'black', 'ms': 2.5}):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot contour boundaries for the specified grain IDs."""
         # Validations
         for gid in gids:
             self.plot_contour_grain_gid(gid,
@@ -1773,9 +1689,7 @@ class polyxtal2d():
                            new_fig=True, ax=None,
                            bjp_kwargs={'marker': 'o', 'mfc': 'yellow',
                                        'mec': 'black', 'ms': 2.5}):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the contour boundary of a single grain."""
         # Validations
         _marker_, _mfc_ = bjp_kwargs['marker'], bjp_kwargs['mfc']
         _mec_, _ms_ = bjp_kwargs['mec'], bjp_kwargs['ms']
@@ -1805,9 +1719,7 @@ class polyxtal2d():
                     mec='darkred', ms=_ms_)
 
     def plot_grain_centroid(self, gid, axis, add_gid_text=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot the centroid of a single grain on the given axis."""
         # Validations
         axis.plot(self.centroids[gid-1][0], self.centroids[gid-1][1],
                   marker='.', mfc='w', mec='k', ms=5)
@@ -1816,9 +1728,7 @@ class polyxtal2d():
                       gid, fontsize=8)
 
     def plot_grain_centroids(self, gids, axis, add_gid_text=True):
-        """
-        Parameters ---------- Returns ------- Example ------- Explanations
-        """
+        """Plot centroids for the given grain IDs on the given axis."""
         # Validations
         for gid in gids:
             self.plot_grain_centroid(gid, axis, add_gid_text=add_gid_text)
