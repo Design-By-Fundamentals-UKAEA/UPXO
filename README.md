@@ -1,6 +1,6 @@
 # UPXO
 
-![UPXO logo and banner](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/blob/dev/wikidocs/assets/logo/upxo_logo_and_banner.png)
+![UPXO logo and banner](https://raw.githubusercontent.com/Design-By-Fundamentals-UKAEA/UPXO/dev/wikidocs/assets/logo/upxo_logo_and_banner.png)
 
 **UPXO (UKAEA Poly-XTAL Operations)** is an open-source Pythonic computational framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for materials science. Although primarily developed for applciations pertaining multi-scale computational studies of nuclear structural materials, it can also solve a wide range of such problems in the Aerospace and Automobile sectors.
 
