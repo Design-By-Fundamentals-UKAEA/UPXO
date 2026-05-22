@@ -63,6 +63,14 @@ Large ensembles of statistically representative microstructures can be generated
 
 ---
 
+## Need Help Getting Started?
+
+If you are from an academic institution and feel UPXO could be useful to your project or use case, and need personal help, don't hesitate to contact Dr. Sunil Anandatheertha — I will be happy to help you set up and offer help in using UPXO.
+
+📧 vaasu.anandatheertha@ukaea.uk
+
+---
+
 ## License
 
 UPXO is distributed under the **GNU General Public License v3.0 (GPL-3.0)** for open-source and academic use.
