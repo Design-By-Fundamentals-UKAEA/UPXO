@@ -95,8 +95,20 @@ import upxo._sup.decorators as decorators
 @njit(parallel=True)
 def get_neighbor_mask(arr, gid):
     """
-    Scans the array. If a pixel equals gid, it checks 4-neighbors.
-    If a neighbor is NOT gid, it is marked in the output mask.
+    Mark pixels adjacent to a given grain ID.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Integer array that is updated in place.
+    gid : int
+        Grain ID to trace.
+
+    Returns
+    -------
+    numpy.ndarray
+        The updated array, with non-``gid`` 4-neighbours marked as ``-1`` and
+        all other non-marked values cleared to ``0``.
     """
     rows, cols = arr.shape
     # Create a boolean mask instead of copying the integer array
@@ -131,7 +143,7 @@ def get_neighbor_mask(arr, gid):
 class labeled_feature_image_2d():
     __slots__ = ('lfi', 'ftypes', 'nfeatures', 'props_df',)
     def __init__(self, lfi=None, ftypes=None, nfeatures=None, props_df=None):
-        """Initialise the instance."""
+        """Initialise a labelled-feature image container."""
         self.lfi = lfi
         self.ftypes = ftypes
         self.nfeatures = nfeatures
@@ -254,7 +266,34 @@ class mcgs2_grain_structure():
                  xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
                  EAPGLB=None, assign_ori_stack=False, assign_ori_slice=True,
                  oripert_tc=True, oripert_gr=True):
-        """Initialise the instance."""
+        """
+        Initialise a 2D temporal-slice grain-structure container.
+
+        Parameters
+        ----------
+        dim : int, optional
+            Spatial dimension of the structure. The default is 2.
+        m : int, optional
+            Temporal slice index.
+        uidata : object, optional
+            User input data bundle.
+        S_total : int, optional
+            Total number of states.
+        px_size : float, optional
+            Pixel size.
+        xgr, ygr, zgr : numpy.ndarray, optional
+            Grid coordinates.
+        uigrid, uimesh : object, optional
+            Grid and mesh metadata.
+        EAPGLB : object, optional
+            Global orientation data.
+        assign_ori_stack : bool, optional
+            Flag for stack-level orientation assignment bookkeeping.
+        assign_ori_slice : bool, optional
+            Flag for slice-level orientation assignment bookkeeping.
+        oripert_tc, oripert_gr : bool, optional
+            Orientation-perturbation flags.
+        """
         self.uinputs = uidata
         self.val = _validation()
         self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
@@ -298,13 +337,13 @@ class mcgs2_grain_structure():
         self.pxtal = {}
 
     def __iter__(self):
-        """Return an iterator over this instance."""
+        """Return an iterator over the grain objects in this structure."""
         # Initialize grain iterator
         self.__gi__ = 1
         return self
 
     def __next1__(self):
-        """__next1__ special method."""
+        """Return the next grain-pixel coordinate set for iteration helpers."""
         # Iterator to get pixel indices of grains one after the other
         if self.n:
             if self.__gi__ <= self.n:
@@ -315,7 +354,7 @@ class mcgs2_grain_structure():
                 raise StopIteration
 
     def __next__(self):
-        """Return the next item from this iterator."""
+        """Return the next grain object from this iterator."""
         # Iterator to get grain objects one after the other
         if self.n:
             if self.__gi__ <= self.n:
@@ -329,22 +368,36 @@ class mcgs2_grain_structure():
                 raise StopIteration
 
     def __str__(self):
-        """Return the string form of this instance."""
+        """Return a short string describing this grain-structure object."""
         # String representation of the object
         return 'grains :: att : n, lgi, id, ind, spart'
 
     def __att__(self):
-        """Return a string listing of all attributes."""
+        """Return a formatted listing of attributes for this instance."""
         return att(self)
     
     def set_grain_coords_dtype(self, dtype):
-        """Set the data-type for storing grain coordinates."""
+        """Set the dtype used to store grain coordinates."""
         self.grain_coords_dtype = dtype
 
     @classmethod
     def from_image(cls, fdb=np.random.random((50, 50)),
                    xmin=0, ymin=0, xinc=1, yinc=1, xmax=50, ymax=50,):
-        """Create mcgs2_grain_structure instance from image."""
+        """
+        Create a structure instance from a 2D image and grid bounds.
+
+        Parameters
+        ----------
+        fdb : numpy.ndarray, optional
+            Image data used to build the grid.
+        xmin, ymin, xinc, yinc, xmax, ymax : int or float, optional
+            Grid bounds and increments.
+
+        Returns
+        -------
+        mcgs2_grain_structure
+            A new instance initialised from the supplied image data.
+        """
         uigrid = {'fdb': fdb,
                   'xmin': xmin, 'ymin': ymin,
                   'xinc': xinc, 'yinc': yinc,
@@ -355,61 +408,27 @@ class mcgs2_grain_structure():
 
     @property
     def get_px_size(self):
-        """Get size of the pixel."""
+        """Return the configured pixel size."""
         return self.px_size
 
     def set__s_n(self, S_total,):
-        """
-        nth value represents the number of grains in the nth state
-
-        Parameters
-        ----------
-        S_total : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
+        """Initialise the per-state grain-count list."""
         self.s_n = [0 for s in range(1, S_total+1)]
 
     def set__s_gid(self, S_total):
-        """
-        Set up dict of s as keys with None values.
-
-        Parameters
-        ----------
-        S_total : int
-            Specify the total number of states.
-
-        Returns
-        -------
-        None
-        """
+        """Initialise the state-to-grain-ID mapping dictionary."""
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
-        """Set up empty list. This would contain list of s values for every gid."""
+        """Reset the grain-to-state mapping list."""
         self.gid_s = []
 
     def set__spart_flag(self, S_total):
-        """
-        Set up spart flag dictionary with False values for each state.
-
-        Parameters
-        ----------
-        S_total : int
-            Specify the total number of states.
-
-        Returns
-        -------
-        None
-        """
+        """Initialise per-state partitioning flags to ``False``."""
         self.spart_flag = {_s_: False for _s_ in range(1, S_total+1)}
 
     def _check_lgi_dtype_uint8(self, lgi):
-        """Validates and modifies (if needed) lgi user input data-type."""
+        """Validate ``lgi`` and coerce it to ``uint8`` when possible."""
         if type(lgi) == np.ndarray and np.size(lgi) > 0 and np.ndim(lgi) == 2:
             if self.lgi.dtype.name != 'uint8':
                 self.lgi = lgi.astype(np.uint8)
@@ -420,11 +439,23 @@ class mcgs2_grain_structure():
 
     @property
     def lfi(self):
-        """Lfi."""
+        """Return the labelled feature image alias used by this class."""
         return self.lgi
 
     def calc_num_grains(self, throw=False):
-        """Calculate the total number of grains in this grain structure."""
+        """
+        Compute the number of grains from the current labelled image.
+
+        Parameters
+        ----------
+        throw : bool, optional
+            If True, return the computed grain count.
+
+        Returns
+        -------
+        int or None
+            The grain count when ``throw`` is True, otherwise ``None``.
+        """
         if self.lgi.size > 0:
             self.n = self.lgi.max()
             if throw:
@@ -432,20 +463,22 @@ class mcgs2_grain_structure():
             
     def get_property_bounded_grains(self, pnames=None, mprops=None, pvalue_thresholds=None):
         """
-        Get grain IDs of grains with property values beyond specified thresholds.
+        Return grain IDs whose property values lie outside the supplied bounds.
 
-        Parameters:
-        - mprops: dict
-            Dictionary containing material properties with property names as keys and numpy arrays of values.
-        - pnames: list
-            List of property names to evaluate.
-        - pvalue_thresholds: dict
-            Dictionary with property names as keys and [lower_threshold, upper_threshold] as values.
+        Parameters
+        ----------
+        pnames : list
+            Property names to evaluate.
+        mprops : dict
+            Mapping of property names to per-grain value arrays.
+        pvalue_thresholds : dict
+            Mapping of property names to ``[lower_threshold, upper_threshold]``.
 
-        Returns:
-        - props_gids: dict
-            Dictionary with property names as keys and lists of grain IDs that meet the threshold criteria.
-        
+        Returns
+        -------
+        dict
+            Grain IDs selected for each requested property.
+
         Examples
         --------
         .. code-block:: python
@@ -467,19 +500,20 @@ class mcgs2_grain_structure():
     
     def extract_neigh_props(self, gids, mprop):
         """
-        Extract properties of neighboring grains for given grain IDs.
+        Extract neighbor grain IDs and property values for each requested grain.
 
         Parameters
         ----------
         gids : list or array-like
-            List of grain IDs for which to extract neighbor properties.
-        mprop : dict
-            Dictionary of morphological property values corresponding to grain IDs.
+            Grain IDs to query.
+        mprop : dict or array-like
+            Property values indexed by grain ID.
 
         Returns
         -------
-        mprops_neigh : dict
-            Dictionary containing neighbor grain IDs and their property values.
+        dict
+            Nested dictionaries keyed by input grain ID for neighbour IDs and
+            their property values.
         """
         mprops_neigh = {'gids': {}, 'vals': {}}
         for gid in gids:
@@ -499,12 +533,26 @@ class mcgs2_grain_structure():
                    user_defined_bbox_ex_bounds=False, bbox_ex_bounds=None,
                    update_grain_object=True, use_numba=False):
         """
-        Find the gids of neighbours for every gid.
+        Populate ``self.neigh_gid`` with neighbour IDs for every grain.
 
         Parameters
         ----------
         include_central_grain : bool, optional
-            Whether to include the central grain in the neighbor list. Default is False.
+            Include the central grain in each neighbour list.
+        print_msg : bool, optional
+            Print progress information while computing neighbours.
+        user_defined_bbox_ex_bounds : bool, optional
+            Use caller-supplied extended bounding boxes.
+        bbox_ex_bounds : dict, optional
+            Extended bounding-box limits keyed by grain ID.
+        update_grain_object : bool, optional
+            Update grain objects with neighbour information.
+        use_numba : bool, optional
+            Use the numba-accelerated path when available.
+
+        Returns
+        -------
+        None
 
         Examples
         --------
@@ -542,7 +590,24 @@ class mcgs2_grain_structure():
             
     def find_neigh_v2(self, p=1.0, include_central_grain=False,
                       throw_numba_dict=False, verbosity_nfids=1000):
-        """Find neigh v2."""
+        """
+        Populate ``self.neigh_gid`` using the O(1) neighbour finder.
+
+        Parameters
+        ----------
+        p : float, optional
+            Neighbourhood expansion parameter passed to the backend helper.
+        include_central_grain : bool, optional
+            Include the central grain in each neighbour list.
+        throw_numba_dict : bool, optional
+            Return the raw numba dictionary when supported.
+        verbosity_nfids : int, optional
+            Progress reporting frequency used by the backend helper.
+
+        Returns
+        -------
+        None
+        """
         _lgi_ = deepcopy(self.lgi)
         _lgi_ = _lgi_.astype(np.int32)
         self.neigh_gid = GidOps.find_O1_neigh_2d(_lgi_, p=p, 
@@ -558,8 +623,31 @@ class mcgs2_grain_structure():
                        bbox_ex_bounds_fid=None, use_numba=False,
                        get_gbsegs=False, save_gbsegs=False, throw_gbsegs=False,
                        throw=False):
-        """'find_neigh_gid' is deprecated function name retained for backward 
-        compatibility."""
+        """
+        Backward-compatible wrapper for ``neighOps.find_neigh_fid``.
+
+        Parameters
+        ----------
+        fid : int
+            Feature or grain ID to query.
+        include_central_grain : bool, optional
+            Include the queried grain in the returned neighbour list.
+        update_grain_object : bool, optional
+            Update the underlying grain object.
+        user_defined_bbox_ex_bounds : bool, optional
+            Use a caller-supplied extended bounding box.
+        bbox_ex_bounds_fid : object, optional
+            Extended bounding-box limits for the queried feature.
+        use_numba : bool, optional
+            Use the numba-accelerated implementation when available.
+        get_gbsegs, save_gbsegs, throw_gbsegs, throw : bool, optional
+            Control grain-boundary segment handling and return behaviour.
+
+        Returns
+        -------
+        list or None
+            Neighbour IDs when ``throw`` is True, otherwise ``None``.
+        """
         if len(self.g) == 0:
             print('\n', 25*'-')
             print('NOTE: ', '\t', "This gs tslice has'nt been characterised. Charecterising to proceed.")
@@ -583,7 +671,31 @@ class mcgs2_grain_structure():
                        bbox_ex_bounds_fid=None, use_numba=False,
                        get_gbsegs=False, save_gbsegs=False, throw_gbsegs=False,
                        throw=False):
-        """Find neigh fid."""
+        """
+        Delegate neighbour lookup to ``neighOps.find_neigh_fid``.
+
+        Parameters
+        ----------
+        fid : int
+            Feature or grain ID to query.
+        include_central_grain : bool, optional
+            Include the queried grain in the returned neighbour list.
+        update_grain_object : bool, optional
+            Update the underlying grain object.
+        user_defined_bbox_ex_bounds : bool, optional
+            Use a caller-supplied extended bounding box.
+        bbox_ex_bounds_fid : object, optional
+            Extended bounding-box limits for the queried feature.
+        use_numba : bool, optional
+            Use the numba-accelerated implementation when available.
+        get_gbsegs, save_gbsegs, throw_gbsegs, throw : bool, optional
+            Control grain-boundary segment handling and return behaviour.
+
+        Returns
+        -------
+        list or None
+            Neighbour IDs when ``throw`` is True, otherwise ``None``.
+        """
         neighbour_ids = neighOps.find_neigh_fid(self.g, self.lfi, fid, self.n,
                                     include_central_grain=include_central_grain,
                                     update_grain_object=update_grain_object, 
@@ -597,22 +709,35 @@ class mcgs2_grain_structure():
         
     @property
     def neigh_fid(self):
-        """Get the neighbour grain IDs dictionary. neigh_gid is deprecated. neigh_fid is 
-        preferred and is to be used in all further development. This property decorator
-        is for backward compatibility.
-        """
+        """Return the neighbour-ID dictionary used for backward compatibility."""
         return self.neigh_gid
 
     @decorators.port_doc('upxo.pxtalops.grid_ops', 'find_feature_extended_bbox_pix')
     def find_extended_bounding_box(self, fid, make_binary=False):
-        """Find extended bounding box."""
+        """
+        Return the extended bounding box for a single feature ID.
+
+        This delegates to :func:`upxo.pxtalops.grid_ops.find_feature_extended_bbox_pix`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Extended bounding-box mask for the requested feature.
+        """
         grain_lfi_ExtBBox = gridOps.find_feature_extended_bbox_pix(fid=fid, lfi=self.lgi,
                                                                    make_binary=make_binary)
         return grain_lfi_ExtBBox
 
     @decorators.port_doc('upxo.pxtalops.grid_ops', 'find_extended_bbox_pix_fids')
     def find_extended_bounding_box_all_grains(self, make_binary=False):
-        """Find extended bounding box all grains."""
+        """
+        Return extended bounding boxes for all grains.
+
+        Returns
+        -------
+        numpy.ndarray
+            Extended bounding-box masks for every grain ID.
+        """
         print('Finding extended bounding boxes for all grains...')
         grain_lgi_ex_all = gridOps.find_extended_bbox_pix_fids(fids=self.gid, lfi=self.lgi,
                                                                make_binary=make_binary)
@@ -620,7 +745,14 @@ class mcgs2_grain_structure():
 
     @decorators.port_doc('upxo.pxtalops.grid_ops', 'find_extended_bbox_pix_fids')
     def find_extended_bounding_box_fids(self, fids=None, make_binary=False):
-        """Find extended bounding box fids."""
+        """
+        Return extended bounding boxes for the requested grain IDs.
+
+        Returns
+        -------
+        numpy.ndarray
+            Extended bounding-box masks for the requested grain IDs.
+        """
         print('Finding extended bounding boxes for specified grains...')
         grain_lgi_ex_fids = gridOps.find_extended_bbox_pix_fids(fids=self.gid if fids is None else fids, lfi=self.lgi,
                                                                make_binary=make_binary)
@@ -1387,7 +1519,12 @@ class mcgs2_grain_structure():
                       char_grain_positions=False, find_neigh=False,
                       char_gb=False, make_skim_prop=False,
                       get_grain_coords=True):
-        """Char morph 2d."""
+        """
+        Characterize the 2D grain structure and populate grain properties.
+
+        This is the main morphology-characterisation entry point and delegates
+        to the versioned implementation selected by ``use_version``.
+        """
         if use_version in [1, 2]:
             # Make data holder for properties
             from upxo._sup.data_templates import pd_templates
@@ -1653,7 +1790,12 @@ class mcgs2_grain_structure():
                     append=False, saa=True, throw=False, make_pd=True,
                     _redo_lgi_=False, make_grain_object=True
                     ):
-        """Char morph 2d v2."""
+        """
+        Characterize the 2D grain structure using the version-2 workflow.
+
+        This implementation detects features, builds grain objects, and
+        optionally computes morphology, neighbourhoods, and grain positions.
+        """
         self._char_fx_version_ = 2
         _mgo_ = make_grain_object
         # ---------------------------------------------
@@ -1707,7 +1849,7 @@ class mcgs2_grain_structure():
             interval = 1
         # ---------------------------------------------
         def set_val(target, key, value):
-            """Set or update val."""
+            """Set a mapping key or object attribute to ``value``."""
             if isinstance(target, dict):
                 target[key] = value
             else:
@@ -1808,37 +1950,37 @@ class mcgs2_grain_structure():
         return grain_pairs
 
     def pad_lfi(self):
-        """Pad lfi."""
+        """Return the labelled feature image padded for boundary operations."""
         return gridOps.pad_lfi(self.lfi, 1, self.n+1)
     
     def find_gb(self, gsimage, plot_gb=False, figsize=(6, 6), dpi=100, cmap='nipy_spectral'):
-        """Find gb."""
+        """Return grain-boundary pixels for ``gsimage`` using the grid helper."""
         return gridOps.find_gb_v1(gsimage, plot_gb=plot_gb, figsize=figsize, dpi=dpi, cmap=cmap)
     
     def segment_gb(self, gsimage, gbimage, neigh_fid, connectivity=8):
-        """Segment gb."""
+        """Segment grain-boundary pixels for the specified neighbouring grain IDs."""
         return gridOps.segment_grain_boundaries(gsimage, gbimage, neigh_fid,
                             connectivity=connectivity)
     
     def make_gbsegImage(self, gbMask, segments, nsegments, neigh_fid):
-        """Build and return gbsegImage."""
+        """Build and return a grain-boundary segment image."""
         return gridOps.make_gbsegImage(gbMask, segments, nsegments, neigh_fid)
 
     def see_all_gbsegs(self, gbsegImage):
-        """See all gbsegs."""
+        """Visualise all grain-boundary segments in ``gbsegImage``."""
         gbViz.see_all_gbsegs(gbsegImage)
 
     def see_gbsegs_fid(self, gbsegImage, fid):
-        """See gbsegs fid."""
+        """Visualise the grain-boundary segments for a specific grain ID."""
         gbViz.see_gbsegs_fid(gbsegImage, fid)
 
     def findJP(self, segments):
-        """Findjp."""
+        """Return grain-boundary junction points for the given segments."""
         junctions = jpOps.findJP(segments)
         return junctions
     
     def separate_junctions_by_order(self, segments):
-        """Separate junctions by order."""
+        """Group junction points by their order."""
         jp_by_jpo = jpOps.separate_junctions_by_order(segments)
         return jp_by_jpo
 
@@ -1846,7 +1988,7 @@ class mcgs2_grain_structure():
             figsize=(5, 5), dpi=80, legend_anchor=(1.02, 1.0), ms2=4,
             ms3=4, ms4=4, ms5=4, legend_loc='upper left', legend_title='Junction point data',
             legend_frameon=True, hide_axis=True, cmap='rainbow'):
-        """See gbsegs jp by jpo."""
+        """Visualise grain-boundary segments together with junctions by order."""
         gbViz.see_gbsegs_jp_by_jpo(gbsegs, jps_by_order, style_by_order=style_by_order,
         default_style=default_style, figsize=figsize, dpi=dpi, legend_anchor=legend_anchor,
         ms2=ms2, ms3=ms3, ms4=ms4, ms5=ms5, legend_loc=legend_loc, legend_title=legend_title,
@@ -1988,7 +2130,7 @@ class mcgs2_grain_structure():
                 print(f'Invalid Instance number, IN: {IN}')
 
     def do_single_pixel_grains_exist(self):
-        """Do single pixel grains exist."""
+        """Return True when any single-pixel grains are present."""
         # Check if any single-pixel grains exist in the grain structure
         single_pixel_gids = self.single_pixel_grains
         if len(single_pixel_gids) > 0:
@@ -2243,7 +2385,7 @@ class mcgs2_grain_structure():
                             'pname': 'area', 'sink_metric': 'mean',
                             'recalculate_mprop': True, 'ineq_spec_ub': '<=',
                             'sink_select_uncertainty': [-5, 5]},):
-        """Thresholding."""
+        """Apply repeated threshold-based merge or erosion operations."""
         for iter_number in range(1, niter+1):
             print(f'Iteration {iter_number} of {niter} for lath application.')
             if prop_type == 'mprop' and threshold_type == 'lower':
@@ -2260,7 +2402,13 @@ class mcgs2_grain_structure():
                                  recalculate_neigh='all', update_grain_object=False, 
                                  validate_ui=True, sink_select_uncertainty=[-5, 5],
                                  post_merge_ops_frequency=1, recursive_search_and_merge=True,):
-        """Lower mprop thresholding."""
+        """
+        Apply lower-threshold morphology-driven grain merging or erosion.
+
+        The operation selects grains whose property values fall below
+        ``threshold`` and then uses neighbouring grains to choose merge sinks
+        or perform erosion, depending on ``method``.
+        """
         # Validations
         qnum = None
         if validate_ui:
@@ -2433,7 +2581,7 @@ class mcgs2_grain_structure():
             True, if successfully merged, else False.
         """
         def MergeGrains():
-            """Mergegrains."""
+            """Merge the selected grain pair using the configured strategy."""
             if simple_merge:
                 self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
                 merge_success = True
@@ -2455,16 +2603,7 @@ class mcgs2_grain_structure():
         return merge_success
 
     def perform_post_grain_merge_ops(self, merge_success, merged_gid):
-        """
-        Perform post grain merge operations.
-
-        Parameters
-        ----------
-        merge_success: bool
-            If True, post grain merge operations will be performed.
-        merged_gid: int
-            Grain ID of the grain that was merged into another grain.
-        """
+        """Run post-merge bookkeeping after a successful grain merge."""
         self.renumber_gid_post_grain_merge(merged_gid)
         self.recalculate_ngrains_post_grain_merge()
         # Update lgi
@@ -2472,58 +2611,37 @@ class mcgs2_grain_structure():
         pass
 
     def renumber_gid_post_grain_merge(self, merged_gid):
-        """
-        Renumber gid post grain merge.
-
-        Parameters
-        ----------
-        merged_gid: int
-            Grain ID of the grain that was merged into another grain.
-        """
+        """Renumber grain IDs after a merge removed ``merged_gid``."""
         # self._gid_bf_merger_ = deepcopy(self.gid) # May nor be needed
         GID_left = self.gid[0:merged_gid-1]
         GID_right = [gid-1 for gid in self.gid[merged_gid:]]
         self.gid = np.array(GID_left + GID_right, dtype=np.int32)
 
     def recalculate_ngrains_post_grain_merge(self):
-        """
-        Recalculate the number of grains post grain merge.
-        """
+        """Recompute the grain count after a merge."""
         # gid must have been recalculated for tjhis as a pre-requisite.
         self.n = len(self.gid)
 
     def renumber_lgi_post_grain_merge(self, merged_gid):
-        """
-        Renumber lgi post grain merge.
-
-        Parameters
-        ----------
-        merged_gid: int
-            Grain ID of the grain that was merged into another grain.
-        """
+        """Renumber the labelled grain image after a merge."""
         # LGI_left = self.lgi[self.lgi < merged_gid]
         self.lgi[self.lgi > merged_gid] -= 1
 
     def validate_propnames(self, mpnames, return_type='dict'):
         """
-        Validate an iterable containing propnames. Mostly for internal use.
+        Validate that each requested property name is supported.
 
         Parameters
         ----------
-        mpnames: dth.dt.ITERABLES
-            Property names to be validated.
-        return_type: str
-            Type of function return. Valid choices: dict (default), list,
-            tuple.
+        mpnames : iterable
+            Property names to validate.
+        return_type : str, optional
+            Return a dictionary or a tuple of validation flags.
 
         Returns
         -------
-        validation: dict (default) / tuple
-            If return_type is other than dictionary and either list or
-            tuple, or numpy array, only tuple will be returned. If return_type
-            is dict, then dict with mpnames keys and their individual
-            validations will be the values. The values will all be bool.
-            If a property is a valid property, then True, else False.
+        dict or tuple
+            Validation results for each property name.
 
         Examples
         --------
@@ -2541,25 +2659,19 @@ class mcgs2_grain_structure():
 
     def check_mpnamevals_exists(self, mpnames, return_type='dict'):
         """
-        Check if the values for the given mpnames exist in self.prop.
+        Check whether each requested property has already been computed.
 
         Parameters
         ----------
-        mpnames: dth.dt.ITERABLES
-            List of user specified names of morphological properties.
-        return_type: str
-            Type of function return. Valid choices: dict (default), list,
-            tuple.
+        mpnames : iterable
+            Property names to check.
+        return_type : str, optional
+            Return a dictionary or a sequence of boolean flags.
 
         Returns
         -------
-        exists: dict (default) / list / tuple
-            If return_type is dict, then dict with mpnames keys and their
-            individual existences will be the values. The values will all be
-            bool. If a property value exists in self.prop, then True, else
-            False.
-            If return_type is other than dictionary and either list or
-            tuple, or numpy array, only tuple will be returned.
+        dict or list or tuple
+            Existence flags for each property name.
         """
         if return_type == 'dict':
             return {mpn: mpn in self.prop.columns for mpn in mpnames}
@@ -2570,21 +2682,28 @@ class mcgs2_grain_structure():
                    char_gb=False, set_grain_coords=True,
                    saa=True, throw=False):
         """
-        Targetted use of char_morph_2d.
+        Compute and cache the requested morphology properties.
 
         Parameters
         ----------
-        mpnames: dth.dt.ITERABLES
-            List of user specified names of morphological properties
-        char_grain_positions: bool
-            If True, grain positions will also be characterized. Defaults to
-            True.
-        char_gb:
-            If True, grain boundary will be characterized/re-characterized.
-            Degfaults to False.
-        set_grain_coords:
-            If True, self.g[gn]['grain'].coords will be updated, else not, for
-            all gn in self.gid.
+        mpnames : iterable
+            Property names to calculate.
+        char_grain_positions : bool, optional
+            Update grain position classification.
+        char_gb : bool, optional
+            Recompute grain-boundary geometry.
+        set_grain_coords : bool, optional
+            Update stored grain coordinates.
+        saa : bool, optional
+            Store computed properties on the instance.
+        throw : bool, optional
+            Return computed property arrays.
+
+        Returns
+        -------
+        dict
+            Requested property values when ``throw`` is True, otherwise
+            ``None`` placeholders.
 
         Examples
         --------
@@ -2617,22 +2736,19 @@ class mcgs2_grain_structure():
 
     def get_mprops(self, mpnames, set_missing_mprop=False):
         """
-        Get values of mpnames.
+        Return morphology-property arrays, computing missing ones if needed.
 
         Parameters
         ----------
-        mpnames: dth.dt.ITERABLES
-            List of user specified names of morphological properties.
-        set_missing_mprop: bool
-            If True, missing morphological property values will be
-            characterized and set before returning the values. Defaults to
-            False.
+        mpnames : iterable
+            Property names to return.
+        set_missing_mprop : bool, optional
+            Compute missing properties before returning values.
 
         Returns
         -------
-        mprop_values: dict
-            Dictionary with mpnames as keys and their corresponding values
-            as numpy arrays.
+        dict
+            Mapping of property name to numpy array or ``None``.
 
         Examples
         --------
@@ -2673,17 +2789,7 @@ class mcgs2_grain_structure():
         return mprop_values
 
     def validata_gids(self, gids):
-        """
-        Validate the gid values.
-
-        Parameters
-        ----------
-        gids: Iterable of ints.
-
-        Returns
-        -------
-        True if all gids are in self.gid else False
-        """
+        """Return True when all requested grain IDs exist in ``self.gid``."""
         return all([gid in self.gid for gid in gids])
 
     def get_gids_in_params_bounds(self,
@@ -2836,22 +2942,19 @@ class mcgs2_grain_structure():
 
     def get_gid_mprop_map(self, mpropname, querry_gids):
         """
-        Provide gid mapped values of a valid mprop for valid querry_gids.
+        Map a morphology property onto the requested grain IDs.
 
         Parameters
         ----------
-        mpropname: str
-            Name of the morphological property whose values are to be
-            mapped to the querry_gids.
-        querry_gids: dth.dt.ITERABLES
-            Iterable of valid gids for which the mprop values are to be
-            mapped.
+        mpropname : str
+            Property name to extract.
+        querry_gids : iterable
+            Grain IDs to map.
 
         Returns
         -------
-        gid_mprop_map: dict
-            Dictionary with querry_gids as keys and their corresponding
-            mprop values as values.
+        dict
+            Grain-ID to property-value mapping.
         """
         # Validations
         self.validate_propnames([mpropname])
@@ -5463,7 +5566,7 @@ class mcgs2_grain_structure():
             return None
 
     def plot_grains_prop_bounds_s(self, s, PROP_NAME=None, prop_min=0, prop_max='', ):
-        """Visualise grains prop bounds s using Matplotlib or PyVista."""
+        """Visualise grains within property bounds for a given state."""
         pass
 
     def plot_grains_at_position(self, position='corner', overlay_centroids=True,
@@ -5516,7 +5619,7 @@ class mcgs2_grain_structure():
         plt.show()
 
     def detect_grain_boundaries(self):
-        """Detect grain boundaries."""
+        """Placeholder for grain-boundary detection."""
         for label in np.unique(self.lgi):
             pass
 
@@ -5679,7 +5782,7 @@ class mcgs2_grain_structure():
             edgecolor_values={'area': 'black', 'perimeter': 'black', 'orientation': 'black', 'solidity': 'black'},
             binsize=30, alpha=0.7, color='blue', edgecolor='black',
             ncolumns=3, ylabel='count', gsdim=2):
-        """See distr."""
+        """Delegate to the plotting helper that visualises property distributions."""
         from upxo.viz.dataviz import see_distr
         see_distr(gsdim=gsdim, viz=viz,
                 prop_data_format='dataframe', prop_df=self.prop,
@@ -5734,25 +5837,25 @@ class mcgs2_grain_structure():
 
     @property
     def pxtal_length(self):
-        """Pxtal length."""
+        """Return the physical length of the polycrystal domain."""
         # Calculate length of the pxtal in microns
         return self.uigrid.xmax-self.uigrid.xmin+self.uigrid.xinc
 
     @property
     def pxtal_height(self):
-        """Pxtal height."""
+        """Return the physical height of the polycrystal domain."""
         # Calculate height of the pxtal in microns
         return self.uigrid.ymax-self.uigrid.ymin+self.uigrid.yinc
 
     @property
     def pxtal_area(self):
-        """Pxtal area."""
+        """Return the physical area of the polycrystal domain."""
         # Calculate area of the pxtal in square microns
         return self.pxtal_length*self.pxtal_height
 
     @property
     def centroids(self):
-        """Centroids."""
+        """Return grain centroids as an ``(n, 2)`` array."""
         # Calculate centroids of the grains
         centroids = []
         for gid in self.gid:
@@ -5762,67 +5865,67 @@ class mcgs2_grain_structure():
 
     @property
     def bboxes(self):
-        """Bboxes."""
+        """Return bounding boxes for all grains."""
         # Calculate bounding boxes of the grains
         return [grain.bbox for grain in self]
 
     @property
     def bboxes_bounds(self):
-        """Bboxes bounds."""
+        """Return bounding-box bounds for all grains."""
         # Calculate bounding box bounds of the grains   
         return [grain.bbox_bounds for grain in self]
 
     @property
     def bboxes_ex(self):
-        """Bboxes ex."""
+        """Return extended bounding boxes for all grains."""
         # Calculate extended bounding boxes of the grains
         return [grain.bbox_ex for grain in self]
 
     @property
     def bboxes_ex_bounds(self):
-        """Bboxes ex bounds."""
+        """Return extended bounding-box bounds for all grains."""
         # Calculate extended bounding box bounds of the grains
         return [grain.bbox_ex_bounds for grain in self]
 
     @property
     def areas(self):
-        """Areas."""
+        """Return grain areas as a numpy array."""
         # Calculate areas of the grains
         return np.array([self.px_size*grain.loc.shape[0] for grain in self])
 
     @property
     def areas_min(self):
-        """Areas min."""
+        """Return the minimum grain area."""
         # Calculate minimum area of the grains
         return self.areas.min()
 
     @property
     def areas_mean(self):
-        """Areas mean."""
+        """Return the mean grain area."""
         # Calculate mean area of the grains
         return self.areas.mean()
 
     @property
     def areas_std(self):
-        """Areas std."""
+        """Return the standard deviation of grain areas."""
         # Calculate standard deviation of the areas of the grains
         return self.areas.std()
 
     @property
     def areas_var(self):
-        """Areas var."""
+        """Return the variance of grain areas."""
         # Calculate variance of the areas of the grains
         return self.areas.var()
 
     @property
     def areas_max(self):
-        """Areas max."""
+        """Return the maximum grain area."""
         # Calculate maximum area of the grains
         return self.areas.max()
 
     @property
     def areas_stat(self):
-        """Areas stat."""
+        """Return basic statistics for grain areas."""
         # Calculate statistics of the areas of the grains
         areas = self.areas
         return {'min': areas.min(),
@@ -5834,7 +5937,7 @@ class mcgs2_grain_structure():
 
     @property
     def aspect_ratios(self):
-        """Aspect ratios."""
+        """Return grain aspect ratios."""
         # Calculate aspect ratios of the grains
         gid_stright_grains = self.straight_line_grains
         mj_axis = [grain.skprop.axis_major_length for grain in self]
@@ -5853,37 +5956,37 @@ class mcgs2_grain_structure():
 
     @property
     def aspect_ratios_min(self):
-        """Aspect ratios min."""
+        """Return the minimum grain aspect ratio."""
         # Calculate minimum aspect ratio of the grains
         return self.aspect_ratios.min()
 
     @property
     def aspect_ratios_mean(self):
-        """Aspect ratios mean."""
+        """Return the mean grain aspect ratio."""
         # Calculate mean aspect ratio of the grains
         return self.aspect_ratios.mean()
 
     @property
     def aspect_ratios_std(self):
-        """Aspect ratios std."""
+        """Return the standard deviation of grain aspect ratios."""
         # Calculate standard deviation of the aspect ratios of the grains
         return self.aspect_ratios.std()
 
     @property
     def aspect_ratios_var(self):
-        """Aspect ratios var."""
+        """Return the variance of grain aspect ratios."""
         # Calculate variance of the aspect ratios of the grains
         return self.aspect_ratios.var()
 
     @property
     def aspect_ratios_max(self):
-        """Aspect ratios max."""
+        """Return the maximum grain aspect ratio."""
         # Calculate maximum aspect ratio of the grains
         return self.aspect_ratios.max()
 
     @property
     def aspect_ratios_stat(self):
-        """Aspect ratios stat."""
+        """Return basic statistics for grain aspect ratios."""
         # Calculate statistics of the aspect ratios of the grains
         aspect_ratios = self.aspect_ratios
         return {'min': aspect_ratios.min(), 'mean': aspect_ratios.mean(),
@@ -5891,14 +5994,14 @@ class mcgs2_grain_structure():
 
     @property
     def npixels(self):
-        """Npixels."""
+        """Return the number of pixels for each grain."""
         # Calculate number of pixels of the grains
         npx = np.array([len(grain.loc) for grain in self])
         return npx
 
     @property
     def single_pixel_grains(self):
-        """Single pixel grains."""
+        """Return the grain IDs that contain a single pixel."""
         # Retrieve the grain IDs of single pixel grains
         return np.where(self.npixels == 1)[0]+1
 
@@ -5910,7 +6013,7 @@ class mcgs2_grain_structure():
 
     @property
     def straight_line_grains(self):
-        """Straight line grains."""
+        """Return grain IDs that are effectively straight-line grains."""
         # get the axis lengths of all availabel grains
         mja = [grain.skprop.axis_major_length for grain in self]
         mna = np.array([grain.skprop.axis_minor_length for grain in self])
@@ -5930,44 +6033,44 @@ class mcgs2_grain_structure():
 
     @property
     def locations(self):
-        """Locations."""
+        """Return stored grain locations."""
         # Calculate locations of the grains
         return [grain.position for grain in self]
 
     @property
     def perimeters(self):
-        """Perimeters."""
+        """Return grain perimeters estimated from pixel counts."""
         # Calculate perimeters of the grains
         characteristic_length = math.sqrt(self.px_size)
         return np.array([characteristic_length*grain.gbloc.shape[0] for grain in self])
 
     @property
     def perimeters_min(self):
-        """Perimeters min."""
+        """Return the minimum grain perimeter."""
         # Calculate minimum perimeter of the grains
         return self.perimeters.min()
 
     @property
     def perimeters_mean(self):
-        """Perimeters mean."""
+        """Return the mean grain perimeter."""
         # Calculate mean perimeter of the grains
         return self.perimeters.mean()
 
     @property
     def perimeters_std(self):
-        """Perimeters std."""
+        """Return the standard deviation of grain perimeters."""
         # Calculate standard deviation of the perimeters of the grains
         return self.perimeters.std()
 
     @property
     def perimeters_var(self):
-        """Perimeters var."""
+        """Return the variance of grain perimeters."""
         # Calculate variance of the perimeters of the grains
         return self.perimeters.var()
 
     @property
     def perimeters_stat(self):
-        """Perimeters stat."""
+        """Return basic statistics for grain perimeters."""
         # Calculate statistics of the perimeters of the grains
         perimeters = self.perimeters
         return {'min': perimeters.min(), 'mean': perimeters.mean(),
@@ -5975,13 +6078,13 @@ class mcgs2_grain_structure():
 
     @property
     def ratio_p_a(self):
-        """Ratio p a."""
+        """Return the perimeter-to-area ratio for each grain."""
         # Calculate perimeter to area ratio of the grains
         return np.array([p/a for p, a in zip(self.perimeters, self.areas)])
 
     @property
     def AF_bgrains_igrains(self):
-        """Af bgrains igrains."""
+        """Return area fractions for boundary and internal grains."""
         # Calculate area fractions of boundary grains and internal grains
         areas = self.areas
         A_bgr = [areas[gid-1] for gid in np.unique(self.positions['boundary'])]
@@ -5992,7 +6095,7 @@ class mcgs2_grain_structure():
 
     @property
     def grains(self):
-        """Grains."""
+        """Return a generator over the grains in this structure."""
         # Generator to iterate over grains
         return (_ for _ in self)
 
@@ -6263,21 +6366,21 @@ class mcgs2_grain_structure():
         textureInstanceNumber = 1
 
     def import_ctf(self, filePath, fileName, convertUPXOgs=True):
-        """Load or import t ctf."""
+        """Import a CTF file into the grain-structure workflow."""
         # Use DefDAP to get the job done here
         pass
 
     def import_crc(self, filePath, fileName, convertUPXOgs=True):
-        """Load or import t crc."""
+        """Import a CRC file into the grain-structure workflow."""
         # Use DefDAP to get the job done here
         pass
 
     def clean_exp_gs(self, minGrainSize=10):
-        """Clean exp gs."""
+        """Clean imported experimental grain-structure data."""
         # Use DefDAP to get the job done here
         pass
 
     def import_dream3d(self, filePath, fileName, convertUPXOgs=True):
-        """Load or import t dream3d."""
+        """Import a Dream3D file into the grain-structure workflow."""
         # Use DefDAP to get the job done here
         pass
