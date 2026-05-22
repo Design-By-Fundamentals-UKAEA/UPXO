@@ -38,8 +38,8 @@ all simulation parameters. The minimal workflow is:
     )
     print(gs.prop.head())       # pandas DataFrame of grain properties
 
-See the `Getting Started <../getting_started.html>`_ and
-`Workflows <../workflows.html>`_ pages for annotated step-by-step examples.
+See the `Getting Started <../../getting_started.html>`_ and
+`Workflows <../../workflows.html>`_ pages for annotated step-by-step examples.
 
 ----
 
@@ -114,16 +114,16 @@ Key Concepts
     number of detected grains (``gs.n``), per-grain morphological properties
     (``gs.prop``), and neighbour data (``gs.neigh_gid``).
 
-See the `Key Concepts <../concepts.html>`_ page for a full explanation.
+See the `Key Concepts <../../concepts.html>`_ page for a full explanation.
 
 ----
 
 Further Reading
 ---------------
 
-- `Getting Started <../getting_started.html>`_
-- `Key Concepts <../concepts.html>`_
-- `Workflows <../workflows.html>`_
+- `Getting Started <../../getting_started.html>`_
+- `Key Concepts <../../concepts.html>`_
+- `Workflows <../../workflows.html>`_
 - `GitHub repository <https://github.com/Design-By-Fundamentals-UKAEA/UPXO>`_
 - `Wiki <https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki>`_
 - `YouTube channel <https://www.youtube.com/@UPXODBF>`_
