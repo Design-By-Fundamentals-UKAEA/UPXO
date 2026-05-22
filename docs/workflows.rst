@@ -6,91 +6,112 @@ Workflows
    :depth: 2
 
 This page shows complete, annotated code examples for common UPXO tasks.
-Each example can be copied into a Jupyter notebook or Python script and run directly.
+All examples follow patterns taken directly from the demo notebooks in
+``src/upxo/demos/``.
+
+.. note::
+
+   UPXO reads simulation parameters from an Excel dashboard file
+   (``input_dashboard.xls``). The examples below use a placeholder path — replace
+   it with the path to your own dashboard file. Template dashboards are provided
+   under ``src/upxo/interfaces/user_inputs/``.
 
 ----
 
-Workflow 1 — MCGS2D from Dashboard to Grain Properties
---------------------------------------------------------
+Workflow 1 — MCGS2D: Simulate, Detect Grains, Characterise
+------------------------------------------------------------
 
-This is the standard starting workflow. It mirrors what ``gschar1.ipynb`` demonstrates.
-
-**Step 1: Run the simulation**
-
-The dashboard is a dictionary of simulation parameters. Pass it to the polycrystal
-constructor to run the Potts-model MC simulation and produce a ``pxt`` object.
+This is the standard MCGS2D pipeline, equivalent to what ``gschar1.ipynb`` demonstrates.
 
 .. code-block:: python
 
-   from upxo.ggrowth.mcgs import mcgs2d
+   from upxo.ggrowth.mcgs import mcgs
 
-   # Minimal dashboard — adjust domain size and steps to your needs
-   pxt = mcgs2d.create(
-       domain = (100, 100),   # lattice size: rows x columns
-       Q      = 200,          # number of grain orientations
-       T      = 0.5,          # effective temperature
-       J      = 1.0,          # grain boundary energy
-       n_mcs  = 50,           # number of Monte-Carlo steps to run
-       n_tslice = 10,         # save every 10th step
+   # Step 1 — Load dashboard and run the MC simulation
+   pxt = mcgs(input_dashboard='path/to/input_dashboard.xls')
+   pxt.simulate()
+
+   # Step 2 — Detect grains at every saved time slice
+   pxt.detect_grains()
+
+   # Step 3 — Pick a time slice
+   # pxt.m is the list of saved MCS step indices
+   tslice = pxt.m[-1]        # last saved step
+   gs = pxt.gs[tslice]       # mcgs2_grain_structure object
+
+   # Step 4 — Characterise: request exactly the properties you need
+   gs.char_morph_2d(
+       use_version=2,
+       npixels=True,
+       area=True,
+       aspect_ratio=True,
+       solidity=True,
+       circularity=True,
+       char_gb=False,
+       make_skim_prop=True,
+       get_grain_coords=True,
    )
 
-After this call, ``pxt.gs`` contains one entry per saved time slice.
-
-**Step 2: Pick a time slice**
-
-.. code-block:: python
-
-   gsid = 5              # the 5th saved time step
-   gs = pxt.gs[gsid]     # mcgs2_grain_structure object for that slice
-
-**Step 3: Detect grains and compute morphological properties**
-
-.. code-block:: python
-
-   gs.char_morph_2d(char_gb=True)   # connected-component detection + shape metrics
-
+   # Step 5 — Inspect results
    print(f"Number of grains: {gs.n}")
-   print(gs.prop.head())            # pandas DataFrame — one row per grain
+   print(gs.prop.columns.tolist())   # shows which columns were computed
+   print(gs.prop.head())
 
-Available columns in ``gs.prop`` include: ``area``, ``aspect_ratio``, ``solidity``,
-``major_axis_length``, ``minor_axis_length``, ``perimeter``, ``equivalent_diameter``.
-
-**Step 4: Access the labelled grain image**
-
-.. code-block:: python
-
-   import matplotlib.pyplot as plt
-
-   plt.imshow(gs.lgi, cmap='tab20')
-   plt.colorbar(label='Grain ID')
-   plt.title(f'MCGS2D — tslice {gsid}, {gs.n} grains')
-   plt.show()
-
-**Step 5: Query grain neighbours**
-
-.. code-block:: python
-
-   gs.find_neigh(include_central_grain=False)
-
-   # Neighbours of grain 10
-   print(gs.neigh_gid[10])
+Properties are only present in ``gs.prop`` if the matching flag was set to ``True``
+in the ``char_morph_2d`` call. Available flags include: ``npixels``, ``area``,
+``aspect_ratio``, ``solidity``, ``circularity``, ``eccentricity``,
+``major_axis_length``, ``minor_axis_length``, ``perimeter``, ``eq_diameter``,
+``compactness``, ``morph_ori``, ``euler_number``.
 
 ----
 
-Workflow 2 — Grain Size Distribution
---------------------------------------
+Workflow 2 — Visualise the Labelled Grain Image
+-------------------------------------------------
 
-Once ``char_morph_2d`` has been called, the area of every grain is in ``gs.prop``.
+After ``detect_grains()``, the labelled grain image is stored in ``gs.lgi``.
 
 .. code-block:: python
 
    import matplotlib.pyplot as plt
 
-   areas = gs.prop['area'].values   # pixel counts
+   tslice = pxt.m[-1]
+   gs = pxt.gs[tslice]
 
    plt.figure()
-   plt.hist(areas, bins=20, edgecolor='k')
-   plt.xlabel('Grain area (pixels)')
+   plt.imshow(gs.lgi, cmap='tab20')
+   plt.colorbar(label='Grain ID')
+   plt.title(f'MCGS2D — tslice {tslice}, {gs.n} grains')
+   plt.axis('off')
+   plt.tight_layout()
+   plt.show()
+
+To visualise the raw MC spin state (before grain detection):
+
+.. code-block:: python
+
+   plt.imshow(pxt.S, cmap='nipy_spectral')
+   plt.title('MC spin state (final)')
+   plt.show()
+
+----
+
+Workflow 3 — Grain Size Distribution
+--------------------------------------
+
+Request ``npixels=True`` (pixel count per grain) when calling ``char_morph_2d``,
+then plot the distribution.
+
+.. code-block:: python
+
+   import matplotlib.pyplot as plt
+
+   gs.char_morph_2d(use_version=2, npixels=True, make_skim_prop=True)
+
+   pixel_counts = gs.prop['npixels'].values
+
+   plt.figure()
+   plt.hist(pixel_counts, bins=20, edgecolor='k')
+   plt.xlabel('Grain size (pixels)')
    plt.ylabel('Count')
    plt.title('Grain size distribution')
    plt.tight_layout()
@@ -98,7 +119,38 @@ Once ``char_morph_2d`` has been called, the area of every grain is in ``gs.prop`
 
 ----
 
-Workflow 3 — Finding Small Grains and Boundary Grains
+Workflow 4 — Grain Neighbourhood
+----------------------------------
+
+.. code-block:: python
+
+   tslice = pxt.m[-1]
+   gs = pxt.gs[tslice]
+
+   # Characterise first so bounding boxes exist for the neighbour search
+   gs.char_morph_2d(use_version=2, bbox=True, bbox_ex=True, make_skim_prop=True)
+
+   # Compute neighbours for every grain
+   gs.find_neigh(include_central_grain=False, print_msg=True, use_numba=True)
+
+   # Neighbours of grain with ID 10
+   print(gs.neigh_gid[10])
+
+.. note::
+
+   A known bug in some builds causes the central grain to appear in its own
+   neighbour list when ``include_central_grain=False``. The workaround used in
+   the demo notebooks is:
+
+   .. code-block:: python
+
+      for gid in gs.neigh_gid.keys():
+          if gid in gs.neigh_gid[gid]:
+              gs.neigh_gid[gid].remove(gid)
+
+----
+
+Workflow 5 — Finding Small Grains and Boundary Grains
 -------------------------------------------------------
 
 Use the ``gid_ops`` module to query the labelled image directly.
@@ -109,80 +161,78 @@ Use the ``gid_ops`` module to query the labelled image directly.
 
    lfi = gs.lgi
 
-   # Grains with fewer than 5 pixels
+   # Grains with 5 pixels or fewer
    small_grains = gidOps.find_small_fids(lfi, threshold=5)
    print("Small grain IDs:", small_grains)
 
-   # Grains touching the domain boundary
+   # Grains whose pixels touch the domain boundary
    boundary_grains = gidOps.find_boundary_fids2d(lfi)
    print("Boundary grain IDs:", boundary_grains)
 
 ----
 
-Workflow 4 — Resampling a Grain Structure Grid
+Workflow 6 — Resampling and Rescaling the Grid
 ------------------------------------------------
 
-Use ``grid_ops`` to downsample or rescale the labelled image, for example
-before exporting to a coarser FE mesh.
+Use ``grid_ops`` to change the resolution of the state array or labelled image.
 
 .. code-block:: python
 
-   import upxo.gsdataops.grid_ops as gridOps
+   from upxo.gsdataops.grid_ops import resample_grid_2d, rescale_grid_2d
 
-   lfi = gs.lgi
-
-   # Downsample to half resolution (sf=0.5 means every 2nd pixel)
-   resampled, x_new, y_new, xinc_new, yinc_new = gridOps.resample_grid_2d(
-       data=lfi, uigrid=None, sf=0.5
+   # Downsample by factor 0.25 using the simulation's own grid object
+   resampled, x_new, y_new, xinc_new, yinc_new = resample_grid_2d(
+       pxt.S, pxt.uigrid, sf=0.25, method='nearest'
    )
-   print("Original shape:", lfi.shape)
+   print("Original shape:", pxt.S.shape)
    print("Resampled shape:", resampled.shape)
 
-   # Scale by a factor of 2 in both dimensions
-   scaled = gridOps.rescale_grid_2d(lfi, scale_factor=2.0)
+   # Rescale to twice the resolution
+   scaled = rescale_grid_2d(pxt.S, scale_factor=2, method='nearest')
    print("Scaled shape:", scaled.shape)
 
 ----
 
-Workflow 5 — Merging Small Grains
+Workflow 7 — Merging Small Grains
 -----------------------------------
 
-Small grains (single-pixel artefacts from the MC evolution) can be absorbed
-into their largest neighbour before downstream analysis.
+Single-pixel or sub-threshold grains can be absorbed into their largest neighbour
+before downstream analysis.
 
 .. code-block:: python
 
+   import numpy as np
    from upxo.pxtalops.gssmooth2d import _merge_small_grains
 
    lfi = gs.lgi
    lfi_clean = _merge_small_grains(lfi, area_threshold=3)
 
-   print("Unique grains before:", len(set(lfi.ravel())))
-   print("Unique grains after :", len(set(lfi_clean.ravel())))
+   print("Unique grains before:", len(np.unique(lfi)))
+   print("Unique grains after :", len(np.unique(lfi_clean)))
 
 ----
 
-Workflow 6 — Comparing Morphology Across Time Slices
+Workflow 8 — Comparing Grain Size Across Time Slices
 ------------------------------------------------------
 
-Iterate over multiple time slices to track how mean grain area evolves with MCS.
+Iterate over saved time slices to track how mean grain size evolves.
 
 .. code-block:: python
 
    import numpy as np
    import matplotlib.pyplot as plt
 
-   gsids      = sorted(pxt.gs.keys())
-   mean_areas = []
+   mean_sizes = []
 
-   for gsid in gsids:
-       gs = pxt.gs[gsid]
-       gs.char_morph_2d()
-       mean_areas.append(gs.prop['area'].mean())
+   for tslice in pxt.m:
+       gs = pxt.gs[tslice]
+       gs.char_morph_2d(use_version=2, npixels=True, make_skim_prop=True)
+       mean_sizes.append(gs.prop['npixels'].mean())
 
-   plt.plot(gsids, mean_areas, marker='o')
-   plt.xlabel('Time slice (gsid)')
-   plt.ylabel('Mean grain area (pixels)')
+   plt.figure()
+   plt.plot(pxt.m, mean_sizes, marker='o')
+   plt.xlabel('Monte-Carlo step (tslice)')
+   plt.ylabel('Mean grain size (pixels)')
    plt.title('Grain growth kinetics')
    plt.tight_layout()
    plt.show()
