@@ -1,14 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Class-1: gtess2d
-----------------
-Instantiation routes:
-    1.
-    2.
--------------------------------------------------------------------------------
-Created on Thu Mar  6 18:14:08 2025
-@author: Dr. Sunil Anandatheertha
-"""
+"""Voronoi-tessellation 2D polycrystal class for UPXO (gtess2d)."""
 import matplotlib.pyplot as plt
 from upxo.geoEntities.mulpoint2d_old import mulpoint2d
 from upxo.geoEntities.mulpoint2d import MPoint2d as mp2d
@@ -61,7 +52,7 @@ class gtess2d():
 
     * floc: Feature location. Needs update with every change in instance.
     Does not store instance wise. As calculation is quick, it must be
-    re-calculated afresh for geomewtry.
+    re-calculated afresh for geometry.
 
     * fdb_base: feature data base link.
     * geolink: geometry link.
@@ -145,7 +136,7 @@ class gtess2d():
     perturb_feat(self, instance=1, gslevel='base', cid=[], )
     fe_mesh(self, instance=1, gslevel='base', tool='gmsh')
     ---------------------------------------------------
-    Definityions to update
+    Definitions to update
     ----------------------
     setup_mprop
     setup_tprop
@@ -307,11 +298,11 @@ class gtess2d():
         self.fdb_subgrains = {}
         self.fdb_paps = {}
         # ------------------------------------------------------------------
-        '''Morphological properties.'''
+        # Morphological properties.
         self.mprop = {inst: {'area': [], 'ar': [], 'gbl': [],
                              }
                       for inst in self.instn}
-        '''Topological properties.'''
+        # Topological properties.
         self.tprop = {inst: {'ncells': len(self.pxtals[inst].geoms),
                              'ncrange': range(len(self.pxtals[inst].geoms)),
                              'nneigh': [],
@@ -320,57 +311,17 @@ class gtess2d():
                       for inst in self.instn}
         # ------------------------------------------------------------------
         self._idmap_fc_ = {'base': {}}
-        '''Map features to cell-IDs. Examples of features included are in the
-        tuple, self._valid_fnames_.
-        general data structure:
-
-        Example acceess - 1 (Direct access, Not preferred)
-        --------------------------------------------------
-        gslevel = 'base'
-        instance_ID = 1
-        cell_ID = 15
-        gset._idmap_fc_[gslevel].keys()
-        gset._idmap_fc_[gslevel][1].keys()
-        gset._idmap_fc_[gslevel][1]['ph'][cell_ID]
-
-        Example access - 2 (Preferred)
-        ------------------------------
-        Please refer to documentation of defintion get_idmap_cf(). Code is,
-        gset.get_idmap_fc('base', 1, 'ph', 1, cids=[])
-
-        options 3 and 2
-        '''
+        # Map features to cell-IDs. Examples of features are in self._valid_fnames_.
+        # Direct access: gset._idmap_fc_[gslevel][instance_ID]['ph'][cell_ID]
+        # Preferred access: gset.get_idmap_fc('base', 1, 'ph', 1, cids=[])
         for i in self.instn:
             _tmp_ = [phid for cid in self.tprop[i]['ncrange']]
             self._idmap_fc_['base'][i] = {'ph': _tmp_}
         # ------------------------------------------------------------------
         self._idmap_cf_ = {'base': {}}
-        '''Map cell IDs to features. Examples of features included are in the
-        tuple, self._valid_fnames_. By default, phase key (i.e. 'ph') will be
-        created. The user may create appropriate keys from the allowed list.
-
-        Example acceess - 1 (Direct access, Not preferred)
-        --------------------------------------------------
-        gslevel = 'base'
-        instance_ID = 1
-        fname = 'ph'
-        fid = 1
-        cell_ID = 15
-
-        gset._idmap_cf_[gslevel].keys()
-        gset._idmap_cf_[gslevel][instance_ID].keys()
-        gset._idmap_cf_[gslevel][instance_ID][fname].keys()
-        gset._idmap_cf_[gslevel][instance_ID][fname][fid]
-
-        The above code accessess all the cells belonging to phase of phase_ID,
-        in the pxtal instance specified by instance_ID.
-
-        Example access - 2 (Preferred)
-        ------------------------------
-        Please refer to documentation of defintion get_idmap_cf(). Code is,
-
-        gset.get_idmap_cf('base', 1, 'ph', 1, cids=[])
-        '''
+        # Map cell IDs to features. Examples of features are in self._valid_fnames_.
+        # By default, phase key ('ph') will be created.
+        # Preferred access: gset.get_idmap_cf('base', 1, 'ph', 1, cids=[])
         for i in self.instn:
             _tmp_ = {'ph': {phid: [cid for cid in self.tprop[i]['ncrange']]}}
             self._idmap_cf_['base'][i] = _tmp_
@@ -380,12 +331,9 @@ class gtess2d():
         # def get_idmap_c_subc
         self.idmap_c_subc = {i: None for i in self.instn}
         # ------------------------------------------------------------------
-        '''Now, we use add_fdb to actually store essential feature information.
-        This includes the vertex coordinstes, instance number, CID mapping list
-        of list of vertex coordinates, CID mapping list of list of vertex
-        coordinate IDs, list of 2D point objects, CID mapping list of
-        UPXo point 2D Object list IDs and UPXO multi-point object (Optional).
-        '''
+        # Use add_fdb to store essential feature information: vertex coordinates,
+        # instance number, CID mapping of vertex coords/IDs, 2D point objects,
+        # and UPXO multi-point object (optional).
         for inst in self.instn:
             self.add_fdb(gslevels=['base'],
                          fdbs=[self.link_geom(instance=inst,
@@ -406,10 +354,12 @@ class gtess2d():
         """
         polgs: dict: Polygonised grain structures
 
-        Example
-        -------
-        from upxo.pxtal.vortess2d import gtess2d
-        gset = gtess2d.from_geometrified_mcgs2d(PXTAL)
+        Examples
+        --------
+        .. code-block:: python
+
+            from upxo.pxtal.vortess2d import gtess2d
+            gset = gtess2d.from_geometrified_mcgs2d(PXTAL)
         """
         sps = None
         pxtals = polgs
@@ -469,7 +419,7 @@ class gtess2d():
             parameters needed to create them are to so as to keep the number
             of seed points between -5% and +5% of that of the 1st instance.
             This is to ensure similar morphological parameter distributions
-            across all instabses. Default value is 10.
+            across all instances. Default value is 10.
 
         sp_distr: int, optional
             Spatial distribution of the seed points desired. Options insluce
@@ -789,23 +739,24 @@ class gtess2d():
                                           make_upxo_mp=True,
                                           make_upxo_mp_subfeatures=False):
         """
-        Extract
+        Extract shapely coordinates for all grains in a given instance.
+
         Parameters
         ----------
         instance: int, optional
             Default value is 1.
 
         mfname: str, optional
-            Options inslude the following:
+            Options include the following:
                 * 'g_rp': grain representative point. This is a point
-                gfaurenteed by shapely to be INSIDE a polygon, in the present
+                guaranteed by shapely to be INSIDE a polygon, in the present
                 case, the GRAIN.
-                * 'g_cp': grain centroia point.
-                * 'g_vp': grain vertx points.
+                * 'g_cp': grain centroid point.
+                * 'g_vp': grain vertex points.
             Default value is 'g_rp'
 
-        Return
-        ------
+        Returns
+        -------
         points: dict
             keys include:
                 * cid: coordinates arranged in order of cid
@@ -1033,8 +984,8 @@ class gtess2d():
         gset.fdb_supset['nclust']  # Number of clusters across instances
         >> [7, 7, 8, 8, 8]
 
-        Exaplanations
-        -------------
+        Notes
+        -----
         Note: This uses the above data access. Please refer it before reading
         further.
 
@@ -1075,19 +1026,18 @@ class gtess2d():
                                  n_instances=1)
         non_mod = {k-1: [_v-1 for _v in v] for k, v in non[0].items()}
         # -------------------------------------------------
-        '''Make sure cid is its own neighbour as a trivial.'''
+        # Make sure cid is its own neighbour as a trivial.
         for cid, neigh in non_mod.items():
             if cid not in neigh:
                 non_mod[cid].append(cid)
         # -------------------------------------------------
-        '''Implement cell exclusion rule for cluster centre cells.'''
+        # Implement cell exclusion rule for cluster centre cells.
         if len(exclude_cluster_centre_cids) != 0:
             for cid in non_mod.keys():
                 if cid in exclude_cluster_centre_cids:
                     del non_mod[cid]
         # -------------------------------------------------
-        '''Build a network-x graph to allow us select the optimum spatial
-        distribution of cells.'''
+        # Build a networkx graph to select the optimum spatial distribution of cells.
         G = make_gid_net_from_neighlist(non_mod)
         # -------------------------------------------------
         print(40*'-', f'\nComputing {n_supcell_instances} instances of',
@@ -1106,7 +1056,7 @@ class gtess2d():
                     selected.add(cell)
             supcell_centres[inst+1] = list(selected)
         # -------------------------------------------------
-        '''Exclude the cluster centre cells as per specification.'''
+        # Exclude the cluster centre cells as per specification.
         if 0 < rand_exclude_cluster_centre_cids < 1:
             for inst in range(n_supcell_instances):
                 # Number of cluster centres
@@ -1125,10 +1075,10 @@ class gtess2d():
         pxmerged = []
         for sset_i in range(1, n_supcell_instances+1):
             # sset_i = 1
-            '''Get clusters of this supercell pxtal instance.'''
+            # Get clusters of this supercell pxtal instance.
             _clusters_ = [non_mod[cid] for cid in supcell_centres[sset_i]]
             # --------------------
-            '''Remove duplicates if specified by user.'''
+            # Remove duplicates if specified by user.
             if remove_duplicate_cells:
                 _cid_ = set()
                 new_clusters = []
@@ -1150,67 +1100,60 @@ class gtess2d():
                 # <<<<<<< TO DO >>>>>>>
                 pass
             # --------------------
-            '''handle empty _clusters_ entries.'''
+            # Handle empty _clusters_ entries.
             for i, _c_ in enumerate(_clusters_, start=0):
                 if len(_c_) == 0:
                     _clusters_[i].append(supcell_centres[sset_i][i])
             # --------------------
-            '''Collect clusters.'''
+            # Collect clusters.
             clusters_coll = np.hstack(_clusters_).astype(np.int16).tolist()
-            '''Build cluster IDs.'''
+            # Build cluster IDs.
             _clids_ = list(range(1, len(supcell_centres[sset_i])+1))
             # --------------------
-            '''Form the super cell dictionary. This will have the following
-            keys:
-                * 'clids'. Cluster IDs. Starts at 1 and increments by 1.
-                * 'cids'. Cell IDs of the cluster's central cell.
-                * 'clusters'. List of [list of cell IDs in each cluster].
-            '''
+            # Form the super-cell dictionary with keys:
+            #   'clids': cluster IDs (starts at 1), 'cids': centre cell IDs,
+            #   'clusters': list of [list of cell IDs in each cluster].
             scells[sset_i] = {'clids': _clids_,
                               'cids': supcell_centres[sset_i],
                               'clusters': _clusters_
                               }
             scells_coll[sset_i] = clusters_coll
             # --------------------
-            '''Form merged poly-xtal instance.'''
+            # Form merged poly-xtal instance.
             if merge and remove_duplicate_cells:
                 pxtcells = self.pxtals[instance].geoms
                 old_cells = {cid: c for cid, c in enumerate(pxtcells, start=0)}
-                '''Build list of cells which will not be merged.'''
+                # Build list of cells that will not be merged.
                 no_merges = []
                 for cid in old_cells.keys():
                     if cid not in scells_coll[sset_i]:
                         no_merges.append(old_cells[cid])
-                '''Build the cells which should be merged and carry out the
-                cell mergers.'''
+                # Build the cells to merge and carry out the cell mergers.
                 if len(no_merges) == 0:
                     mpxinst = None
                 else:
-                    '''Merge the cells'''
+                    # Merge the cells.
                     merged_cells = []
                     for scell in scells[sset_i]['clusters']:
                         if len(scell) > 0:
-                            '''Merge only if there are cells to merge.'''
+                            # Merge only if there are cells to merge.
                             cells_to_merge = [old_cells[cid] for cid in scell]
                             _merged_cell_ = unary_union(cells_to_merge)
                             merged_cells.append(_merged_cell_)
                         else:
-                            '''If not, then just update cell itself as the
-                            merged cell. TO DO: To check if this is really
-                            needed.'''
+                            # If not, just use the cell itself as the merged cell.
                             merged_cells.append(_merged_cell_)
-                    '''Form the merged poly-xtal instance.'''
+                    # Form the merged poly-xtal instance.
                     mpxinst = MultiPolygon(no_merges + merged_cells)
                 pxmerged.append(mpxinst)
             # --------------------
-        '''Note that any pre-existing data in self.fdb_supset will be
-        re-written.'''
+        # Any pre-existing data in self.fdb_supset will be re-written.
         if not hasattr(self, 'fdb_supset'):
             self.fdb_supset = {}
         elif not isinstance(self.fdb_supset, dict):
             self.fdb_supset = {}
         # -------------------------------
-        '''Create the Super-Cell Feature Database.'''
+        # Create the super-cell feature database.
         if self.fdb_supset:
             self.fdb_supset = {}
         self.fdb_supset['name'] = super_cell_name
@@ -1230,7 +1173,7 @@ class gtess2d():
             ncells.append(_ncells_)
         self.fdb_supset['ncells'] = ncells
         # -------------------------------
-        '''Plot a sample if user requested for a plot.'''
+        # Plot a sample if the user requested a plot.
         if sample_plot and merge and remove_duplicate_cells:
             for i in range(len(pxmerged)):
                 pxtal = pxmerged[i]
@@ -1263,6 +1206,10 @@ class gtess2d():
                         throw_pxtal=False,
                         ):
         """
+        Partition cells in a grain structure using sub-division algorithms.
+
+        Parameters
+        ----------
         gslevel: str
             Specify the grain structure level. Default value is 'base'.
 
@@ -1408,32 +1355,30 @@ class gtess2d():
 
         """
         # cids_sd=[]
-        '''Gather all cids in specified gslevel and instance_ID_source.'''
+        # Gather all cids in specified gslevel and instance_ID_source.
         cids_all = self.get_all_cids(gslevel=gslevel,
                                      instance_ID=instance_ID_source)
         cells_all, _ = self.get_cells(gslevel=gslevel,
                                       instance_ID=instance_ID_source,
                                       cids=cids_all, validate=True).values()
         # ---------------------------------------------------------------------
-        '''cells_sd: cells to be sub-divided.
-        cids_sd: cids of cells to be sub-divided.'''
+        # cells_sd: cells to be sub-divided. cids_sd: cids of cells to be sub-divided.
         # cids_sd = cids_all[1:]
         cells_sd, cids_sd = self.get_cells(gslevel=gslevel,
                                            instance_ID=instance_ID_source,
                                            cids=cids_sd,
                                            validate=True).values()
         # ---------------------------------------------------------------------
-        '''Template dictionartty to store subcells and subcell cids.'''
+        # Template dictionary to store subcells and subcell cids.
         subcells = {cid: {'cells': None, 'cids': None} for cid in cids_all}
         # ---------------------------------------------------------------------
-        '''Lets first deal with all those which are not getting sub-divided.'''
+        # First handle all cells that are not being sub-divided.
         for cid_all in cids_all:
             if cid_all not in cids_sd:
                 subcells[cid_all]['cells'] = [cells_all[cid_all]]
                 subcells[cid_all]['cids'] = np.array([0])
         # ---------------------------------------------------------------------
-        '''Now, sub-divide the cells in cells_sd into subcell sets and store
-        each sub-cell set in reference to cid_sd of cids_sd.'''
+        # Sub-divide cells in cells_sd into subcell sets, keyed by cid_sd.
         if partition_type == 'Sub-cell-0':
             for cid, cell in zip(cids_sd, cells_sd):
                 print(f"Finding optimum subcell config for gslevel: '{gslevel}, ",
@@ -1456,16 +1401,16 @@ class gtess2d():
         elif partition_type == 'Sub-cell-1':
             pass
         # ---------------------------------------------------------------------
-        '''Now, reset the local subcell IDs to global IDs'''
+        # Reset local subcell IDs to global IDs.
         # print(subcells)
         for i in cids_all[1:]:
             subcells[i]['cids'] += subcells[i-1]['cids'][-1] + 1
         # ---------------------------------------------------------------------
-        '''We will turn cids back to list'''
+        # Turn cids back to list.
         for i in cids_all:
             subcells[i]['cids'] = list(subcells[i]['cids'])
         # ---------------------------------------------------------------------
-        '''Assemble all subcells to make the pxtal.'''
+        # Assemble all subcells to make the pxtal.
         subcells_all = []
         for i in cids_all:
             subcells_all += subcells[i]['cells']
@@ -1474,7 +1419,7 @@ class gtess2d():
         for sg in subcells.values():
             sc_cids +=  sg['cids']
         # ---------------------------------------------------------------------
-        '''Build the subcell id - parent id relationship'''
+        # Build the subcell-id to parent-id relationship.
         scid_pcid = {}
         for sc in subcells.items():
             scid, pcid = sc[0], sc[1]['cids']
@@ -1520,24 +1465,26 @@ class gtess2d():
                             _min_subcell_area_factor_=-1,
                             niter_max=1000, _force_select_=True
                             ):
-        '''
-        Divide a cell in sub-cells using seed point basd Voronoi Tessellation.
+        """
+        Divide a cell into sub-cells using seed-point-based Voronoi tessellation.
 
-        xtal_object: shapely polygon
+        Parameters
+        ----------
+        cell : shapely.Polygon
+            The grain polygon to subdivide.
+        spn : int, optional
+            Number of seed points for Voronoi tessellation. Default value is 100.
+        seed_lattice_type : str, optional
+            Distribution of seed points. Values: ``'rand_uni'``, ``'rand_nrm'``,
+            ``'bridson'``, ``'dart'``, ``'lattice.sq'``, ``'lattice.tri'``,
+            ``'lattice.hex'``. Default value is ``'rand_uni'``.
+        combine_small_subs : bool, optional
+            Whether to combine small Voronoi cells with neighbours.
+            Default value is False.
 
-        spn:
-            number of seed points for voronoi tessellation inside this grain
-            type: shapely MultiPoint
-        seed_lattice_type:
-            distribution of seed points
-            type: str
-            values: 'ru', 'hex', 'tri', 'rec', 'rn_xtal_centroid'
-        combine_small_subs:
-            Whether to combine small Voronoi cells with neighbours
-            type: bool - True / False
-
-        Access:
-            voronoi_subdivision(pxtal[2], seed_points, combine_small_subs)
+        Notes
+        -----
+        Example call: ``voronoi_subdivision(pxtal[2], seed_points, combine_small_subs)``
 
         Examples
         --------
@@ -1560,7 +1507,7 @@ class gtess2d():
         >> 31  # the 'cell' has been subdivided into 31 sub-cells.
 
         sc['pxtal']  # View the actual subcell structures on command line.
-        '''
+        """
         _pi_ = np.pi
         _sqrt_ = np.sqrt
         _urd_ = np.random.uniform
@@ -1575,8 +1522,7 @@ class gtess2d():
             min_sc_afac_MAX = 0.09
         # ----------------------------------------------------------
         def _form_seed_points_(xmin, xmax, ymin, ymax, spn):
-            '''Form the shapely multi-point object will be used to make the
-            bounding voronoi tessellation.'''
+            # Form the shapely multi-point object for the bounding Voronoi tessellation.
             if seed_lattice_type == 'rand_uni':
                 x = _urd_(xmin, xmax, spn)
                 y = _urd_(ymin, ymax, spn)
@@ -1596,52 +1542,38 @@ class gtess2d():
             return sp
         # ----------------------------------------------------------
         def _form_subcells_(sp, cell):
-            '''Break the cell into sub-cells. The seed points will be used to
-            create an overlay bounding Voronoi tessellation. Intersections b/w
-            input cell and the tess cells will be ca;lculated. Those which
-            intersect will be kept (with necessary crops). The ones which are
-            kept are the ones which are the subcells.'''
-
-            '''Build the Bounding Voronoi tessellation.'''
+            # Break the cell into sub-cells using a bounding Voronoi tessellation.
+            # Intersections between the input cell and tessellation cells are kept.
+            # Build the bounding Voronoi tessellation.
             BVT = voronoi_diagram(sp, tolerance=0.0, edges=False)
-            """"Filter the BVT for necessary cells."""
-            '''Build the temporary subcell list.'''
+            # Filter the BVT for necessary cells.
+            # Build the temporary subcell list.
             _sc_ = []
             for count in range(len(BVT.geoms)):
                 if BVT.geoms[count].intersects(cell):
                     _sc_.append(BVT.geoms[count].intersection(cell))
-            '''Assess the above temporary sub-cell list and sub-select
-            based on user specified condition.'''
+            # Assess the temporary sub-cell list and sub-select based on user condition.
             sc = _sc_
             return sc
         # ----------------------------------------------------------
-        '''Estimate buffer distance for the cell.'''
+        # Estimate buffer distance for the cell.
         buff_dist = _buffer_factor_*_sqrt_(cell.area/_pi_)
-        '''Get the buffered cell. This cell will be bigger then the input cell
-        but roughly the same shape.'''
+        # Get the buffered cell (bigger but roughly the same shape).
         cell_buffered = cell.buffer(buff_dist)
-        '''Build cell bounds.'''
+        # Build cell bounds.
         x_bounds = cell_buffered.boundary.xy[0]
         y_bounds = cell_buffered.boundary.xy[1]
         xmin, xmax = min(x_bounds), max(x_bounds)
         ymin, ymax = min(y_bounds), max(y_bounds)
-        '''Build the seed points.'''
+        # Build the seed points.
         if _min_subcell_area_factor_ == -1:
             sp = _form_seed_points_(xmin, xmax, ymin, ymax, spn)
             # sc = _form_subcells_(sp, cell)
         elif 0 < _min_subcell_area_factor_ <= min_sc_afac_MAX:
-            '''This means, decisions will be made to select or regenerate a set
-            of sub-cells, based on whether a subcell set satisfies the user
-            specified condition or not. Multiple iterations willbe performed.
-            if an iteration yields the optyimum solution, iterations will stop.
-            the iterations can proceed for the specified maximum number. If no
-            optimum solutions are reached by the end of the maximum iterations,
-            then two choices are used. 1st choice is to the ub-select amongst e
-            the existing set of supoints, which yields the sub-cell division
-            which is closest to being optimum. The second is an error will be
-            reported that best solution could not be reached, which ofcourse
-            is only if the user has the necessary conditions input to this
-            function'''
+            # Select or regenerate a set of sub-cells based on whether the subcell
+            # set satisfies the user-specified condition. Multiple iterations are
+            # performed; if an optimum is found iterations stop early. If not found
+            # within niter_max, the closest solution is selected or an error raised.
             spsets = []
             afac = []
             isel = -1
@@ -1677,18 +1609,18 @@ class gtess2d():
             raise ValueError('Invalid _min_subcell_area_factor_ specified.')
 
         sc = _form_subcells_(sp, cell)
-        '''Form the cell IDs.'''
+        # Form the cell IDs.
         if id_format == 'from_cid_max':
             cids = list(range(cid_offset+1, cid_offset+len(sc)+1))
         elif id_format == 'from_0':
             cids = list(range(0, len(sc)))
         print(10*' ', f'No. of sub-cells: {len(cids)}')
-        '''Form the multi-polygon object if requested.'''
+        # Form the multi-polygon object if requested.
         if combine_small_subs:
             pxtal = MultiPolygon(sc)
         else:
             pxtal = None
-        '''Build the return subcells dictionary.'''
+        # Build the return subcells dictionary.
         subcells = {'cells': sc,
                     'pxtal': pxtal,
                     'cids': cids}
@@ -1761,9 +1693,9 @@ class gtess2d():
                             for cid in cids]):
                     raise TypeError('Invalid cids value type.')
         # ----------------------------------------------
-        '''Extract the cells from the pxtal database.'''
+        # Extract the cells from the pxtal database.
         if gslevel == 'base':
-            '''get the poly-xtal using gslevel and instance id.'''
+            # Get the poly-xtal using gslevel and instance id.
             pxtal = self.get_pxtal(gslevel=gslevel,
                                    instance_ID=instance_ID,
                                    validate=validate)
@@ -1894,12 +1826,12 @@ class gtess2d():
         # ---------------------------------------------------------------------
         self.fdb_paps[papiid] = {}
         # ---------------------------------------------------------------------
-        '''Meta Data.'''
+        # Meta data.
         self.fdb_paps[papiid]['gslevel_source'] = scinfo['gslevel_source']
         self.fdb_paps[papiid]['instance_ID_source'] = scinfo['instance_ID_source']
         self.fdb_paps[papiid]['instance_ID_paps'] = scinfo['instance_ID_partition']
         # ---------------------------------------------------------------------
-        '''IDs.'''
+        # IDs.
         # Base grain structure cells.
         self.fdb_paps[papiid]['base_cid'] = np.array(list(scinfo['sc'].keys()))
         # Prior austenitic cells. These are cells which host the PAPs.
@@ -1915,7 +1847,7 @@ class gtess2d():
         # Reverse map
         self.fdb_paps[papiid]['rmap_cid'] = scinfo['rmap']
         # ---------------------------------------------------------------------
-        '''Poly-XTAL objects.'''
+        # Poly-XTAL objects.
         # Base grain structure
         self.fdb_paps[papiid]['base_px'] = self.pxtals[scinfo['instance_ID_source']]
         self.fdb_paps[papiid]['pac_parents'] = scinfo['pxtal']
@@ -2377,9 +2309,6 @@ class gtess2d():
                         saa=True, throw=True):
         """
         Assign location tags to each cell feature of gslevel database.
-
-        Parameters
-        ----------
         """
         # Cell tags
         ct = {'inner': None,
@@ -2429,11 +2358,11 @@ class gtess2d():
 
         geolink: dict, optional
             Specify the geometry linking dictionary. If empty, it will be
-            caculated and used.
+            calculated and used.
 
         technique: str, optional
             Specify the technique to establish vertex point sharing across
-            cells. Options include the follwing:
+            cells. Options include the following:
                 * mid: memory ids. This is quick as it uses just the equality
                 of UPXo point2d object memory IDs.
                 * dist: Distance based. This would be slower as one would
@@ -2445,19 +2374,19 @@ class gtess2d():
 
         use_trees: bool, optional
             Specify whether to construct trees for distance checking. May be
-            slow if more cells exoist and cells contain small number of
+            slow if more cells exist and cells contain small number of
             vertices. Only suitable when the number of vertices on each
             cell is very large. For example, a voronoi cell after having been
-            roughned on its boundaries by grain boundary perturbations would
-            possess a lartge number of vertex points. In these cases, it would
+            roughened on its boundaries by grain boundary perturbations would
+            possess a large number of vertex points. In these cases, it would
             be useful to use the tree structure. Otherwise, it is not
             recommended. On the contrary, if specified False, then the
-            distances willbe claculated using numpy vectorised operations,
+            distances will be calculated using numpy vectorised operations,
             which is very fast too!
 
         tol: float, optional
-            Specifty the tolerance value useds to asess vertex point
-            coincidence if techniqyue chosen in 'dist'.
+            Specify the tolerance value used to assess vertex point
+            coincidence if technique chosen is 'dist'.
 
         Returns
         -------
@@ -2620,15 +2549,6 @@ class gtess2d():
         On: float, optional
             Default value is 1.
 
-        cumulative: bool, optional
-            Default value is True.
-
-        find_for_boundary_grains: bool, optional
-            Default value is True.
-
-        include_boundary_grains: bool, optional
-            Default value is True.
-
         Returns
         -------
         Examples
@@ -2756,8 +2676,14 @@ class gtess2d():
 
     def find_neigh_nplus1(self, neighs_On, include_central_grain=True):
         """
-        neighs_Onplus1 = gset.find_neigh_nplus1(neighs_On,
-                                               include_central_grain=True)
+        Build and return (n+1)-th order neighbours from n-th order neighbour dict.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            neighs_Onplus1 = gset.find_neigh_nplus1(neighs_On,
+                                                    include_central_grain=True)
         """
         neighs_Onplus1 = {cid: None for cid in neighs_On.keys()}
         for cid, neighs in neighs_On.items():
@@ -2935,10 +2861,10 @@ class gtess2d():
             instance's morphological property statistic value.
             Default value is True.
 
-        Return
-        ------
+        Returns
+        -------
         mprop_data: dict
-            Morphological property data reqiested for.
+            Morphological property data requested for.
 
         dev_12i: dict
             Deviation between 1st to ith instance.
@@ -3053,22 +2979,19 @@ class gtess2d():
             grains = self.pxtals[instance].geoms
             ar = np.array([None for grain in grains])
             for i, grain in enumerate(grains):
-                '''Get the grain bounds'''
+                # Get the grain bounds.
                 bounds = grain.bounds
                 bbc = np.array([[bounds[0], bounds[1]],  # xmin, ymin
                                 [bounds[2], bounds[1]],  # xmax, ymin
                                 [bounds[2], bounds[3]],  # xmax, ymax
                                 [bounds[0], bounds[3]],  # xmin, ymax
                                 ])
-                '''Get the edge lengths of the bounding box coordinates.'''
+                # Get the edge lengths of the bounding box coordinates.
                 L = np.sqrt(np.sum(np.square(bbc - np.roll(bbc, -1, axis=0)),
                                    axis=1))
-                '''There will be four values for four edges of the bbox.'''
+                # Four values for four edges; unique reveals the two perpendicular lengths.
                 perp_line_lengths = np.unique(np.round(L, decimals=8))
-                '''Of these 4 values, two pairs will be there. Taking a unique
-                will reveal the lengths of two perpendicular edges. This is
-                then used to calculate the aspect ratio as the ratio of
-                longer side to shorter side.'''
+                # Aspect ratio is the ratio of the longer side to the shorter side.
                 ar[i] = perp_line_lengths.max()/perp_line_lengths.min()
 
         if prop_type == 'envelope':
@@ -3076,20 +2999,14 @@ class gtess2d():
             grains = self.pxtals[instance].geoms
             ar = np.array([None for grain in grains])
             for i, grain in enumerate(grains):
-                '''Find bounding box coordinates. Coordinates will form a closed
-                loop. Starts at top left and ends and bottom left. Ordered
-                clockwise.
-                '''
+                # Bounding box coords form a closed clockwise loop from top-left.
                 bbc = np.vstack(grain.boundary.envelope.boundary.xy).T[:-1]
-                '''Get the edge lengths of the bounding box coordinates.'''
+                # Get the edge lengths of the bounding box coordinates.
                 L = np.sqrt(np.sum(np.square(bbc - np.roll(bbc, -1, axis=0)),
                                    axis=1))
-                '''There will be four values for four edges of the bbox.'''
+                # Four values for four edges; unique reveals the two perpendicular lengths.
                 perp_line_lengths = np.unique(np.round(L, decimals=8))
-                '''Of these 4 values, two pairs will be there. Taking a unique
-                will reveal the lengths of two perpendicular edges. This is
-                then used to calculate the aspect ratio as the ratio of
-                longer side to shorter side.'''
+                # Aspect ratio is the ratio of the longer side to the shorter side.
                 ar[i] = perp_line_lengths.max()/perp_line_lengths.min()
 
         if prop_type == 'bbox_rot':
@@ -3098,15 +3015,12 @@ class gtess2d():
             ar = np.array([None for grain in grains])
             for i, grain in enumerate(grains):
                 bbc = np.array(list(grain.minimum_rotated_rectangle.exterior.coords))[:-1]
-                '''Get the edge lengths of the bounding box coordinates.'''
+                # Get the edge lengths of the bounding box coordinates.
                 L = np.sqrt(np.sum(np.square(bbc - np.roll(bbc, -1, axis=0)),
                                    axis=1))
-                '''There will be four values for four edges of the bbox.'''
+                # Four values for four edges; unique reveals the two perpendicular lengths.
                 perp_line_lengths = np.unique(np.round(L, decimals=8))
-                '''Of these 4 values, two pairs will be there. Taking a unique
-                will reveal the lengths of two perpendicular edges. This is
-                then used to calculate the aspect ratio as the ratio of
-                longer side to shorter side.'''
+                # Aspect ratio is the ratio of the longer side to the shorter side.
                 ar[i] = perp_line_lengths.max()/perp_line_lengths.min()
 
         if saa:
@@ -3120,8 +3034,8 @@ class gtess2d():
                   make_upxo_mp_subfeatures=False,
                   saa=True, throw=False):
         """
-        Return
-        ------
+        Returns
+        -------
         link: dict
             Following are the keys:
 
@@ -3157,8 +3071,8 @@ class gtess2d():
         --------
         link = gset.link_geom(instance=1, saa=True, throw=True)
 
-        Understanding
-        -------------
+        Notes
+        -----
         link['vc_cid_ind'][0]
             [25, 18, 14, 15, 22, 25]
         link['vc_cid_ind'][1]
@@ -3212,13 +3126,13 @@ class gtess2d():
         make_ump, make_umpsf = make_upxo_mp, make_upxo_mp_subfeatures
         # ---------------------------------------------
         # pxtal = PXT.pxtals[instance]
-        '''Get point coordinate details'''
+        # Get point coordinate details.
         _get_coords_ = self.extract_shapely_coords_all_grains
         points = _get_coords_(gslevel=gslevel, instance=instance,
                               mfname='c_vp',
                               make_upxo_mp=make_ump,
                               make_upxo_mp_subfeatures=make_umpsf)
-        '''Get the vertex coordinates'''
+        # Get the vertex coordinates.
         vc = points['all']
         vc_cid = points['cid']
 
@@ -3228,7 +3142,7 @@ class gtess2d():
             for gvi, gv in enumerate(gvc, start=0):
                 vc_cid_ind[gvci][gvi] = np.where((vc == gv).all(axis=1))[0][0]
 
-        '''Vertex point objects'''
+        # Vertex point objects.
         vp_cid = [[points['mp_all'].points[gvi] for gvi in gvci]
                   for gvci in vc_cid_ind]
 
@@ -3275,11 +3189,13 @@ class gtess2d():
 
     def add_fdb(self, instance=1, gslevels=['base'], fdbs=[None]):
         """
-        Add a featutre database instance.
+        Add a feature database instance.
 
-        gslevels: list
+        Parameters
+        ----------
+        gslevels : list
             List of feature names.
-        feat: list
+        fdbs : list
             List of feature data bases.
 
         Examples
@@ -3321,6 +3237,8 @@ class gtess2d():
 
     def plot(self, instance=1):
         """
+        Plot all cells of the specified grain structure instance.
+
         Examples
         --------
         from upxo.pxtal.vortess2d import gtess2d
@@ -3362,12 +3280,6 @@ class gtess2d():
 
         non = gset.find_On_neigh(instance=1, gslevel='base', On=3)
         gset.plot_cells(instance=1, cids=non[100])
-
-        # ====================================================================
-        train to be the best among the group
-        train to win
-        train to dominate
-        # ====================================================================
         """
         if not self.fdb_base:
             self.add_fdb(gslevels=['link'],
@@ -3390,60 +3302,29 @@ class gtess2d():
 
         Parameters
         ----------
-        cell: shapely.polygon
-            Specify a sapely polygon.
+        cell: shapely.Polygon
+            Specify a shapely polygon.
 
+        Examples
+        --------
+        .. code-block:: python
 
-from shapely.geometry import box, Point
-from shapely.ops import unary_union
-import matplotlib.pyplot as plt
+            from shapely.geometry import box, Point
+            from shapely.ops import unary_union
+            import matplotlib.pyplot as plt
 
-# Step 1: Define the original rectangle (cell)
-cell = box(0, 0, 10, 5)
+            cell = box(0, 0, 10, 5)
+            inner = cell.buffer(-0.5)
+            annulus = cell.difference(inner)
+            hole_centers = [Point(1, 1), Point(9, 1), Point(5, 0.3), Point(5, 4.7)]
+            holes = [p.buffer(0.1) for p in hole_centers]
+            holes_within_annulus = [h for h in holes if annulus.contains(h)]
+            final_shape = annulus.difference(unary_union(holes_within_annulus))
 
-# Step 2: Buffer inward to get the inner cell
-inner = cell.buffer(-0.5)
-
-# Step 3: Create the annular region
-annulus = cell.difference(inner)
-
-# Step 4: Choose hole centers within the annulus — near the mid-distance from the boundary
-hole_centers = [Point(1, 1), Point(9, 1), Point(5, 0.3), Point(5, 4.7)]
-hole_radius = 0.1
-holes = [p.buffer(hole_radius) for p in hole_centers]
-
-# Step 5: Ensure the holes are within the annulus
-holes_within_annulus = [h for h in holes if annulus.contains(h)]
-
-# Step 6: Subtract holes from the annular region
-final_shape = annulus.difference(unary_union(holes_within_annulus))
-
-# Plotting
-def plot_shape(shape, color='lightblue'):
-    if shape.geom_type == 'Polygon':
-        x, y = shape.exterior.xy
-        plt.fill(x, y, color=color)
-        for interior in shape.interiors:
-            x, y = interior.xy
-            plt.fill(x, y, color='white')
-    elif shape.geom_type == 'MultiPolygon':
-        for geom in shape.geoms:
-            plot_shape(geom, color=color)
-
-plt.figure(figsize=(8, 6))
-plot_shape(final_shape)
-plt.gca().set_aspect('equal')
-plt.title("Annular Region with Valid Holes")
-plt.show()
-
-
-
-fs = final_shape
-
-fs.interiors[0]
-fs.interiors[1]
-fs.interiors[2]
-
+            fs = final_shape
+            fs.interiors[0]
+            fs.interiors[1]
+            fs.interiors[2]
         """
         return 1+len(cell.interiors)
 
@@ -3453,7 +3334,7 @@ fs.interiors[2]
         return vert
 
     def get_cell_vertices_ext_from_lr(self, lr):
-        '''lr: linear ring.'''
+        """Return exterior vertices from a Shapely LinearRing."""
         vert = np.array([crd for crd in lr.coords])[:-1]
         return vert
 
@@ -3482,8 +3363,8 @@ fs.interiors[2]
         """
         Sub-feature introduction: grain boundary zone: for a single cell
 
-        method: str, optional
-            Followig options are permitted.
+        method : str, optional
+            Following options are permitted.
                 * 'min_edge_length'
                 * 'min_dist_centre'
                 * 'smallest_skl_length'
