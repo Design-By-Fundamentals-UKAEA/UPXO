@@ -349,6 +349,10 @@ def stretch_grid_2d(data, stretch_x=1.0, stretch_y=1.0, px_size_x=1.0, px_size_y
     -----
     The stretch is applied to the physical dimensions of the grid, with final
     grid size determined by dividing new physical dimensions by pixel sizes.
+
+    Usage
+    -----
+    import upxo.gsdataops.grid_ops as gridOps
     """
     h, w = data.shape
     new_physical_x, new_physical_y = w*px_size_x*stretch_x, h*px_size_y*stretch_y
@@ -359,18 +363,20 @@ def stretch_grid_2d(data, stretch_x=1.0, stretch_y=1.0, px_size_x=1.0, px_size_y
 def resample_grid_2d(data, uigrid, sf=0.5, method='nearest'):
     """
     Resample a 2D array at every nth row and column.
-    
+
     Parameters
     ----------
     data : np.ndarray
         2D state matrix to resample
-    uigrid : object
-        Grid configuration object with attributes: xmin, xmax, xinc, ymin, ymax, yinc
+    uigrid : object or None
+        Grid configuration object with attributes: xmin, xmax, xinc, ymin, ymax, yinc.
+        If None, grid attributes are inferred from data shape: xmin=ymin=0, xinc=yinc=1,
+        xmax=data.shape[1]-1, ymax=data.shape[0]-1.
     sf : float
         Sampling factor (0 < sf <= 1). sf=0.5 means every 2nd pixel, sf=0.33 means every 3rd pixel
     method : str, optional
         Interpolation method ('nearest', 'linear', etc.). Default is 'nearest'.
-    
+
     Returns
     -------
     resampled_data : np.ndarray
@@ -385,6 +391,14 @@ def resample_grid_2d(data, uigrid, sf=0.5, method='nearest'):
         New y increment
     """
     from scipy.interpolate import RegularGridInterpolator
+    if uigrid is None:
+        class _G:
+            pass
+        uigrid = _G()
+        uigrid.xmin, uigrid.ymin = 0.0, 0.0
+        uigrid.xinc, uigrid.yinc = 1.0, 1.0
+        uigrid.xmax = float(data.shape[1] - 1)
+        uigrid.ymax = float(data.shape[0] - 1)
     xgr = np.arange(uigrid.xmin, uigrid.xmax+uigrid.xinc, uigrid.xinc)
     ygr = np.arange(uigrid.ymin, uigrid.ymax+uigrid.yinc, uigrid.yinc)
     xinc_new, yinc_new = uigrid.xinc/sf, uigrid.yinc/sf
