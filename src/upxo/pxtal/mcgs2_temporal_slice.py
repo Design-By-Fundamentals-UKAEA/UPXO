@@ -843,7 +843,7 @@ class mcgs2_grain_structure():
         if method == 'mc state partitioned global' and len(vf) == 0:
             self.species[spid] = deepcopy(self.s)
         # ---------------------------------------------
-        fx1 = mcharOps.charecterise_features_in_image_2d
+        fx1 = mcharOps.characterise_features_in_image_2d
         Xgrid, Ygrid = self.xgr, self.ygr
         # ---------------------------------------------
         if ignore_vf:
@@ -960,7 +960,7 @@ class mcgs2_grain_structure():
         --------
         .. code-block:: python
 
-            skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
+            skprops, bbox_limits_ex, bboxes_ex, coords_dict = mcharOps.characterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
                                            make_skprops=True, extract_coords=True,
                                            throw_bounding_box=True
                                            )
@@ -1148,34 +1148,14 @@ class mcgs2_grain_structure():
             pxtal.gs[tslice].plot_grains_gids([gid], gclr='color', title='parent gid: '+str(gid))
             pxtal.gs[tslice].plot_grains_gids(neighbours, gclr='color', cmap_name='nipy_spectral')
         """
-        # ---------------------------------------------------------------------
-        if neigh_order == 0:
-            return grain_id
-        # ---------------------------------------------------------------------
-        if recalculate or self.neigh_gid is None or len(self.neigh_gid) == 0:
+        if recalculate or not self.neigh_gid:
             if fast_estimate:
                 self.find_neigh_gid_fast_all_grains(include_parent=include_parent)
             else:
                 self.find_neigh(include_central_grain=include_parent)
-        # ---------------------------------------------------------------------
-        # print(self.neigh_gid[grain_id])
-        # ---------------------------------------------------------------------
-        # Start with 1st-order neighbors
-        neighbors = set(self.neigh_gid.get(grain_id, []))
-        for _ in range(neigh_order - 1):
-            new_neighbors = set()
-            for neighbor in neighbors:
-                new_neighbors.update(self.neigh_gid.get(neighbor, []))
-            neighbors.update(new_neighbors)
-        # ---------------------------------------------------------------------
-        if not include_parent:
-            neighbors.discard(grain_id)
-        if output_type == 'list':
-            return list(neighbors)
-        if output_type == 'nparray':
-            return np.array(list(neighbors))
-        elif output_type == 'set':
-            return neighbors
+        return neighOps.get_upto_nth_order_neighbors(
+            self.neigh_gid, grain_id, neigh_order,
+            include_parent=include_parent, output_type=output_type)
 
     def get_nth_order_neighbors(self, grain_id, neigh_order, fast_estimate=False,
                                 recalculate=False, include_parent=True):
@@ -1215,20 +1195,13 @@ class mcgs2_grain_structure():
                                              include_parent=True)
         pxtal.gs[tslice].plot_grains_gids(neighbours, gclr='color')
         """
-        neigh_upto_n_minus_1 = self.get_upto_nth_order_neighbors(grain_id, neigh_order-1,
-                                                                 fast_estimate=fast_estimate,
-                                                                 include_parent=include_parent,
-                                                                 output_type='set')
-        if type(neigh_upto_n_minus_1) in dth.dt.NUMBERS:
-            neigh_upto_n_minus_1 = set([neigh_upto_n_minus_1])
-
-        neigh_upto_n = self.get_upto_nth_order_neighbors(grain_id, neigh_order,
-                                                         fast_estimate=fast_estimate,
-                                                         include_parent=include_parent,
-                                                         output_type='set')
-        if type(neigh_upto_n) in dth.dt.NUMBERS:
-            neigh_upto_n = set([neigh_upto_n])
-        return list(neigh_upto_n.difference(neigh_upto_n_minus_1))
+        if recalculate or not self.neigh_gid:
+            if fast_estimate:
+                self.find_neigh_gid_fast_all_grains(include_parent=include_parent)
+            else:
+                self.find_neigh(include_central_grain=include_parent)
+        return neighOps.get_nth_order_neighbors(
+            self.neigh_gid, grain_id, neigh_order, include_parent=include_parent)
 
     def get_upto_nth_order_neighbors_all_grains(self, neigh_order,
                                                 recalculate=False, fast_estimate=False,
@@ -1269,13 +1242,14 @@ class mcgs2_grain_structure():
                                                                  include_parent=True,
                                                                  output_type='list')
         """
-        neighs_upto_nth_order = {gid: self.get_upto_nth_order_neighbors(gid, neigh_order,
-                                                                        fast_estimate=fast_estimate,
-                                                                        recalculate=recalculate,
-                                                                        include_parent=include_parent,
-                                                                        output_type='list')
-                                 for gid in self.gid}
-        return neighs_upto_nth_order
+        if recalculate or not self.neigh_gid:
+            if fast_estimate:
+                self.find_neigh_gid_fast_all_grains(include_parent=include_parent)
+            else:
+                self.find_neigh(include_central_grain=include_parent)
+        return neighOps.get_upto_nth_order_neighbors_all_grains(
+            self.neigh_gid, self.gid, neigh_order,
+            include_parent=include_parent, output_type=output_type)
 
     def get_nth_order_neighbors_all_grains(self, neigh_order, fast_estimate=False,
                                            recalculate=False, include_parent=True):
@@ -1410,12 +1384,13 @@ class mcgs2_grain_structure():
                  markersize=no_msz[0])
         plt.gca().set_aspect('equal')
         """
-        neighs_nth_order = {gid: self.get_nth_order_neighbors(gid, neigh_order,
-                                                              fast_estimate=fast_estimate,
-                                                              recalculate=recalculate,
-                                                              include_parent=include_parent)
-                            for gid in self.gid}
-        return neighs_nth_order
+        if recalculate or not self.neigh_gid:
+            if fast_estimate:
+                self.find_neigh_gid_fast_all_grains(include_parent=include_parent)
+            else:
+                self.find_neigh(include_central_grain=include_parent)
+        return neighOps.get_nth_order_neighbors_all_grains(
+            self.neigh_gid, self.gid, neigh_order, include_parent=include_parent)
 
     def get_upto_nth_order_neighbors_all_grains_prob(self, neigh_order,
                                                      recalculate=False,
@@ -1463,46 +1438,12 @@ class mcgs2_grain_structure():
             neigh1[2][22]
             neigh2[2][22]
         """
-        # @dev:
-            # no: neighbour order in these definitions.
-        no = neigh_order
-        on_neigh_all_grains_upto = self.get_upto_nth_order_neighbors_all_grains
-        on_neigh_all_grains_at = self.get_nth_order_neighbors_all_grains
-        if isinstance(no, (int, np.int32)):
-            if print_msg:
-                print('neigh_order is of type int. Adopting the usual method.')
-            neigh_on = on_neigh_all_grains_upto(no, recalculate=recalculate,
-                                           include_parent=include_parent)
-            return neigh_on
-        elif isinstance(no, (float, np.float64)):
-            if abs(no-round(no)) < _int_approx_:
-                if print_msg:
-                    print('neigh_order is close to being int. Adopting usual method.')
-                neigh_on = on_neigh_all_grains_upto(math.floor(no),
-                                                    recalculate=recalculate,
-                                                    include_parent=include_parent)
-                return neigh_on
-            else:
-                if print_msg:
-                    # Nothing to print
-                    pass
-                no_low, no_high = math.floor(no), math.ceil(no)
-                neigh_upto_low = on_neigh_all_grains_upto(no_low,
-                                                          recalculate=recalculate,
-                                                          include_parent=include_parent)
-                neigh_at_high = on_neigh_all_grains_at(no_low+1,
-                                                       recalculate=recalculate,
-                                                       include_parent=False)
-                delno = np.round(abs(neigh_order-math.floor(neigh_order)), 4)
-                neighbours = {}
-                for gid in self.gid:
-                    nselect = math.ceil(delno * len(neigh_at_high[gid]))
-                    if len(neigh_at_high[gid]) > 1:
-                        neighbours[gid] = neigh_upto_low[gid] + random.sample(neigh_at_high[gid],
-                                                                              nselect)
-                return neighbours
-        else:
-            raise ValueError('Invalid neigh_order')
+        if recalculate or not self.neigh_gid:
+            self.find_neigh(include_central_grain=include_parent)
+        return neighOps.get_upto_nth_order_neighbors_all_grains_prob(
+            self.neigh_gid, self.gid, neigh_order,
+            include_parent=include_parent, print_msg=print_msg,
+            _int_approx_=_int_approx_)
 
     def char_morph_2d(self, use_characterization_settings=False, use_version=1,
                       bso=1, def_feat_name='grain',
@@ -1824,15 +1765,15 @@ class mcgs2_grain_structure():
             features = gridOps.detect_features_in_image_MCstateWise_2d(deepcopy(self.lgi),
                                     binary_structure_order=bso)
             self.lgi = deepcopy(features[0])
-        use_charecterise_features_in_image_version = 2
+        use_characterise_features_in_image_version = 2
         # ---------------------------------------------
-        if use_charecterise_features_in_image_version == 1:
-            fx1 = mcharOps.charecterise_features_in_image_2d
+        if use_characterise_features_in_image_version == 1:
+            fx1 = mcharOps.characterise_features_in_image_2d
             skprops, bbox_limits_ex, bboxes_ex, coords_dict = fx1(self.lgi, 
                     self.xgr, self.ygr, make_skprops=True, extract_coords=True,
                     throw_bounding_box=True)
-        elif use_charecterise_features_in_image_version == 2:
-            fx1 = mcharOps.charecterise_features_in_image_v2
+        elif use_characterise_features_in_image_version == 2:
+            fx1 = mcharOps.characterise_features_in_image_v2
             _fx1Output_ = fx1(self.lgi, Xgrid=self.xgr, Ygrid=self.ygr,
                               make_skprops=True, extract_coords=True, 
                               throw_bounding_box=True)
