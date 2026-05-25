@@ -54,7 +54,7 @@ def detect_features(mcStateArray, connectivity=18, delta=0):
                                         delta=delta)
     return lfi, N, connectivity
 
-def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
+def characterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
                                     make_skprops=True, extract_coords=True,
                                     throw_bounding_box=True
                                     ):
@@ -88,7 +88,7 @@ def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
 
     Example
     -------
-    skprops, bbox_limits, bboxes_ex, coords_dict = ...charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
+    skprops, bbox_limits, bboxes_ex, coords_dict = ...characterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
                                     make_skprops=True, extract_coords=True,
                                     throw_bounding_box=True
                                     )
@@ -119,10 +119,68 @@ def charecterise_features_in_image_2d(labelled_image, Xgrid, Ygrid,
             skprops[fid] = regionprops(bbox_ex, cache=False)[0]
     return skprops, bbox_limits_ex, bboxes_ex, coords_dict
 
-def charecterise_features_in_image_v2(labelled_image, Xgrid=None, Ygrid=None, 
+def characterise_features_in_image_v2(labelled_image, Xgrid=None, Ygrid=None,
                                     make_skprops=True, extract_coords=True, 
                                     throw_bounding_box=True):
-    """Charecterise features in image v2."""
+    """Characterise every labelled feature in a 2D image (single-pass, faster).
+
+    Calls ``skimage.measure.regionprops`` once on the full labelled image rather
+    than constructing a binary mask per feature, making it considerably faster
+    than :func:`characterise_features_in_image_2d` for images with many grains.
+    Returns both tight and one-pixel-padded bounding boxes.
+
+    Parameters
+    ----------
+    labelled_image : numpy.ndarray of int, shape (R, C)
+        Integer-labelled image. 0 is background; each positive integer
+        identifies one feature (grain).
+    Xgrid : numpy.ndarray of float, shape (R, C), or None
+        Physical X-coordinate at every pixel. When ``None``, column index
+        is used as the X coordinate.
+    Ygrid : numpy.ndarray of float, shape (R, C), or None
+        Physical Y-coordinate at every pixel. When ``None``, row index
+        is used as the Y coordinate.
+    make_skprops : bool, default True
+        Retain the ``skimage.measure.RegionProperties`` object for each
+        feature in ``skprops``.
+    extract_coords : bool, default True
+        Record the physical (X, Y) coordinates of every pixel belonging
+        to each feature in ``coords_dict``.
+    throw_bounding_box : bool, default True
+        Populate tight (``bbox_limits``, ``bboxes``) and extended
+        (``bbox_limits_ex``, ``bboxes_ex``) bounding-box outputs.
+
+    Returns
+    -------
+    skprops : dict[int, skimage.measure.RegionProperties or None]
+        Feature ID → region-properties object from the full-image
+        ``regionprops`` call. ``None`` when ``make_skprops`` is False.
+    bbox_limits : dict[int, list[int] or None]
+        Feature ID → ``[rmin, rmax, cmin, cmax]`` tight bounding-box
+        slice indices, clamped to image boundaries.
+        ``None`` when ``throw_bounding_box`` is False.
+    bbox_limits_ex : dict[int, list[int] or None]
+        Feature ID → ``[rmin_ex, rmax_ex, cmin_ex, cmax_ex]``
+        one-pixel-padded bounding-box slice indices.
+        ``None`` when ``throw_bounding_box`` is False.
+    bboxes : dict[int, numpy.ndarray or None]
+        Feature ID → binary int32 crop of the tight bounding box.
+        ``None`` when ``throw_bounding_box`` is False.
+    bboxes_ex : dict[int, numpy.ndarray or None]
+        Feature ID → binary int32 crop of the padded bounding box.
+        ``None`` when ``throw_bounding_box`` is False.
+    coords_dict : dict[int, numpy.ndarray or None]
+        Feature ID → array of shape (N_pixels, 2) with physical
+        ``[X, Y]`` coordinates of every pixel in the feature.
+        ``None`` when ``extract_coords`` is False.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from upxo.charops._mchar2d import characterise_features_in_image_v2
+    >>> lfi = np.array([[1, 1, 0], [0, 2, 2], [0, 2, 0]], dtype=int)
+    >>> skp, bl, bl_ex, bx, bx_ex, coords = characterise_features_in_image_v2(lfi)
+    """
     if Xgrid is None or Ygrid is None:
         h, w = labelled_image.shape
         indices = np.indices((h, w))
