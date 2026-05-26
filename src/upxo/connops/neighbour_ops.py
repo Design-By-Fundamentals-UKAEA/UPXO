@@ -14,6 +14,8 @@ Usage
 
     import upxo.connops.neighbour_ops as neighOps
 """
+import math
+import random
 import numpy as np
 from numba import njit, prange
 from copy import deepcopy
@@ -317,10 +319,8 @@ def find_neigh(lfi, fids, gdict, nfeatures, include_central_grain=False,
     return neigh_gid
 
 
-def get_upto_nth_order_neighbors(lfi, neigh_fid, grain_id, neigh_order,
-                                 fast_estimate=False,
-                                 recalculate=False, include_parent=True,
-                                 output_type='list'):
+def get_upto_nth_order_neighbors(neigh_gid, grain_id, neigh_order,
+                                 include_parent=True, output_type='list'):
     """Return all grains reachable within ``neigh_order`` hops from ``grain_id``.
 
     Starting from the 1st-order neighbours of ``grain_id``, the function
@@ -329,71 +329,46 @@ def get_upto_nth_order_neighbors(lfi, neigh_fid, grain_id, neigh_order,
 
     Parameters
     ----------
-    lfi : numpy.ndarray of int, shape (R, C)
-        Full labelled feature image.  Used only when ``recalculate`` is True
-        to trigger neighbour recomputation via ``self.find_neigh``.
-    neigh_fid : dict[int, list of int]
-        Pre-computed neighbour map returned by :func:`find_neigh`.  Pass an
-        empty dict or ``None`` to force recomputation via ``recalculate=True``.
+    neigh_gid : dict[int, list of int]
+        Pre-computed neighbour map — typically ``gs.neigh_gid`` populated by
+        :func:`find_neigh`.
     grain_id : int
         ID of the central grain.
     neigh_order : int
-        Maximum hop count.  ``neigh_order=1`` returns direct neighbours;
-        ``neigh_order=2`` returns neighbours-of-neighbours, and so on.
-        Passing ``0`` returns ``grain_id`` itself.
-    fast_estimate : bool, default False
-        Use the fast neighbour estimation method when recomputing (only
-        relevant if ``recalculate`` is True).
-    recalculate : bool, default False
-        Recompute the neighbour map even if ``neigh_fid`` is already populated.
+        Maximum hop count.  ``1`` returns direct neighbours; ``2`` returns
+        neighbours-of-neighbours, and so on.  ``0`` returns ``[grain_id]``.
     include_parent : bool, default True
         Include ``grain_id`` in the returned set.
     output_type : {'list', 'nparray', 'set'}, default 'list'
-        Return type.  ``'nparray'`` accepts several aliases:
-        ``'np'``, ``'np.array'``, ``'numpy'``.
+        Return type.  ``'nparray'`` also accepts ``'np'``, ``'np.array'``,
+        ``'numpy'``.
 
     Returns
     -------
     list, numpy.ndarray, or set
-        All grain IDs within ``neigh_order`` hops of ``grain_id``, in the
-        format requested by ``output_type``.
+        All grain IDs within ``neigh_order`` hops of ``grain_id``.
 
     Examples
     --------
     .. code-block:: python
 
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 18
-        pxtal.gs[tslice].char_morph_2d(char_gb=True)
-
-        neighbours = pxtal.gs[tslice].get_upto_nth_order_neighbors(
-            grain_id=6, neigh_order=3,
-            fast_estimate=False, recalculate=True,
+        import upxo.connops.neighbour_ops as neighOps
+        # neigh_gid populated by find_neigh or find_neigh_v2
+        result = neighOps.get_upto_nth_order_neighbors(
+            gs.neigh_gid, grain_id=6, neigh_order=3,
             include_parent=True, output_type='list')
-
-        pxtal.gs[tslice].plot_grains_gids(
-            neighbours, gclr='color', cmap_name='nipy_spectral')
 
     See Also
     --------
-    get_nth_order_neighbors : Returns only the grains *at* exactly order *n*
-        (i.e. reachable in exactly ``n`` hops but not fewer).
+    get_nth_order_neighbors : Returns only the grains at exactly order n.
     """
     if neigh_order == 0:
-        return grain_id
-    if recalculate or neigh_fid is None or len(neigh_fid) == 0:
-        if fast_estimate:
-            self.find_neigh_gid_fast_all_grains(include_parent=include_parent)
-        else:
-            self.find_neigh(include_central_grain=include_parent)
-    neighbors = set(neigh_fid.get(grain_id, []))
+        return [grain_id]
+    neighbors = set(neigh_gid.get(grain_id, []))
     for _ in range(neigh_order - 1):
         new_neighbors = set()
         for neighbor in neighbors:
-            new_neighbors.update(neigh_fid.get(neighbor, []))
+            new_neighbors.update(neigh_gid.get(neighbor, []))
         neighbors.update(new_neighbors)
     if not include_parent:
         neighbors.discard(grain_id)
@@ -405,8 +380,7 @@ def get_upto_nth_order_neighbors(lfi, neigh_fid, grain_id, neigh_order,
         return neighbors
 
 
-def get_nth_order_neighbors(self, grain_id, neigh_order, fast_estimate=False,
-                            recalculate=False, include_parent=True):
+def get_nth_order_neighbors(neigh_gid, grain_id, neigh_order, include_parent=True):
     """Return the grains reachable in *exactly* ``neigh_order`` hops.
 
     Computes the set difference between the up-to-*n* and up-to-*(n-1)*
@@ -415,14 +389,12 @@ def get_nth_order_neighbors(self, grain_id, neigh_order, fast_estimate=False,
 
     Parameters
     ----------
+    neigh_gid : dict[int, list of int]
+        Pre-computed neighbour map — typically ``gs.neigh_gid``.
     grain_id : int
         ID of the central grain.
     neigh_order : int
         Exact hop count.  Grains reachable in fewer hops are excluded.
-    fast_estimate : bool, default False
-        Use fast neighbour estimation when recomputing neighbours.
-    recalculate : bool, default False
-        Force recomputation of the neighbour map.
     include_parent : bool, default True
         Include ``grain_id`` in the candidate set before differencing.
 
@@ -436,50 +408,34 @@ def get_nth_order_neighbors(self, grain_id, neigh_order, fast_estimate=False,
     --------
     .. code-block:: python
 
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 16
-
-        neighbours = pxtal.gs[tslice].get_nth_order_neighbors(
-            grain_id=10, neigh_order=6,
-            fast_estimate=False, recalculate=True, include_parent=True)
-
-        pxtal.gs[tslice].plot_grains_gids(neighbours, gclr='color')
+        import upxo.connops.neighbour_ops as neighOps
+        result = neighOps.get_nth_order_neighbors(
+            gs.neigh_gid, grain_id=10, neigh_order=2, include_parent=True)
     """
-    neigh_upto_n_minus_1 = self.get_upto_nth_order_neighbors(grain_id, neigh_order-1,
-                                                                fast_estimate=fast_estimate,
-                                                                include_parent=include_parent,
-                                                                output_type='set')
-    if type(neigh_upto_n_minus_1) in dth.dt.NUMBERS:
-        neigh_upto_n_minus_1 = set([neigh_upto_n_minus_1])
-
-    neigh_upto_n = self.get_upto_nth_order_neighbors(grain_id, neigh_order,
-                                                        fast_estimate=fast_estimate,
-                                                        include_parent=include_parent,
-                                                        output_type='set')
-    if type(neigh_upto_n) in dth.dt.NUMBERS:
-        neigh_upto_n = set([neigh_upto_n])
+    neigh_upto_n_minus_1 = set(get_upto_nth_order_neighbors(
+        neigh_gid, grain_id, neigh_order - 1,
+        include_parent=include_parent, output_type='set'))
+    neigh_upto_n = set(get_upto_nth_order_neighbors(
+        neigh_gid, grain_id, neigh_order,
+        include_parent=include_parent, output_type='set'))
     return list(neigh_upto_n.difference(neigh_upto_n_minus_1))
 
 
-def get_upto_nth_order_neighbors_all_grains(self, neigh_order,
-                                            recalculate=False, fast_estimate=False,
+def get_upto_nth_order_neighbors_all_grains(neigh_gid, gids, neigh_order,
                                             include_parent=True, output_type='list'):
-    """Return up-to-nth-order neighbours for every grain in the structure.
+    """Return up-to-nth-order neighbours for every grain.
 
     Calls :func:`get_upto_nth_order_neighbors` for each grain ID in
-    ``self.gid`` and collects the results into a dictionary.
+    ``gids`` and collects the results into a dictionary.
 
     Parameters
     ----------
+    neigh_gid : dict[int, list of int]
+        Pre-computed neighbour map — typically ``gs.neigh_gid``.
+    gids : array-like of int
+        Grain IDs to process — typically ``gs.gid``.
     neigh_order : int
-        Maximum hop count passed to :func:`get_upto_nth_order_neighbors`.
-    recalculate : bool, default False
-        Force recomputation of the neighbour map for each grain.
-    fast_estimate : bool, default False
-        Use fast neighbour estimation when recomputing.
+        Maximum hop count.
     include_parent : bool, default True
         Include each grain's own ID in its neighbour list.
     output_type : {'list', 'nparray', 'set'}, default 'list'
@@ -494,42 +450,33 @@ def get_upto_nth_order_neighbors_all_grains(self, neigh_order,
     --------
     .. code-block:: python
 
-        from upxo.ggrowth.mcgs import mcgs
-        pxtal = mcgs(input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-
-        neighs = pxtal.gs[16].get_upto_nth_order_neighbors_all_grains(
-            neigh_order=1, recalculate=False,
+        import upxo.connops.neighbour_ops as neighOps
+        result = neighOps.get_upto_nth_order_neighbors_all_grains(
+            gs.neigh_gid, gs.gid, neigh_order=2,
             include_parent=True, output_type='list')
-        print(neighs[5])  # neighbours of grain 5 up to order 1
+        print(result[5])  # neighbours of grain 5 up to order 2
     """
-    neighs_upto_nth_order = {gid: self.get_upto_nth_order_neighbors(gid, neigh_order,
-                                                                    fast_estimate=fast_estimate,
-                                                                    recalculate=recalculate,
-                                                                    include_parent=include_parent,
-                                                                    output_type='list')
-                                for gid in self.gid}
-    return neighs_upto_nth_order
+    return {gid: get_upto_nth_order_neighbors(neigh_gid, gid, neigh_order,
+                                              include_parent=include_parent,
+                                              output_type=output_type)
+            for gid in gids}
 
 
-def get_nth_order_neighbors_all_grains(self, neigh_order, fast_estimate=False,
-                                        recalculate=False, include_parent=True):
-    """Return the exactly-nth-order neighbours for every grain in the structure.
+def get_nth_order_neighbors_all_grains(neigh_gid, gids, neigh_order, include_parent=True):
+    """Return the exactly-nth-order neighbours for every grain.
 
-    Calls :func:`get_nth_order_neighbors` for each grain ID in ``self.gid``
-    and collects results into a dictionary.  Only grains first reachable at
-    exactly ``neigh_order`` hops are included; grains reachable in fewer hops
-    are excluded.
+    Calls :func:`get_nth_order_neighbors` for each grain ID in ``gids``
+    and collects results into a dictionary.  Only grains first reachable
+    at exactly ``neigh_order`` hops are included.
 
     Parameters
     ----------
+    neigh_gid : dict[int, list of int]
+        Pre-computed neighbour map — typically ``gs.neigh_gid``.
+    gids : array-like of int
+        Grain IDs to process — typically ``gs.gid``.
     neigh_order : int
         Exact hop count.
-    fast_estimate : bool, default False
-        Use fast neighbour estimation when recomputing.
-    recalculate : bool, default False
-        Force recomputation of the neighbour map.
     include_parent : bool, default True
         Include each grain's own ID in the candidate set before differencing.
 
@@ -543,40 +490,20 @@ def get_nth_order_neighbors_all_grains(self, neigh_order, fast_estimate=False,
     --------
     .. code-block:: python
 
-        from upxo.ggrowth.mcgs import mcgs
-        import matplotlib.pyplot as plt
-        import numpy as np
-
-        pxtal = mcgs(input_dashboard='input_dashboard.xls')
-        pxtal.simulate()
-        pxtal.detect_grains()
-        tslice = 99
-        pxtal.gs[tslice].char_morph_2d(char_gb=True)
-
-        cg = 10           # central grain ID
-        neigh_order = 2
-
-        A = pxtal.gs[tslice].get_nth_order_neighbors_all_grains(
-            neigh_order, fast_estimate=False,
-            recalculate=False, include_parent=True)
-
-        pxtal.gs[tslice].plot_grains_gids(
-            A[cg], gclr='color', title='2nd-order neighbours of grain 10',
-            cmap_name='CMRmap_r')
+        import upxo.connops.neighbour_ops as neighOps
+        result = neighOps.get_nth_order_neighbors_all_grains(
+            gs.neigh_gid, gs.gid, neigh_order=2, include_parent=True)
+        print(result[10])  # grains at exactly order 2 from grain 10
     """
-    neighs_nth_order = {gid: self.get_nth_order_neighbors(gid, neigh_order,
-                                                            fast_estimate=fast_estimate,
-                                                            recalculate=recalculate,
-                                                            include_parent=include_parent)
-                        for gid in self.gid}
-    return neighs_nth_order
+    return {gid: get_nth_order_neighbors(neigh_gid, gid, neigh_order,
+                                         include_parent=include_parent)
+            for gid in gids}
 
 
-def get_upto_nth_order_neighbors_all_grains_prob(self, neigh_order,
-                                                    recalculate=False,
-                                                    include_parent=False,
-                                                    print_msg=False,
-                                                    _int_approx_=0.05):
+def get_upto_nth_order_neighbors_all_grains_prob(neigh_gid, gids, neigh_order,
+                                                  include_parent=False,
+                                                  print_msg=False,
+                                                  _int_approx_=0.05):
     """Return up-to-nth-order neighbours for all grains with probabilistic fractional orders.
 
     Extends :func:`get_upto_nth_order_neighbors_all_grains` to accept
@@ -639,39 +566,30 @@ def get_upto_nth_order_neighbors_all_grains_prob(self, neigh_order,
         print(neigh_half[22])    # probabilistic blend for grain 22
     """
     no = neigh_order
-    on_neigh_all_grains_upto = self.get_upto_nth_order_neighbors_all_grains
-    on_neigh_all_grains_at = self.get_nth_order_neighbors_all_grains
     if isinstance(no, (int, np.int32)):
         if print_msg:
             print('neigh_order is of type int. Adopting the usual method.')
-        neigh_on = on_neigh_all_grains_upto(no, recalculate=recalculate,
-                                        include_parent=include_parent)
-        return neigh_on
+        return get_upto_nth_order_neighbors_all_grains(
+            neigh_gid, gids, no, include_parent=include_parent)
     elif isinstance(no, (float, np.float64)):
-        if abs(no-round(no)) < _int_approx_:
+        if abs(no - round(no)) < _int_approx_:
             if print_msg:
                 print('neigh_order is close to being int. Adopting usual method.')
-            neigh_on = on_neigh_all_grains_upto(math.floor(no),
-                                                recalculate=recalculate,
-                                                include_parent=include_parent)
-            return neigh_on
+            return get_upto_nth_order_neighbors_all_grains(
+                neigh_gid, gids, math.floor(no), include_parent=include_parent)
         else:
-            if print_msg:
-                pass
-            no_low, no_high = math.floor(no), math.ceil(no)
-            neigh_upto_low = on_neigh_all_grains_upto(no_low,
-                                                        recalculate=recalculate,
-                                                        include_parent=include_parent)
-            neigh_at_high = on_neigh_all_grains_at(no_low+1,
-                                                    recalculate=recalculate,
-                                                    include_parent=False)
-            delno = np.round(abs(neigh_order-math.floor(neigh_order)), 4)
+            no_low = math.floor(no)
+            neigh_upto_low = get_upto_nth_order_neighbors_all_grains(
+                neigh_gid, gids, no_low, include_parent=include_parent)
+            neigh_at_high = get_nth_order_neighbors_all_grains(
+                neigh_gid, gids, no_low + 1, include_parent=False)
+            delno = np.round(abs(no - no_low), 4)
             neighbours = {}
-            for gid in self.gid:
+            for gid in gids:
                 nselect = math.ceil(delno * len(neigh_at_high[gid]))
                 if len(neigh_at_high[gid]) > 1:
-                    neighbours[gid] = neigh_upto_low[gid] + random.sample(neigh_at_high[gid],
-                                                                            nselect)
+                    neighbours[gid] = (neigh_upto_low[gid] +
+                                       random.sample(neigh_at_high[gid], nselect))
             return neighbours
     else:
         raise ValueError('Invalid neigh_order')
