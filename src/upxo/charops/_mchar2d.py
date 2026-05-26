@@ -226,3 +226,178 @@ def characterise_features_in_image_v2(labelled_image, Xgrid=None, Ygrid=None,
             skprops[fid] = prop
 
     return skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict
+
+
+def classify_grain_positions_2d(lgi, gid):
+    """Classify each grain as corner / edge / internal based on lgi pixel positions.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+    gid : array-like of int
+        All grain IDs present in lgi.
+
+    Returns
+    -------
+    positions : dict[str, numpy.ndarray]
+        Keys: 'top_left', 'top_right', 'bottom_left', 'bottom_right',
+              'pure_top', 'pure_bottom', 'pure_left', 'pure_right',
+              'top', 'bottom', 'left', 'right', 'boundary', 'corner', 'internal'.
+        Values: arrays of grain IDs belonging to each category.
+    """
+    top_left     = np.array([lgi[-1,  0]], dtype=int)
+    top_right    = np.array([lgi[-1, -1]], dtype=int)
+    bottom_left  = np.array([lgi[0,   0]], dtype=int)
+    bottom_right = np.array([lgi[0,  -1]], dtype=int)
+    left   = np.unique(lgi[:,  0])
+    right  = np.unique(lgi[:, -1])
+    top    = np.unique(lgi[-1, :])
+    bottom = np.unique(lgi[0,  :])
+    pure_top    = np.setdiff1d(top,    np.union1d(top_left,    top_right))
+    pure_bottom = np.setdiff1d(bottom, np.union1d(bottom_left, bottom_right))
+    pure_left   = np.setdiff1d(left,   np.union1d(top_left,    bottom_left))
+    pure_right  = np.setdiff1d(right,  np.union1d(top_right,   bottom_right))
+    internal = np.setdiff1d(gid, np.union1d(np.union1d(top, bottom),
+                                             np.union1d(left, right)))
+    return {
+        'left': left, 'right': right, 'top': top, 'bottom': bottom,
+        'top_left': top_left, 'top_right': top_right,
+        'bottom_left': bottom_left, 'bottom_right': bottom_right,
+        'pure_top': pure_top, 'pure_bottom': pure_bottom,
+        'pure_left': pure_left, 'pure_right': pure_right,
+        'internal': internal,
+        'boundary': np.union1d(np.union1d(top, bottom), np.union1d(left, right)),
+        'corner': np.union1d(np.union1d(top_left, top_right),
+                             np.union1d(bottom_left, bottom_right)),
+    }
+
+
+def extract_prop_npixels(locs_list):
+    """Return pixel counts for each grain from a list of location arrays."""
+    return [len(loc) for loc in locs_list]
+
+
+def extract_prop_gb_pixels(gblocs_list):
+    """Return grain-boundary pixel counts from a list of boundary location arrays."""
+    return [len(gbloc) for gbloc in gblocs_list]
+
+
+def extract_prop_area(skprops):
+    return [skprops[fid].area for fid in skprops]
+
+
+def extract_prop_eq_diameter(skprops):
+    return [skprops[fid].equivalent_diameter_area for fid in skprops]
+
+
+def extract_prop_perimeter(skprops):
+    return [skprops[fid].perimeter for fid in skprops]
+
+
+def extract_prop_perimeter_crofton(skprops):
+    return [skprops[fid].perimeter_crofton for fid in skprops]
+
+
+def extract_prop_solidity(skprops):
+    return [skprops[fid].solidity for fid in skprops]
+
+
+def extract_prop_major_axis_length(skprops):
+    return [skprops[fid].major_axis_length for fid in skprops]
+
+
+def extract_prop_minor_axis_length(skprops):
+    return [skprops[fid].minor_axis_length for fid in skprops]
+
+
+def extract_prop_morph_ori(skprops):
+    return [skprops[fid].orientation * 180.0 / np.pi for fid in skprops]
+
+
+def extract_prop_feret_diameter(skprops):
+    return [skprops[fid].feret_diameter_max for fid in skprops]
+
+
+def extract_prop_euler_number(skprops):
+    return [skprops[fid].euler_number for fid in skprops]
+
+
+def extract_prop_eccentricity(skprops):
+    return [skprops[fid].eccentricity for fid in skprops]
+
+
+def extract_prop_aspect_ratio(skprops, EPS=1e-10):
+    result = []
+    for fid in skprops:
+        maj  = skprops[fid].major_axis_length
+        min_ = skprops[fid].minor_axis_length
+        result.append(np.inf if min_ <= EPS else maj / min_)
+    return result
+
+
+def extract_prop_compactness(area_list, perimeter_list, EPS=1e-10):
+    result = []
+    for area, perim in zip(area_list, perimeter_list):
+        circle_area = perim ** 2 / (4.0 * np.pi)
+        result.append(area / circle_area if circle_area >= EPS else 1)
+    return result
+
+
+def build_grain_props(skprops, prop_flags, locs_list=None, gblocs_list=None, EPS=1e-10):
+    """Extract all flagged grain properties from skprops and pixel-location lists.
+
+    Parameters
+    ----------
+    skprops : dict[int, RegionProperties]
+        Ordered mapping of grain ID → skimage RegionProperties.
+    prop_flags : dict[str, bool]
+        Which properties to compute (same keys as ``self.prop_flag``).
+    locs_list : list[numpy.ndarray] or None
+        Per-grain pixel-location arrays (needed when ``prop_flags['npixels']`` is True).
+    gblocs_list : list[numpy.ndarray] or None
+        Per-grain boundary location arrays (needed for npixels_gb / gb_length_px).
+    EPS : float
+        Numerical guard for zero-denominator properties.
+
+    Returns
+    -------
+    props : dict[str, list]
+        Extracted property lists keyed by property name.
+    """
+    props = {}
+    if prop_flags.get('npixels') and locs_list is not None:
+        props['npixels'] = extract_prop_npixels(locs_list)
+    if prop_flags.get('npixels_gb') and gblocs_list is not None:
+        props['npixels_gb'] = extract_prop_gb_pixels(gblocs_list)
+    if prop_flags.get('gb_length_px') and gblocs_list is not None:
+        props['gb_length_px'] = extract_prop_gb_pixels(gblocs_list)
+    if prop_flags.get('area'):
+        props['area'] = extract_prop_area(skprops)
+    if prop_flags.get('eq_diameter'):
+        props['eq_diameter'] = extract_prop_eq_diameter(skprops)
+    if prop_flags.get('perimeter'):
+        props['perimeter'] = extract_prop_perimeter(skprops)
+    if prop_flags.get('perimeter_crofton'):
+        props['perimeter_crofton'] = extract_prop_perimeter_crofton(skprops)
+    if prop_flags.get('compactness'):
+        a = props.get('area') or extract_prop_area(skprops)
+        p = props.get('perimeter') or extract_prop_perimeter(skprops)
+        props['compactness'] = extract_prop_compactness(a, p, EPS)
+    if prop_flags.get('aspect_ratio'):
+        props['aspect_ratio'] = extract_prop_aspect_ratio(skprops, EPS)
+    if prop_flags.get('solidity'):
+        props['solidity'] = extract_prop_solidity(skprops)
+    if prop_flags.get('major_axis_length'):
+        props['major_axis_length'] = extract_prop_major_axis_length(skprops)
+    if prop_flags.get('minor_axis_length'):
+        props['minor_axis_length'] = extract_prop_minor_axis_length(skprops)
+    if prop_flags.get('morph_ori'):
+        props['morph_ori'] = extract_prop_morph_ori(skprops)
+    if prop_flags.get('feret_diameter'):
+        props['feret_diameter'] = extract_prop_feret_diameter(skprops)
+    if prop_flags.get('euler_number'):
+        props['euler_number'] = extract_prop_euler_number(skprops)
+    if prop_flags.get('eccentricity'):
+        props['eccentricity'] = extract_prop_eccentricity(skprops)
+    return props
