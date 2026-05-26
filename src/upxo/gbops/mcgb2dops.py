@@ -1152,3 +1152,122 @@ def calculate_junction_order(matrix, junction_point):
     unique_grains = np.unique(neighborhood)
     order = len(unique_grains[unique_grains > 0])
     return order
+
+
+def build_grain_pairs(neigh_gid):
+    """Build unique grain pairs from a neighbour dictionary.
+
+    Parameters
+    ----------
+    neigh_gid : dict[int, list[int]]
+        Mapping of grain ID → list of neighbour grain IDs.
+
+    Returns
+    -------
+    grain_pairs : list[tuple[int, int]]
+        Unique pairs ``(g1, g2)`` with ``g2 > g1``.
+    """
+    grain_pairs = []
+    for grain_id, neighbors in neigh_gid.items():
+        for neighbor_id in neighbors:
+            if neighbor_id > grain_id:
+                grain_pairs.append((grain_id, neighbor_id))
+    return grain_pairs
+
+
+def identify_grain_boundary_pixels(lgi, grain_pairs):
+    """Return pixel coordinates of each grain-pair interface.
+
+    Scans horizontal and vertical pixel adjacencies to find pixels where
+    two specified grain IDs are immediate neighbours.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+    grain_pairs : list of tuple
+        Each entry is ``(grain_id1, grain_id2)``; order within the tuple
+        does not matter.
+
+    Returns
+    -------
+    gb_dict : dict[tuple[int, int], numpy.ndarray]
+        Sorted pair ``(g1, g2)`` → array of shape (N, 2) with
+        ``[row, col]`` coordinates of boundary pixels.
+    """
+    target_pairs = set(tuple(sorted((int(p[0]), int(p[1])))) for p in grain_pairs)
+    temp_store = defaultdict(list)
+    # Horizontal pass — detects vertical grain boundaries
+    left, right = lgi[:, :-1], lgi[:, 1:]
+    mask_h = left != right
+    rows_h, cols_h = np.nonzero(mask_h)
+    for r, c, g1, g2 in zip(rows_h, cols_h, left[mask_h], right[mask_h]):
+        pair = tuple(sorted((int(g1), int(g2))))
+        if pair in target_pairs:
+            temp_store[pair].append([float(r), float(c)])
+    # Vertical pass — detects horizontal grain boundaries
+    top, bottom = lgi[:-1, :], lgi[1:, :]
+    mask_v = top != bottom
+    rows_v, cols_v = np.nonzero(mask_v)
+    for r, c, g1, g2 in zip(rows_v, cols_v, top[mask_v], bottom[mask_v]):
+        pair = tuple(sorted((int(g1), int(g2))))
+        if pair in target_pairs:
+            temp_store[pair].append([float(r), float(c)])
+    return {pair: np.array(coords, dtype=np.float64)
+            for pair, coords in temp_store.items()}
+
+
+def find_gb_junction_point_map(lgi):
+    """Return a binary map of grain-boundary junction pixels.
+
+    A pixel is a junction if three or more distinct non-zero grain IDs
+    appear in its 3×3 neighbourhood.  Only boundary pixels (detected by
+    ``skimage.segmentation.find_boundaries``) are tested, which avoids
+    evaluating interior pixels and reduces cost for large images.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+
+    Returns
+    -------
+    jmap : numpy.ndarray of int, shape (R, C)
+        1 at junction pixels, 0 elsewhere.
+
+    Notes
+    -----
+    Delegates per-pixel neighbourhood counting to
+    :func:`calculate_junction_order`, the single-pixel companion of this
+    function.
+    """
+    from skimage.segmentation import find_boundaries
+    gb_mask = find_boundaries(lgi, connectivity=1, mode='thick')
+    boundary_coords = np.argwhere(gb_mask)
+    jmap = np.zeros(lgi.shape, dtype=int)
+    for yx in boundary_coords:
+        if calculate_junction_order(lgi, tuple(yx)) >= 3:
+            jmap[yx[0], yx[1]] = 1
+    return jmap
+
+
+def compute_grain_boundary_locs(grain_mask):
+    """Return pixel indices of a single grain's boundary via binary erosion.
+
+    Boundary pixels are those inside the grain but absent from the eroded
+    grain: ``boundary = mask AND NOT erode(mask)``.
+
+    Parameters
+    ----------
+    grain_mask : numpy.ndarray of bool or uint8, shape (R, C)
+        Binary mask where non-zero marks the grain's pixels.
+
+    Returns
+    -------
+    gbloc : numpy.ndarray of int, shape (N, 2)
+        Row/column indices of boundary pixels.
+    """
+    from scipy.ndimage import binary_erosion
+    mask_bool = grain_mask.astype(bool)
+    boundary = mask_bool & ~binary_erosion(mask_bool)
+    return np.argwhere(boundary)
