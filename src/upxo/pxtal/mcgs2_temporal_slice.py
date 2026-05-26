@@ -76,6 +76,7 @@ import pandas as pd
 from upxo.dclasses.features import twingen
 import upxo.gsdataops.gid_ops as GidOps
 import upxo.charops.mchar as mcharOps
+import upxo.gbops.mcgb2dops as gbOps
 import upxo.viz.gbviz as gbViz
 import upxo.gsdataops.grid_ops as gridOps
 import upxo.connops.neighbour_ops as neighOps
@@ -1662,10 +1663,7 @@ class mcgs2_grain_structure():
                     # ---------------------------------------------
                     # Extract grain boundary indices
                     if char_gb:
-                        from scipy.ndimage import binary_erosion
-                        boundary = grain_mask.astype(bool) & ~binary_erosion(grain_mask.astype(bool))
-                        gb = np.argwhere(boundary)
-                        self.g[gn]['grain'].gbloc = deepcopy(gb)
+                        self.g[gn]['grain'].gbloc = deepcopy(gbOps.compute_grain_boundary_locs(grain_mask))
                     # ---------------------------------------------
                     rmin = np.where(grain_mask)[0].min()
                     rmax = np.where(grain_mask)[0].max()+1
@@ -1849,12 +1847,8 @@ class mcgs2_grain_structure():
                 set_val(features[fid], 'bbox', bboxes[fid])
             # ----------------------
             if char_gb:
-                from scipy.ndimage import binary_erosion
                 fid_mask = (self.lgi == fid).astype(bool)
-                boundary = fid_mask & ~binary_erosion(fid_mask)
-                gb = np.argwhere(boundary)
-                set_val(features[fid], 'gbloc', gb)
-                '''features[fid].gbloc = gb'''
+                set_val(features[fid], 'gbloc', gbOps.compute_grain_boundary_locs(fid_mask))
 
         self.g = features
         if _mgo_:
@@ -1875,20 +1869,8 @@ class mcgs2_grain_structure():
             return features
 
     def build_grain_pairs(self, neigh_gid):
-        """
-        Build unique grain pairs from the neighbor list.
-
-        Parameters
-        ----------
-        neigh_gid : dict
-            Dictionary where key is grain ID and value is list of neighbor grain IDs.
-        """
-        grain_pairs = []
-        for grain_id, neighbors in neigh_gid.items():
-            for neighbor_id in neighbors:
-                if neighbor_id > grain_id:  # Only add pairs where neighbor_id > grain_id to avoid duplicates
-                    grain_pairs.append((grain_id, neighbor_id))
-        return grain_pairs
+        """Build unique grain pairs from the neighbour list."""
+        return gbOps.build_grain_pairs(neigh_gid)
 
     def pad_lfi(self):
         """Return the labelled feature image padded for boundary operations."""
@@ -1953,61 +1935,8 @@ class mcgs2_grain_structure():
         return kmake.make_gid_net_from_neighlist(neigh_gid)
         
     def identify_grain_boundary_pixels(self, grain_pairs):
-        """
-        Identify grain boundary pixels for specified grain pairs.
-        
-        Parameters
-        ----------
-        grain_pairs : list of tuples
-            List of tuples where each tuple contains two grain IDs representing a grain pair.
-
-        Returns
-        -------
-        dict
-            Dictionary where:
-            - Key: tuple (grain_id1, grain_id2) as standard Python ints (sorted)
-            - Value: Nx2 NumPy array of coordinates (float64)
-        """
-        # 1. Prepare target list for fast lookup
-        # Convert input to sorted tuples of standard ints
-        target_pairs = set(tuple(sorted((int(p[0]), int(p[1])))) for p in grain_pairs)
-        # Use a temp dictionary with lists to aggregate data first
-        # (Appending to lists is faster than stacking numpy arrays in a loop)
-        temp_store = defaultdict(list)
-        # --- Horizontal Pass (detects vertical boundaries) ---
-        left = self.lgi[:, :-1]
-        right = self.lgi[:, 1:]
-        mask_h = left != right
-        rows_h, cols_h = np.nonzero(mask_h)
-        id_left = left[mask_h]
-        id_right = right[mask_h]
-        for r, c, g1, g2 in zip(rows_h, cols_h, id_left, id_right):
-            # Ensure key consistency
-            p1, p2 = int(g1), int(g2)
-            pair = tuple(sorted((p1, p2)))
-            if pair in target_pairs:
-                # Append [row, col] to the list for this pair
-                # We treat r, c as floats
-                temp_store[pair].append([float(r), float(c)])
-        # --- Vertical Pass (detects horizontal boundaries) ---
-        top = self.lgi[:-1, :]
-        bottom = self.lgi[1:, :]
-        mask_v = top != bottom
-        rows_v, cols_v = np.nonzero(mask_v)
-        id_top = top[mask_v]
-        id_bottom = bottom[mask_v]
-        for r, c, g1, g2 in zip(rows_v, cols_v, id_top, id_bottom):
-            p1, p2 = int(g1), int(g2)
-            pair = tuple(sorted((p1, p2)))
-            if pair in target_pairs:
-                temp_store[pair].append([float(r), float(c)])
-        # --- Final Conversion ---
-        # Convert lists of lists into Nx2 NumPy arrays
-        gb_dict = {}
-        for pair, coords_list in temp_store.items():
-            # Convert to numpy array of shape (N, 2)
-            gb_dict[pair] = np.array(coords_list, dtype=np.float64)
-        return gb_dict
+        """Identify grain boundary pixels for the specified grain pairs."""
+        return gbOps.identify_grain_boundary_pixels(self.lgi, grain_pairs)
     
     def plot_boundaries_standalone(self, gb_dict):
         """
@@ -2046,27 +1975,11 @@ class mcgs2_grain_structure():
             points are to be calculated if xorimap is True.
             Default is None.
         """
-        from scipy.ndimage import generic_filter
-        def __find_junctions(pixel_values):
-            """
-            Function to be applied on each pixel. It checks if the central
-            pixel is a junction point. pixel_values: A flattened array of the
-            central pixel and its neighbors. Returns 1 if the central pixel
-            is a junction, else 0.
-            """
-            unique_grains = np.unique(pixel_values)
-            '''Count the unique grain IDs excluding the background or border
-            if needed'''
-            count = np.sum(unique_grains > 0)
-            return 1 if count >= 3 else 0
-        __footprint__ = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
         if not xorimap:
-            self.gbjp = generic_filter(self.lgi, __find_junctions,
-                            footprint=__footprint__, mode='nearest', cval=0)
+            self.gbjp = gbOps.find_gb_junction_point_map(self.lgi)
         else:
             if IN in self.pxtal.keys():
-                self.pxtal[IN].gbjp = generic_filter(self.pxtal[IN].lgi, __find_junctions,
-                                        footprint=__footprint__, mode='nearest', cval=0)
+                self.pxtal[IN].gbjp = gbOps.find_gb_junction_point_map(self.pxtal[IN].lgi)
             else:
                 print(f'Invalid Instance number, IN: {IN}')
 
@@ -3932,54 +3845,15 @@ class mcgs2_grain_structure():
         plot_grains_at_position : Visualize grains at specific positions
         find_border_internal_grains_fast : Fast alternative for border/internal classification
         """
-        top_left = np.array([self.lgi[-1, 0]], dtype=int)
-        top_right = np.array([self.lgi[-1, -1]], dtype=int)
-        bottom_left = np.array([self.lgi[0, 0]], dtype=int)
-        bottom_right = np.array([self.lgi[0, -1]], dtype=int)
-        left = np.unique(self.lgi[:, 0])
-        right = np.unique(self.lgi[:, -1])
-        top = np.unique(self.lgi[-1, :])
-        bottom = np.unique(self.lgi[0, :])
-        pure_top = np.setdiff1d(top, np.union1d(top_left, top_right))
-        pure_bottom = np.setdiff1d(bottom, np.union1d(bottom_left, bottom_right))
-        pure_left = np.setdiff1d(left, np.union1d(top_left, bottom_left))
-        pure_right = np.setdiff1d(right, np.union1d(top_right, bottom_right))
-        internal = np.setdiff1d(self.gid, np.union1d(np.union1d(top, bottom), np.union1d(left, right)))
-        self.positions['left'] = left
-        self.positions['right'] = right
-        self.positions['top'] = top
-        self.positions['bottom'] = bottom
-        self.positions['top_left'] = top_left
-        self.positions['top_right'] = top_right
-        self.positions['bottom_left'] = bottom_left
-        self.positions['bottom_right'] = bottom_right
-        self.positions['pure_top'] = pure_top
-        self.positions['pure_bottom'] = pure_bottom
-        self.positions['pure_left'] = pure_left
-        self.positions['pure_right'] = pure_right
-        self.positions['internal'] = internal
-        self.positions['boundary'] = np.union1d(np.union1d(top, bottom), np.union1d(left, right))
-        self.positions['corner'] = np.union1d(np.union1d(top_left, top_right), np.union1d(bottom_left, bottom_right))
+        self.positions = mcharOps.classify_grain_positions_2d(self.lgi, self.gid)
+        pos = self.positions
         for grain in self:
             gid = grain.gid
-            if gid in top_left:
-                grain.position = 'top_left'
-            elif gid in top_right:
-                grain.position = 'top_right'
-            elif gid in bottom_left:
-                grain.position = 'bottom_left'
-            elif gid in bottom_right:
-                grain.position = 'bottom_right'
-            elif gid in pure_top:
-                grain.position = 'pure_top'
-            elif gid in pure_bottom:
-                grain.position = 'pure_bottom'
-            elif gid in pure_left:
-                grain.position = 'pure_left'
-            elif gid in pure_right:
-                grain.position = 'pure_right'
-            elif gid in internal:
-                grain.position = 'internal'
+            for category in ('top_left', 'top_right', 'bottom_left', 'bottom_right',
+                             'pure_top', 'pure_bottom', 'pure_left', 'pure_right', 'internal'):
+                if gid in pos[category]:
+                    grain.position = category
+                    break
 
     def find_border_internal_grains_fast(self):
         """
@@ -4225,13 +4099,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        npixels = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                npixels.append(len(g['grain'].loc))
-            elif self._char_fx_version_ == 2:
-                npixels.append(len(g.loc))
-        self.prop['npixels'] = npixels
+        self.prop['npixels'] = mcharOps.extract_prop_npixels(self._collect_locs())
         if self.display_messages:
             print('    Number of Pixels making the grains: DONE')
 
@@ -4242,14 +4110,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['npixels_gb']:
-        npixels_gb = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                npixels_gb.append(len(g['grain'].gbloc))
-            elif self._char_fx_version_ == 2:
-                npixels_gb.append(len(g.gbloc))
-        self.prop['npixels_gb'] = npixels_gb
+        self.prop['npixels_gb'] = mcharOps.extract_prop_gb_pixels(self._collect_gblocs())
 
     def find_prop_gb_length_px(self):
         """
@@ -4258,14 +4119,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['gb_length_px']:
-        gb_length_px = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                gb_length_px.append(len(g['grain'].gbloc))
-            elif self._char_fx_version_ == 2:
-                gb_length_px.append(len(g.gbloc))
-        self.prop['gb_length_px'] = gb_length_px
+        self.prop['gb_length_px'] = mcharOps.extract_prop_gb_pixels(self._collect_gblocs())
 
     def find_prop_area(self):
         """
@@ -4274,14 +4128,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['area']:
-        area = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                area.append(g['grain'].skprop.area)
-            elif self._char_fx_version_ == 2:
-                area.append(g.skprop.area)
-        self.prop['area'] = area
+        self.prop['area'] = mcharOps.extract_prop_area(self._collect_skprops())
 
     def find_prop_eq_diameter(self):
         """
@@ -4290,14 +4137,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['eq_diameter']:
-        eq_diameter = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                eq_diameter.append(g['grain'].skprop.equivalent_diameter_area)
-            elif self._char_fx_version_ == 2:
-                eq_diameter.append(g.skprop.equivalent_diameter_area)
-        self.prop['eq_diameter'] = eq_diameter
+        self.prop['eq_diameter'] = mcharOps.extract_prop_eq_diameter(self._collect_skprops())
 
     def find_prop_perimeter(self):
         """
@@ -4306,14 +4146,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['perimeter']:
-        perimeter = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                perimeter.append(g['grain'].skprop.perimeter)
-            elif self._char_fx_version_ == 2:
-                perimeter.append(g.skprop.perimeter)
-        self.prop['perimeter'] = perimeter
+        self.prop['perimeter'] = mcharOps.extract_prop_perimeter(self._collect_skprops())
 
     def find_prop_perimeter_crofton(self):
         """
@@ -4322,14 +4155,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['perimeter_crofton']:
-        perimeter_crofton = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                perimeter_crofton.append(g['grain'].skprop.perimeter_crofton)
-            elif self._char_fx_version_ == 2:
-                perimeter_crofton.append(g.skprop.perimeter_crofton)
-        self.prop['perimeter_crofton'] = perimeter_crofton
+        self.prop['perimeter_crofton'] = mcharOps.extract_prop_perimeter_crofton(self._collect_skprops())
 
     def find_prop_compactness(self):
         """
@@ -4338,57 +4164,10 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['compactness']:
-        compactness = []
-        if self.prop_flag['area']:
-            if self.prop_flag['perimeter']:
-                for i, g in enumerate(self.g.values()):
-                    area = self.prop['area'][i]
-                    # Calculate area of circle with the same perimeter
-                    # P = pi*D --> D = P/pi
-                    # A = pi*D**2/4 = pi*(P/pi)**2/4 = P/(4*pi)
-                    circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
-                    if circle_area >= self.EPS:
-                        compactness.append(area/circle_area)
-                    else:
-                        compactness.append(1)
-            else:
-                for i, g in self.g.values():
-                    area = self.prop['area'][i]
-                    if self._char_fx_version_ == 1:
-                        circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
-                    elif self._char_fx_version_ == 2:
-                        circle_area = g.skprop.perimeter**2/(4*np.pi)
-                    if circle_area >= self.EPS:
-                        compactness.append(area/circle_area)
-                    else:
-                        compactness.append(1)
-        else:
-            if self.prop_flag['perimeter']:
-                for i, g in self.g.values():
-                    if self._char_fx_version_ == 1:
-                        area = g['grain'].skprop.area
-                    elif self._char_fx_version_ == 2:
-                        area = g.skprop.area
-                    circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
-                    if circle_area >= self.EPS:
-                        compactness.append(area/circle_area)
-                    else:
-                        compactness.append(1)
-            else:
-                for i, g in self.g.values():
-                    if self._char_fx_version_ == 1:
-                        area = g['grain'].skprop.area
-                        circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
-                    elif self._char_fx_version_ == 2:
-                        area = g.skprop.area
-                        circle_area = g.skprop.perimeter**2/(4*np.pi)
-                    if circle_area >= self.EPS:
-                        compactness.append(area/circle_area)
-                    else:
-                        compactness.append(1)
-
-        self.prop['compactness'] = compactness
+        skp = self._collect_skprops()
+        a = list(self.prop['area']) if 'area' in self.prop.columns else mcharOps.extract_prop_area(skp)
+        p = list(self.prop['perimeter']) if 'perimeter' in self.prop.columns else mcharOps.extract_prop_perimeter(skp)
+        self.prop['compactness'] = mcharOps.extract_prop_compactness(a, p, EPS=self.EPS)
 
     def find_prop_aspect_ratio(self):
         """
@@ -4397,20 +4176,8 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['aspect_ratio']:
-        aspect_ratio = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                maj_axis = g['grain'].skprop.major_axis_length
-                min_axis = g['grain'].skprop.minor_axis_length
-            elif self._char_fx_version_ == 2:
-                maj_axis = g.skprop.major_axis_length
-                min_axis = g.skprop.minor_axis_length
-            if min_axis <= self.EPS:
-                aspect_ratio.append(np.inf)
-            else:
-                aspect_ratio.append(maj_axis/min_axis)
-        self.prop['aspect_ratio'] = aspect_ratio
+        self.prop['aspect_ratio'] = mcharOps.extract_prop_aspect_ratio(
+            self._collect_skprops(), EPS=self.EPS)
 
     def find_prop_solidity(self):
         """
@@ -4419,14 +4186,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['solidity']:
-        solidity = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                solidity.append(g['grain'].skprop.solidity)
-            elif self._char_fx_version_ == 2:
-                solidity.append(g.skprop.solidity)
-        self.prop['solidity'] = solidity
+        self.prop['solidity'] = mcharOps.extract_prop_solidity(self._collect_skprops())
 
     def find_prop_circularity(self):
         """
@@ -4445,14 +4205,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['major_axis_length']:
-        major_axis_length = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                major_axis_length.append(g['grain'].skprop.major_axis_length)
-            elif self._char_fx_version_ == 2:
-                major_axis_length.append(g.skprop.major_axis_length)
-        self.prop['major_axis_length'] = major_axis_length
+        self.prop['major_axis_length'] = mcharOps.extract_prop_major_axis_length(self._collect_skprops())
 
     def find_prop_minor_axis_length(self):
         """
@@ -4461,14 +4214,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['minor_axis_length']:
-        minor_axis_length = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                minor_axis_length.append(g['grain'].skprop.minor_axis_length)
-            elif self._char_fx_version_ == 2:
-                minor_axis_length.append(g.skprop.minor_axis_length)
-        self.prop['minor_axis_length'] = minor_axis_length
+        self.prop['minor_axis_length'] = mcharOps.extract_prop_minor_axis_length(self._collect_skprops())
 
     def find_prop_morph_ori(self):
         """
@@ -4477,14 +4223,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['morph_ori']:
-        morph_ori = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                morph_ori.append(g['grain'].skprop.orientation)
-            elif self._char_fx_version_ == 2:
-                morph_ori.append(g.skprop.orientation)
-        self.prop['morph_ori'] = [mo*180/np.pi for mo in morph_ori]
+        self.prop['morph_ori'] = mcharOps.extract_prop_morph_ori(self._collect_skprops())
 
     def find_prop_feret_diameter(self):
         """
@@ -4493,14 +4232,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['feret_diameter']:
-        feret_diameter = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                feret_diameter.append(g['grain'].skprop.feret_diameter_max)
-            elif self._char_fx_version_ == 2:
-                feret_diameter.append(g.skprop.feret_diameter_max)
-        self.prop['feret_diameter'] = feret_diameter
+        self.prop['feret_diameter'] = mcharOps.extract_prop_feret_diameter(self._collect_skprops())
 
     def find_prop_euler_number(self):
         """
@@ -4509,14 +4241,7 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['euler_number']:
-        euler_number = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                euler_number.append(g['grain'].skprop.euler_number)
-            elif self._char_fx_version_ == 2:
-                euler_number.append(g.skprop.euler_number)
-        self.prop['euler_number'] = euler_number
+        self.prop['euler_number'] = mcharOps.extract_prop_euler_number(self._collect_skprops())
 
     def find_prop_eccentricity(self):
         """
@@ -4525,14 +4250,25 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        # if self.prop_flag['eccentricity']:
-        eccentricity = []
-        for g in self.g.values():
-            if self._char_fx_version_ == 1:
-                eccentricity.append(g['grain'].skprop.eccentricity)
-            elif self._char_fx_version_ == 2:
-                eccentricity.append(g.skprop.eccentricity)
-        self.prop['eccentricity'] = eccentricity
+        self.prop['eccentricity'] = mcharOps.extract_prop_eccentricity(self._collect_skprops())
+
+    def _collect_skprops(self):
+        """Return {fid: skprop} from self.g regardless of _char_fx_version_."""
+        if self._char_fx_version_ == 1:
+            return {gid: g['grain'].skprop for gid, g in self.g.items()}
+        return {gid: g.skprop for gid, g in self.g.items()}
+
+    def _collect_locs(self):
+        """Return list of per-grain pixel-location arrays from self.g."""
+        if self._char_fx_version_ == 1:
+            return [g['grain'].loc for g in self.g.values()]
+        return [g.loc for g in self.g.values()]
+
+    def _collect_gblocs(self):
+        """Return list of per-grain boundary pixel-location arrays from self.g."""
+        if self._char_fx_version_ == 1:
+            return [g['grain'].gbloc for g in self.g.values()]
+        return [g.gbloc for g in self.g.values()]
 
     def build_prop(self, correct_aspect_ratio=False):
         """
@@ -4543,49 +4279,23 @@ class mcgs2_grain_structure():
         -------
         None
         """
-        if self.prop_flag['npixels']:
-            self.find_prop_npixels()
-        if self.prop_flag['npixels_gb']:
-            self.find_prop_npixels_gb()
-        if self.prop_flag['gb_length_px']:
-            self.find_prop_gb_length_px()
-        if self.prop_flag['area']:
-            self.find_prop_area()
-        if self.prop_flag['eq_diameter']:
-            self.find_prop_eq_diameter()
-        if self.prop_flag['perimeter']:
-            self.find_prop_perimeter()
-        if self.prop_flag['perimeter_crofton']:
-            self.find_prop_perimeter_crofton()
-        if self.prop_flag['compactness']:
-            self.find_prop_compactness()
-        if self.prop_flag['aspect_ratio']:
-            self.find_prop_aspect_ratio()
-        if self.prop_flag['solidity']:
-            self.find_prop_solidity()
-        if self.prop_flag['circularity']:
-            self.find_prop_circularity()
-        if self.prop_flag['major_axis_length']:
-            self.find_prop_major_axis_length()
-        if self.prop_flag['minor_axis_length']:
-            self.find_prop_minor_axis_length()
-        if self.prop_flag['morph_ori']:
-            self.find_prop_morph_ori()
-        if self.prop_flag['feret_diameter']:
-            self.find_prop_feret_diameter()
-        if self.prop_flag['euler_number']:
-            self.find_prop_euler_number()
-        if self.prop_flag['eccentricity']:
-            self.find_prop_eccentricity()
+        skprops = self._collect_skprops()
+        locs_list = self._collect_locs() if self.prop_flag.get('npixels') else None
+        gblocs_list = (self._collect_gblocs()
+                       if (self.prop_flag.get('npixels_gb') or self.prop_flag.get('gb_length_px'))
+                       else None)
+        props = mcharOps.build_grain_props(skprops, self.prop_flag,
+                                           locs_list=locs_list, gblocs_list=gblocs_list,
+                                           EPS=self.EPS)
+        for key, vals in props.items():
+            self.prop[key] = vals
         # ------------------------------------------
         if correct_aspect_ratio:
-            if any((not 'area' in self.prop.columns,
-                   not 'aspect_ratio' in self.prop.columns,
-                   not 'major_axis_length' in self.prop.columns,
-                   not 'minor_axis_length' in self.prop.columns)):
-                print('Need area, aspect_ratio, major_axis_length, minor_axis_length', 
+            if not all(c in self.prop.columns for c in
+                       ('area', 'aspect_ratio', 'major_axis_length', 'minor_axis_length')):
+                print('Need area, aspect_ratio, major_axis_length, minor_axis_length',
                       'to correct aspect ratio. Skipping aspect ratio correction.')
-            else:                    
+            else:
                 df = deepcopy(self.prop)
                 df.loc[df['area'] == 1, ['major_axis_length', 'minor_axis_length', 'aspect_ratio']] = 1
                 df.loc[df['minor_axis_length'] == 0, 'minor_axis_length'] = 1
