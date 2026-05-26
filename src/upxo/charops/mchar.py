@@ -220,3 +220,94 @@ def characterise_features_in_image_v2(labelled_image, Xgrid=None, Ygrid=None,
               extract_coords=extract_coords, throw_bounding_box=throw_bounding_box)
     skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict = fxop
     return skprops, bbox_limits, bbox_limits_ex, bboxes, bboxes_ex, coords_dict
+
+
+def classify_grain_positions_2d(lgi, gid):
+    """Classify each grain as corner / edge / internal based on lgi pixel positions.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+    gid : array-like of int
+        All grain IDs present in lgi.
+
+    Returns
+    -------
+    positions : dict[str, numpy.ndarray]
+        Position category → array of grain IDs. Categories: 'top_left', 'top_right',
+        'bottom_left', 'bottom_right', 'pure_top', 'pure_bottom', 'pure_left',
+        'pure_right', 'top', 'bottom', 'left', 'right', 'boundary', 'corner', 'internal'.
+    """
+    return _mchar2d.classify_grain_positions_2d(lgi, gid)
+
+
+def build_grain_props(skprops, prop_flags, locs_list=None, gblocs_list=None, EPS=1e-10):
+    """Extract all flagged grain properties from skimage RegionProperties.
+
+    Parameters
+    ----------
+    skprops : dict[int, skimage.measure.RegionProperties]
+        Mapping of grain ID → skimage RegionProperties object.
+    prop_flags : dict[str, bool]
+        Which properties to compute (same keys as ``self.prop_flag``).
+    locs_list : list[numpy.ndarray] or None
+        Per-grain pixel-location arrays (needed when prop_flags['npixels'] is True).
+    gblocs_list : list[numpy.ndarray] or None
+        Per-grain boundary location arrays (needed for npixels_gb / gb_length_px).
+    EPS : float
+        Numerical guard for zero-denominator properties.
+
+    Returns
+    -------
+    props : dict[str, list]
+        Extracted property lists keyed by property name.
+    """
+    return _mchar2d.build_grain_props(skprops, prop_flags,
+                                      locs_list=locs_list, gblocs_list=gblocs_list, EPS=EPS)
+
+
+def extract_prop_area(skprops):
+    return _mchar2d.extract_prop_area(skprops)
+
+def extract_prop_eq_diameter(skprops):
+    return _mchar2d.extract_prop_eq_diameter(skprops)
+
+def extract_prop_perimeter(skprops):
+    return _mchar2d.extract_prop_perimeter(skprops)
+
+def extract_prop_perimeter_crofton(skprops):
+    return _mchar2d.extract_prop_perimeter_crofton(skprops)
+
+def extract_prop_solidity(skprops):
+    return _mchar2d.extract_prop_solidity(skprops)
+
+def extract_prop_major_axis_length(skprops):
+    return _mchar2d.extract_prop_major_axis_length(skprops)
+
+def extract_prop_minor_axis_length(skprops):
+    return _mchar2d.extract_prop_minor_axis_length(skprops)
+
+def extract_prop_morph_ori(skprops):
+    return _mchar2d.extract_prop_morph_ori(skprops)
+
+def extract_prop_feret_diameter(skprops):
+    return _mchar2d.extract_prop_feret_diameter(skprops)
+
+def extract_prop_euler_number(skprops):
+    return _mchar2d.extract_prop_euler_number(skprops)
+
+def extract_prop_eccentricity(skprops):
+    return _mchar2d.extract_prop_eccentricity(skprops)
+
+def extract_prop_aspect_ratio(skprops, EPS=1e-10):
+    return _mchar2d.extract_prop_aspect_ratio(skprops, EPS=EPS)
+
+def extract_prop_compactness(area_list, perimeter_list, EPS=1e-10):
+    return _mchar2d.extract_prop_compactness(area_list, perimeter_list, EPS=EPS)
+
+def extract_prop_npixels(locs_list):
+    return _mchar2d.extract_prop_npixels(locs_list)
+
+def extract_prop_gb_pixels(gblocs_list):
+    return _mchar2d.extract_prop_gb_pixels(gblocs_list)
