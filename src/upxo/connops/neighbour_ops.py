@@ -363,6 +363,11 @@ def get_upto_nth_order_neighbors(neigh_gid, grain_id, neigh_order,
     get_nth_order_neighbors : Returns only the grains at exactly order n.
     """
     if neigh_order == 0:
+        singleton = {grain_id}
+        if output_type in ('np', 'nparray', 'np.array', 'numpy'):
+            return np.array([grain_id])
+        if output_type == 'set':
+            return singleton
         return [grain_id]
     neighbors = set(neigh_gid.get(grain_id, []))
     for _ in range(neigh_order - 1):

@@ -950,21 +950,86 @@ class gsan2d():
                            compactness=False, solidity=True, morph_ori=False, circularity=False,
                            eccentricity=True, euler_number=True, moments_hu=True,
                            char_grain_positions=False, char_gb=False, get_grain_coords=True, connectivity=2):
-        """
+        """Characterise a single 2-D grain-structure slice and wrap it for analysis.
+
+        Calls ``gstslice.char_morph_2d`` (and optionally ``find_neigh_v2``)
+        with the requested property flags, then returns a ``gsan2d`` instance
+        whose ``gsstack`` contains this one slice under key ``1``.
+
+        Parameters
+        ----------
+        gstslice : mcgs2_temporal_slice
+            A single grain-structure time-slice object to characterise.
+        detect_grains : bool, default False
+            Run grain detection on ``gstslice`` before characterisation.
+        prechar : bool, default False
+            If True, skip ``char_morph_2d`` (assume the slice is already
+            characterised).
+        find_neigh : bool, default True
+            Find grain neighbours via ``find_neigh_v2`` after characterisation.
+        find_neigh_p : float, default 1.0
+            Sampling probability for neighbour search; must be in ``[0, 1]``.
+        find_neigh_include_central_feat : bool, default False
+            Include the grain itself in its own neighbour list.
+        find_neigh_throw_numba_dict : bool, default False
+            Return a Numba-typed dict from the neighbour search.
+        npixels : bool, default False
+            Characterise grain area in pixels.
+        npixels_gb : bool, default False
+            Characterise number of grain-boundary pixels per grain.
+        gb_length_px : bool, default False
+            Characterise grain-boundary arc length in pixels.
+        eq_diameter : bool, default False
+            Characterise equivalent circular diameter.
+        feret_diameter : bool, default False
+            Characterise maximum Feret (calliper) diameter.
+        perimeter : bool, default False
+            Characterise grain perimeter length.
+        perimeter_crofton : bool, default False
+            Characterise perimeter using the Crofton formula.
+        aspect_ratio : bool, default True
+            Characterise aspect ratio; also enables ``major_axis_length``
+            and ``minor_axis_length`` automatically.
+        compactness : bool, default False
+            Characterise compactness (4π·area / perimeter²).
+        solidity : bool, default True
+            Characterise solidity (area / convex-hull area).
+        morph_ori : bool, default False
+            Characterise morphological orientation in degrees.
+        circularity : bool, default False
+            Characterise circularity.
+        eccentricity : bool, default True
+            Characterise eccentricity of the best-fit ellipse.
+        euler_number : bool, default True
+            Characterise the Euler characteristic.
+        moments_hu : bool, default True
+            Characterise the seven Hu invariant moments.
+        char_grain_positions : bool, default False
+            Classify each grain as corner, edge, or internal.
+        char_gb : bool, default False
+            Characterise grain-boundary pixel locations.
+        get_grain_coords : bool, default True
+            Extract physical pixel coordinates for each grain.
+        connectivity : int, default 2
+            Connectivity for feature labelling (1 = 4-connected,
+            2 = 8-connected in 2-D).
+
+        Returns
+        -------
+        gsan2d
+            Instance with ``creation='pxtal_single'``,
+            ``gsstack={1: gstslice}``, and ``pnames`` set to every
+            property flag that was True.
+
         Example
         -------
-        from upxo.ggrowth.mcgs import mcgs
-        from upxo.analysis.analysis2d import gsan2d
-        pxt = mcgs(input_dashboard='C:\\Development\\UPXO\\upxo_library\\src\\upxo\\interfaces\\user_inputs\\input_dashboard_profiling_alg202a.xls')
-        pxt.simulate()
-        
-        gsan = gsan2d.from_mcgs2d_single(gstslice, detect_grains=False, prechar=False,
-                                         npixels=False, npixels_gb=False, gb_length_px=False,
-                                         eq_diameter=False, feret_diameter=False,
-                                         perimeter=False, perimeter_crofton=False,
-                                         compactness=False, solidity=True, morph_ori=False, circularity=True,
-                                         eccentricity=True, euler_number=True, moments_hu=True,
-                                         char_gb=False, get_grain_coords=False, connectivity=2)
+        >>> from upxo.ggrowth.mcgs import mcgs
+        >>> from upxo.analysis.analysis2d import gsan2d
+        >>> pxt = mcgs(input_dashboard='path/to/input_dashboard.xls')
+        >>> pxt.simulate()
+        >>> gsan = gsan2d.from_mcgs2d_single(pxt.gs[10],
+        ...     solidity=True, eccentricity=True, euler_number=True,
+        ...     moments_hu=True, get_grain_coords=False)
         """
         cls.defmp['npixels'], cls.defmp['npixels_gb'] = npixels, npixels_gb
         cls.defmp['gb_length_px'] = gb_length_px
@@ -1045,7 +1110,89 @@ class gsan2d():
                               circularity=False, eccentricity=True,
                               euler_number=True, moments_hu=True,
                               char_gb=False, get_grain_coords=False):
-        """Construct this instance from gsstack temporal."""
+        """Characterise every slice in a temporal grain-structure stack and wrap for analysis.
+
+        Iterates over the stack, calls ``char_morph_2d`` (and optionally
+        ``find_neigh_v2``) on each slice with the requested property flags,
+        then returns a ``gsan2d`` instance whose ``gsstack`` maps each
+        grain-structure ID to its characterised slice.
+
+        Parameters
+        ----------
+        gsstack : dict[int, mcgs2_temporal_slice] or pxtal
+            Temporal stack of grain-structure slices. If ``ispxtal`` is
+            True, this must be a pxtal object exposing a ``.gs`` attribute.
+        gsids : list of int, default []
+            Subset of grain-structure IDs to include. An empty list
+            uses all IDs present in ``gsstack``.
+        detect_grains : bool, default False
+            Run grain detection on each slice before characterisation.
+        ispxtal : bool, default False
+            If True, treat ``gsstack`` as a pxtal object and extract its
+            ``.gs`` dict, filtered to ``gsids`` when provided.
+        prechar : bool, default False
+            If True, skip ``char_morph_2d`` on all slices (assume already
+            characterised).
+        find_neigh : bool, default False
+            Find grain neighbours in each slice via ``find_neigh_v2``.
+        find_neigh_p : float, default 1.0
+            Sampling probability for neighbour search; must be in ``[0, 1]``.
+        find_neigh_include_central_feat : bool, default False
+            Include the grain itself in its own neighbour list.
+        find_neigh_throw_numba_dict : bool, default False
+            Return a Numba-typed dict from the neighbour search.
+        npixels : bool, default False
+            Characterise grain area in pixels.
+        npixels_gb : bool, default False
+            Characterise number of grain-boundary pixels per grain.
+        gb_length_px : bool, default False
+            Characterise grain-boundary arc length in pixels.
+        eq_diameter : bool, default False
+            Characterise equivalent circular diameter.
+        feret_diameter : bool, default False
+            Characterise maximum Feret (calliper) diameter.
+        perimeter : bool, default False
+            Characterise grain perimeter length.
+        perimeter_crofton : bool, default False
+            Characterise perimeter using the Crofton formula.
+        aspect_ratio : bool, default True
+            Characterise aspect ratio; also enables ``major_axis_length``
+            and ``minor_axis_length`` automatically.
+        compactness : bool, default False
+            Characterise compactness (4π·area / perimeter²).
+        solidity : bool, default True
+            Characterise solidity (area / convex-hull area).
+        morph_ori : bool, default False
+            Characterise morphological orientation in degrees.
+        circularity : bool, default False
+            Characterise circularity.
+        eccentricity : bool, default True
+            Characterise eccentricity of the best-fit ellipse.
+        euler_number : bool, default True
+            Characterise the Euler characteristic.
+        moments_hu : bool, default True
+            Characterise the seven Hu invariant moments.
+        char_gb : bool, default False
+            Characterise grain-boundary pixel locations.
+        get_grain_coords : bool, default False
+            Extract physical pixel coordinates for each grain.
+
+        Returns
+        -------
+        gsan2d
+            Instance with ``creation='pxtal_tmp'``, ``gsstack`` mapping
+            each included grain-structure ID to its characterised slice,
+            and ``pnames`` set to every property flag that was True.
+
+        Example
+        -------
+        >>> from upxo.ggrowth.mcgs import mcgs
+        >>> from upxo.analysis.analysis2d import gsan2d
+        >>> pxt = mcgs(input_dashboard='path/to/input_dashboard.xls')
+        >>> pxt.simulate()
+        >>> gsan = gsan2d.from_gsstack_temporal(pxt, ispxtal=True,
+        ...     solidity=True, eccentricity=True, euler_number=True)
+        """
         cls.defmp['npixels'], cls.defmp['npixels_gb'] = npixels, npixels_gb
         cls.defmp['gb_length_px'] = gb_length_px
         cls.defmp['eq_diameter'], cls.defmp['feret_diameter'] = eq_diameter, feret_diameter
@@ -1123,10 +1270,18 @@ class gsan2d():
 
     @classmethod
     def from_distr(cls, distributions):
-        """Construct this instance from distr."""
-        obj = cls(temporal=True, stack_type='temporal', gsstack=gsstack)
-        obj.gsstack = gsstack
-        return obj
+        """Construct a gsan2d instance from pre-computed property distributions.
+
+        Parameters
+        ----------
+        distributions : dict[str, array-like]
+            Mapping of property name → array of values, one per grain.
+
+        Notes
+        -----
+        Not yet implemented.
+        """
+        raise NotImplementedError('from_distr is not yet implemented.')
     
     def find_neigh(self, gsids=None, p=1.0,
                    include_central_feat=False,
@@ -1270,12 +1425,70 @@ class gsan2d():
             corr_volume[i] = corr_matrix
         self.corr['temporal'] = corr_volume
 
-    def pcanalyis(self, gsids=[1], gids=[], 
-                  pnames=['area', 'major_axis_length', 'minor_axis_length', 'eccentricity'],
-                  auto_ncomp=True, ncomp_method='mle', svd_solver='auto', saa=True, throw=False,
-                  see_scree=True, annotate=True, see_exvar=True, see_cum_exvar=False,
-                  figsize=(8, 3)):
-        """Pcanalyis."""
+    def pca_analysis(self, gsids=[1], gids=[],
+                     pnames=['area', 'major_axis_length', 'minor_axis_length', 'eccentricity'],
+                     auto_ncomp=True, ncomp_method='mle', svd_solver='auto', saa=True, throw=False,
+                     see_scree=True, annotate=True, see_exvar=True, see_cum_exvar=False,
+                     figsize=(8, 3)):
+        """Run principal component analysis on grain property data.
+
+        Standardises the selected properties for each requested grain-structure
+        ID, fits a PCA model, and optionally plots explained-variance curves.
+        Results are stored in ``self.pca[gsid]`` when ``saa`` is True.
+
+        Parameters
+        ----------
+        gsids : list of int, default [1]
+            Grain-structure IDs to analyse. An empty list selects all
+            integer keys present in ``self.dfs``.
+        gids : list of int, default []
+            Specific grain IDs (1-indexed rows) to include. An empty list
+            uses all grains in the dataframe.
+        pnames : list of str, default ['area', 'major_axis_length', 'minor_axis_length', 'eccentricity']
+            Property names used as PCA features; must be columns in
+            ``self.dfs[gsid]``. An empty list uses all available columns.
+        auto_ncomp : bool, default True
+            If True, fit with ``n_components=len(pnames)`` (all components).
+            If False, ``ncomp_method`` is passed as ``n_components``.
+        ncomp_method : str or int, default 'mle'
+            Passed as ``n_components`` to ``sklearn.decomposition.PCA``
+            when ``auto_ncomp`` is False. Common values: ``'mle'`` or an
+            integer.
+        svd_solver : str, default 'auto'
+            SVD solver forwarded to ``PCA``; see scikit-learn documentation.
+        saa : bool, default True
+            Save-and-apply: store fitted results in ``self.pca[gsid]``.
+        throw : bool, default False
+            If True, return ``(pca_, scores_, exvar_)``; otherwise return
+            ``(None, None, None)``.
+        see_scree : bool, default True
+            Reserved for a future scree plot; not yet implemented.
+        annotate : bool, default True
+            Reserved for annotation of variance plots; not yet implemented.
+        see_exvar : bool, default True
+            Plot per-component explained variance (%) for each gsid.
+        see_cum_exvar : bool, default False
+            Plot cumulative explained variance (%) for each gsid.
+        figsize : tuple of float, default (8, 3)
+            Figure size ``(width, height)`` in inches for variance plots.
+
+        Returns
+        -------
+        pca_ : dict[int, sklearn.decomposition.PCA] or None
+            gsid → fitted PCA object. ``None`` when ``throw`` is False.
+        scores_ : dict[int, numpy.ndarray] or None
+            gsid → score array of shape ``(n_grains, n_components)``.
+            ``None`` when ``throw`` is False.
+        exvar_ : dict[int, numpy.ndarray] or None
+            gsid → explained-variance-ratio array of length
+            ``n_components``. ``None`` when ``throw`` is False.
+
+        Notes
+        -----
+        Rows containing NaN values are dropped before fitting.
+        ``self.pca`` is populated with :class:`principle_component_analysis`
+        objects keyed by gsid.
+        """
         
         if len(gsids) == 0:
             gsids = [i for i in list(self.dfs.keys()) if type(i)==int]
@@ -1383,18 +1596,31 @@ class gsan2d():
                 self.K[gsid].characterize_graph(k_char_level=k_char_level)
 
     def see_stats(self, gsid=[1], pname='area', metric='mean'):
-        """See stats."""
-        # Extract data.
-        values = []
-        for tslice in range(len(STATS_list)):
-            values.append(STATS_list[tslice].loc[metric, property_name])
+        """Plot a summary statistic of one property across specified time slices.
+
+        Parameters
+        ----------
+        gsid : int or list of int, default [1]
+            Time-slice ID(s) to include. Each must have been characterised
+            via :meth:`compute_statistics` before calling this method.
+        pname : str, default 'area'
+            Property name; must be a column in ``self.dfs[gsid]``.
+        metric : str, default 'mean'
+            Row label in the statistics table produced by
+            ``DataFrame.describe()``. Valid values include ``'mean'``,
+            ``'std'``, ``'min'``, ``'25%'``, ``'50%'``, ``'75%'``,
+            ``'max'``, ``'skew'``, ``'kurt'``.
+        """
+        gsids = gsid if isinstance(gsid, list) else [gsid]
+        values = [self.stts[g].loc[metric, pname] for g in gsids]
         plt.figure(figsize=(4, 3))
-        plt.plot(range(len(STATS_list)), values, marker='o', linestyle='-', color='purple')
-        plt.title(f'{metric.capitalize()} of {property_name} over Time Slices', fontsize=14)
-        plt.xlabel('Time Slice')
-        plt.ylabel(f'{metric.capitalize()} of {property_name}')
+        plt.plot(gsids, values, marker='o', linestyle='-', color='purple')
+        plt.title(f'{metric.capitalize()} of {pname}', fontsize=14)
+        plt.xlabel('Time slice')
+        plt.ylabel(f'{metric.capitalize()} of {pname}')
         plt.grid(alpha=0.3)
         plt.tight_layout()
+        plt.show()
 
     def see_dstr_univariate(self, gsid=1, pnames=['area'], 
                             bw_adjust=[0.75], kde_clr=['blue'],
@@ -1555,6 +1781,6 @@ class gsan2d():
             plt.tight_layout()
             plt.show()
         elif plottype == 'a':
-            sns.lineplot(data=combined_df, x='time_slice', y='orientation')
+            sns.lineplot(data=self.dfs['temporal'], x='time_slice', y=pname)
 
 

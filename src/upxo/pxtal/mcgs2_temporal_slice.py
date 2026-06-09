@@ -1435,9 +1435,9 @@ class mcgs2_grain_structure():
             neigh0 = def_neigh(1, recalculate=False, include_parent=True)
             neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
             neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
-            neigh0[22]
-            neigh1[2][22]
-            neigh2[2][22]
+            neigh0[22]   # list of neighbours of grain 22 at order 1
+            neigh1[22]   # probabilistic blend for grain 22 (order ~1.06)
+            neigh2[22]   # probabilistic blend for grain 22 (order ~1.5)
         """
         if recalculate or not self.neigh_gid:
             self.find_neigh(include_central_grain=include_parent)
