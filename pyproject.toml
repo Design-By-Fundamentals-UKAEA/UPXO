@@ -1,3 +1,10 @@
+[tool.pytest.ini_options]
+filterwarnings = [
+    # Numba's Python-level TypedDict accessor internally casts int32 keys
+    # to Python int (int64) during iteration — upstream Numba behaviour.
+    "ignore::numba.core.errors.NumbaTypeSafetyWarning",
+]
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

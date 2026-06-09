@@ -126,7 +126,8 @@ def find_O1_neigh_2d(lgi, p=1.0, include_central_grain=False, throw_numba_dict=F
     if throw_numba_dict:
         return _find_neigh_gid_numba_2d_(lgi32)
     else:
-        neigh_fids = {int(k): list(map(int, v)) for k, v in _find_neigh_gid_numba_2d_(lgi32).items() if int(k) != 0}
+        _nd = _find_neigh_gid_numba_2d_(lgi32)
+        neigh_fids = {int(k): list(map(int, _nd[k])) for k in _nd.keys() if int(k) != 0}
         neigh_fids = {k: v.append(k) or v for k, v in neigh_fids.items()} if include_central_grain else neigh_fids
     if p == 1.0:
         return neigh_fids
@@ -336,7 +337,7 @@ def _find_neigh_gid_numba_2d_(lgi):
     neighbor_counts = np.zeros(max_gid+1, dtype=np.int32)
     # Preallocate padded arrays
     for gid in range(max_gid + 1):
-        neigh_gid[gid] = np.full(max_neighbors, -1, dtype=np.int32)
+        neigh_gid[np.int32(gid)] = np.full(max_neighbors, -1, dtype=np.int32)
     # Scan image
     for x in range(shape_x):
         for y in range(shape_y):
@@ -362,11 +363,12 @@ def _find_neigh_gid_numba_2d_(lgi):
     # Trim padding and return final dict
     final_neigh_gid = Dict.empty(key_type=types.int32, value_type=types.int32[:])
     for gid in range(max_gid + 1):
-        n = neighbor_counts[gid]
+        gid32 = np.int32(gid)
+        n = neighbor_counts[gid32]
         trimmed = np.empty(n, dtype=np.int32)
         for i in range(n):
-            trimmed[i] = neigh_gid[gid][i]
-        final_neigh_gid[gid] = trimmed
+            trimmed[i] = neigh_gid[gid32][i]
+        final_neigh_gid[gid32] = trimmed
 
     return final_neigh_gid
 

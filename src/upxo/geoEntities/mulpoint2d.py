@@ -49,7 +49,6 @@ centroid : np.ndarray, shape (2,)
 """
 import math
 import numpy as np
-import numpy.matlib
 from copy import deepcopy
 # from icecream import ic
 import itertools
