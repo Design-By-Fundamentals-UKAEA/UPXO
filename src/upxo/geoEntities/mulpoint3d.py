@@ -23,7 +23,6 @@ Usage
 """
 import math
 import numpy as np
-import numpy.matlib
 from copy import deepcopy
 from scipy.spatial import cKDTree
 import vtk

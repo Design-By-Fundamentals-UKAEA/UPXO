@@ -1793,8 +1793,7 @@ class Point2d():
         if type(angles) in _NUMB:
             angles = np.array(angles)
         if angles.size == 1:
-            import numpy.matlib
-            angles = numpy.matlib.repmat(angles, 1, len(locx)).squeeze()
+            angles = np.tile(angles, len(locx))
         if degree:
             angles = np.radians(angles)
         # ----------------------------------------------------

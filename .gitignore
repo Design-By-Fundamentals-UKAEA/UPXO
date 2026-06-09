@@ -106,6 +106,9 @@ data/logs/
 # Keep placeholder files
 !/src/upxo/scripts/**/.gitkeep
 
+# Generated output files
+/src/upxo/outputs/
+
 # Ignore the tutorials forlder completely
 /src/upxo/tutorials/
 /src/upxo/profiling/
