@@ -7,6 +7,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.1] - 2026-06-09
+
+### Changed
+- Aligned the release metadata across the project for the 1.0.1 release.
+- Updated the Read the Docs build environment to Python 3.13 to match the package requirement.
+
 ## [1.0.0] - 2026-05-22
 
 ### Added
