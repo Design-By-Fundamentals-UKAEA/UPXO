@@ -64,13 +64,13 @@ class grid():
     characterization_ID = 0
     characterization_settings = None
     __slots__ = ('uigrid', 'uisim', 'uigsc', 'uiint', 'study',
-                 'uigsprop', 'uimesh', 'uigeomrepr' '_mcsteps_',
+                 'uigsprop', 'uimesh', 'uigeomrepr', '_mcsteps_',
                  'uidata_all', 'index', 'ndimg_label_pck',
                  '__ui', '__g__', '__gprop__', '__gb__', '__gbprop__',
                  'gs', 'xgr', 'ygr', 'zgr',
                  'NL_dict', 'px_length', 'px_size',
                  'S', 's', 'sa', 'AIA', 'AIA0', 'AIA1',
-                 'xind' 'yind', 'zind', 'xinda', 'yinda', 'zinda',
+                 'xind', 'yind', 'zind', 'xinda', 'yinda', 'zinda',
                  'NLM_nd', 'NLM', 'EAPGLB', 'tex',
                  'tslices_with_prop', 'vis', 'vizstyles', 'display_messages',
                  '__info_message_display_level__', 'dt_dict'
