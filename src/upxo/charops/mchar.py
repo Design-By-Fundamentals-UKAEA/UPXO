@@ -311,3 +311,30 @@ def extract_prop_npixels(locs_list):
 
 def extract_prop_gb_pixels(gblocs_list):
     return _mchar2d.extract_prop_gb_pixels(gblocs_list)
+
+def get_grain_size_distribution_from_slice(lgi_2d):
+    """
+    Extract grain area (pixel count) distribution from a 2D labelled
+    grain image.
+
+    Typically called on a 2D slice extracted from a 3D grain structure
+    (via :func:`~upxo.gsdataops.grid_ops.section_from_3d`) to compare
+    grain size distributions against an EBSD reference for
+    representativeness assessment.
+
+    Parameters
+    ----------
+    lgi_2d : ndarray (ny, nx), int
+        2D labelled grain image; positive values are grain IDs,
+        values <= 0 are ignored.
+
+    Returns
+    -------
+    grain_areas : ndarray
+        1-D array of grain pixel counts (one entry per unique positive
+        grain ID found in *lgi_2d*).
+    """
+    import numpy as np
+    grain_ids = np.unique(lgi_2d)
+    grain_ids = grain_ids[grain_ids > 0]
+    return np.array([int(np.sum(lgi_2d == gid)) for gid in grain_ids])
