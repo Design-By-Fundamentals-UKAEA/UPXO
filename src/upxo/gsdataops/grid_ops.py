@@ -2121,3 +2121,209 @@ def compute_grain_intercept_lengths(rp, lfi, n_sample_pts=None) -> 'np.ndarray':
 # Intra-grain location finding operations. Search ID: SID_IntraGrainLocOps
 # General LFI operations. Search ID: SID_GeneralLFIOps
 # Voxel morphology smoothing operations. Search ID: SID_VoxelMorphSmoothOps
+
+
+# ---------------------------------------------------------------------------
+# 3D slice-pair extraction
+# ---------------------------------------------------------------------------
+
+def extract_2d_slice_pair(lgi_3d, quat_3d, axis, slice_idx):
+    """
+    Extract matching 2D label and quaternion slices perpendicular to *axis*.
+
+    Convenience wrapper around :func:`section_from_3d` that extracts
+    both the grain label field and the corresponding quaternion field
+    in a single call.
+
+    Parameters
+    ----------
+    lgi_3d : ndarray (nx, ny, nz), int
+        3D labelled grain image.
+    quat_3d : ndarray (nx, ny, nz, 4), float
+        Per-voxel quaternion field matching *lgi_3d*.
+    axis : int (0, 1, or 2)
+        Axis perpendicular to the desired slice.
+    slice_idx : int
+        Index along *axis*.
+
+    Returns
+    -------
+    lgi_2d : ndarray
+        2D label slice.
+    quat_2d : ndarray (..., 4)
+        Matching 2D quaternion slice.
+    """
+    import numpy as np
+    lgi_2d = section_from_3d(lgi_3d, axis=axis, location=slice_idx)
+    if axis == 0:
+        quat_2d = quat_3d[slice_idx, :, :, :]
+    elif axis == 1:
+        quat_2d = quat_3d[:, slice_idx, :, :]
+    else:
+        quat_2d = quat_3d[:, :, slice_idx, :]
+    return lgi_2d, quat_2d
+
+
+# ---------------------------------------------------------------------------
+# Voxel topology cleaning
+# ---------------------------------------------------------------------------
+
+def clean_voxel_spikes_3d(lgi, face_kernel=None):
+    """
+    Remove vertex-spike voxels from a 3D labelled grain image.
+
+    A spike voxel belongs to grain *g* but has zero face-connected
+    neighbours that also belong to *g*.  All spikes are detected globally
+    in one pass and reassigned atomically (no iterative hopping).
+
+    Parameters
+    ----------
+    lgi : ndarray (nx, ny, nz), int
+        3D labelled grain image.  Modified in place.
+    face_kernel : ndarray (3, 3, 3), int or None
+        Kernel counting face-connected same-grain neighbours.
+        Defaults to the standard 6-face cross kernel.
+
+    Returns
+    -------
+    lgi : ndarray
+        Cleaned grain image (same object, modified in place).
+    spike_count : int
+        Number of spike voxels reassigned.
+    """
+    import numpy as np
+    from scipy.ndimage import convolve as _ndconvolve
+
+    if face_kernel is None:
+        face_kernel = np.array([
+            [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+            [[0, 1, 0], [1, 0, 1], [0, 1, 0]],
+            [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+        ], dtype=np.int32)
+
+    face_offsets = [(1, 0, 0), (-1, 0, 0), (0, 1, 0),
+                    (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+    sx, sy, sz = lgi.shape
+    spike_candidates = []
+
+    for gid in sorted(int(g) for g in np.unique(lgi) if g > 0):
+        mask = (lgi == gid)
+        face_count = _ndconvolve(
+            mask.astype(np.int32), face_kernel, mode='constant', cval=0)
+        for v in np.argwhere(mask & (face_count == 0)):
+            spike_candidates.append((int(v[0]), int(v[1]), int(v[2]), gid))
+
+    spike_count = 0
+    for ix, iy, iz, gid in spike_candidates:
+        nb_counts = {}
+        for dx, dy, dz in face_offsets:
+            nx_, ny_, nz_ = ix + dx, iy + dy, iz + dz
+            if 0 <= nx_ < sx and 0 <= ny_ < sy and 0 <= nz_ < sz:
+                ng = int(lgi[nx_, ny_, nz_])
+                if ng > 0 and ng != gid:
+                    nb_counts[ng] = nb_counts.get(ng, 0) + 1
+        if nb_counts:
+            lgi[ix, iy, iz] = max(nb_counts, key=nb_counts.get)
+            spike_count += 1
+
+    return lgi, spike_count
+
+
+def split_disconnected_lobes_3d(
+        lgi,
+        all_quats,
+        twin_role,
+        twin_parent_of,
+        next_gid,
+        rng,
+        split_jitter_deg=0.0,
+):
+    """
+    Split edge/corner-only connected lobes in a 3D labelled grain image.
+
+    For each grain with more than one 6-connected component, minority
+    components are relabelled as new grain IDs.  The largest component
+    retains the original ID.  Orientations are inherited; optional angular
+    jitter (via
+    :func:`~upxo.xtalphy.crystal_orientation.apply_orientation_jitter`)
+    makes lobes crystallographically distinct when *split_jitter_deg* > 0.
+
+    Parameters
+    ----------
+    lgi : ndarray (nx, ny, nz), int
+        3D labelled grain image.  Modified in place.
+    all_quats : dict {int: ndarray (4,)}
+        Per-grain quaternion map.  New entries added in place.
+    twin_role : dict {int: str}
+        Role map.  New entries added in place.
+    twin_parent_of : dict {int: int}
+        Provenance map.  New entries added in place.
+    next_gid : int
+        Starting ID for new grain IDs.
+    rng : numpy.random.Generator
+        Random number generator.
+    split_jitter_deg : float
+        Minimum misorientation (degrees) to enforce between lobes.
+        0 keeps identical orientations.
+
+    Returns
+    -------
+    lgi, all_quats, twin_role, twin_parent_of : same objects, modified
+    split_events : dict {new_gid: dict}
+        {'parent_gid', 'component_size_vox', 'jitter_applied_deg'}.
+    next_gid : int
+        Next available grain ID.
+    """
+    import numpy as np
+    from scipy.ndimage import label as _ndlabel
+
+    try:
+        from upxo.xtalphy.crystal_orientation import apply_orientation_jitter as _jitter
+        _has_jitter = True
+    except ImportError:
+        _has_jitter = False
+
+    split_events = {}
+
+    for gid in sorted(int(g) for g in np.unique(lgi) if g > 0):
+        mask = (lgi == gid).astype(np.uint8)
+        labeled, n_comp = _ndlabel(mask)
+        if n_comp <= 1:
+            continue
+
+        comp_sizes = sorted(
+            [(c, int(np.sum(labeled == c))) for c in range(1, n_comp + 1)],
+            key=lambda x: x[1], reverse=True,
+        )
+
+        parent_q = all_quats.get(gid)
+        parent_role = twin_role.get(gid, 'non_host')
+
+        for rank, (comp_idx, comp_size) in enumerate(comp_sizes):
+            if rank == 0:
+                continue
+
+            lgi[labeled == comp_idx] = next_gid
+
+            q_new = parent_q.copy() if parent_q is not None else np.array(
+                [1., 0., 0., 0.])
+            jitter_applied = 0.0
+
+            if split_jitter_deg > 0.0 and parent_q is not None and _has_jitter:
+                q_new = _jitter(parent_q, split_jitter_deg, rng)
+                cos_half = float(np.clip(
+                    np.abs(np.dot(parent_q, q_new)), 0.0, 1.0))
+                jitter_applied = float(
+                    np.degrees(2.0 * np.arccos(cos_half)))
+
+            all_quats[next_gid] = q_new
+            twin_role[next_gid] = parent_role
+            twin_parent_of[next_gid] = gid
+            split_events[next_gid] = {
+                'parent_gid': gid,
+                'component_size_vox': comp_size,
+                'jitter_applied_deg': jitter_applied,
+            }
+            next_gid += 1
+
+    return lgi, all_quats, twin_role, twin_parent_of, split_events, next_gid
