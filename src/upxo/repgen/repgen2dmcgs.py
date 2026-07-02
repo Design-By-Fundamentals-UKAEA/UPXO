@@ -4571,6 +4571,112 @@ class repgen2d:
         return figs
 
 
+
+    def compute_ebsd_twin_vf_partition(self, parent_info: dict, tvf: dict = None) -> dict:
+        """
+        Classify EBSD pure twin grains as Type 2a (outward, boundary-sharing)
+        or Type 2b (inward, fully submerged) by geometric analysis of
+        ``self.lfi_ebsd``.
+
+        Type 2a -- pure twin that shares at least one pixel boundary with a
+                   pure-parent grain.  In the synthetic structure these are
+                   carved from the parent grain at the primary-twin boundary
+                   (outward secondary twins).
+
+        Type 2b -- pure twin whose every adjacent grain is an intermediate
+                   (not a pure parent).  In the synthetic structure these are
+                   carved from within the primary twin lamella (inward /
+                   submerged secondary twins).
+
+        Parameters
+        ----------
+        parent_info : dict
+            Output of :meth:`identify_parent_grains`.
+        tvf : dict or None
+            Output of :meth:`compute_ebsd_tvf`.  Used to read ``csl_label``.
+            If None, the first key of *parent_info* is used.
+
+        Returns
+        -------
+        dict with keys
+            ``vf_2a``            -- area fraction of Type-2a outward twins.
+            ``vf_2b``            -- area fraction of Type-2b inward twins.
+            ``tvf_stage1``       -- primary-twin carving target for the SGC:
+                                    intermediate_frac + vf_2b (the full region
+                                    to carve from the parent grain, including
+                                    space later subdivided by 2b secondaries).
+            ``n_2a``             -- count of Type-2a pure twin grains.
+            ``n_2b``             -- count of Type-2b pure twin grains.
+            ``prob_secondary_outward`` -- vf_2a / (vf_2a + vf_2b); use this
+                                    as ``prob_secondary_outward_twinNucleation``
+                                    in ``TwinGenerator3D``.
+            ``intermediate_frac``-- area fraction of intermediate grains
+                                    (from parent_info pixel counts).
+        """
+        import numpy as np
+        import cc3d
+
+        csl_label = (tvf['csl_label'] if tvf is not None
+                     else next(iter(parent_info)))
+
+        roles = parent_info[csl_label]
+        pure_parents   = set(roles.get('pure_parents',   []))
+        pure_twins     = set(roles.get('pure_twins',     []))
+        intermediates  = (set(roles.get('all_parents',   []))
+                          & set(roles.get('all_twins',   [])))
+
+        lfi = self.lfi_ebsd.astype(np.int32)
+        total_px = float(lfi.size)
+
+        # Build adjacency from the EBSD label field (4-connectivity)
+        edges = cc3d.region_graph(lfi, connectivity=4)
+        adj: dict = {}
+        for a, b in edges:
+            a, b = int(a), int(b)
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+
+        # Classify each pure twin as 2a or 2b
+        gids_2a, gids_2b = [], []
+        for gid in pure_twins:
+            neighbors = adj.get(int(gid), set())
+            if neighbors & pure_parents:   # touches at least one pure parent
+                gids_2a.append(gid)
+            else:                          # surrounded by intermediates only
+                gids_2b.append(gid)
+
+        def _vf(gids):
+            return sum(int(np.sum(lfi == g)) for g in gids) / total_px
+
+        vf_2a = _vf(gids_2a)
+        vf_2b = _vf(gids_2b)
+        vf_int = _vf(intermediates)
+        tvf_stage1 = vf_int + vf_2b
+        total_sec = vf_2a + vf_2b
+        prob_out = vf_2a / total_sec if total_sec > 0 else 0.0
+
+        result = {
+            'vf_2a':                     vf_2a,
+            'vf_2b':                     vf_2b,
+            'tvf_stage1':                tvf_stage1,
+            'n_2a':                      len(gids_2a),
+            'n_2b':                      len(gids_2b),
+            'prob_secondary_outward':    prob_out,
+            'intermediate_frac':         vf_int,
+        }
+
+        print(f'compute_ebsd_twin_vf_partition  (CSL: {csl_label})')
+        print(f'  Intermediates (primary twins) : {len(intermediates):>4d}  VF={vf_int:.4f}')
+        print(f'  Type-2a pure twins (outward)  : {len(gids_2a):>4d}  VF={vf_2a:.4f}')
+        print(f'  Type-2b pure twins (inward)   : {len(gids_2b):>4d}  VF={vf_2b:.4f}')
+        print(f'  SGC Stage-1 carving target    :       VF={tvf_stage1:.4f}  '
+              f'(intermediate + 2b)')
+        print(f'  Derived prob_secondary_outward: {prob_out:.3f}')
+        return result
+
+
 # _char_lfi has moved to upxo.interfaces.defdap.ebsd_reader as a
 # module-level helper.  Import it here for any legacy internal callers.
 from upxo.interfaces.defdap.ebsd_reader import _char_lfi  # noqa: F401
+
+
