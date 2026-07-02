@@ -1860,6 +1860,21 @@ _SIGMA3_Q = np.array([
     1.0 / (2.0 * 3.0 ** 0.5),
 ], dtype=np.float64)
 
+# All four Σ3 rotation variants: 60° about each of the four <111> directions.
+# Row k corresponds to the {111} plane whose crystal-frame normal is
+# n_crystal[k] = [±1, ±1, ±1] / √3 (same ordering used in
+# compute_s3_habit_plane_3d).  Selecting different rows for adjacent
+# twin lamellae within the same host grain ensures a Σ9 (~38.9°)
+# misorientation between those lamellae.
+_s3_hw = 3.0 ** 0.5 / 2.0          # cos(30°)
+_s3_ax = 1.0 / (2.0 * 3.0 ** 0.5)  # sin(30°) / √3
+_SIGMA3_Q_ALL_VARIANTS = np.array([
+    [_s3_hw,  _s3_ax,  _s3_ax,  _s3_ax],   # 60° about  [111]/√3
+    [_s3_hw, -_s3_ax,  _s3_ax,  _s3_ax],   # 60° about [-111]/√3
+    [_s3_hw,  _s3_ax, -_s3_ax,  _s3_ax],   # 60° about  [1-11]/√3
+    [_s3_hw,  _s3_ax,  _s3_ax, -_s3_ax],   # 60° about  [11-1]/√3
+], dtype=np.float64)
+
 # Σ5 rotations: 36.87° about each cubic <100> axis — three symmetry-equivalent variants
 import math as _math
 _S5_HW = _math.radians(36.87 / 2.0)
@@ -2553,3 +2568,314 @@ def exmp_all():
     exmp_grain_boundary_misorientation_distribution()
     print()
     exmp_gbmd_from_lfi()
+
+
+# ---------------------------------------------------------------------------
+# 3D habit-plane selection
+# ---------------------------------------------------------------------------
+
+def compute_s3_habit_plane_3d(q, rng, variant_idx=None):
+    """
+    Select one of the four {111} habit-plane normals for a Sigma3 twin
+    host grain and return it as a unit vector in the 3D sample frame.
+
+    This is the 3D generalisation of :func:`compute_s3_lamella_angle_2d`.
+    In 3D there is no privileged observation plane, so the active {111}
+    variant is either specified explicitly (for multi-lamella introduction,
+    where different variants must be used per lamella to ensure Sigma9
+    boundaries form between adjacent twins) or selected uniformly at random.
+
+    Parameters
+    ----------
+    q : array-like (4,)
+        Host grain quaternion [w, x, y, z].
+    rng : numpy.random.Generator
+        Random number generator; used only when *variant_idx* is None.
+    variant_idx : int (0-3) or None
+        Which of the four {111} plane normals to use.  Row indices match
+        ``_SIGMA3_Q_ALL_VARIANTS``:
+        0 -> [ 1, 1, 1]/sqrt3,  1 -> [-1, 1, 1]/sqrt3,
+        2 -> [ 1,-1, 1]/sqrt3,  3 -> [ 1, 1,-1]/sqrt3.
+        If None (default), a variant is chosen uniformly at random.
+
+    Returns
+    -------
+    normal : ndarray (3,)
+        Unit normal of the selected {111} plane in the sample frame.
+    """
+    q = np.asarray(q, dtype=np.float64)
+    q = q / np.linalg.norm(q)
+    w, x, y, z = q
+
+    R = np.array([
+        [1 - 2*(y*y + z*z),   2*(x*y - w*z),   2*(x*z + w*y)],
+        [  2*(x*y + w*z), 1 - 2*(x*x + z*z),   2*(y*z - w*x)],
+        [  2*(x*z - w*y),   2*(y*z + w*x), 1 - 2*(x*x + y*y)],
+    ])
+
+    inv_sqrt3 = 1.0 / np.sqrt(3.0)
+    n_crystal = np.array([
+        [ 1.0,  1.0,  1.0],
+        [-1.0,  1.0,  1.0],
+        [ 1.0, -1.0,  1.0],
+        [ 1.0,  1.0, -1.0],
+    ]) * inv_sqrt3
+
+    n_sample = (R @ n_crystal.T).T
+    idx = int(variant_idx) if variant_idx is not None else int(rng.integers(0, 4))
+    normal = n_sample[idx]
+    return normal / np.linalg.norm(normal)
+
+
+# ---------------------------------------------------------------------------
+# Orientation jitter for lobe splitting
+# ---------------------------------------------------------------------------
+
+def apply_orientation_jitter(q, min_misori_deg, rng, max_retries=100):
+    """
+    Perturb *q* so the misorientation between the original and the
+    returned quaternion is at least *min_misori_deg* degrees.
+
+    Used when a grain has been topologically split (lobe separation) and
+    the user requests child lobes to be crystallographically distinct
+    (see :func:`~upxo.gsdataops.grid_ops.split_disconnected_lobes_3d`).
+
+    Parameters
+    ----------
+    q : ndarray (4,)
+        Input quaternion [w, x, y, z].
+    min_misori_deg : float
+        Minimum required misorientation angle (degrees).
+    rng : numpy.random.Generator
+        Random number generator.
+    max_retries : int
+        Maximum attempts; returns the best candidate found if exhausted.
+
+    Returns
+    -------
+    q_jittered : ndarray (4,)
+        Perturbed quaternion satisfying the constraint, or best attempt.
+    """
+    best_q = q.copy()
+    best_misori = 0.0
+    for _ in range(max_retries):
+        sc = rng.normal(0.0, np.radians(min_misori_deg))
+        ax = rng.standard_normal(3)
+        ax /= np.linalg.norm(ax)
+        pt = np.array([np.cos(sc / 2.), *np.sin(sc / 2.) * ax],
+                      dtype=np.float64)
+        q_cand = _positive_w(_quat_mul(pt, q))
+        misori = float(np.degrees(
+            2.0 * np.arccos(np.clip(np.abs(np.dot(q, q_cand)), 0.0, 1.0))
+        ))
+        if misori >= min_misori_deg:
+            return q_cand
+        if misori > best_misori:
+            best_misori = misori
+            best_q = q_cand
+    return best_q
+
+
+# ---------------------------------------------------------------------------
+# Conflict-free orientation assignment (3D-generalisable)
+# ---------------------------------------------------------------------------
+
+def assign_orientations_conflict_free(
+        grain_ids,
+        neigh_graph,
+        quat_pool,
+        all_assigned,
+        max_retries=50,
+        rng=None,
+        fallback_pool=None,
+):
+    """
+    Assign a quaternion to each grain in *grain_ids* from *quat_pool*
+    such that no two adjacent grains receive the exact same quaternion.
+
+    Dimension-agnostic, connectivity-configurable generalisation of
+    :func:`assign_parent_orientations`.  The caller pre-builds
+    *neigh_graph* with the desired connectivity (6 for face-only in 3D)
+    and passes a shared *all_assigned* dict so that successive calls for
+    different grain roles (host, then non-host) respect each other.
+
+    Parameters
+    ----------
+    grain_ids : array-like of int
+        Grain IDs to assign orientations to.
+    neigh_graph : dict {int: set of int}
+        Pre-built neighbour graph keyed by grain ID.
+    quat_pool : ndarray (N, 4)
+        Candidate quaternions to sample from.
+    all_assigned : dict {int: ndarray (4,)}
+        Shared assignment dict; mutated in place and returned.
+    max_retries : int
+        Redraws before switching to *fallback_pool*.
+    rng : numpy.random.Generator or None
+        RNG; created fresh if None.
+    fallback_pool : ndarray (M, 4) or None
+        FCC-synthetic fallback quaternions (e.g. from
+        ``tops.synth_fcc_quats``).
+
+    Returns
+    -------
+    all_assigned : dict
+        Updated assignment dict (same object as input).
+    n_fallback : int
+        Number of grains that required the fallback pool.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+    grain_ids = list(grain_ids)
+    n_pool = len(quat_pool)
+    n_fallback = 0
+    fb_idx = 0
+
+    for gid in rng.permutation(grain_ids).tolist():
+        used_by_neigh = {
+            all_assigned[nb_].tobytes()
+            for nb_ in neigh_graph.get(int(gid), set())
+            if nb_ in all_assigned
+        }
+
+        chosen = None
+        for _ in range(max_retries):
+            candidate = _positive_w(quat_pool[int(rng.integers(0, n_pool))].copy())
+            if candidate.tobytes() not in used_by_neigh:
+                chosen = candidate
+                break
+
+        if chosen is None and fallback_pool is not None and len(fallback_pool) > 0:
+            chosen = _positive_w(fallback_pool[fb_idx % len(fallback_pool)].copy())
+            fb_idx += 1
+            n_fallback += 1
+        elif chosen is None:
+            chosen = _positive_w(quat_pool[int(rng.integers(0, n_pool))].copy())
+
+        all_assigned[int(gid)] = chosen
+
+    return all_assigned, n_fallback
+
+
+# ---------------------------------------------------------------------------
+# FCC twinning Schmid-factor calculation
+# ---------------------------------------------------------------------------
+
+def _build_fcc_twin_systems() -> np.ndarray:
+    """
+    Build all 12 FCC {111}<112> twinning systems in crystal frame.
+
+    Returns
+    -------
+    ndarray (12, 2, 3)
+        Axis-0: one of the 12 systems.
+        Axis-1: 0 = unit plane normal, 1 = unit shear direction.
+        Axis-2: xyz components.
+
+    Ordering: 3 consecutive rows share the same {111} plane variant, in the
+    same order as ``_SIGMA3_Q_ALL_VARIANTS`` rows:
+    variant 0 -> [ 1, 1, 1] / sqrt3
+    variant 1 -> [-1, 1, 1] / sqrt3
+    variant 2 -> [ 1,-1, 1] / sqrt3
+    variant 3 -> [ 1, 1,-1] / sqrt3
+    """
+    import itertools as _it
+
+    plane_normals = np.array([
+        [ 1,  1,  1],
+        [-1,  1,  1],
+        [ 1, -1,  1],
+        [ 1,  1, -1],
+    ], dtype=np.float64) / 3.0 ** 0.5
+
+    # All 24 candidate <112>-type vectors (all sign/permutation combinations
+    # of [2,1,1]) normalised to unit length.
+    cands = []
+    for perm in [(2, 1, 1), (1, 2, 1), (1, 1, 2)]:
+        for signs in _it.product((-1, 1), repeat=3):
+            cands.append([perm[i] * signs[i] for i in range(3)])
+    cands = np.array(cands, dtype=np.float64) / 6.0 ** 0.5  # (24, 3)
+
+    systems = []
+    for n in plane_normals:
+        in_plane = [b for b in cands if abs(float(np.dot(b, n))) < 1e-9]
+        # Deduplicate ± pairs; keep the 3 unique positive representatives.
+        unique_dirs = []
+        seen: set = set()
+        for b in in_plane:
+            key = tuple(int(round(v * 1000)) for v in b)
+            neg = tuple(-v for v in key)
+            if key not in seen and neg not in seen:
+                seen.add(key)
+                unique_dirs.append(b)
+        if len(unique_dirs) != 3:
+            raise RuntimeError(
+                f'Expected 3 <112> dirs for plane {n}, got {len(unique_dirs)}')
+        for b in unique_dirs:
+            systems.append((n.copy(), b.copy()))
+
+    return np.array(systems, dtype=np.float64)
+
+
+# Module-level constant: 12 FCC {111}<112> systems in crystal frame.
+# Shape (12, 2, 3) — see _build_fcc_twin_systems docstring.
+_FCC_TWIN_SYSTEMS_CRYSTAL = _build_fcc_twin_systems()
+
+
+def schmid_factors_fcc_twinning(
+        q: 'np.ndarray',
+        loading_direction: tuple = (0., 0., 1.),
+) -> 'tuple[np.ndarray, int]':
+    """
+    Maximum Schmid factor per {111} plane variant for FCC twinning.
+
+    For each of the 4 {111} habit-plane variants the Schmid factor is
+    computed for all 3 <112> shear directions on that plane; the maximum
+    over the 3 directions is returned.
+
+    Schmid factor: m = |cos phi| * |cos lambda|
+    where phi = angle(loading_direction, plane_normal)
+          lambda = angle(loading_direction, shear_direction)
+
+    Parameters
+    ----------
+    q : array-like (4,)
+        Grain orientation quaternion [w, x, y, z].
+    loading_direction : array-like (3,)
+        Reference loading/thermal-gradient direction in the SAMPLE frame.
+        Default (0, 0, 1) = sample normal / ND direction.
+
+    Returns
+    -------
+    m_per_plane : ndarray (4,)
+        Maximum Schmid factor for each {111} variant.  Index ordering
+        matches ``_SIGMA3_Q_ALL_VARIANTS`` rows (and
+        ``compute_s3_habit_plane_3d`` variant indices):
+        0 -> [ 1, 1, 1]/sqrt3,  1 -> [-1, 1, 1]/sqrt3,
+        2 -> [ 1,-1, 1]/sqrt3,  3 -> [ 1, 1,-1]/sqrt3.
+    active_variant : int
+        Index (0-3) of the variant with the highest Schmid factor —
+        the crystallographically most-favourable twin plane.
+    """
+    q = np.asarray(q, dtype=np.float64)
+    q = q / np.linalg.norm(q)
+    w, x, y, z = q
+
+    R = np.array([
+        [1 - 2*(y*y + z*z),   2*(x*y - w*z),   2*(x*z + w*y)],
+        [  2*(x*y + w*z), 1 - 2*(x*x + z*z),   2*(y*z - w*x)],
+        [  2*(x*z - w*y),   2*(y*z + w*x), 1 - 2*(x*x + y*y)],
+    ])
+
+    l = np.asarray(loading_direction, dtype=np.float64)
+    l = l / np.linalg.norm(l)
+
+    # Rotate all 12 systems to sample frame (vectorised)
+    n_samp = _FCC_TWIN_SYSTEMS_CRYSTAL[:, 0, :] @ R.T  # (12, 3)
+    b_samp = _FCC_TWIN_SYSTEMS_CRYSTAL[:, 1, :] @ R.T  # (12, 3)
+
+    m = np.abs(n_samp @ l) * np.abs(b_samp @ l)  # (12,)
+
+    m_per_plane = np.array([m[3*i:3*(i+1)].max() for i in range(4)])
+    active_variant = int(np.argmax(m_per_plane))
+    return m_per_plane, active_variant
