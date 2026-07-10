@@ -1,0 +1,8 @@
+{
+  "DEFAULT_LIMITS": {
+    "C3D8":  {"max_voxels": 5000000, "warn_voxels": 2000000},
+    "C3D4":  {"max_voxels": 2000000, "warn_voxels": 1000000},
+    "C3D20": {"max_voxels": 1500000, "warn_voxels":  750000},
+    "C3D10": {"max_voxels": 1000000, "warn_voxels":  500000}
+  }
+}
