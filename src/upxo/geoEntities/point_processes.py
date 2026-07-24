@@ -49,7 +49,14 @@ except ImportError:
 
 @dataclass
 class Window:
-    """Spatial window for point process"""
+    """
+    Spatial rectangular window for point-process generation.
+
+    Attributes
+    ----------
+    xmin, xmax, ymin, ymax : float
+        Coordinate bounds of the rectangular sampling domain.
+    """
     xmin: float = 0.0
     xmax: float = 100.0
     ymin: float = 0.0
@@ -57,35 +64,79 @@ class Window:
     
     @property
     def width(self) -> float:
-        """Width of the bounding window (``xmax - xmin``)."""
+        """
+        Width of the bounding window.
+
+        Returns
+        -------
+        float
+            ``xmax - xmin``.
+        """
         return self.xmax - self.xmin
 
     @property
     def height(self) -> float:
-        """Height of the bounding window (``ymax - ymin``)."""
+        """
+        Height of the bounding window.
+
+        Returns
+        -------
+        float
+            ``ymax - ymin``.
+        """
         return self.ymax - self.ymin
 
     @property
     def area(self) -> float:
-        """Area of the bounding window (``width * height``)."""
+        """
+        Area of the bounding window.
+
+        Returns
+        -------
+        float
+            Product of ``width`` and ``height``.
+        """
         return self.width * self.height
     
     @classmethod
     def from_tuple(cls, bounds: Tuple[float, float, float, float]):
-        """Create from (xmin, xmax, ymin, ymax)"""
+        """
+        Create a window from tuple bounds.
+
+        Parameters
+        ----------
+        bounds : tuple of float
+            Bounds in ``(xmin, xmax, ymin, ymax)`` order.
+
+        Returns
+        -------
+        Window
+            Rectangular sampling window.
+        """
         return cls(xmin=bounds[0], xmax=bounds[1], ymin=bounds[2], ymax=bounds[3])
 
 
 class PointProcess(ABC):
-    """Abstract base class for point processes"""
+    """
+    Abstract base class for point processes.
+
+    Notes
+    -----
+    Subclasses implement ``generate`` and return point coordinates as a
+    ``pandas.DataFrame``.
+    """
     
     def __init__(self, 
                  window: Optional[Tuple[float, float, float, float]] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            window: (xmin, xmax, ymin, ymax) or None for (0,100,0,100)
-            seed: random seed for reproducibility
+        Parameters
+        ----------
+        window : tuple of float or Window, optional
+            Spatial bounds in ``(xmin, xmax, ymin, ymax)`` order, or an
+            existing ``Window`` object. ``None`` uses ``(0, 100, 0, 100)``.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         if window is None:
             window = (0, 100, 0, 100)
@@ -96,7 +147,14 @@ class PointProcess(ABC):
     
     @abstractmethod
     def generate(self) -> pd.DataFrame:
-        """Generate point pattern. Returns DataFrame with columns [x, y, ...]"""
+        """
+        Generate a point pattern.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Point coordinates with at least ``x`` and ``y`` columns.
+        """
         pass
 
     def calculate_k_function(self, points: pd.DataFrame, 
@@ -104,6 +162,21 @@ class PointProcess(ABC):
                              r_count: int = 50) -> Dict[str, np.ndarray]:
         """
         Calculates Ripley's K-function K(r) using PySAL's pointpats.K.
+
+        Parameters
+        ----------
+        points : pandas.DataFrame
+            Point coordinates with ``x`` and ``y`` columns.
+        r_max : float, optional
+            Maximum support radius.
+        r_count : int, optional
+            Number of support radii requested by the caller.
+
+        Returns
+        -------
+        dict
+            Dictionary containing support radii under ``'r'`` and K-function
+            values under ``'K_r'``.
         """
         if len(points) < 2:
             return {'r': np.array([0]), 'K_r': np.array([0])}
@@ -140,15 +213,29 @@ class PointProcess(ABC):
         Calculates the Pair Correlation Function g(r) by deriving it 
         numerically from the K-function obtained via pointpats.K.
         
-        Args:
-            points (pd.DataFrame): DataFrame with 'x', 'y' (and 'z' if 3D) columns.
-            r_max (float): Maximum radius (r) for the calculation.
-            r_count (int): Number of radii to sample between 0 and r_max.
-            dimension (int): The spatial dimension (2 or 3) of the pattern.
+        Parameters
+        ----------
+        points : pandas.DataFrame
+            DataFrame with ``x`` and ``y`` columns, and optionally ``z`` for
+            3D workflows.
+        r_max : float, optional
+            Maximum radius for the calculation.
+        r_count : int, optional
+            Number of radii to sample between zero and ``r_max``.
+        dimension : int, optional
+            Spatial dimension of the pattern. Supported values are ``2`` and
+            ``3``.
 
-        Returns:
-            Dict[str, np.ndarray]: Dictionary containing 'r_g' (radii for g(r)) 
-                                   and 'g_r' (the Pair Correlation function estimate).
+        Returns
+        -------
+        dict
+            Dictionary containing ``'r_g'`` radii and ``'g_r'`` pair
+            correlation estimates.
+
+        Raises
+        ------
+        ValueError
+            If ``dimension`` is not 2 or 3.
         """
         
         # 1. Calculate K(r) using the accurate pointpats method
@@ -179,7 +266,24 @@ class PointProcess(ABC):
         return {'r_g': r_g, 'g_r': g_r}
     
     def plot(self, points: pd.DataFrame, title: str = "Point Pattern", ax=None):
-        """Plot generated points"""
+        """
+        Plot generated points.
+
+        Parameters
+        ----------
+        points : pandas.DataFrame
+            Point coordinates with ``x`` and ``y`` columns.
+        title : str, optional
+            Plot title.
+        ax : matplotlib.axes.Axes, optional
+            Existing axes to plot into. If ``None``, a new figure and axes are
+            created.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            Axes containing the point pattern plot.
+        """
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 8))
         
@@ -197,6 +301,15 @@ class PoissonPointProcess(PointProcess):
     Homogeneous Poisson point process.
     
     Points are uniformly distributed; counts follow Poisson distribution.
+
+    Parameters
+    ----------
+    intensity : float, optional
+        Mean number of points per unit area.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
     """
     
     def __init__(self, 
@@ -204,16 +317,27 @@ class PoissonPointProcess(PointProcess):
                  window: Optional[Tuple] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            intensity: λ = mean number of points per unit area
-            window: spatial bounds
-            seed: random seed
+        Parameters
+        ----------
+        intensity : float, optional
+            Mean number of points per unit area.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         super().__init__(window, seed)
         self.intensity = intensity
     
     def generate(self) -> pd.DataFrame:
-        """Generate Poisson points"""
+        """
+        Generate homogeneous Poisson points.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Generated point coordinates with ``x`` and ``y`` columns.
+        """
         n_points = np.random.poisson(self.intensity * self.window.area)
         
         x = np.random.uniform(self.window.xmin, self.window.xmax, n_points)
@@ -225,6 +349,18 @@ class PoissonPointProcess(PointProcess):
 class InhomogeneousPoissonPointProcess(PointProcess):
     """
     Inhomogeneous Poisson point process with spatially varying intensity.
+
+    Parameters
+    ----------
+    intensity_func : callable
+        Callable accepting ``x`` and ``y`` arrays and returning local
+        intensity values.
+    max_intensity : float
+        Upper bound intensity used for thinning.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
     """
     
     def __init__(self,
@@ -233,18 +369,31 @@ class InhomogeneousPoissonPointProcess(PointProcess):
                  window: Optional[Tuple] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            intensity_func: callable(x, y) -> intensity at location
-            max_intensity: maximum intensity (for thinning)
-            window: spatial bounds
-            seed: random seed
+        Parameters
+        ----------
+        intensity_func : callable
+            Callable accepting ``x`` and ``y`` arrays and returning local
+            intensity values.
+        max_intensity : float
+            Upper bound intensity used for thinning.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         super().__init__(window, seed)
         self.intensity_func = intensity_func
         self.max_intensity = max_intensity
     
     def generate(self) -> pd.DataFrame:
-        """Generate inhomogeneous Poisson via thinning"""
+        """
+        Generate an inhomogeneous Poisson process by thinning.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Accepted point coordinates with ``x`` and ``y`` columns.
+        """
         # Generate homogeneous background
         n_background = np.random.poisson(self.max_intensity * self.window.area)
         x = np.random.uniform(self.window.xmin, self.window.xmax, n_background)
@@ -263,6 +412,19 @@ class PoissonClusterProcess(PointProcess):
     Poisson cluster process (Neyman-Scott).
     
     Parents follow Poisson; offspring cluster around parents.
+
+    Parameters
+    ----------
+    parent_intensity : float, optional
+        Intensity of the parent Poisson process.
+    n_offspring_per_parent : int, optional
+        Mean number of offspring per parent.
+    offspring_radius : float, optional
+        Standard deviation of offspring displacement around each parent.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
     """
     
     def __init__(self,
@@ -272,12 +434,18 @@ class PoissonClusterProcess(PointProcess):
                  window: Optional[Tuple] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            parent_intensity: intensity of parent Poisson
-            n_offspring_per_parent: mean number of offspring per parent
-            offspring_radius: std dev of offspring around parent
-            window: spatial bounds
-            seed: random seed
+        Parameters
+        ----------
+        parent_intensity : float, optional
+            Intensity of the parent Poisson process.
+        n_offspring_per_parent : int, optional
+            Mean number of offspring per parent.
+        offspring_radius : float, optional
+            Standard deviation of offspring displacement around each parent.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         super().__init__(window, seed)
         self.parent_intensity = parent_intensity
@@ -285,7 +453,14 @@ class PoissonClusterProcess(PointProcess):
         self.offspring_radius = offspring_radius
     
     def generate(self) -> pd.DataFrame:
-        """Generate cluster points"""
+        """
+        Generate clustered offspring points.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Generated offspring coordinates with ``x`` and ``y`` columns.
+        """
         n_parents = np.random.poisson(self.parent_intensity * self.window.area)
         
         parent_x = np.random.uniform(self.window.xmin, self.window.xmax, n_parents)
@@ -317,6 +492,18 @@ class MaternHardCore(PointProcess):
     
     Points repel each other: no two points within hard_core_radius.
     Generated via thinning of Poisson.
+
+    Parameters
+    ----------
+    intensity : float, optional
+        Target candidate intensity. Achieved intensity may be lower after
+        hard-core rejection.
+    hard_core_radius : float, optional
+        Minimum allowed distance between accepted points.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
     """
     
     def __init__(self,
@@ -325,18 +512,36 @@ class MaternHardCore(PointProcess):
                  window: Optional[Tuple] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            intensity: target intensity (achieved intensity may be lower)
-            hard_core_radius: minimum allowed distance between points
-            window: spatial bounds
-            seed: random seed
+        Parameters
+        ----------
+        intensity : float, optional
+            Target candidate intensity. Achieved intensity may be lower after
+            hard-core rejection.
+        hard_core_radius : float, optional
+            Minimum allowed distance between accepted points.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         super().__init__(window, seed)
         self.intensity = intensity
         self.hard_core_radius = hard_core_radius
     
 def generate(self) -> pd.DataFrame:
-        """Generate hard-core points via rejection sampling (optimized with KDTree)"""
+        """
+        Generate hard-core points by rejection sampling.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Accepted point coordinates with ``x`` and ``y`` columns.
+
+        Notes
+        -----
+        Candidate acceptance uses a KDTree nearest-neighbor check against
+        already accepted points.
+        """
         
         points_list = []
         
@@ -377,6 +582,19 @@ class ThomasClusterProcess(PointProcess):
     
     Offspring distributed normally around parent locations.
     Special case of Neyman-Scott.
+
+    Parameters
+    ----------
+    parent_intensity : float, optional
+        Intensity of the parent Poisson process.
+    mean_offspring : float, optional
+        Mean number of offspring per parent.
+    offspring_std : float, optional
+        Standard deviation of offspring displacement.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
     """
     
     def __init__(self,
@@ -386,12 +604,18 @@ class ThomasClusterProcess(PointProcess):
                  window: Optional[Tuple] = None,
                  seed: Optional[int] = None):
         """
-        Args:
-            parent_intensity: intensity of parent Poisson
-            mean_offspring: mean offspring per parent
-            offspring_std: standard deviation of offspring displacement
-            window: spatial bounds
-            seed: random seed
+        Parameters
+        ----------
+        parent_intensity : float, optional
+            Intensity of the parent Poisson process.
+        mean_offspring : float, optional
+            Mean number of offspring per parent.
+        offspring_std : float, optional
+            Standard deviation of offspring displacement.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
         """
         super().__init__(window, seed)
         self.parent_intensity = parent_intensity
@@ -399,7 +623,14 @@ class ThomasClusterProcess(PointProcess):
         self.offspring_std = offspring_std
     
     def generate(self) -> pd.DataFrame:
-        """Generate Thomas cluster points"""
+        """
+        Generate Thomas cluster points.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Generated offspring coordinates with ``x`` and ``y`` columns.
+        """
         n_parents = np.random.poisson(self.parent_intensity * self.window.area)
         
         parent_x = np.random.uniform(self.window.xmin, self.window.xmax, n_parents)
@@ -435,6 +666,21 @@ class StraussProcess(PointProcess):
     
     Inhibitory: points less likely to appear near existing points.
     Interaction range and strength parameterized.
+
+    Parameters
+    ----------
+    beta : float, optional
+        Intensity parameter.
+    gamma : float, optional
+        Interaction parameter. Values between 0 and 1 produce inhibition.
+    interaction_range : float, optional
+        Radius within which pair interaction is counted.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    seed : int, optional
+        Random seed for reproducibility.
+    max_iterations : int, optional
+        Number of MCMC proposal iterations.
     """
     
     def __init__(self,
@@ -445,13 +691,20 @@ class StraussProcess(PointProcess):
                  seed: Optional[int] = None,
                  max_iterations: int = 1000):
         """
-        Args:
-            beta: intensity parameter
-            gamma: interaction parameter (0 < gamma < 1 for inhibition)
-            interaction_range: radius within which interaction occurs
-            window: spatial bounds
-            seed: random seed
-            max_iterations: MCMC iterations
+        Parameters
+        ----------
+        beta : float, optional
+            Intensity parameter.
+        gamma : float, optional
+            Interaction parameter. Values between 0 and 1 produce inhibition.
+        interaction_range : float, optional
+            Radius within which pair interaction is counted.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        seed : int, optional
+            Random seed for reproducibility.
+        max_iterations : int, optional
+            Number of MCMC proposal iterations.
         """
         super().__init__(window, seed)
         self.beta = beta
@@ -460,7 +713,21 @@ class StraussProcess(PointProcess):
         self.max_iterations = max_iterations
     
     def _count_neighbors(self, x: float, y: float, points: List) -> int:
-        """Count points within interaction range"""
+        """
+        Count points within interaction range.
+
+        Parameters
+        ----------
+        x, y : float
+            Query-point coordinates.
+        points : list
+            Existing point coordinates.
+
+        Returns
+        -------
+        int
+            Number of existing points inside ``interaction_range``.
+        """
         count = 0
         for px, py in points:
             if np.sqrt((x - px)**2 + (y - py)**2) <= self.interaction_range:
@@ -468,7 +735,14 @@ class StraussProcess(PointProcess):
         return count
     
     def generate(self) -> pd.DataFrame:
-        """Generate Strauss points via MCMC"""
+        """
+        Generate Strauss points by MCMC proposal sampling.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Generated point coordinates with ``x`` and ``y`` columns.
+        """
         points = []
         
         for _ in range(self.max_iterations):
@@ -498,6 +772,16 @@ class StraussProcess(PointProcess):
 class RegularLattice(PointProcess):
     """
     Regular lattice (grid) of points.
+
+    Parameters
+    ----------
+    spacing : float, optional
+        Distance between neighboring grid points.
+    window : tuple or Window, optional
+        Spatial sampling bounds.
+    jitter : float, optional
+        Standard deviation of Gaussian coordinate perturbation. A value of
+        zero disables jitter.
     """
     
     def __init__(self,
@@ -505,17 +789,29 @@ class RegularLattice(PointProcess):
                  window: Optional[Tuple] = None,
                  jitter: float = 0.0):
         """
-        Args:
-            spacing: distance between grid points
-            window: spatial bounds
-            jitter: random displacement std dev (0 = no jitter)
+        Parameters
+        ----------
+        spacing : float, optional
+            Distance between neighboring grid points.
+        window : tuple or Window, optional
+            Spatial sampling bounds.
+        jitter : float, optional
+            Standard deviation of Gaussian coordinate perturbation. A value of
+            zero disables jitter.
         """
         super().__init__(window, seed=None)
         self.spacing = spacing
         self.jitter = jitter
     
     def generate(self) -> pd.DataFrame:
-        """Generate regular lattice"""
+        """
+        Generate regular lattice points.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Lattice point coordinates with ``x`` and ``y`` columns.
+        """
         x = np.arange(self.window.xmin, self.window.xmax + self.spacing, self.spacing)
         y = np.arange(self.window.ymin, self.window.ymax + self.spacing, self.spacing)
         
@@ -532,7 +828,21 @@ class RegularLattice(PointProcess):
 
 # Convenience functions
 def compare_processes(window: Tuple = (0, 100, 0, 100), seed: int = 42):
-    """Generate and plot comparison of different processes"""
+    """
+    Generate and plot a comparison of different point processes.
+
+    Parameters
+    ----------
+    window : tuple, optional
+        Spatial bounds in ``(xmin, xmax, ymin, ymax)`` order.
+    seed : int, optional
+        Random seed used for stochastic processes.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure containing process comparison subplots.
+    """
     processes = [
         ('Poisson', PoissonPointProcess(intensity=0.01, window=window, seed=seed)),
         ('Cluster', PoissonClusterProcess(parent_intensity=0.005, window=window, seed=seed)),
@@ -550,4 +860,3 @@ def compare_processes(window: Tuple = (0, 100, 0, 100), seed: int = 42):
     
     plt.tight_layout()
     return fig
-
