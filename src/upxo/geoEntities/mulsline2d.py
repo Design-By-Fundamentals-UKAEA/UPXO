@@ -125,6 +125,17 @@ class MSline2d():
     A connected chain of :class:`~upxo.geoEntities.sline2d.Sline2d` line
     segments sharing end-nodes. Supports open and closed topologies.
 
+    Attributes
+    ----------
+    lines : list
+        Constituent ``Sline2d`` segments.
+    nodes : list
+        Ordered endpoint nodes along the polyline.
+    features : dict
+        Feature metadata associated with the polyline.
+    closed : bool
+        Whether the polyline is closed.
+
     Examples
     --------
     .. code-block:: python
@@ -176,6 +187,11 @@ class MSline2d():
     def __iter__(self):
         """
         Return an iterable of the line segments in self.
+
+        Returns
+        -------
+        iterator
+            Iterator over ``self.lines``.
 
         Examples
         --------
@@ -392,7 +408,14 @@ class MSline2d():
 
     @property
     def nlines(self):
-        """Return number of lines."""
+        """
+        Return number of lines.
+
+        Returns
+        -------
+        int
+            Number of constituent line segments.
+        """
         return len(self.lines)
 
     @property
@@ -445,7 +468,14 @@ class MSline2d():
 
     @property
     def nnodes(self):
-        """Return number of lines."""
+        """
+        Return number of polyline nodes.
+
+        Returns
+        -------
+        int
+            Node count, excluding the duplicate closing node when closed.
+        """
         return len(self.nodes[:-1]) if self.closed else len(self.nodes)
 
     @property
@@ -488,12 +518,24 @@ class MSline2d():
     def gradients(self):
         """
         Return gradient of every line.
+
+        Returns
+        -------
+        list
+            Gradient value for each constituent line.
         """
         return [line.gradient for line in self.lines]
 
     @property
     def get_nodes(self):
-        """Return unique list of nodes in the multi-straight-line object."""
+        """
+        Return unique nodes in the multi-straight-line object.
+
+        Returns
+        -------
+        numpy.ndarray
+            Unique node coordinate rows.
+        """
         nodes = [[line.x0, line.y0] for line in self.lines]
         nodes += [[line.x1, line.y1] for line in self.lines]
         return np.unique(nodes, axis=0)
@@ -537,7 +579,14 @@ class MSline2d():
 
     @property
     def line_ids(self):
-        """Return memory id of each line."""
+        """
+        Return memory id of each line.
+
+        Returns
+        -------
+        list of int
+            Python ``id`` values for all constituent lines.
+        """
         return [id(line) for line in self.lines]
 
     def flip(self, saa=True, throw=False):
@@ -668,6 +717,16 @@ class MSline2d():
         """
         From a list of multisline2d objects, multislines2d, find the ones which
         come spatially immediately after self.
+
+        Parameters
+        ----------
+        multislines2d : list of MSline2d
+            Candidate successor polylines.
+
+        Returns
+        -------
+        list
+            ``do_i_precede`` results for each candidate.
         """
         precedes = []
         for msl in multislines2d:
@@ -755,6 +814,16 @@ class MSline2d():
         """
         Close the self multi-straight line object.
 
+        Parameters
+        ----------
+        reclose : bool, optional
+            If ``True``, append a closing line even when already closed.
+
+        Returns
+        -------
+        None
+            Updates ``self.lines`` in place.
+
         Examples
         --------
         a.
@@ -772,7 +841,14 @@ class MSline2d():
             self.lines.append(sl2d(ll.x1, ll.y1, fl.x0, fl.y0))
 
     def unclose(self):
-        """Remove the closing line."""
+        """
+        Remove the closing line.
+
+        Returns
+        -------
+        None
+            Deletes the last line from ``self.lines``.
+        """
         del self.lines[-1]
 
     def distances_nodes(self, points):
@@ -1520,16 +1596,24 @@ class ring2d():
         self.closed = True
 
     def connectivity0(self, flip_if_possible=True):
-        '''
+        """
         Assess closure of 1st & last segment with option to close if possible.
 
-        Return
-        ------
-        closed: True, if closd or has been closed.
-        last_seg_flipped: True, if seg was originally found open but closed.
-        flip_possible: Whether flipped or not, if True, indicates that
-            the segments can be closed between first and last ones.
-        '''
+        Parameters
+        ----------
+        flip_if_possible : bool, optional
+            Whether to flip the last segment when doing so would close the
+            ring.
+
+        Returns
+        -------
+        closed : bool
+            ``True`` if the ring is already closed or has been closed.
+        last_seg_flipped : bool
+            ``True`` if the last segment was flipped to achieve closure.
+        flip_possible : bool
+            ``True`` when closure is possible by flipping the last segment.
+        """
         closed, last_seg_flipped, flip_possible = False, False, False
         if self.segments[0].nodes[0].eq_fast(self.segments[-1].nodes[-1])[0]:
             closed = True
@@ -1541,9 +1625,14 @@ class ring2d():
         return closed, last_seg_flipped, flip_possible
 
     def connectivity1(self):
-        '''
+        """
         Assess closure of all intermediate segments.
-        '''
+
+        Returns
+        -------
+        None
+            Updates ``self.conn1`` with pairwise segment-continuity flags.
+        """
         self.conn1 = {}
         for i in range(self.nsegs):
             if i < self.nsegs-1:
@@ -1783,15 +1872,16 @@ class ring2d():
         From list of multisline2d, multislines2d, do all (i+1)^th multisline2d
         follow i^th multisline2d? with or without the need for flips.
 
-        Return
-        ------
-        continuity: final result, whethwr all make a chain or not, irrespective
-            of the need for flip.
-        flip_needed: True if any of the multisline2d in the list neede to be
-            flipped to enure spatial continuity. The actual e,ements needing
-            flips can be found in second element opf every
-            subliest in i_precede_chain.
-        i_precede_chain: list of do_i_precede results for every i:i+1 pair
+        Returns
+        -------
+        continuity : bool
+            ``True`` when all segments form a chain, irrespective of whether
+            flips are needed.
+        flip_needed : bool
+            ``True`` if any multi-line object needs flipping to ensure spatial
+            continuity.
+        i_precede_chain : list
+            ``do_i_precede`` results for every ``i:i+1`` pair.
         """
         i_precede_chain = []
         for i in range(len(self.segments)-1):
