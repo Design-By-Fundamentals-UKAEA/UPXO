@@ -88,27 +88,65 @@ class Sline3d_leanest():
     __slots__ = ('x0', 'y0', 'z0', 'x1', 'y1', 'z1')
 
     def __init__(self, x0=0, y0=0, z0=0, x1=1, y1=0, z1=0):
-        """Initialise with six scalar endpoint coordinates."""
+        """Initialise with six scalar endpoint coordinates.
+
+        Parameters
+        ----------
+        x0, y0, z0 : float, optional
+            Start-point coordinates.
+        x1, y1, z1 : float, optional
+            End-point coordinates.
+        """
         self.x0, self.y0, self.z0 = x0, y0, z0
         self.x1, self.y1, self.z1 = x1, y1, z1
 
     def __repr__(self):
-        """Return a compact ``UPXO-sl3d-lean (x0,y0,z0)-(x1,y1,z1)`` string."""
+        """Return a compact line summary string.
+
+        Returns
+        -------
+        str
+            ``UPXO-sl3d-lean (x0,y0,z0)-(x1,y1,z1)`` summary.
+        """
         return f'UPXO-sl3d-lean ({self.x0},{self.y0},{self.z0})-({self.x1},{self.y1},{self.z1})'
 
     def __iter__(self):
-        """Iterate over the two endpoint coordinate tuples."""
+        """Iterate over the two endpoint coordinate tuples.
+
+        Returns
+        -------
+        iterator
+            Iterator over ``(x0, y0, z0)`` and ``(x1, y1, z1)``.
+        """
         return (i for i in ((self.x0, self.y0, self.z0),
                             (self.x1, self.y1, self.z1)))
 
     def __getitem__(self, index):
-        """Index the line: 0 → start point, 1 → end point."""
+        """Return an endpoint by index.
+
+        Parameters
+        ----------
+        index : int
+            Endpoint index. ``0`` returns the start point and ``1`` returns
+            the end point.
+
+        Returns
+        -------
+        tuple
+            Endpoint coordinate tuple.
+        """
         return ((self.x0, self.y0, self.z0),
                 (self.x1, self.y1, self.z1))[index]
 
     @property
     def length(self):
-        """Euclidean length of the line segment."""
+        """Euclidean length of the line segment.
+
+        Returns
+        -------
+        float
+            Segment length.
+        """
         return math.sqrt((self.x1-self.x0)**2+(self.y1-self.y0)**2+(self.z1-self.z0)**2)
 
 
@@ -164,16 +202,40 @@ class Sline3d():
             self.x1, self.y1, self.z1 = pntb.x, pntb.y, pnta.z
 
     def __repr__(self):
-        """Return ``UPXO-sl3d (x0,y0,z0)-(x1,y1,z1). <id>`` summary string."""
+        """Return a concise line summary string.
+
+        Returns
+        -------
+        str
+            ``UPXO-sl3d (x0,y0,z0)-(x1,y1,z1). <id>`` summary.
+        """
         return f'UPXO-sl3d ({self.x0},{self.y0},{self.z0})-({self.x1},{self.y1},{self.z1}). {id(self)}'
 
     def __iter__(self):
-        """Iterate over the two endpoint coordinate tuples."""
+        """Iterate over the two endpoint coordinate tuples.
+
+        Returns
+        -------
+        iterator
+            Iterator over ``(x0, y0, z0)`` and ``(x1, y1, z1)``.
+        """
         return (i for i in ((self.x0, self.y0, self.z0),
                             (self.x1, self.y1, self.z1)))
 
     def __getitem__(self, index):
-        """Index the line: 0 → start point, 1 → end point."""
+        """Return an endpoint by index.
+
+        Parameters
+        ----------
+        index : int
+            Endpoint index. ``0`` returns the start point and ``1`` returns
+            the end point.
+
+        Returns
+        -------
+        tuple
+            Endpoint coordinate tuple.
+        """
         return ((self.x0, self.y0, self.z0),
                 (self.x1, self.y1, self.z1))[index]
 
@@ -194,11 +256,34 @@ class Sline3d():
         return [length == e.length for e in lines]
 
     def __ne__(self, lines):
-        """Return per-line inequality with ``self``."""
+        """Return per-line inequality with ``self``.
+
+        Parameters
+        ----------
+        lines : iterable of Sline3d
+            Lines to compare against ``self``.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where the corresponding equality comparison is false.
+        """
         return [not eeq for eeq in self == lines]
 
     def __lt__(self, lines):
-        """Return per-line ``self.length < other.length`` comparisons."""
+        """Return per-line ``self.length < other.length`` comparisons.
+
+        Parameters
+        ----------
+        lines : iterable of float
+            Length values or comparable objects used by the existing
+            implementation.
+
+        Returns
+        -------
+        list of bool
+            Result of comparing ``self.length`` with each supplied item.
+        """
         length = self.length
         return [length < l for l in lines]
 
@@ -255,7 +340,20 @@ class Sline3d():
 
     @classmethod
     def by_vector(cls, point, xyproj):
-        """Construct from an endpoint and a direction vector. Not yet implemented."""
+        """Construct from an endpoint and a direction vector.
+
+        Parameters
+        ----------
+        point : Point3d or array-like
+            Endpoint through which the line should pass.
+        xyproj : array-like
+            Direction or projected vector specification.
+
+        Raises
+        ------
+        NotImplementedError
+            This constructor is not yet implemented.
+        """
         raise NotImplementedError("by_vector is not yet implemented.")
 
     @property
@@ -475,17 +573,35 @@ class Sline3d():
 
     @property
     def coord_i(self):
-        """Start coordinate as ``[x0, y0, z0]``."""
+        """Start coordinate.
+
+        Returns
+        -------
+        list of float
+            ``[x0, y0, z0]``.
+        """
         return [self.x0, self.y0, self.z0]
 
     @property
     def coord_j(self):
-        """End coordinate as ``[x1, y1, z1]``."""
+        """End coordinate.
+
+        Returns
+        -------
+        list of float
+            ``[x1, y1, z1]``.
+        """
         return [self.x1, self.y1, self.z1]
 
     @property
     def points(self):
-        """Return ``[Point3d(i), Point3d(mid), Point3d(j)]``."""
+        """Return endpoint and midpoint objects.
+
+        Returns
+        -------
+        list of Point3d
+            ``[Point3d(i), Point3d(mid), Point3d(j)]``.
+        """
         from upxo.geoEntities.point3d import Point3d
         mp = self.mid
         return [Point3d(self.x0, self.y0, self.z0),
@@ -521,17 +637,45 @@ class Sline3d():
         return is_endpoint
 
     def invert(self):
-        """Swap start and end endpoints in place."""
+        """Swap start and end endpoints in place.
+
+        Returns
+        -------
+        None
+            The line is modified in place.
+        """
         ends = self.coord_list
         self.x0, self.y0, self.z0 = ends[1]
         self.x1, self.y1, self.z1 = ends[0]
 
     def move_i(self, point):
-        """Move the start point to ``point`` in place."""
+        """Move the start point to ``point`` in place.
+
+        Parameters
+        ----------
+        point : array-like, length 3
+            New start coordinate.
+
+        Returns
+        -------
+        None
+            The line is modified in place.
+        """
         self.x0, self.y0, self.z0 = point
 
     def move_j(self, point):
-        """Move the end point to ``point`` in place."""
+        """Move the end point to ``point`` in place.
+
+        Parameters
+        ----------
+        point : array-like, length 3
+            New end coordinate.
+
+        Returns
+        -------
+        None
+            The line is modified in place.
+        """
         self.x1, self.y1, self.z1 = point
 
     def distance_to_points(self, points=None, *, ref='all'):
