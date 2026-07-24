@@ -107,9 +107,24 @@ from upxo.geoEntities.point3d import Point3d
 NUMBERS, ITERABLES = dth.dt.NUMBERS, dth.dt.ITERABLES
 
 class _coord_():
+    """
+    Minimal coordinate holder used for lightweight internal bookkeeping.
+
+    Parameters
+    ----------
+    x, y, z : float
+        Raw coordinate values to store on the object.
+    """
     __slots__ = ('x', 'y', 'z')
     def __init__(self, x, y, z):
-        """Store raw 3D coordinate values in ``x``, ``y``, ``z``."""
+        """
+        Store raw 3D coordinate values.
+
+        Parameters
+        ----------
+        x, y, z : float
+            Coordinate values assigned to the matching attributes.
+        """
         self.x, self.y, self.z = x, y, z
 
 class p2d_leanest():
@@ -364,7 +379,14 @@ class Point2d():
         self.plane = plane
 
     def __repr__(self):
-        """Instance object string representation."""
+        """
+        Return a developer-readable point representation.
+
+        Returns
+        -------
+        str
+            Representation containing the current ``x`` and ``y`` values.
+        """
         return f"uxpo-p2d ({self.x},{self.y})"
 
     def __eq__(self, plist):
@@ -1571,7 +1593,24 @@ class Point2d():
 
     @staticmethod
     def val_point_and_get_coord(point):
-        """Validate a single point specification and return its (x, y) coordinates."""
+        """
+        Validate a single point specification and return coordinates.
+
+        Parameters
+        ----------
+        point : Point2d, p2d_leanest, list, or tuple
+            Point-like object or coordinate specification.
+
+        Returns
+        -------
+        tuple
+            ``(x, y)`` coordinates extracted from ``point``.
+
+        Raises
+        ------
+        ValueError
+            If ``point`` is missing or has an unsupported specification.
+        """
         _ = False
         if not point:
             raise ValueError('Point OR coord not provided.')
@@ -1596,7 +1635,25 @@ class Point2d():
 
     @staticmethod
     def val_points_and_get_coords(points):
-        """Validate a collection of point specifications and return coordinate arrays (x, y)."""
+        """
+        Validate point specifications and return coordinate arrays.
+
+        Parameters
+        ----------
+        points : object or iterable
+            Point-like object, coordinate specification, or homogeneous
+            collection of point-like objects.
+
+        Returns
+        -------
+        tuple
+            ``(target_loc_x, target_loc_y)`` arrays or scalar coordinates.
+
+        Raises
+        ------
+        ValueError
+            If inputs are missing, mixed-type, or unsupported.
+        """
         if not points:
             raise ValueError('Points OR coords not provided.')
         if type(points) in dth.dt.ITERABLES:
