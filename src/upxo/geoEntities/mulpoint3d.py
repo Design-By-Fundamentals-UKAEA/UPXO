@@ -58,6 +58,8 @@ class MPoint3d():
         Spatial index, populated on demand by :meth:`maketree`.
     pdist : callable
         Reference to ``scipy.spatial.distance.pdist`` for pairwise distances.
+    metadata : dict
+        User/provenance metadata carried with this point cloud.
 
     Standard coordinate format
     --------------------------
@@ -68,12 +70,230 @@ class MPoint3d():
                            [2, 3, 3],
                            [4, 5, 6]])
     """
-    __slots__ = ('coords', 'tree', 'pdist')
+    __slots__ = ('coords', 'tree', 'pdist', 'metadata')
 
-    def __init__(self, coords=None):
+    def __init__(self, coords=None, metadata=None):
         """Initialise from an ``(N, 3)`` numpy array of 3D coordinates."""
-        self.coords = coords
+        self.coords = self._coerce_coords(coords)
+        self.tree = None
         self.pdist = pdist
+        self.metadata = {} if metadata is None else dict(metadata)
+
+    @staticmethod
+    def _coerce_coords(coords):
+        """Return ``coords`` as a numeric contiguous ``(N, 3)`` array."""
+        if coords is None:
+            return np.empty((0, 3), dtype=float)
+
+        coords = np.asarray(coords, dtype=float)
+        if coords.ndim == 1:
+            if coords.size == 0:
+                return np.empty((0, 3), dtype=float)
+            if coords.size != 3:
+                raise ValueError('coords must have shape (N, 3).')
+            coords = coords.reshape(1, 3)
+        elif coords.ndim != 2 or coords.shape[1] != 3:
+            raise ValueError('coords must have shape (N, 3).')
+
+        return np.ascontiguousarray(coords)
+
+    @staticmethod
+    def _coerce_bounds(bounds):
+        """Return axis-aligned RVE bounds as a numeric ``(3, 2)`` array."""
+        bounds = np.asarray(bounds, dtype=float)
+        if bounds.shape != (3, 2):
+            raise ValueError('bounds must have shape (3, 2).')
+        if not np.all(np.isfinite(bounds)):
+            raise ValueError('bounds must contain only finite values.')
+        if np.any(bounds[:, 1] <= bounds[:, 0]):
+            raise ValueError('Each bounds row must satisfy min < max.')
+        return np.ascontiguousarray(bounds)
+
+    @staticmethod
+    def _coerce_boundary(boundary):
+        """Return canonical boundary label and per-axis periodic flags."""
+        boundary = str(boundary).strip().lower()
+        if boundary in ('aperiodic', 'nonperiodic', 'non-periodic', 'open'):
+            return 'aperiodic', (False, False, False)
+        if boundary == 'periodic':
+            return 'periodic', (True, True, True)
+        raise ValueError("boundary must be either 'aperiodic' or 'periodic'.")
+
+    @staticmethod
+    def _effective_bounds(bounds, face_clearance):
+        """Return the bounds available after applying face clearance."""
+        face_clearance = float(face_clearance)
+        if not np.isfinite(face_clearance):
+            raise ValueError('face_clearance must be finite.')
+        if face_clearance < 0:
+            raise ValueError('face_clearance must be non-negative.')
+
+        lengths = bounds[:, 1] - bounds[:, 0]
+        if np.any(2.0*face_clearance >= lengths):
+            raise ValueError(
+                'face_clearance must be smaller than half of every RVE length.'
+            )
+
+        effective = bounds.copy()
+        effective[:, 0] += face_clearance
+        effective[:, 1] -= face_clearance
+        return effective
+
+    @staticmethod
+    def _seed_metadata(generator_type, boundary, periodic, bounds,
+                       effective_bounds, face_clearance, extra=None):
+        """Return standard Voronoi-seed provenance metadata."""
+        seed_metadata = {
+            'seed_role': 'voronoi_generator',
+            'generator_type': generator_type,
+            'boundary': boundary,
+            'periodic': periodic,
+            'bounds': bounds.tolist(),
+            'effective_bounds': effective_bounds.tolist(),
+            'face_clearance': float(face_clearance),
+        }
+        if extra is not None:
+            seed_metadata.update(dict(extra))
+        return seed_metadata
+
+    @staticmethod
+    def _points_in_bounds(coords, bounds):
+        """Return mask for coordinates inside closed axis-aligned bounds."""
+        coords = np.asarray(coords, dtype=float)
+        return np.all((coords >= bounds[:, 0]) & (coords <= bounds[:, 1]),
+                      axis=1)
+
+    @staticmethod
+    def _wrap_coords_to_bounds(coords, bounds):
+        """Wrap coordinates into an axis-aligned periodic box."""
+        lengths = bounds[:, 1] - bounds[:, 0]
+        return ((coords - bounds[:, 0]) % lengths) + bounds[:, 0]
+
+    @staticmethod
+    def _periodic_delta(coords, refs, bounds):
+        """Return minimum-image deltas from ``coords`` to ``refs``."""
+        delta = coords[:, None, :] - refs[None, :, :]
+        lengths = bounds[:, 1] - bounds[:, 0]
+        return delta - lengths*np.round(delta/lengths)
+
+    @classmethod
+    def _nearest_seed_indices(cls, points, seeds, bounds=None,
+                              periodic=False, batch_size=20000):
+        """Return nearest seed index for every point."""
+        points = np.asarray(points, dtype=float)
+        seeds = np.asarray(seeds, dtype=float)
+        nearest = np.empty(points.shape[0], dtype=int)
+        for start in range(0, points.shape[0], batch_size):
+            stop = min(start + batch_size, points.shape[0])
+            batch = points[start:stop]
+            if periodic:
+                delta = cls._periodic_delta(batch, seeds, bounds)
+            else:
+                delta = batch[:, None, :] - seeds[None, :, :]
+            nearest[start:stop] = np.argmin(np.einsum('ijk,ijk->ij',
+                                                       delta, delta),
+                                            axis=1)
+        return nearest
+
+    @staticmethod
+    def _apply_jitter(coords, jitter, rng, bounds, periodic):
+        """Apply bounded random jitter to generated lattice coordinates."""
+        jitter = float(jitter)
+        if jitter < 0:
+            raise ValueError('jitter must be non-negative.')
+        if jitter == 0 or coords.size == 0:
+            return coords
+        coords = coords + rng.uniform(-jitter, jitter, size=coords.shape)
+        if periodic:
+            return MPoint3d._wrap_coords_to_bounds(coords, bounds)
+        mask = MPoint3d._points_in_bounds(coords, bounds)
+        return coords[mask]
+
+    @staticmethod
+    def _select_points(coords, n, rng):
+        """Select exactly ``n`` points without replacement when requested."""
+        if n is None:
+            return coords
+        n = int(n)
+        if n < 1:
+            raise ValueError('n must be a positive integer.')
+        if coords.shape[0] < n:
+            raise ValueError(
+                f'Only {coords.shape[0]} points generated; requested {n}. '
+                'Use smaller spacing, larger bounds, or lower face_clearance.'
+            )
+        if coords.shape[0] == n:
+            return coords
+        selection = rng.choice(coords.shape[0], size=n, replace=False)
+        return coords[np.sort(selection)]
+
+    @staticmethod
+    def _estimate_lattice_spacing(bounds, n, lattice, ca_ratio):
+        """Estimate lattice spacing needed to generate roughly ``n`` points."""
+        n = int(n)
+        volume = np.prod(bounds[:, 1] - bounds[:, 0])
+        lattice = str(lattice).lower()
+        if lattice == 'bcc':
+            return (2.0*volume/n)**(1.0/3.0)
+        if lattice == 'fcc':
+            return (4.0*volume/n)**(1.0/3.0)
+        if lattice == 'hcp':
+            cell_factor = np.sqrt(3.0)*ca_ratio
+            return (2.0*volume/(n*cell_factor))**(1.0/3.0)
+        raise ValueError("lattice must be one of 'fcc', 'bcc', or 'hcp'.")
+
+    @staticmethod
+    def _generate_lattice_points(lattice, bounds, spacing, ca_ratio):
+        """Generate FCC, BCC, or HCP lattice points inside ``bounds``."""
+        lattice = str(lattice).strip().lower()
+        spacing = float(spacing)
+        if spacing <= 0 or not np.isfinite(spacing):
+            raise ValueError('spacing must be a positive finite value.')
+
+        lengths = bounds[:, 1] - bounds[:, 0]
+        if lattice in ('fcc', 'bcc'):
+            if lattice == 'fcc':
+                basis = np.array([[0.0, 0.0, 0.0],
+                                  [0.0, 0.5, 0.5],
+                                  [0.5, 0.0, 0.5],
+                                  [0.5, 0.5, 0.0]])
+            else:
+                basis = np.array([[0.0, 0.0, 0.0],
+                                  [0.5, 0.5, 0.5]])
+            shape = np.ceil(lengths/spacing).astype(int) + 1
+            i, j, k = np.meshgrid(np.arange(shape[0]),
+                                  np.arange(shape[1]),
+                                  np.arange(shape[2]),
+                                  indexing='ij')
+            cells = np.column_stack((i.ravel(), j.ravel(), k.ravel()))
+            coords = (bounds[:, 0] + cells[:, None, :]*spacing
+                      + basis[None, :, :]*spacing)
+            coords = coords.reshape(-1, 3)
+        elif lattice == 'hcp':
+            a = spacing
+            c = ca_ratio*a
+            a1 = np.array([a, 0.0, 0.0])
+            a2 = np.array([0.5*a, 0.5*np.sqrt(3.0)*a, 0.0])
+            a3 = np.array([0.0, 0.0, c])
+            basis = np.array([[0.0, 0.0, 0.0],
+                              [2.0/3.0, 1.0/3.0, 0.5]])
+            n1 = int(np.ceil(lengths[0]/a)) + 3
+            n2 = int(np.ceil(2.0*lengths[1]/(np.sqrt(3.0)*a))) + 3
+            n3 = int(np.ceil(lengths[2]/c)) + 2
+            coords = []
+            start = bounds[:, 0] - np.array([a, np.sqrt(3.0)*a, c])
+            for i in range(n1):
+                for j in range(n2):
+                    for k in range(n3):
+                        origin = start + i*a1 + j*a2 + k*a3
+                        for b in basis:
+                            coords.append(origin + b[0]*a1 + b[1]*a2
+                                          + b[2]*a3)
+            coords = np.asarray(coords, dtype=float)
+        else:
+            raise ValueError("lattice must be one of 'fcc', 'bcc', or 'hcp'.")
+
+        return coords[MPoint3d._points_in_bounds(coords, bounds)]
 
     def __repr__(self):
         """Return ``UPXO-mp3d. n=<N>.`` summary string."""
@@ -197,42 +417,34 @@ class MPoint3d():
         """
         if toadd is None:
             return
-        else:
-            if operation == 'add':
-                if type(toadd) in dth.dt.NUMBERS:
-                    self.coords += toadd
-                if type(toadd) in dth.dt.ITERABLES:
-                    if find_spec_of_points(toadd) == 'type-[1,2,3]':
-                        self.coords += np.array(toadd)
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3]]':
-                        self.coords += np.array(toadd[0])
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3],[4,5,6],[7,8,9]]':
-                        if len(toadd) == self.n:
-                            self.coords += np.array(toadd)
-                        else:
-                            raise ValueError('Invalid length of toadd.')
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3,4],[1,2,3,4],[1,2,3,4]]':
-                        if len(toadd[0]) == self.n:
-                            self.coords += np.array(toadd).T
-                        else:
-                            raise ValueError('Invalid length of toadd.')
-            elif operation == 'append':
-                if type(toadd) in dth.dt.ITERABLES:
-                    if find_spec_of_points(toadd) == 'type-[1,2,3]':
-                        self.coords = np.array(list(self.coords) + list(toadd))
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3]]':
-                        self.coords = np.array(list(self.coords) + list(toadd[0]))
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3],[4,5,6],[7,8,9]]':
-                        toadd = [list(ta) for ta in toadd]
-                        coords = [list(coord) for coord in self.coords]
-                        self.coords = np.array(coords+toadd)
-                    if find_spec_of_points(toadd) == 'type-[[1,2,3,4],[1,2,3,4],[1,2,3,4]]':
-                        toadd = [list(ta) for ta in np.array(toadd).T]
-                        coords = [list(coord) for coord in self.coords]
-                        self.coords += np.array(toadd).T
+
+        if operation not in ('add', 'append'):
+            raise ValueError("operation must be either 'add' or 'append'.")
+
+        if operation == 'add':
+            if type(toadd) in dth.dt.NUMBERS:
+                self.coords += toadd
+                self.tree = None
+                return
+
+            toadd = np.asarray(toadd, dtype=float)
+            if toadd.ndim == 1 and toadd.size == 3:
+                self.coords += toadd
+            elif toadd.ndim == 2 and toadd.shape == self.coords.shape:
+                self.coords += toadd
+            elif toadd.ndim == 2 and toadd.T.shape == self.coords.shape:
+                self.coords += toadd.T
+            else:
+                raise ValueError('Invalid shape of toadd for add operation.')
+            self.tree = None
+
+        elif operation == 'append':
+            toadd = self._coerce_coords(toadd)
+            self.coords = np.vstack((self.coords, toadd))
+            self.tree = None
 
     @classmethod
-    def from_coords(cls, point_coords):
+    def from_coords(cls, point_coords, metadata=None):
         """Instantiate from an ``(N, 3)`` array or list of coordinate triples.
 
         Parameters
@@ -254,10 +466,810 @@ class MPoint3d():
             MULPOINT3D = mp3d.from_coords(point_coords)
             print(MULPOINT3D.coords)
         """
-        return cls(coords=np.array(point_coords))
+        return cls(coords=np.array(point_coords), metadata=metadata)
 
     @classmethod
-    def from_x_y_z(cls, x, y, z):
+    def from_random_uniform(cls, bounds=((0, 1), (0, 1), (0, 1)), n=100,
+                            seed=None, boundary='aperiodic',
+                            face_clearance=0.0, metadata=None):
+        """Generate uniformly distributed random 3D Voronoi seed points.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            Axis-aligned RVE bounds as ``((xmin, xmax), (ymin, ymax),
+            (zmin, zmax))``. Default is the unit cube.
+        n : int, optional
+            Number of seed points to generate. Default is 100.
+        seed : int or None, optional
+            Random seed for reproducibility. Default is None.
+        boundary : {'aperiodic', 'periodic'}, optional
+            Intended downstream Voronoi boundary condition. The point
+            coordinates are generated the same way, but the metadata carries
+            periodic flags for tessellation code. Default is 'aperiodic'.
+        face_clearance : float, optional
+            Minimum Euclidean distance from every seed point to any RVE face.
+            For an axis-aligned box this is implemented by sampling within the
+            inner box obtained by offsetting all faces inward by this value.
+            Default is 0.0.
+        metadata : dict or None, optional
+            Extra metadata to merge into the generated seed metadata.
+
+        Returns
+        -------
+        MPoint3d
+            Seed point cloud with generation metadata attached.
+        """
+        n = int(n)
+        if n < 1:
+            raise ValueError('n must be a positive integer.')
+
+        bounds = cls._coerce_bounds(bounds)
+        boundary, periodic = cls._coerce_boundary(boundary)
+        effective_bounds = cls._effective_bounds(bounds, face_clearance)
+
+        rng = np.random.default_rng(seed)
+        lows = effective_bounds[:, 0]
+        highs = effective_bounds[:, 1]
+        coords = rng.uniform(lows, highs, size=(n, 3))
+
+        seed_metadata = cls._seed_metadata(
+            'random', boundary, periodic, bounds, effective_bounds,
+            face_clearance, extra={
+            'n_requested': n,
+            'n_generated': n,
+            'random_seed': seed,
+            })
+        if metadata is not None:
+            seed_metadata.update(dict(metadata))
+        return cls(coords=coords, metadata=seed_metadata)
+
+    @classmethod
+    def from_custom_seeds(cls, coords, bounds=None, boundary='aperiodic',
+                          face_clearance=0.0, enforce_bounds=True,
+                          metadata=None):
+        """Create Voronoi seed points from user-supplied coordinates.
+
+        Parameters
+        ----------
+        coords : array-like, shape (N, 3)
+            User-provided seed coordinates.
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds as ``((xmin, xmax), (ymin, ymax), (zmin, zmax))``.
+            If provided, the coordinates may be checked against the effective
+            bounds after applying ``face_clearance``.
+        boundary : {'aperiodic', 'periodic'}, optional
+            Boundary-condition label to store in seed metadata.
+        face_clearance : float, optional
+            Minimum distance expected between seeds and RVE faces. This is
+            used for metadata and, when ``bounds`` and ``enforce_bounds`` are
+            provided, for bounds validation.
+        enforce_bounds : bool, optional
+            If True, require all coordinates to lie within the effective
+            bounds.
+        metadata : dict, optional
+            Additional metadata merged into the generated seed metadata.
+
+        Returns
+        -------
+        MPoint3d
+            Point cloud containing the custom seed coordinates and provenance
+            metadata.
+
+        Raises
+        ------
+        ValueError
+            If ``face_clearance`` is non-zero without bounds, or if
+            ``enforce_bounds`` is True and coordinates fall outside the
+            effective bounds.
+        """
+        coords = cls._coerce_coords(coords)
+        boundary, periodic = cls._coerce_boundary(boundary)
+
+        if bounds is None:
+            if face_clearance != 0.0:
+                raise ValueError('bounds are required when face_clearance '
+                                 'is non-zero.')
+            seed_metadata = {
+                'seed_role': 'voronoi_generator',
+                'generator_type': 'custom',
+                'boundary': boundary,
+                'periodic': periodic,
+                'bounds': None,
+                'effective_bounds': None,
+                'face_clearance': float(face_clearance),
+                'n_generated': coords.shape[0],
+            }
+        else:
+            bounds = cls._coerce_bounds(bounds)
+            effective_bounds = cls._effective_bounds(bounds, face_clearance)
+            if enforce_bounds and not np.all(cls._points_in_bounds(
+                    coords, effective_bounds)):
+                raise ValueError('custom seed coordinates must lie inside '
+                                 'the effective bounds.')
+            seed_metadata = cls._seed_metadata(
+                'custom', boundary, periodic, bounds, effective_bounds,
+                face_clearance, extra={'n_generated': coords.shape[0]})
+
+        if metadata is not None:
+            seed_metadata.update(dict(metadata))
+        return cls(coords=coords, metadata=seed_metadata)
+
+    @classmethod
+    def from_lattice(cls, lattice, bounds=((0, 1), (0, 1), (0, 1)), n=None,
+                     spacing=None, seed=None, boundary='aperiodic',
+                     face_clearance=0.0, jitter=0.0,
+                     ca_ratio=np.sqrt(8.0/3.0), metadata=None):
+        """Generate FCC, BCC, or HCP Voronoi seed lattice points.
+
+        Parameters
+        ----------
+        lattice : {'fcc', 'bcc', 'hcp'}
+            Lattice family used to place candidate seed points.
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds as ``((xmin, xmax), (ymin, ymax), (zmin, zmax))``.
+        n : int, optional
+            Number of seed points to return. If provided with ``spacing=None``,
+            spacing is estimated and candidates are down-selected to exactly
+            ``n`` points.
+        spacing : float, optional
+            Lattice spacing. If omitted, ``n`` must be supplied.
+        seed : int or None, optional
+            Random seed used for down-selection and jitter.
+        boundary : {'aperiodic', 'periodic'}, optional
+            Boundary-condition label stored in metadata.
+        face_clearance : float, optional
+            Inward offset from every RVE face used to define the effective
+            lattice-generation bounds.
+        jitter : float, optional
+            Uniform random perturbation magnitude applied independently to
+            generated lattice coordinates.
+        ca_ratio : float, optional
+            HCP ``c/a`` ratio. Ignored for FCC and BCC.
+        metadata : dict, optional
+            Additional metadata merged into the generated seed metadata.
+
+        Returns
+        -------
+        MPoint3d
+            Lattice seed point cloud.
+
+        Raises
+        ------
+        ValueError
+            If neither ``spacing`` nor ``n`` is supplied, if spacing is
+            invalid, or if too few lattice candidates can be generated.
+        """
+        lattice = str(lattice).strip().lower()
+        bounds = cls._coerce_bounds(bounds)
+        boundary, periodic = cls._coerce_boundary(boundary)
+        effective_bounds = cls._effective_bounds(bounds, face_clearance)
+        rng = np.random.default_rng(seed)
+        spacing_requested = spacing
+        spacing_was_estimated = spacing is None
+
+        if spacing is None:
+            if n is None:
+                raise ValueError('Either spacing or n must be supplied.')
+            spacing = cls._estimate_lattice_spacing(effective_bounds, n,
+                                                    lattice, ca_ratio)
+        spacing = float(spacing)
+
+        candidate_coords = None
+        spacing_used = spacing
+        for attempt in range(16):
+            candidate_coords = cls._generate_lattice_points(
+                lattice, effective_bounds, spacing_used, ca_ratio)
+            candidate_coords = cls._apply_jitter(candidate_coords, jitter, rng,
+                                                 effective_bounds, periodic)
+            if n is None or candidate_coords.shape[0] >= int(n):
+                break
+            if not spacing_was_estimated:
+                break
+            spacing_used *= 0.90
+        else:
+            raise ValueError('Could not generate enough lattice points. '
+                             'Try smaller spacing or lower face_clearance.')
+
+        coords = cls._select_points(candidate_coords, n, rng)
+        seed_metadata = cls._seed_metadata(
+            lattice, boundary, periodic, bounds, effective_bounds,
+            face_clearance, extra={
+                'lattice': lattice,
+                'spacing_requested': spacing_requested,
+                'spacing_used': spacing_used,
+                'jitter': float(jitter),
+                'ca_ratio': float(ca_ratio),
+                'n_requested': None if n is None else int(n),
+                'n_candidates': int(candidate_coords.shape[0]),
+                'n_generated': int(coords.shape[0]),
+                'random_seed': seed,
+            })
+        if metadata is not None:
+            seed_metadata.update(dict(metadata))
+        return cls(coords=coords, metadata=seed_metadata)
+
+    @classmethod
+    def from_fcc_lattice(cls, **kwargs):
+        """Generate FCC lattice Voronoi seed points.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to :meth:`from_lattice`.
+
+        Returns
+        -------
+        MPoint3d
+            FCC lattice seed point cloud.
+        """
+        return cls.from_lattice('fcc', **kwargs)
+
+    @classmethod
+    def from_bcc_lattice(cls, **kwargs):
+        """Generate BCC lattice Voronoi seed points.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to :meth:`from_lattice`.
+
+        Returns
+        -------
+        MPoint3d
+            BCC lattice seed point cloud.
+        """
+        return cls.from_lattice('bcc', **kwargs)
+
+    @classmethod
+    def from_hcp_lattice(cls, **kwargs):
+        """Generate HCP lattice Voronoi seed points.
+
+        Parameters
+        ----------
+        **kwargs
+            Keyword arguments forwarded to :meth:`from_lattice`.
+
+        Returns
+        -------
+        MPoint3d
+            HCP lattice seed point cloud.
+        """
+        return cls.from_lattice('hcp', **kwargs)
+
+    @classmethod
+    def from_hard_core_random(cls, bounds=((0, 1), (0, 1), (0, 1)), n=100,
+                              min_distance=0.05, seed=None,
+                              boundary='aperiodic', face_clearance=0.0,
+                              max_attempts=100000, metadata=None):
+        """Generate random seeds with a minimum seed-to-seed distance.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds as ``((xmin, xmax), (ymin, ymax), (zmin, zmax))``.
+        n : int, optional
+            Number of accepted seed points to generate.
+        min_distance : float, optional
+            Minimum permitted Euclidean distance between any two seeds.
+        seed : int or None, optional
+            Random seed for reproducible rejection sampling.
+        boundary : {'aperiodic', 'periodic'}, optional
+            Boundary-condition label stored in metadata. Fully periodic
+            clouds use minimum-image distance checks.
+        face_clearance : float, optional
+            Inward offset from every RVE face used to define the effective
+            sampling bounds.
+        max_attempts : int, optional
+            Maximum number of candidate draws before failing.
+        metadata : dict, optional
+            Additional metadata merged into the generated seed metadata.
+
+        Returns
+        -------
+        MPoint3d
+            Hard-core random seed point cloud.
+
+        Raises
+        ------
+        ValueError
+            If inputs are invalid or if ``n`` seeds cannot be placed within
+            ``max_attempts``.
+        """
+        n = int(n)
+        if n < 1:
+            raise ValueError('n must be a positive integer.')
+        min_distance = float(min_distance)
+        if min_distance < 0 or not np.isfinite(min_distance):
+            raise ValueError('min_distance must be a non-negative finite '
+                             'value.')
+
+        bounds = cls._coerce_bounds(bounds)
+        boundary, periodic = cls._coerce_boundary(boundary)
+        effective_bounds = cls._effective_bounds(bounds, face_clearance)
+        rng = np.random.default_rng(seed)
+        max_attempts = int(max_attempts)
+        if max_attempts < n:
+            raise ValueError('max_attempts must be at least n.')
+
+        lows = effective_bounds[:, 0]
+        highs = effective_bounds[:, 1]
+        accepted = []
+        attempts = 0
+        min_distance_sq = min_distance*min_distance
+        while len(accepted) < n and attempts < max_attempts:
+            attempts += 1
+            candidate = rng.uniform(lows, highs, size=3)
+            if not accepted:
+                accepted.append(candidate)
+                continue
+            refs = np.asarray(accepted, dtype=float)
+            if periodic == (True, True, True):
+                delta = cls._periodic_delta(candidate.reshape(1, 3), refs,
+                                            effective_bounds)[0]
+            else:
+                delta = refs - candidate
+            if np.all(np.einsum('ij,ij->i', delta, delta) >=
+                      min_distance_sq):
+                accepted.append(candidate)
+
+        if len(accepted) < n:
+            raise ValueError(
+                f'Could only place {len(accepted)} hard-core points after '
+                f'{attempts} attempts. Reduce n, min_distance, or '
+                'face_clearance, or increase max_attempts.'
+            )
+
+        coords = np.asarray(accepted, dtype=float)
+        seed_metadata = cls._seed_metadata(
+            'hard_core', boundary, periodic, bounds, effective_bounds,
+            face_clearance, extra={
+                'n_requested': n,
+                'n_generated': int(coords.shape[0]),
+                'min_distance': min_distance,
+                'attempts': attempts,
+                'max_attempts': max_attempts,
+                'random_seed': seed,
+            })
+        if metadata is not None:
+            seed_metadata.update(dict(metadata))
+        return cls(coords=coords, metadata=seed_metadata)
+
+    @classmethod
+    def from_cvt(cls, bounds=((0, 1), (0, 1), (0, 1)), n=100, seed=None,
+                 boundary='aperiodic', face_clearance=0.0, iterations=20,
+                 samples_per_seed=40, batch_size=20000, metadata=None):
+        """Generate approximate centroidal Voronoi tessellation seed points.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds as ``((xmin, xmax), (ymin, ymax), (zmin, zmax))``.
+        n : int, optional
+            Number of seed points to generate.
+        seed : int or None, optional
+            Random seed for reproducible initialization and sampling.
+        boundary : {'aperiodic', 'periodic'}, optional
+            Boundary-condition label stored in metadata. Fully periodic clouds
+            use minimum-image assignments during Lloyd updates.
+        face_clearance : float, optional
+            Inward offset from every RVE face used to define the effective
+            sampling bounds.
+        iterations : int, optional
+            Number of Monte-Carlo Lloyd iterations.
+        samples_per_seed : int, optional
+            Number of random sample points per seed and iteration.
+        batch_size : int, optional
+            Batch size used for nearest-seed assignment.
+        metadata : dict, optional
+            Additional metadata merged into the generated seed metadata.
+
+        Returns
+        -------
+        MPoint3d
+            Approximate CVT seed point cloud.
+
+        Raises
+        ------
+        ValueError
+            If count, iteration, sampling, bounds, or batch parameters are
+            invalid.
+        """
+        n = int(n)
+        iterations = int(iterations)
+        samples_per_seed = int(samples_per_seed)
+        if n < 1:
+            raise ValueError('n must be a positive integer.')
+        if iterations < 0:
+            raise ValueError('iterations must be non-negative.')
+        if samples_per_seed < 1:
+            raise ValueError('samples_per_seed must be positive.')
+        batch_size = int(batch_size)
+        if batch_size < 1:
+            raise ValueError('batch_size must be positive.')
+
+        bounds = cls._coerce_bounds(bounds)
+        boundary, periodic = cls._coerce_boundary(boundary)
+        effective_bounds = cls._effective_bounds(bounds, face_clearance)
+        rng = np.random.default_rng(seed)
+        lows = effective_bounds[:, 0]
+        highs = effective_bounds[:, 1]
+        seeds = rng.uniform(lows, highs, size=(n, 3))
+        nsamples = n*samples_per_seed
+
+        for _ in range(iterations):
+            samples = rng.uniform(lows, highs, size=(nsamples, 3))
+            nearest = cls._nearest_seed_indices(
+                samples, seeds, bounds=effective_bounds,
+                periodic=periodic == (True, True, True),
+                batch_size=batch_size)
+            next_seeds = seeds.copy()
+            for idx in range(n):
+                owned = samples[nearest == idx]
+                if owned.size == 0:
+                    next_seeds[idx] = rng.uniform(lows, highs, size=3)
+                elif periodic == (True, True, True):
+                    delta = cls._periodic_delta(owned, seeds[idx:idx+1],
+                                                effective_bounds)[:, 0, :]
+                    next_seeds[idx] = seeds[idx] + delta.mean(axis=0)
+                else:
+                    next_seeds[idx] = owned.mean(axis=0)
+            if periodic == (True, True, True):
+                next_seeds = cls._wrap_coords_to_bounds(next_seeds,
+                                                        effective_bounds)
+            seeds = next_seeds
+
+        seed_metadata = cls._seed_metadata(
+            'cvt', boundary, periodic, bounds, effective_bounds,
+            face_clearance, extra={
+                'n_requested': n,
+                'n_generated': int(seeds.shape[0]),
+                'iterations': iterations,
+                'samples_per_seed': samples_per_seed,
+                'random_seed': seed,
+                'method': 'monte_carlo_lloyd',
+            })
+        if metadata is not None:
+            seed_metadata.update(dict(metadata))
+        return cls(coords=seeds, metadata=seed_metadata)
+
+    def _resolve_seed_bounds(self, bounds=None):
+        """Resolve RVE bounds from user input or seed metadata."""
+        if bounds is None:
+            bounds = self.metadata.get('bounds')
+        if bounds is None:
+            if self.n == 0:
+                raise ValueError('bounds are required for an empty seed cloud.')
+            mins = self.coords.min(axis=0)
+            maxs = self.coords.max(axis=0)
+            bounds = np.column_stack((mins, maxs))
+        return self._coerce_bounds(bounds)
+
+    def _resolve_periodic(self, periodic=None):
+        """Resolve periodic flags from user input or seed metadata."""
+        if periodic is None:
+            periodic = self.metadata.get('periodic', (False, False, False))
+        if isinstance(periodic, bool):
+            periodic = (periodic, periodic, periodic)
+        if len(periodic) != 3:
+            raise ValueError('periodic must be a bool or length-3 iterable.')
+        return tuple(bool(flag) for flag in periodic)
+
+    def nearest_neighbour_distances(self, bounds=None, periodic=None):
+        """Return nearest-neighbour distance for every seed point.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds used when periodic distances are requested. If omitted,
+            bounds are resolved from ``self.metadata['bounds']`` or from the
+            coordinate extents.
+        periodic : bool or iterable of bool, optional
+            Periodic boundary flags. If omitted, metadata is used.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Nearest-neighbour distance for each seed point.
+
+        Notes
+        -----
+        Periodic distances use the minimum-image convention inside ``bounds``.
+        A single-point cloud returns ``nan`` for that point.
+        """
+        if self.n == 0:
+            return np.empty(0, dtype=float)
+        if self.n == 1:
+            return np.full(1, np.nan, dtype=float)
+
+        periodic = self._resolve_periodic(periodic)
+        if periodic == (True, True, True):
+            bounds = self._resolve_seed_bounds(bounds)
+            delta = self._periodic_delta(self.coords, self.coords, bounds)
+            dist_sq = np.einsum('ijk,ijk->ij', delta, delta)
+            np.fill_diagonal(dist_sq, np.inf)
+            return np.sqrt(np.min(dist_sq, axis=1))
+
+        distances, _ = self.ckd_tree.query(self.coords, k=2)
+        return distances[:, 1]
+
+    def distances_to_rve_faces(self, bounds=None):
+        """Return distances to ``xmin, xmax, ymin, ymax, zmin, zmax`` faces.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds. If omitted, bounds are resolved from metadata or from
+            coordinate extents.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N, 6)
+            Distance from each seed to the six RVE faces, ordered as
+            ``xmin, xmax, ymin, ymax, zmin, zmax``.
+        """
+        bounds = self._resolve_seed_bounds(bounds)
+        return np.column_stack((
+            self.coords[:, 0] - bounds[0, 0],
+            bounds[0, 1] - self.coords[:, 0],
+            self.coords[:, 1] - bounds[1, 0],
+            bounds[1, 1] - self.coords[:, 1],
+            self.coords[:, 2] - bounds[2, 0],
+            bounds[2, 1] - self.coords[:, 2],
+        ))
+
+    def minimum_face_distances(self, bounds=None):
+        """Return minimum distance from each seed to any RVE face.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Minimum face distance for each seed.
+        """
+        if self.n == 0:
+            return np.empty(0, dtype=float)
+        return np.min(self.distances_to_rve_faces(bounds=bounds), axis=1)
+
+    def distances_to_rve_corners(self, bounds=None):
+        """Return distances from every seed to the 8 RVE corners.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N, 8)
+            Distances from each seed to all RVE corners.
+        """
+        bounds = self._resolve_seed_bounds(bounds)
+        corners = np.array([[x, y, z]
+                            for x in bounds[0]
+                            for y in bounds[1]
+                            for z in bounds[2]], dtype=float)
+        delta = self.coords[:, None, :] - corners[None, :, :]
+        return np.linalg.norm(delta, axis=2)
+
+    def minimum_corner_distances(self, bounds=None):
+        """Return minimum distance from each seed to any RVE corner.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Minimum corner distance for each seed.
+        """
+        if self.n == 0:
+            return np.empty(0, dtype=float)
+        return np.min(self.distances_to_rve_corners(bounds=bounds), axis=1)
+
+    def distances_to_rve_edges(self, bounds=None):
+        """Return distances from every seed to the 12 finite RVE edges.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N, 12)
+            Distances from each seed to the finite RVE edges.
+        """
+        bounds = self._resolve_seed_bounds(bounds)
+        x0, x1 = bounds[0]
+        y0, y1 = bounds[1]
+        z0, z1 = bounds[2]
+        edges = []
+        for y in (y0, y1):
+            for z in (z0, z1):
+                edges.append(([x0, y, z], [x1, y, z]))
+        for x in (x0, x1):
+            for z in (z0, z1):
+                edges.append(([x, y0, z], [x, y1, z]))
+        for x in (x0, x1):
+            for y in (y0, y1):
+                edges.append(([x, y, z0], [x, y, z1]))
+
+        distances = []
+        for start, end in edges:
+            start = np.asarray(start, dtype=float)
+            end = np.asarray(end, dtype=float)
+            direction = end - start
+            length_sq = np.dot(direction, direction)
+            t = np.dot(self.coords - start, direction)/length_sq
+            closest = start + np.clip(t, 0.0, 1.0)[:, None]*direction
+            distances.append(np.linalg.norm(self.coords - closest, axis=1))
+        return np.column_stack(distances)
+
+    def minimum_edge_distances(self, bounds=None):
+        """Return minimum distance from each seed to any RVE edge.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Minimum edge distance for each seed.
+        """
+        if self.n == 0:
+            return np.empty(0, dtype=float)
+        return np.min(self.distances_to_rve_edges(bounds=bounds), axis=1)
+
+    def boundary_zone_counts(self, bounds=None, threshold=None):
+        """Count seeds close to no faces, one face, two faces, or three faces.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds.
+        threshold : float, optional
+            Distance threshold used to classify a seed as near a face. If
+            omitted, ``self.metadata['face_clearance']`` is used when present.
+
+        Returns
+        -------
+        dict
+            Counts for ``interior_zone``, ``face_zone``, ``edge_zone``, and
+            ``corner_zone`` together with the applied threshold.
+
+        Notes
+        -----
+        This directly exposes the different practical effects of a face
+        clearance near RVE faces, edges, and corners.
+        """
+        if threshold is None:
+            threshold = self.metadata.get('face_clearance', 0.0)
+        threshold = float(threshold)
+        if threshold < 0.0:
+            raise ValueError('threshold must be non-negative.')
+        near_faces = self.distances_to_rve_faces(bounds=bounds) <= threshold
+        n_near_faces = near_faces.sum(axis=1)
+        return {
+            'interior_zone': int(np.sum(n_near_faces == 0)),
+            'face_zone': int(np.sum(n_near_faces == 1)),
+            'edge_zone': int(np.sum(n_near_faces == 2)),
+            'corner_zone': int(np.sum(n_near_faces >= 3)),
+            'threshold': threshold,
+        }
+
+    def seed_quality_summary(self, bounds=None, periodic=None,
+                             min_distance=None, face_clearance=None):
+        """Return compact seed-cloud QA statistics as a dictionary.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds used for boundary-distance diagnostics.
+        periodic : bool or iterable of bool, optional
+            Periodic boundary flags used for nearest-neighbour distances.
+        min_distance : float, optional
+            Minimum seed-to-seed distance to check.
+        face_clearance : float, optional
+            Minimum distance from seeds to RVE faces to check. If omitted,
+            metadata is used when available.
+
+        Returns
+        -------
+        dict
+            Summary containing nearest-neighbour statistics, face/edge/corner
+            distances, zone counts, and violation counts.
+        """
+        bounds = self._resolve_seed_bounds(bounds)
+        periodic = self._resolve_periodic(periodic)
+        if face_clearance is None:
+            face_clearance = self.metadata.get('face_clearance', 0.0)
+        face_clearance = float(face_clearance)
+
+        nn = self.nearest_neighbour_distances(bounds=bounds,
+                                              periodic=periodic)
+        min_face = self.minimum_face_distances(bounds=bounds)
+        min_edge = self.minimum_edge_distances(bounds=bounds)
+        min_corner = self.minimum_corner_distances(bounds=bounds)
+        finite_nn = nn[np.isfinite(nn)]
+        summary = {
+            'n': int(self.n),
+            'generator_type': self.metadata.get('generator_type'),
+            'boundary': self.metadata.get('boundary'),
+            'periodic': periodic,
+            'bounds': bounds.tolist(),
+            'face_clearance': face_clearance,
+            'nn_min': None if finite_nn.size == 0 else float(finite_nn.min()),
+            'nn_mean': None if finite_nn.size == 0 else float(finite_nn.mean()),
+            'nn_max': None if finite_nn.size == 0 else float(finite_nn.max()),
+            'face_distance_min': None if min_face.size == 0 else float(min_face.min()),
+            'face_distance_mean': None if min_face.size == 0 else float(min_face.mean()),
+            'edge_distance_min': None if min_edge.size == 0 else float(min_edge.min()),
+            'corner_distance_min': None if min_corner.size == 0 else float(min_corner.min()),
+            'boundary_zone_counts': self.boundary_zone_counts(
+                bounds=bounds, threshold=face_clearance),
+        }
+        if min_distance is not None:
+            min_distance = float(min_distance)
+            summary['min_distance'] = min_distance
+            summary['min_distance_violations'] = int(np.sum(finite_nn <
+                                                            min_distance))
+        summary['face_clearance_violations'] = int(np.sum(min_face <
+                                                          face_clearance))
+        return summary
+
+    def validate_seed_cloud(self, bounds=None, periodic=None,
+                            min_distance=None, face_clearance=None,
+                            throw=False):
+        """Validate seed cloud spacing and face clearance constraints.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            RVE bounds used for boundary-distance diagnostics.
+        periodic : bool or iterable of bool, optional
+            Periodic boundary flags used for nearest-neighbour distances.
+        min_distance : float, optional
+            Minimum seed-to-seed distance to enforce.
+        face_clearance : float, optional
+            Minimum distance from seeds to RVE faces to enforce.
+        throw : bool, optional
+            If True, raise an exception when validation fails.
+
+        Returns
+        -------
+        dict
+            Seed-quality summary augmented with ``valid`` and ``errors`` keys.
+
+        Raises
+        ------
+        ValueError
+            If ``throw`` is True and one or more validation checks fail.
+        """
+        summary = self.seed_quality_summary(bounds=bounds, periodic=periodic,
+                                            min_distance=min_distance,
+                                            face_clearance=face_clearance)
+        errors = []
+        if summary['face_clearance_violations'] > 0:
+            errors.append('face_clearance')
+        if summary.get('min_distance_violations', 0) > 0:
+            errors.append('min_distance')
+        summary['valid'] = len(errors) == 0
+        summary['errors'] = errors
+        if throw and errors:
+            raise ValueError(f'Seed cloud failed validation: {errors}')
+        return summary
+
+    @classmethod
+    def from_x_y_z(cls, x, y, z, metadata=None):
         """Instantiate from separate x, y, and z coordinate arrays.
 
         Parameters
@@ -279,10 +1291,10 @@ class MPoint3d():
             MULPOINT3D = mp3d.from_x_y_z(x, y, z)
             print(MULPOINT3D.coords)
         """
-        return cls(coords=np.array([x, y, z]).T)
+        return cls(coords=np.array([x, y, z]).T, metadata=metadata)
 
     @classmethod
-    def from_xyz(cls, xyz):
+    def from_xyz(cls, xyz, metadata=None):
         """Instantiate from a ``(3, N)`` coordinate matrix.
 
         Parameters
@@ -304,7 +1316,7 @@ class MPoint3d():
             MULPOINT3D = mp3d.from_xyz(xyz)
             print(MULPOINT3D.coords)
         """
-        return cls(coords=xyz.T)
+        return cls(coords=xyz.T, metadata=metadata)
 
     @classmethod
     def from_mulpoint2d(cls, mp2d, zloc=0.0):
@@ -477,7 +1489,8 @@ class MPoint3d():
         rotated_points = np.dot(translated_points, R.T)
         rotated_points += rot_ref
         coords = rotated_points - (mulpoint3d.centroid - translate_ref) + dxyz
-        return cls(coords=coords)
+        return cls(coords=coords,
+                   metadata=deepcopy(getattr(mulpoint3d, 'metadata', {})))
 
     @classmethod
     def from_mulsline3d(cls, msline3d):
@@ -493,7 +1506,8 @@ class MPoint3d():
                       translate_ref=[0.0, 0.0, 0.0],
                       rot=[0.0, 0.0, 0.0],
                       rot_ref=[0.0, 0.0, 0.0],
-                      degree=True
+                      degree=True,
+                      metadata=None
                       ):
         """Instantiate from a regular 3-D Cartesian grid with optional rigid-body transform.
 
@@ -559,7 +1573,7 @@ class MPoint3d():
                               np.arange(yspec[0], yspec[1]+yspec[2], yspec[2]),
                               np.arange(zspec[0], zspec[1]+zspec[2], zspec[2]))
         coords = np.array([X.ravel(), Y.ravel(), Z.ravel()]).T
-        mulpoint3d = MPoint3d.from_coords(coords)
+        mulpoint3d = MPoint3d.from_coords(coords, metadata=metadata)
         if isinstance(translate_ref, str):
             if translate_ref == 'centroid':
                 translate_ref = mulpoint3d.centroid
@@ -574,7 +1588,7 @@ class MPoint3d():
                                         translate_ref=translate_ref,
                                         rot=rot,
                                         rot_ref=rot_ref,
-                                        degree=True)
+                                        degree=degree)
 
     @property
     def n(self):
@@ -609,7 +1623,9 @@ class MPoint3d():
     @property
     def ckd_tree(self):
         """Build and return a ``cKDTree`` for fast nearest-neighbour queries."""
-        return self.maketree(treeType='ckdtree')
+        if self.tree is None:
+            self.tree = self.maketree(treeType='ckdtree', throw=True)
+        return self.tree
 
     def squared_distances_to_point(self, point):
         """Return squared Euclidean distances from all points to ``point``.
@@ -772,6 +1788,8 @@ class MPoint3d():
         """
         if treeType not in ('ckdtree', 'kdtree'):
             return None
+        if self.n == 0:
+            raise ValueError('Cannot build a tree for an empty MPoint3d.')
         from scipy.spatial import cKDTree as ckdt
         tree = ckdt(self.coords, copy_data=False, balanced_tree=balance)
         if saa:
