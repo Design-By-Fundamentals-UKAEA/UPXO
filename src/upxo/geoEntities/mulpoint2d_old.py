@@ -17,8 +17,38 @@ from upxo._sup import dataTypeHandlers as dth
 class mulpoint2d():
     """
     CORE UPXO GEOMEWTRIC ENTITY CLASS.
+
+    Legacy 2D multi-point container used by older UPXO geometry workflows.
+    The active replacement is ``MPoint2d`` in ``mulpoint2d.py``; this class is
+    retained for compatibility with older code paths and examples.
+
     Author:
         Dr. Sunil Anandatheertha
+
+    Parameters
+    ----------
+    mulpoint_type : str, optional
+        Role of the multi-point collection.
+    method : str, optional
+        Construction method used to populate the point collection.
+    gridding_technique, sampling_technique : str, optional
+        Grid or random sampling controls used by grid-generation branches.
+    nrndpnts : int, optional
+        Number of random points requested by random generation branches.
+    point_objects : list, optional
+        Existing UPXO point objects used for point-object construction.
+    coordx, coordy, coordxy : list, optional
+        Coordinate inputs used by coordinate-list construction branches.
+    xbound, ybound : list, optional
+        Domain bounds for generated points.
+    char_length, latvecs, angles : list, optional
+        Grid spacing and orientation controls.
+    lean : str, optional
+        Storage/detail level for the collection.
+    pdom : str, optional
+        Point-domain label.
+    make_rid, make_ckdtree, vis, print_summary : bool, optional
+        Optional post-construction actions.
 
     Slots
     -----
@@ -89,7 +119,36 @@ class mulpoint2d():
                  vis: bool = False,
                  print_summary: bool = True
                  ):
-        """Initialise the instance."""
+        """
+        Initialise the legacy 2D multi-point instance.
+
+        Parameters
+        ----------
+        mulpoint_type : str, optional
+            Role of the multi-point collection.
+        method : str, optional
+            Construction method used to populate the point collection.
+        gridding_technique, sampling_technique : str, optional
+            Grid or random sampling controls used by grid-generation branches.
+        nrndpnts : int, optional
+            Number of random points requested by random generation branches.
+        point_objects : list, optional
+            Existing UPXO point objects used for point-object construction.
+        mulpoint_objects : list, optional
+            Existing multi-point objects to unpack into this collection.
+        coordx, coordy, coordxy : list, optional
+            Coordinate inputs used by coordinate-list construction branches.
+        xbound, ybound : list, optional
+            Domain bounds for generated points.
+        char_length, latvecs, angles : list, optional
+            Grid spacing and orientation controls.
+        lean : str, optional
+            Storage/detail level for the collection.
+        pdom : str, optional
+            Point-domain label.
+        make_rid, make_ckdtree, vis, print_summary : bool, optional
+            Optional post-construction actions.
+        """
         self.lean = lean
         self.xbound = xbound
         self.ybound = ybound
@@ -226,7 +285,19 @@ class mulpoint2d():
     # -----------------------------------------------
 
     def __repr__(self, recompute_flag=False):
-        """Return a string representation of this instance."""
+        """
+        Return a string representation of this instance.
+
+        Parameters
+        ----------
+        recompute_flag : bool, optional
+            Whether to recompute cached geometry before formatting.
+
+        Returns
+        -------
+        str
+            Summary containing point count and centroid coordinates.
+        """
         if recompute_flag:
             if self.lean in ('no', 'low', 'medium'):
                 self.recompute_from_mids()
@@ -241,17 +312,42 @@ class mulpoint2d():
         return str1 + str2 + str3
 
     def __len__(self):
-        '''
+        """
+        Return number of points in the collection.
+
+        Returns
+        -------
+        int
+            Number of points currently stored by this multi-point object.
+
+        Notes
+        -----
         Returns [[mp1, mp2, ... mpn], [p1, p1, ..., pn]]
         Where,
               mp1 till mpn: child multi-point objects
               p1: total number of unique points in mp1, and so on
-        '''
+        """
         return self.npoints
 
     def __iter__(self,
                  __behaviour='__iterate__over__points__'):
-        '''
+        """
+        Return an iterator over points or coordinates.
+
+        Parameters
+        ----------
+        __behaviour : str, optional
+            Legacy behaviour selector. The current implementation resets this
+            internally to ``'__iterate__over__points__'``.
+
+        Returns
+        -------
+        iterator
+            Iterator over point objects for lower-lean collections or
+            coordinate tuples for high-lean collections.
+
+        Notes
+        -----
         RESTRICTION: operates on a single multi-point object
                      if there are child multi-point objects,
                      then user must ensure iter operating on each of them,
@@ -260,7 +356,7 @@ class mulpoint2d():
                      Iterates through individual points and returns the
                      tuple (m_n.locx[i], m_n.locy[i]), where, n is the
                      n^th multi-point object
-        '''
+        """
         # "__behaviour" options include:
         # (a) '__iterate__over__coordinates__'
         # (b) '__iterate__over__points__'
@@ -274,7 +370,21 @@ class mulpoint2d():
                 return zip(self.locx, self.locy)
 
     def __contains__(self, point_object_list):
-        '''
+        """
+        Check whether queried point objects are contained in this collection.
+
+        Parameters
+        ----------
+        point_object_list : list
+            Query point objects.
+
+        Returns
+        -------
+        None
+            Placeholder return value; this method is not implemented.
+
+        Notes
+        -----
         Returns [[mp1, mp2, ... mpn], [[ip1], [ip2], ..., [ipn]]]
         Where,
               mp1 till mpn: child multi-point objects
@@ -284,11 +394,23 @@ class mulpoint2d():
         INPUTS:
             point_object_list: a list of point_objects, which
                                forms the queried points
-        '''
+        """
         pass
 
     def pop(self, remove_indices):
-        """Pop."""
+        """
+        Remove points by index and recompute basic cached quantities.
+
+        Parameters
+        ----------
+        remove_indices : iterable of int
+            Point indices to remove.
+
+        Returns
+        -------
+        None
+            Updates ``self.points`` and cached basics in place.
+        """
         self.points = [i for j, i in enumerate(self.points)
                        if j not in remove_indices]
         self.recompute_basics(npoints_flag=True,
@@ -296,12 +418,26 @@ class mulpoint2d():
                               centroid_flag=True)
 
     def __pow__(self, power):
-        '''
+        """
+        Raise all x and y coordinates to ``power``.
+
+        Parameters
+        ----------
+        power : float
+            Exponent applied to every coordinate component.
+
+        Returns
+        -------
+        None
+            Updates point coordinates or coordinate arrays in place.
+
+        Notes
+        -----
         OPERATION:
             Raises all in self.locx and self.locy by power
         RETURN:
             re-calculated self.locx and self.locy
-        '''
+        """
         if self.lean in ('no', 'low', 'medium'):
             for _point in self.points:
                 _point.x **= power
@@ -332,7 +468,39 @@ class mulpoint2d():
                  bridson_sampling_k=30,
                  vis=True
                  ):
-        """Makegrid."""
+        """
+        Generate a point grid or random point cloud.
+
+        Parameters
+        ----------
+        method : str, optional
+            Grid construction method.
+        gridding_technique, sampling_technique : str, optional
+            Random or structured generation controls.
+        randuni_calc : str, optional
+            Uniform-random calculation mode.
+        nrndpnts : int, optional
+            Number of random points.
+        char_length_mean, char_length_min, char_length_max : float, optional
+            Characteristic length controls for random generation.
+        n_trials, n_iterations : int, optional
+            Iterative search controls.
+        space : str, optional
+            Coordinate spacing transformation.
+        xbound, ybound : list, optional
+            Domain bounds.
+        char_length, angles : list, optional
+            Grid spacing and angular controls.
+        bridson_sampling_k : int, optional
+            Candidate count for Bridson-style sampling.
+        vis : bool, optional
+            Whether to visualise generated points.
+
+        Returns
+        -------
+        None
+            Updates coordinate arrays and optional point objects in place.
+        """
         if method == 'recgrid':
             self.__grid_rec(xbound,
                             ybound,
@@ -404,7 +572,26 @@ class mulpoint2d():
                    char_length,
                    space,
                    throw):
-        """  grid rec."""
+        """
+        Generate a rectangular point grid.
+
+        Parameters
+        ----------
+        xbound, ybound : list
+            Domain bounds for x and y coordinates.
+        char_length : list
+            Grid spacing along x and y.
+        space : str
+            Spacing transformation mode.
+        throw : bool
+            Whether to return generated coordinate arrays.
+
+        Returns
+        -------
+        tuple or None
+            ``(x, y)`` coordinate arrays when ``throw`` is true; otherwise
+            updates ``self.locx`` and ``self.locy`` in place.
+        """
         _x = np.linspace(xbound[0],
                          xbound[1],
                          int(abs(xbound[1]-xbound[0])/char_length[0]))
@@ -442,9 +629,30 @@ class mulpoint2d():
                    char_length,
                    space,
                    throw=False):
-        '''
+        """
         Make a triangular grid
-        '''
+
+        Parameters
+        ----------
+        method : str
+            Triangular-grid construction method.
+        angles : list
+            Angular controls for grid rows.
+        xbound, ybound : list
+            Domain bounds.
+        char_length : list
+            Grid spacing controls.
+        space : str
+            Spacing transformation mode.
+        throw : bool, optional
+            Whether to return generated coordinate arrays.
+
+        Returns
+        -------
+        tuple or None
+            ``(x, y)`` coordinate arrays when ``throw`` is true; otherwise
+            updates ``self.locx`` and ``self.locy`` in place.
+        """
         if method == 'trigrid1':
             _rad = np.radians
             # angles = [0, 60]
@@ -499,7 +707,38 @@ class mulpoint2d():
                    sampling_radius=0.025,
                    sampling_k=30,
                    throw=False):
-        """  grid rnd."""
+        """
+        Generate random points using uniform, dart, or related sampling.
+
+        Parameters
+        ----------
+        sampling_technique : str, optional
+            Random sampling strategy.
+        xbound, ybound : list, optional
+            Domain bounds.
+        randuni_calc : str, optional
+            Uniform-random calculation mode.
+        nrndpnts : int, optional
+            Number of requested random points.
+        char_length_mean, char_length_min, char_length_max : float, optional
+            Characteristic length controls for random placement.
+        n_trials, n_iterations : int, optional
+            Iterative search controls.
+        space : str, optional
+            Coordinate spacing transformation.
+        sampling_radius : float, optional
+            Minimum spacing radius for dart sampling.
+        sampling_k : int, optional
+            Candidate count for Bridson-style sampling.
+        throw : bool, optional
+            Whether to return generated coordinate arrays.
+
+        Returns
+        -------
+        tuple or None
+            ``(x, y)`` coordinate arrays when ``throw`` is true; otherwise
+            updates ``self.locx`` and ``self.locy`` in place.
+        """
         if sampling_technique == 'uniform':
             # initiate the numpy>random>uniform method
             npruni = np.random.uniform
@@ -616,7 +855,25 @@ class mulpoint2d():
                   percentage: float = 10.0,
                   method: str = '-+',
                   ):
-        """Check or validate is within."""
+        """
+        Check whether a value lies within a percentage band.
+
+        Parameters
+        ----------
+        input_value : float
+            Value to test.
+        reference_value : float
+            Central or boundary reference value.
+        percentage : float, optional
+            Percentage tolerance.
+        method : str, optional
+            Bound construction mode: ``'-+'``, ``'.+'``, or ``'-.'``.
+
+        Returns
+        -------
+        bool
+            ``True`` when ``input_value`` lies inside the requested band.
+        """
         factor = percentage/100
         if method == '-+':
             lowerbound = reference_value*(1-factor)
@@ -635,12 +892,27 @@ class mulpoint2d():
     def assign_rid(self,
                    flag=False,
                    idlength=4):
-        '''
+        """
         Assign a randomly generated ID.
         Unchanging ID for the instance's life.
+
+        Parameters
+        ----------
+        flag : bool, optional
+            Whether to assign an ID.
+        idlength : int, optional
+            Number of characters in the generated ID.
+
+        Returns
+        -------
+        None
+            Updates ``self.rid`` when requested and not already present.
+
+        Notes
+        -----
         # CAUTION: Do not provide something like a change_rid function
                    down the lane.
-        '''
+        """
         if flag:
             try:
                 print(self.rid)
@@ -657,7 +929,14 @@ class mulpoint2d():
             pass
 
     def build_global_rid(self):
-        """Build and return  global rid."""
+        """
+        Build and return global point IDs.
+
+        Returns
+        -------
+        list or None
+            Combined multi-point and point IDs when available.
+        """
         try:
             _ = self.rid
         except AttributeError:
@@ -667,12 +946,19 @@ class mulpoint2d():
                 return [self.rid+p.rid for p in self.points]
 
     def unpack(self):
-        '''
+        """
         Behaviour should change after bringing in the capability of this class
         being able to store many multi-point objects. In which case, this
         should return a single list of all points across all its point
         constituent objects.
 
+        Returns
+        -------
+        list
+            Stored point objects.
+
+        Notes
+        -----
         NOTE: "point constituent objects" could be either point2d objects or
                mulpoint2d objects
 
@@ -682,20 +968,36 @@ class mulpoint2d():
         RESTRICTION @ 12 October 2022:
             A mupoint2d object cannot and should not hold more than one sub-
             mulpoint2d object.
-        '''
+        """
         return self.points
 
     def add_points(self,
                    toadd,
                    recomp=True):
-        '''
+        """
+        Append a point object to ``self.points``.
+
+        Parameters
+        ----------
+        toadd : Point2d
+            Point object to append.
+        recomp : bool, optional
+            Whether to recompute cached point data after appending.
+
+        Returns
+        -------
+        None
+            Updates the collection in place.
+
+        Notes
+        -----
         OPERATION:
             Appends the point_object to self.points
         RESTRICTIONS:
             Only when self.lean in ('no', 'low', 'medium')
         RETURN:
             Does not return anything
-        '''
+        """
         if self.lean in ('ignore', 'no', 'low', 'medium'):
             self.points.append(toadd)
             if recomp:
@@ -707,19 +1009,49 @@ class mulpoint2d():
 
     def partition(self,
                   into='xtals_by_state'):
-        '''
+        """
+        Partition this multi-point object into child multi-point objects.
+
+        Parameters
+        ----------
+        into : str, optional
+            Partitioning target or strategy.
+
+        Returns
+        -------
+        None
+            Placeholder return value; partitioning is not yet implemented.
+
+        Notes
+        -----
         Break up this multi-point object into multiple
         multi-point objects based on input conditions
 
         If "xtals_by_state": Useful for pixellated grain structure: either
             VTGS.2d or MCGS.2d
-        '''
+        """
         pass
 
     def neg(self,
             axis='x',
             indices=None):
-        '''
+        """
+        Negate selected x, y, or xy coordinates.
+
+        Parameters
+        ----------
+        axis : {'x', 'y', 'xy'}, optional
+            Coordinate axis or axes to negate.
+        indices : iterable of int, optional
+            Point indices to operate on.
+
+        Returns
+        -------
+        None
+            Updates selected coordinates in place and recomputes basics.
+
+        Notes
+        -----
         OPERATION:
             Perform -self.locx
         INPUTS:
@@ -728,7 +1060,7 @@ class mulpoint2d():
             .negx()
         TRIGGERED OPERATIONS:
             (1) relavent recompute operations
-        '''
+        """
         if self.lean in ('no', 'low', 'medium'):
             if not indices:
                 _iterable = range(self.npoints)
@@ -765,12 +1097,27 @@ class mulpoint2d():
 
     def clean(self,
               depth=0):
-        '''
+        """
+        Clean duplicate or cached point data.
+
+        Parameters
+        ----------
+        depth : int, optional
+            Cleaning depth. Higher depths are reserved for progressively more
+            aggressive cleanup.
+
+        Returns
+        -------
+        None
+            Updates cached point state in place.
+
+        Notes
+        -----
         OPERATIONS:
             (1) Remove duplicates
             (2) Removes all attributes except:
                     (a) self.locx, self.locy
-        '''
+        """
         if depth == 0:
             # Remove duplicates
             if self.lean in ('no', 'low', 'medium'):
@@ -803,6 +1150,20 @@ class mulpoint2d():
                  throw=False):
         """
         Use tree structure to deal with a very large system of points
+
+        Parameters
+        ----------
+        treeType : {'ckdtree', 'kdtree'}, optional
+            Spatial tree type.
+        saa : bool, optional
+            Whether to store the built tree on ``self.tree``.
+        throw : bool, optional
+            Whether to return the built tree.
+
+        Returns
+        -------
+        scipy.spatial.cKDTree or None
+            Built tree when ``throw`` is true; otherwise ``None``.
         """
         if treeType in ('ckdtree', 'kdtree'):
             # Scipy ckdtree
@@ -819,9 +1180,22 @@ class mulpoint2d():
     def neigh_pair_count(self,
                          other=None,
                          cor=0.1):
-        '''
+        """
         Count how many nearby pairs can be formed.
-        '''
+
+        Parameters
+        ----------
+        other : object, optional
+            Other tree-like object to compare against. If omitted, the method
+            compares the collection tree with itself.
+        cor : float, optional
+            Cut-off radius.
+
+        Returns
+        -------
+        int
+            Number of neighbouring pairs within ``cor``.
+        """
         try:
             _ = self.tree
         except AttributeError:
@@ -842,7 +1216,33 @@ class mulpoint2d():
                      return_length=False,
                      vis=True
                      ):
-        """Neigh points."""
+        """
+        Find neighbouring stored points around query points.
+
+        Parameters
+        ----------
+        method : {'coord', 'point'}, optional
+            Query input mode.
+        coord_list : list, optional
+            Query coordinate list.
+        point_object_list : list, optional
+            Query point objects.
+        cor : list or float, optional
+            Search radius or radii.
+        mpnorm : float, optional
+            Minkowski norm used by KD-tree queries.
+        workers : int, optional
+            Number of workers used by KD-tree queries.
+        return_sorted, return_length : bool, optional
+            KD-tree query output options.
+        vis : bool, optional
+            Whether to visualise neighbour hits.
+
+        Returns
+        -------
+        list
+            Neighbour index lists for the supplied query points.
+        """
         if method in ('coord', 'point'):
             try:
                 _ = self.tree
@@ -903,6 +1303,26 @@ class mulpoint2d():
             point_objects_list=None,
             multi_point_objects_list=None):
         """
+        Add coordinates, points, or multi-point contents to this collection.
+
+        Parameters
+        ----------
+        toadd : {'coord', 'points', 'multi_points'}, optional
+            Type of input to append.
+        coord_list : list, optional
+            Coordinate pairs to append when ``toadd='coord'``.
+        point_objects_list : list, optional
+            Point objects to append when ``toadd='points'``.
+        multi_point_objects_list : list, optional
+            Multi-point objects to unpack when ``toadd='multi_points'``.
+
+        Returns
+        -------
+        None
+            Updates the collection in place and recomputes when needed.
+
+        Notes
+        -----
         mpobj.add(toadd = 'points', point_objects_list = [p1, p1, p1, p1,
                                                           p1, p1, p1])
 
@@ -940,7 +1360,31 @@ class mulpoint2d():
             coord_list=[],
             cut_off_radius=0.0,
             vf=0.05):
-        """Rem."""
+        """
+        Remove points from this collection.
+
+        Parameters
+        ----------
+        method : str, optional
+            Removal method.
+        torem : str, optional
+            Type of object to remove.
+        point_objects_list : list, optional
+            Point objects used as removal queries.
+        multi_point_objects_list : list, optional
+            Multi-point objects whose points are used as removal queries.
+        coord_list : list, optional
+            Coordinate queries.
+        cut_off_radius : float, optional
+            Removal cut-off radius.
+        vf : float, optional
+            Volume-fraction style control retained by legacy branches.
+
+        Returns
+        -------
+        None
+            Updates point storage in place when matches are found.
+        """
         codist = 0.0
         if method == 'bynumber':
             if torem == 'points':
@@ -979,17 +1423,55 @@ class mulpoint2d():
             self.__state_change = False
 
     def distance(self, x, y):
-        """Distance."""
+        """
+        Return distances from all stored points to ``(x, y)``.
+
+        Parameters
+        ----------
+        x, y : float
+            Query coordinate.
+
+        Returns
+        -------
+        numpy.ndarray
+            Euclidean distances from every stored coordinate to ``(x, y)``.
+        """
         return np.sqrt((np.array(self.locx)-x)**2+(np.array(self.locy)-y)**2)
 
     def angles(self, x, y):
-        """Angles."""
+        """
+        Return polar angles from ``(x, y)`` to all stored points.
+
+        Parameters
+        ----------
+        x, y : float
+            Query coordinate.
+
+        Returns
+        -------
+        numpy.ndarray
+            Angles from the query coordinate to each stored point.
+        """
         return np.arctan2(np.array(self.locy)-y, np.array(self.locx)-x)
 
     def translate(self, delx, dely):
-        '''
+        """
+        Translate all stored points.
+
+        Parameters
+        ----------
+        delx, dely : float
+            Coordinate increments applied along x and y.
+
+        Returns
+        -------
+        None
+            Updates point objects or coordinate arrays in place.
+
+        Notes
+        -----
         # TODO: INCLUDE OPERATIONS FOR HIGH AND VERY HIGH LEAN SPECIFICATIONS
-        '''
+        """
         if self.lean in ('no', 'low', 'medium'):
             if delx != 0:
                 for pobj in self.points:
@@ -1010,7 +1492,19 @@ class mulpoint2d():
                                   centroid_flag=True)
 
     def moveto(self, newx, newy):
-        """Moveto."""
+        """
+        Move the collection centroid to a new coordinate.
+
+        Parameters
+        ----------
+        newx, newy : float
+            Target centroid coordinate.
+
+        Returns
+        -------
+        None
+            Translates the collection in place.
+        """
         self.translate(newx - self.centroid[0], newy - self.centroid[1])
 
     def DG(self,
@@ -1023,9 +1517,31 @@ class mulpoint2d():
            F21=None,
            F22=None,
            angle=None):
-        '''
+        """
+        Return the deformation gradient.
+
+        Parameters
+        ----------
+        deformation : str, optional
+            Deformation type.
+        facx, facy : float, optional
+            Stretch factors.
+        shear : float, optional
+            Shear value.
+        F11, F12, F21, F22 : float, optional
+            Components of a general deformation gradient.
+        angle : float, optional
+            Rotation angle in degrees for rotation deformation.
+
+        Returns
+        -------
+        numpy.ndarray
+            2x2 deformation-gradient matrix.
+
+        Notes
+        -----
         Returns the deformation gradient.
-        '''
+        """
         if deformation == 'stretch':
             return np.array([[facx, 0.0], [0.0, facy]])
         elif deformation == 'shearx':
@@ -1042,7 +1558,23 @@ class mulpoint2d():
             return np.array([[F11, F12], [F21, F22]])
 
     def rotate1(self, x, y, θ):
-        '''
+        """
+        Rotate all stored points about a centre.
+
+        Parameters
+        ----------
+        x, y : float
+            Coordinates of the rotation centre.
+        θ : float
+            Angle of rotation in degrees.
+
+        Returns
+        -------
+        None
+            Updates stored point coordinates in place.
+
+        Notes
+        -----
         x, y: coordinates of the rotation centre
         ang: angle of rotation.
 
@@ -1063,7 +1595,7 @@ class mulpoint2d():
                 |x1|  =  |x0-xc| x |cos(theta) -sin(theta)| + |xc|
                 |y1|     |y0-yc|   |sin(theta)  cos(theta)|   |yc|
             Above can be done easily through numpy
-        '''
+        """
         # Form the rotation matrix
         # θ = np.deg2rad(θ)
         # c, s = np.cos(θ), np.sin(θ)
@@ -1093,12 +1625,28 @@ class mulpoint2d():
                 y,
                 factorx,
                 factory):
-        '''
+        """
+        Move points radially away from a reference coordinate.
+
+        Parameters
+        ----------
+        x, y : float
+            Reference coordinate.
+        factorx, factory : float
+            Radial scaling factors along x and y components.
+
+        Returns
+        -------
+        None
+            Updates stored point coordinates in place.
+
+        Notes
+        -----
         1. Compute distances of all point objects to (x,y)
         2. delx and dely will be stretch_factorx and stretch_factory times the
         NOTES:
             1. Any negative factors will be made positive upon execution.
-        '''
+        """
         d, θ = self.distance(x, y), self.angles(x, y)
         dcosang, dsinang = d*np.cos(θ)*abs(factorx), d*np.sin(θ)*abs(factory)
         for count in range(self.npoints):
@@ -1113,7 +1661,23 @@ class mulpoint2d():
     def shear(self,
               deformation='shearx',
               shear=None):
-        '''
+        """
+        Shear deform the multi-point object.
+
+        Parameters
+        ----------
+        deformation : str, optional
+            Shear deformation mode.
+        shear : float, optional
+            Shear magnitude.
+
+        Returns
+        -------
+        None
+            Updates stored point coordinates in place.
+
+        Notes
+        -----
         shear deform the multi-point object
         OPTIONS:
             1. shearx: shear along x - axis. A +ve shear tilts left vertical
@@ -1121,7 +1685,7 @@ class mulpoint2d():
             2. sheary: shear along y - axis. A +ve shear tilts bottom
             horizontal of fundamental rectangle up, about bottom left corner
             3. pureshear: shearx + sheary
-        '''
+        """
         F = self.DG(deformation=deformation, shear=shear)
         if self.lean in ('no', 'low', 'medium'):
             for i, (x0, y0) in enumerate(zip(self.locx, self.locy), start=0):
@@ -1143,7 +1707,23 @@ class mulpoint2d():
                c: float = 0.0,
                keep_original: bool = True
                ):
-        '''
+        """
+        Mirror points about a line in general form.
+
+        Parameters
+        ----------
+        a, b, c : float, optional
+            Constants in the equation ``a*x + b*y + c = 0``.
+        keep_original : bool, optional
+            Whether original points should be retained by future implementations.
+
+        Returns
+        -------
+        None
+            Placeholder-style method; current body does not update the collection.
+
+        Notes
+        -----
         a, b, c: constants in the equation of line: ax + by + c = 0
         K = −2(ax0+by0+c) / sqrt(a^2 + b^2)
         x1 = aK + x0
@@ -1155,7 +1735,7 @@ class mulpoint2d():
             If you are looking at mirroring about line parallel to x-axis,
                 at a distance of 2 units towards +ve y-axis,
                 then choose a = 0, b = 1, c = 2
-        '''
+        """
         x0 = 1
         y0 = 1
         a = 0
@@ -1168,10 +1748,24 @@ class mulpoint2d():
     def merge(self,
               retain='first',
               ):
-        '''
+        """
+        Merge points based on a proximity or overlap condition.
+
+        Parameters
+        ----------
+        retain : str, optional
+            Retention policy for merged points.
+
+        Returns
+        -------
+        None
+            Placeholder return value; merge is not yet implemented.
+
+        Notes
+        -----
         #TODO
         Merge two or more points based on proximity or overlap condition
-        '''
+        """
         pass
 
     def noise(self,
@@ -1181,7 +1775,25 @@ class mulpoint2d():
               ground=None,
               height=None,
               perturb_mag=None):
-        """Noise."""
+        """
+        Apply coordinate noise to the point collection.
+
+        Parameters
+        ----------
+        perturb_flag : bool, optional
+            Legacy perturbation enable flag.
+        perturb_type : str, optional
+            Noise generation mode.
+        depth, ground, height : float, optional
+            Controls for ``'dgh'`` perturbation.
+        perturb_mag : object, optional
+            Magnitude controls for local uniform or normal perturbations.
+
+        Returns
+        -------
+        None
+            Updates coordinates and cached basics in place.
+        """
         if perturb_type == 'dgh':
             # Depth, Ground and Height are lengths
             depth, ground, height = -abs(depth), abs(ground), abs(height)
@@ -1268,11 +1880,29 @@ class mulpoint2d():
               iterations: int = 2,
               bounds=None,
               options: str = 'Qbb Qc Qx'):
-        '''
+        """
+        Apply Lloyd relaxation to the 2D point cloud.
+
+        Parameters
+        ----------
+        iterations : int, optional
+            Number of relaxation iterations.
+        bounds : object, optional
+            Bounding box used to constrain relaxed points.
+        options : str, optional
+            Qhull options passed to SciPy Voronoi construction.
+
+        Returns
+        -------
+        object
+            Relaxed point coordinate array.
+
+        Notes
+        -----
         # TODO: MUST CLEAN THIS UP AND MAKE IT UPXO COMPATIBLE
         Credit: see below link
         https://vedo.embl.es/autodocs/content/vedo/pointcloud.html#vedo.pointcloud.Points.smoothLloyd2D
-        '''
+        """
         # def smoothLloyd2D(self, iterations=2, bounds=None,
         #                   options='Qbb Qc Qx'):
         """Lloyd relaxation of a 2D pointcloud."""
@@ -1341,6 +1971,16 @@ class mulpoint2d():
 
     def recompute_from_mids(self):
         """
+        Recompute unique point state using point memory IDs.
+
+        Returns
+        -------
+        None
+            Updates point storage and cached basics when duplicate memory IDs
+            are detected.
+
+        Notes
+        -----
         mid: ID of the object's memory address'
         NOTE TO DEVELOPER: LEAVE THIS AS IS
         """
@@ -1363,12 +2003,28 @@ class mulpoint2d():
     def recompute_from_dist(self,
                             method='points_normal',
                             tolerance_distance=0.0):
-        '''
+        """
+        Recompute unique point state using distance-based comparison.
+
+        Parameters
+        ----------
+        method : str, optional
+            Distance comparison method.
+        tolerance_distance : float, optional
+            Distance tolerance used to identify duplicates.
+
+        Returns
+        -------
+        None
+            Updates duplicate state and cached basics when needed.
+
+        Notes
+        -----
         DESCRIPTION: recompute() using point2d.__eq__(query_point_object)
         # WHEN TO USE:
             Use when system size is small.
             Exact size threshild YET to be determined
-        '''
+        """
         self.__state_change = self.unique_points_dist(method=method,
                                                       tolerance_distance=tolerance_distance)
         if self.__state_change:
@@ -1379,11 +2035,25 @@ class mulpoint2d():
         self.__state_change = False
 
     def unique_points_mids(self, mids):
-        '''
+        """
+        Keep unique point objects based on memory IDs.
+
+        Parameters
+        ----------
+        mids : list
+            Memory IDs corresponding to the point objects to retain.
+
+        Returns
+        -------
+        None
+            Updates ``self.points`` in place.
+
+        Notes
+        -----
         In this case, update op happens by comparing memory ID of point objects
         NOTE: For the forseable future, this method is to be used until its use
         been validated against.
-        '''
+        """
         # mids = [id(pobj) for pobj in self.points] # object memory IDs
         # if len(mids) > len(list(set(mids))):
         # Choose numpy if number of points are more than 'npoints = 1000'
@@ -1403,7 +2073,23 @@ class mulpoint2d():
     def unique_points_dist(self,
                            method='points_normal',
                            tolerance_distance=0.0):
-        '''
+        """
+        Identify unique points using distance comparisons.
+
+        Parameters
+        ----------
+        method : str, optional
+            Duplicate-detection method.
+        tolerance_distance : float, optional
+            Distance tolerance below which points are treated as repeating.
+
+        Returns
+        -------
+        tuple
+            Duplicate-detection status and legacy placeholder values.
+
+        Notes
+        -----
         Identify unique points as the first of the list of points which
         have a zero-distance in case of repeating points
             NOTE: zero-distance is decided by the tolerance_distance set by
@@ -1412,7 +2098,7 @@ class mulpoint2d():
         # TODO: Enable multi-processing and speed up the process
 
         NOTE: LEAVE THIS METHOD AS IT IS
-        '''
+        """
         if method == 'points_normal':
             __points = []
             repeated = [False for _ in self.points]
@@ -1474,6 +2160,20 @@ class mulpoint2d():
         """
         On a need to basis, recompute the number of points, x and y coordinate
         lists (deques) and the centroid
+
+        Parameters
+        ----------
+        npoints_flag : bool, optional
+            Whether to recompute point count.
+        locx_locy_flag : bool, optional
+            Whether to recompute coordinate arrays.
+        centroid_flag : bool, optional
+            Whether to recompute centroid.
+
+        Returns
+        -------
+        None
+            Updates requested cached quantities in place.
         """
         if npoints_flag:
             self.recompute_npoints()
@@ -1485,6 +2185,11 @@ class mulpoint2d():
     def recompute_npoints(self):
         """
         Recompute the number of points in this collection
+
+        Returns
+        -------
+        None
+            Updates ``self.npoints`` in place.
         """
         if self.lean in ('ignore', 'no', 'low', 'medium'):
             try:
@@ -1497,6 +2202,11 @@ class mulpoint2d():
     def recompute_locx_locy(self):
         """
         Recompute the coordinate location lists (deques)
+
+        Returns
+        -------
+        None
+            Updates ``self.locx`` and ``self.locy`` in place.
         """
         if self.lean in ('ignore', 'no', 'low', 'medium'):
             # TODO: Combine the following two lines into a single
@@ -1510,6 +2220,18 @@ class mulpoint2d():
         """
         Recompute the centroid of the point collection
 
+        Parameters
+        ----------
+        accuracy : str, optional
+            Accuracy mode retained for legacy compatibility.
+
+        Returns
+        -------
+        None
+            Updates ``self.centroid`` in place.
+
+        Notes
+        -----
         TODO: In the case of multi-point collection, this is to return
         a list of centroids, in the order of the multi-point list
         """
@@ -1523,6 +2245,23 @@ class mulpoint2d():
            throw=True):
         """
         Compute the convex hull using various known packages
+
+        Parameters
+        ----------
+        package : str, optional
+            Convex-hull backend.
+        save_as_attribute : bool, optional
+            Whether to store the hull on ``self.qh``.
+        throw : bool, optional
+            Whether to return the computed hull.
+
+        Returns
+        -------
+        object or None
+            Convex-hull object when ``throw`` is true; otherwise ``None``.
+
+        Notes
+        -----
         TODO: THIS REQUIRES IMMEDIATE FURTHER DEVELOPMENT
         """
         if package == 'scipy':
@@ -1537,12 +2276,31 @@ class mulpoint2d():
 
     def qh_find_area(self):
         """
+        Find convex-hull area.
+
+        Returns
+        -------
+        None
+            Placeholder return value; hull area calculation is not implemented.
+
+        Notes
+        -----
         # TODO: THIS REQUIRES IMMEDIATE FURTHER DEVELOPMENT
         """
         pass
 
     def qh_find_perimeter(self):
         """
+        Find convex-hull perimeter.
+
+        Returns
+        -------
+        None
+            Placeholder return value; hull perimeter calculation is not
+            implemented.
+
+        Notes
+        -----
         # TODO: THIS REQUIRES IMMEDIATE FURTHER DEVELOPMENT
         """
         pass
@@ -1550,6 +2308,11 @@ class mulpoint2d():
     def hole(self):
         """
         Make a hole, an empty region in a region of distributed point objects
+
+        Returns
+        -------
+        None
+            Placeholder return value; hole generation is not implemented.
         """
         pass
 
@@ -1557,18 +2320,33 @@ class mulpoint2d():
         """
         Attach xtal area to the xtal point. The xtal point should be the xtal
         representative point.
+
+        Returns
+        -------
+        None
+            Placeholder return value; scalar-field mapping is not implemented.
         """
         pass
 
     def mapsf_ori(self):
         """
         Attach orientation distribution to the point distribution
+
+        Returns
+        -------
+        None
+            Placeholder return value; orientation mapping is not implemented.
         """
         pass
 
     def mapsf_gnd(self):
         """
         Attach GND field to the point distribution
+
+        Returns
+        -------
+        None
+            Placeholder return value; GND mapping is not implemented.
         """
         pass
 
@@ -1578,7 +2356,27 @@ class mulpoint2d():
                        make_ckdtree=False,
                        sep_n=10,
                        sep_string='-X'):
-        """ print summary."""
+        """
+        Print a formatted construction summary.
+
+        Parameters
+        ----------
+        print_summary : bool, optional
+            Whether to print the summary.
+        make_point_objects : bool, optional
+            Whether point objects were requested.
+        make_ckdtree : bool, optional
+            Whether KD-tree construction was requested.
+        sep_n : int, optional
+            Number of separator repetitions.
+        sep_string : str, optional
+            Separator token.
+
+        Returns
+        -------
+        None
+            Writes formatted information to stdout when enabled.
+        """
         if print_summary:
             from colorama import init as colorama_init
             from colorama import Fore
@@ -1609,6 +2407,24 @@ class mulpoint2d():
     def plot(self, figsize=(1.6, 1.6), dpi=100,
              visopt=('.', 0.5, 'k', 10, 'maroon', 1.0)):
         """
+        Plot stored points with Matplotlib.
+
+        Parameters
+        ----------
+        figsize : tuple, optional
+            Matplotlib figure size.
+        dpi : int, optional
+            Figure resolution.
+        visopt : tuple, optional
+            Marker visual options.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            Axes containing the point scatter plot.
+
+        Notes
+        -----
         self.vizopt = ('o', 0.5, 'k', 10, 'w', 0.8)
         IN EXACT ORDER:
             o   : circle marker style
@@ -1637,7 +2453,14 @@ class mulpoint2d():
         return ax
 
     def perthist(self):
-        """Perthist."""
+        """
+        Plot perturbation histograms.
+
+        Returns
+        -------
+        None
+            Displays histograms for ``self.xpert`` and ``self.ypert``.
+        """
         fig = plt.figure(figsize=(1.6, 1.6),
                          dpi=100)
         ax = fig.add_axes([0, 0, 1, 1])
