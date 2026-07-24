@@ -133,6 +133,11 @@ class MPoint2d():
         """
         Return an iterable of point coordinates in self.
 
+        Returns
+        -------
+        iterator
+            Iterator over rows of ``self.coords``.
+
         Examples
         --------
         .. code-block:: python
@@ -146,7 +151,22 @@ class MPoint2d():
 
     def __getitem__(self, i):
         """
-        Make self indexable. i: index location.
+        Return the coordinate at index ``i``.
+
+        Parameters
+        ----------
+        i : int
+            Coordinate-row index.
+
+        Returns
+        -------
+        numpy.ndarray
+            Coordinate row at index ``i``.
+
+        Raises
+        ------
+        ValueError
+            If ``i`` exceeds the available coordinate count.
 
         Examples
         --------
@@ -164,6 +184,19 @@ class MPoint2d():
     def add(self, toadd=None, operation='add'):
         """
         Add toadd to self.coords.
+
+        Parameters
+        ----------
+        toadd : object, optional
+            Point, coordinate, or coordinate collection to add according to
+            ``operation``.
+        operation : str, optional
+            Add operation mode.
+
+        Returns
+        -------
+        None
+            Updates ``self.coords`` in place for supported branches.
 
         Examples
         --------
@@ -290,6 +323,16 @@ class MPoint2d():
         """
         Instantiate mulpoint2d using list of point coordinates.
 
+        Parameters
+        ----------
+        point_coords : array-like, shape (N, 2)
+            Coordinate rows used to build the collection.
+
+        Returns
+        -------
+        MPoint2d
+            Multi-point collection populated from ``point_coords``.
+
         Examples
         --------
         .. code-block:: python
@@ -306,7 +349,18 @@ class MPoint2d():
     @classmethod
     def from_xy(cls, xy):
         """
-        Instantiate mulpoint2d using array of x, y and z coordinate lists.
+        Instantiate ``MPoint2d`` using x and y coordinate lists.
+
+        Parameters
+        ----------
+        xy : array-like, shape (2, N)
+            Coordinate matrix with x-coordinates in the first row and
+            y-coordinates in the second row.
+
+        Returns
+        -------
+        MPoint2d
+            Multi-point collection populated from ``xy``.
 
         Examples
         --------
@@ -362,6 +416,18 @@ class MPoint2d():
         """
         Instantiate a rectangular grid of 2D points.
 
+        Parameters
+        ----------
+        xstart, xinc, xend : float
+            Start, increment, and stop values for x-grid coordinates.
+        ystart, yinc, yend : float
+            Start, increment, and stop values for y-grid coordinates.
+
+        Returns
+        -------
+        MPoint2d
+            Multi-point collection containing the rectangular grid points.
+
         Examples
         --------
         .. code-block:: python
@@ -381,6 +447,24 @@ class MPoint2d():
                                         distribution='urand', dmin=None):
         """
         Build a point cluster uniformly distributed around a centroid.
+
+        Parameters
+        ----------
+        centroid : array-like
+            Cluster centroid coordinate.
+        n : int, optional
+            Number of points to generate.
+        r : float, optional
+            Cluster radius.
+        distribution : str, optional
+            Distribution type.
+        dmin : float, optional
+            Optional minimum separation distance.
+
+        Returns
+        -------
+        MPoint2d
+            Multi-point collection containing generated cluster points.
 
         Examples
         --------
@@ -546,6 +630,18 @@ class MPoint2d():
         """
         Check whether ``point`` is among the stored points.
 
+        Parameters
+        ----------
+        point : Point2d or array-like
+            Candidate point.
+        validate : bool, optional
+            Whether to validate and coerce ``point`` before distance checks.
+
+        Returns
+        -------
+        bool
+            ``True`` if any stored point is within ``EPS`` squared distance.
+
         Examples
         --------
         .. code-block:: python
@@ -655,6 +751,20 @@ class MPoint2d():
         """
         Calculates distances between self.centroid and other 2D points.
 
+        Parameters
+        ----------
+        points : list of Point2d or numpy.ndarray
+            Points to compute distances from.
+        validate_points : bool, optional
+            Whether to validate and coerce the input point collection.
+        points_type : str, optional
+            Type hint used when ``validate_points`` is ``False``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Euclidean distances from ``self.centroid`` to the supplied points.
+
         Examples
         --------
         .. code-block:: python
@@ -745,6 +855,17 @@ class MPoint2d():
     def maketree(self, treeType='ckdtree'):
         """
         Use tree structure to deal with a very large system of points.
+
+        Parameters
+        ----------
+        treeType : {'ckdtree', 'kdtree'}, optional
+            Spatial tree type to construct.
+
+        Returns
+        -------
+        scipy.spatial.cKDTree or None
+            KD-tree over ``self.coords`` for supported tree types; otherwise
+            ``None``.
 
         Examples
         --------
