@@ -97,11 +97,23 @@ class MSline3d():
     __slots__ = ('lines', 'x0', 'y0', 'z0', 'x1', 'y1', 'z1', 'f', 'closed')
 
     def __init__(self, llist):
-        """Initialise from a list of ``Sline3d`` objects."""
+        """Initialise from a list of ``Sline3d`` objects.
+
+        Parameters
+        ----------
+        llist : list of Sline3d
+            Ordered line segments stored in the collection.
+        """
         self.lines = llist
 
     def __repr__(self):
-        """Return ``UPXO MSline3d. n=<N>. ID: <id>`` summary string."""
+        """Return a concise multi-line summary string.
+
+        Returns
+        -------
+        str
+            ``UPXO MSline3d. n=<N>. ID: <id>`` summary.
+        """
         return f"UPXO MSline3d. n={len(self.lines)}. ID: {id(self)}"
 
     @classmethod
@@ -144,12 +156,35 @@ class MSline3d():
                        'max_total_length': 10,
                        'min_total_length': 8,
                        'mean_length': 1}):
-        """Construct a multi-line by random walk with length/angle variation. Not yet implemented."""
+        """Construct a multi-line by random walk with length/angle variation.
+
+        Parameters
+        ----------
+        var_l : str, optional
+            Length-variation mode.
+        var_ang : str, optional
+            Angular-variation mode.
+        specs : dict, optional
+            Random-walk specification dictionary. Existing keys include
+            ``'n'``, ``'max_total_length'``, ``'min_total_length'``, and
+            ``'mean_length'``.
+
+        Raises
+        ------
+        NotImplementedError
+            This constructor is not yet implemented.
+        """
         raise NotImplementedError("by_walk is not yet implemented.")
 
     @property
     def n(self):
-        """Number of line segments in the collection."""
+        """Number of line segments in the collection.
+
+        Returns
+        -------
+        int
+            Number of stored line segments.
+        """
         return len(self.lines)
 
     @property
@@ -264,7 +299,13 @@ class MSline3d():
         return [id(line) for line in self.lines]
 
     def unclose(self):
-        """Remove the closing segment (last element of ``self.lines``) in place."""
+        """Remove the closing segment in place.
+
+        Returns
+        -------
+        None
+            The last element of ``self.lines`` is deleted.
+        """
         del self.lines[-1]
 
     def distances_nodes(self, points):
