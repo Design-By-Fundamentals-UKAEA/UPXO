@@ -66,6 +66,12 @@ class Sline2d_leanest():
     x1, y1 : float
         Coordinates of end point.
 
+    Notes
+    -----
+    This class intentionally avoids the richer state kept by ``Sline2d``.
+    Use it when endpoint coordinates and basic geometric predicates are
+    sufficient.
+
     Usage
     -----
         from upxo.geoEntities.sline2d import Sline2d_leanest as sl2dl
@@ -96,7 +102,15 @@ class Sline2d_leanest():
         self.x1, self.y1 = x1, y1
 
     def __repr__(self):
-        """Return ``UPXO-sl2d-lean (x0,y0)-(x1,y1)`` with 6 decimal places."""
+        """
+        Return a compact lean-line representation.
+
+        Returns
+        -------
+        str
+            String of the form ``UPXO-sl2d-lean (x0,y0)-(x1,y1)`` with
+            coordinates rounded to six decimal places.
+        """
         return f'UPXO-sl2d-lean ({round(self.x0, 6)},{round(self.y0, 6)})-({round(self.x1, 6)},{round(self.y1, 6)})'
 
     def __iter__(self):
@@ -385,24 +399,75 @@ class Sline2d():
             self.x1, self.y1 = pntb.x, pntb.y
 
     def __repr__(self):
-        """Repr function."""
+        """
+        Return a compact line representation.
+
+        Returns
+        -------
+        str
+            String containing rounded endpoint coordinates and object id.
+        """
         return f'UPXO-sl2d ({round(self.x0, 6)},{round(self.y0, 6)})-({round(self.x1, 6)},{round(self.y1, 6)}). {id(self)}'
 
     def __iter__(self):
-        """Make self an iterable over its two points."""
+        """
+        Make self iterable over endpoint coordinate pairs.
+
+        Returns
+        -------
+        generator
+            Generator yielding ``(x0, y0)`` and ``(x1, y1)``.
+        """
         return (i for i in ((self.x0, self.y0), (self.x1, self.y1)))
 
     def __getitem__(self, index):
-        """Make self indexable. 0: 1st point, 1: 2nd point, other: Error."""
+        """
+        Return endpoint coordinates by index.
+
+        Parameters
+        ----------
+        index : int
+            ``0`` returns the start coordinate and ``1`` returns the end
+            coordinate.
+
+        Returns
+        -------
+        tuple
+            Endpoint coordinate pair.
+        """
         return ((self.x0, self.y0), (self.x1, self.y1))[index]
 
     def __eq__(self, lines):
-        """Check for == @length."""
+        """
+        Compare line lengths for equality.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate lines to compare against.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where candidate line length equals ``self.length``.
+        """
         # Validate lines
         return [self.length == e.length for e in lines]
 
     def __ne__(self, lines):
-        """Check for != @length."""
+        """
+        Compare line lengths for inequality.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate lines to compare against.
+
+        Returns
+        -------
+        list of bool
+            Inequality comparison result as implemented by this class.
+        """
         # No need of validations here.
         return self == lines
 
@@ -411,6 +476,16 @@ class Sline2d():
         Check for < @length.
 
         True for a line in lines if self line length is < line length.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate line lengths or line-like values to compare against.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where ``self.length`` is less than the candidate value.
         """
         # No need of validations here.
         length = self.length
@@ -421,6 +496,17 @@ class Sline2d():
         Check for <= @length.
 
         True for a line in lines if self line length is <= line length.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate line lengths or line-like values to compare against.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where ``self.length`` is less than or equal to the
+            candidate value.
         """
         # No need of validations here.
         length = self.length
@@ -431,6 +517,16 @@ class Sline2d():
         Check for > @length.
 
         True for a line in lines if self line length is > line length.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate line lengths or line-like values to compare against.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where ``self.length`` is greater than the candidate value.
         """
         # No need of validations here.
         length = self.length
@@ -441,6 +537,17 @@ class Sline2d():
         Check for >= @length.
 
         True for a line in lines if self line length is >= line length.
+
+        Parameters
+        ----------
+        lines : iterable
+            Candidate line lengths or line-like values to compare against.
+
+        Returns
+        -------
+        list of bool
+            ``True`` where ``self.length`` is greater than or equal to the
+            candidate value.
         """
         # No need of validations here.
         length = self.length
@@ -860,6 +967,11 @@ class Sline2d():
         """
         Return the length increments along x and y.
 
+        Returns
+        -------
+        tuple
+            ``(dx, dy)`` increments from start endpoint to end endpoint.
+
         Examples
         --------
         >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -873,6 +985,11 @@ class Sline2d():
         """
         Return the length increment along x.
 
+        Returns
+        -------
+        float
+            ``x1 - x0``.
+
         Examples
         --------
         >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -885,6 +1002,11 @@ class Sline2d():
     def dy(self):
         """
         Return the length increments along y.
+
+        Returns
+        -------
+        float
+            ``y1 - y0``.
 
         Examples
         --------
@@ -1067,12 +1189,26 @@ class Sline2d():
 
     @property
     def coord_i(self):
-        """Return coordinates of starting point as `[x0, y0]`."""
+        """
+        Return coordinates of the starting point.
+
+        Returns
+        -------
+        list
+            Coordinates ``[x0, y0]``.
+        """
         return [self.x0, self.y0]
 
     @property
     def coord_j(self):
-        """Return coordinates of ending point as `[x1, y1]`."""
+        """
+        Return coordinates of the ending point.
+
+        Returns
+        -------
+        list
+            Coordinates ``[x1, y1]``.
+        """
         return [self.x1, self.y1]
 
     @property
@@ -1151,6 +1287,16 @@ class Sline2d():
         """
         Return True if point is one of the end points on the line.
 
+        Parameters
+        ----------
+        point : array-like
+            Candidate coordinate pair.
+
+        Returns
+        -------
+        bool
+            ``True`` when ``point`` equals the start or end coordinate.
+
         Examples
         --------
         >>> from upxo.geoEntities.sline2d import Sline2d as sl2d
@@ -1165,6 +1311,11 @@ class Sline2d():
     def invert(self):
         """
         Invert start and end points.
+
+        Returns
+        -------
+        None
+            Updates this line in place.
 
         Examples
         --------
@@ -1684,6 +1835,38 @@ class Sline2d():
         """
         Distribute points over a straight line.
 
+        Parameters
+        ----------
+        n : int or sequence, optional
+            Number of points or point counts to distribute.
+        spacing : str, optional
+            Spacing mode for the main distribution.
+        factor : float, optional
+            Distribution factor in the interval ``[0, 1]``.
+        sub_spacing : str or sequence, optional
+            Spacing mode for sub-distributions.
+        subfactors : float or sequence, optional
+            Sub-distribution factor(s).
+        trim_ij : bool, optional
+            Whether to trim generated points at the line endpoints.
+        symexp : object, optional
+            Symbolic expression used by symbolic spacing workflows.
+        _coord_rounding_ : tuple, optional
+            Coordinate-rounding control as ``(enabled, decimals)``.
+        _plot_ : bool, optional
+            Whether to plot the generated distribution.
+
+        Returns
+        -------
+        object
+            Distributed point coordinates or point objects as produced by the
+            selected spacing branch.
+
+        Raises
+        ------
+        ValueError
+            If spacing, factor, subfactor, or count inputs are invalid.
+
         Examples
         --------
         .. code-block:: python
@@ -1735,7 +1918,23 @@ class Sline2d():
         ang, length = self.ang, self.length
         # .........
         def apply_spacing(r, spacing, fac):
-            """Map ratio array ``r`` through the chosen spacing function."""
+            """
+            Map ratio array ``r`` through the chosen spacing function.
+
+            Parameters
+            ----------
+            r : numpy.ndarray
+                Ratio values to transform.
+            spacing : str
+                Spacing function name.
+            fac : float
+                Spacing factor controlling distribution direction.
+
+            Returns
+            -------
+            numpy.ndarray
+                Transformed ratio values.
+            """
             # Valid only for factors = 0.0, 1.0
             spacing_actions = {
                 'constant': lambda r: r,
@@ -1897,6 +2096,18 @@ class Sline2d():
     def normal_vector(self, ratio=0.0, return_type='sl2d'):
         """
         Find normal vector centred at starting point.
+
+        Parameters
+        ----------
+        ratio : float, optional
+            Fractional position along the line at which the normal is centred.
+        return_type : str, optional
+            Output representation. ``'sl2d'`` returns a line object.
+
+        Returns
+        -------
+        object
+            Normal-vector representation requested by ``return_type``.
 
         Examples
         --------
@@ -2719,7 +2930,16 @@ class Sline2d():
         raise NotImplementedError("rotate_about is not yet implemented.")
 
     def attach_mp(self, *, mp=None, name=None):
-        """Attach a UPXO multi-point object and a name."""
+        """
+        Attach a UPXO multi-point object under a name.
+
+        Parameters
+        ----------
+        mp : object, optional
+            Multi-point object to attach.
+        name : str, optional
+            Key used to store the multi-point object.
+        """
         self.mp[name] = mp
 
     def attach_xtal(self, *, xtals=None):
@@ -2734,6 +2954,20 @@ class Sline2d():
 
     def perp_distance(self, plist, ptype='coord_list'):
         """
+        Compute perpendicular distances from points to this line.
+
+        Parameters
+        ----------
+        plist : object
+            Point or collection of points to evaluate.
+        ptype : str, optional
+            Point input specification. Default is ``'coord_list'``.
+
+        Returns
+        -------
+        object
+            Perpendicular distance result for the supplied points.
+
         Examples
         --------
         **Example 1** — coordinate pair:
@@ -3320,8 +3554,24 @@ class Sline2d():
 
     def generate_points(self, dxmean, pert_factor=0.0):
         """
-        dxmean : Mean spacing
-        pert_factor
+        Generate points along the line using an approximate mean spacing.
+
+        Parameters
+        ----------
+        dxmean : float
+            Mean spacing between generated points.
+        pert_factor : float, optional
+            Perturbation factor applied to internal point locations.
+
+        Returns
+        -------
+        object
+            Generated point representation produced by this method.
+
+        Raises
+        ------
+        ValueError
+            If ``dxmean`` is not positive.
 
         Examples
         --------
@@ -3429,7 +3679,25 @@ class Sline2d():
 
         if method == 'by_count':
             def get_spacing(k):
-                """Return the spacing distance for offset index ``k``."""
+                """
+                Return the spacing distance for offset index ``k``.
+
+                Parameters
+                ----------
+                k : int
+                    Offset index from the source line.
+
+                Returns
+                -------
+                float
+                    Offset spacing distance.
+
+                Raises
+                ------
+                ValueError
+                    If spacing is not a float or supported normal-distribution
+                    dictionary.
+                """
                 if isinstance(spacing, dict) and spacing.get("dist") == "normal":
                     mu = spacing.get("mean", 1.0)
                     std_factor = spacing.get("std_factor", 0.0)
