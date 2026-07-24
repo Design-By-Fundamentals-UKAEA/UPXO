@@ -107,12 +107,34 @@ LIST OF POINT-PXTAL OPERATION METHODS
 # POINT TO POINT(S) COMPARISON OPERATIONS
 
 def CMPEQ_points(p1, p2):
-    """Return ``p1 == p2`` using the point equality operator."""
+    """Return ``p1 == p2`` using the point equality operator.
+
+    Parameters
+    ----------
+    p1, p2 : object
+        Point-like objects supporting equality comparison.
+
+    Returns
+    -------
+    bool or list of bool
+        Result returned by ``p1.__eq__(p2)``.
+    """
     return p1 == p2
 
 
 def CMPEQ_pnt_fast_exact(p1, p2):
-    """Return ``True`` if ``p1`` and ``p2`` have exactly equal x and y."""
+    """Return exact coordinate equality for two points.
+
+    Parameters
+    ----------
+    p1, p2 : object
+        Point-like objects exposing ``x`` and ``y`` attributes.
+
+    Returns
+    -------
+    bool
+        ``True`` when both x and y coordinates are exactly equal.
+    """
     equality = False
     if p1.x == p2.x and p1.y == p2.y:
         equality = True
@@ -120,7 +142,19 @@ def CMPEQ_pnt_fast_exact(p1, p2):
 
 
 def CMPEQ_pnt_fast_EPS(p1, p2):
-    """Return ``True`` if the Euclidean distance between ``p1`` and ``p2`` is ≤ EPS."""
+    """Return EPS-based equality for two points.
+
+    Parameters
+    ----------
+    p1, p2 : object
+        Point-like objects exposing ``x`` and ``y`` attributes.
+
+    Returns
+    -------
+    bool
+        ``True`` when the Euclidean distance between points is less than or
+        equal to the hard-coded EPS value.
+    """
     EPS, equality = 0.000000000001, False
     if sqrt((p1.x-p2.x)**2+(p1.y-p2.y)**2) <= EPS:
         equality = True
@@ -128,7 +162,21 @@ def CMPEQ_pnt_fast_EPS(p1, p2):
 
 
 def CMPEQ_pnt_fast_tdist(p1, p2, tdist=0.000000000001):
-    """Return ``True`` if the Euclidean distance between ``p1`` and ``p2`` is ≤ ``tdist``."""
+    """Return distance-threshold equality for two points.
+
+    Parameters
+    ----------
+    p1, p2 : object
+        Point-like objects exposing ``x`` and ``y`` attributes.
+    tdist : float, optional
+        Maximum distance for equality.
+
+    Returns
+    -------
+    bool
+        ``True`` when the Euclidean distance between points is less than or
+        equal to ``tdist``.
+    """
     equality = False
     if sqrt((p1.x-p2.x)**2+(p1.y-p2.y)**2) <= tdist:
         equality = True
@@ -350,7 +398,29 @@ def RELPOS_point_points_right(point, point_objects):
 
 
 def xadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Add ``k`` to the x-coordinate of ``point``, with saa/throw control."""
+    """Add ``k`` to the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Increment or nested increments to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -395,7 +465,29 @@ def xadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def yadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Add ``k`` to the y-coordinate of ``point``, with saa/throw control."""
+    """Add ``k`` to the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Increment or nested increments to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -440,7 +532,29 @@ def yadd(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xmul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Multiply the x-coordinate of ``point`` by ``k``, with saa/throw control."""
+    """Multiply the x-coordinate of ``point`` by ``k``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Multiplier or nested multipliers to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -485,7 +599,29 @@ def xmul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def ymul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Multiply the y-coordinate of ``point`` by ``k``, with saa/throw control."""
+    """Multiply the y-coordinate of ``point`` by ``k``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Multiplier or nested multipliers to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if saa and make_new:
@@ -530,7 +666,29 @@ def ymul(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xdiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Divide the x-coordinate of ``point`` by ``k``, with saa/throw control."""
+    """Divide the x-coordinate of ``point`` by ``k``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Divisor or nested divisors to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if k >= 0.000000000001:
@@ -582,7 +740,29 @@ def xdiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def ydiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
-    """Divide the y-coordinate of ``point`` by ``k``, with saa/throw control."""
+    """Divide the y-coordinate of ``point`` by ``k``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    k : number or iterable
+        Divisor or nested divisors to apply.
+    saa : bool, optional
+        If True, update the supplied point.
+    make_new : bool, optional
+        If True, create new point object(s).
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+    throw : bool, optional
+        If True, return the computed result.
+
+    Returns
+    -------
+    object
+        New point, tuple of new points, status string, or ``None`` depending
+        on control flags.
+    """
     if type(k) in dth.dt.NUMBERS + dth.dt.ITERABLES:
         if type(k) in dth.dt.NUMBERS:
             if k >= 0.000000000001:
@@ -634,7 +814,22 @@ def ydiv(point, k, saa=False, make_new=True, lean='ignore', throw=True):
 
 
 def xabs(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Apply absolute value to the x-coordinate of ``point``, with saa/throw control."""
+    """Apply absolute value to the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _x = abs(point.x)
     if saa and make_new:
@@ -652,7 +847,22 @@ def xabs(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def yabs(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Apply absolute value to the y-coordinate of ``point``, with saa/throw control."""
+    """Apply absolute value to the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _y = abs(point.y)
     if saa and make_new:
@@ -670,7 +880,22 @@ def yabs(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def intize(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Convert both coordinates of ``point`` to ``int``, with saa/throw control."""
+    """Convert both coordinates of ``point`` to ``int``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _x, _y = int(point.x), int(point.y)
     if saa and make_new:
@@ -688,7 +913,22 @@ def intize(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def floatize(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Convert both coordinates of ``point`` to ``float``, with saa/throw control."""
+    """Convert both coordinates of ``point`` to ``float``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _x, _y = float(point.x), float(point.y)
     if saa and make_new:
@@ -707,7 +947,24 @@ def floatize(point, saa=False, make_new=True, lean='ignore', throw=True):
 
 def roundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
-    """Round both coordinates of ``point`` to ``ndigits``, with saa/throw control."""
+    """Round both coordinates of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x, _y = round(point.x, nd), round(point.y, nd)
@@ -727,7 +984,24 @@ def roundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
-    """Round the x-coordinate of ``point`` to ``ndigits``, with saa/throw control."""
+    """Round the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x = round(point.x, nd)
@@ -747,7 +1021,24 @@ def xroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
-    """Round the y-coordinate of ``point`` to ``ndigits``, with saa/throw control."""
+    """Round the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _y = round(point.y, nd)
@@ -767,7 +1058,24 @@ def yroundround(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def roundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
               throw=True):
-    """Apply ``math.ceil`` to both coordinates of ``point``, with saa/throw control."""
+    """Apply decimal-place ceiling to both coordinates of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled ceiling.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x_, _y_ = point.x, point.y
@@ -789,7 +1097,24 @@ def roundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
-    """Apply ``math.ceil`` to the x-coordinate of ``point``, with saa/throw control."""
+    """Apply decimal-place ceiling to the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled ceiling.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x_ = point.x
@@ -810,7 +1135,24 @@ def xroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
-    """Apply ``math.ceil`` to the y-coordinate of ``point``, with saa/throw control."""
+    """Apply decimal-place ceiling to the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled ceiling.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _y_ = point.y
@@ -831,7 +1173,24 @@ def yroundceil(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def roundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                throw=True):
-    """Apply ``math.floor`` to both coordinates of ``point``, with saa/throw control."""
+    """Apply decimal-place floor to both coordinates of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled floor.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x_, _y_ = point.x, point.y
@@ -853,7 +1212,24 @@ def roundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def xroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
-    """Apply ``math.floor`` to the x-coordinate of ``point``, with saa/throw control."""
+    """Apply decimal-place floor to the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled floor.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _x_ = point.x
@@ -874,7 +1250,24 @@ def xroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
 
 def yroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
                 throw=True):
-    """Apply ``math.floor`` to the y-coordinate of ``point``, with saa/throw control."""
+    """Apply decimal-place floor to the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    nd : int, optional
+        Number of decimal places used for scaled floor.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     # nd: number of decimal places
     if saa or make_new:
         _y_ = point.y
@@ -894,7 +1287,22 @@ def yroundfloor(point, nd=4, saa=False, make_new=True, lean='ignore',
         return to_return
 
 def negxy(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Negate both coordinates of ``point``, with saa/throw control."""
+    """Negate both coordinates of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _x, _y = -point.x, -point.y
     if saa and make_new:
@@ -912,7 +1320,22 @@ def negxy(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def negx(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Negate the x-coordinate of ``point``, with saa/throw control."""
+    """Negate the x-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _x = -point.x
     if saa and make_new:
@@ -930,7 +1353,22 @@ def negx(point, saa=False, make_new=True, lean='ignore', throw=True):
         return to_return
 
 def negy(point, saa=False, make_new=True, lean='ignore', throw=True):
-    """Negate the y-coordinate of ``point``, with saa/throw control."""
+    """Negate the y-coordinate of ``point``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         _y = -point.y
     if saa and make_new:
@@ -949,12 +1387,42 @@ def negy(point, saa=False, make_new=True, lean='ignore', throw=True):
 
 def mirrorx(point, saa: bool = False, make_new: bool = True,
             lean: bool = 'ignore', throw: bool = True):
-    """Mirror point about the x-axis."""
+    """Mirror point about the x-axis.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``negy``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to the point operation.
+
+    Returns
+    -------
+    object
+        Result returned by ``point.negy``.
+    """
     return point.negy(saa=saa, make_new=make_new, lean=lean, throw=throw)
 
 def mirrory(point, saa: bool = False, make_new: bool = True,
             lean: bool = 'ignore', throw: bool = True):
-    """Mirror point about the y-axis."""
+    """Mirror point about the y-axis.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``negx``.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to the point operation.
+
+    Returns
+    -------
+    object
+        Result returned by ``point.negx``.
+    """
     return point.negx(saa=saa, make_new=make_new, lean=lean, throw=throw)
 
 def translate(point, xyincr: list = [0.0, 0.0], method: str = 'xyincr',
@@ -963,7 +1431,32 @@ def translate(point, xyincr: list = [0.0, 0.0], method: str = 'xyincr',
               xynew: list = [0.0, 0.0], saa: bool = False,
               make_new: bool = True, lean: bool = 'ignore',
               throw: bool = True):
-    """Translate ``point`` by a displacement vector, with saa/throw control."""
+    """Translate ``point`` by displacement or target coordinates.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    xyincr : list, optional
+        ``[dx, dy]`` displacement used by ``method='xyincr'``.
+    method : str, optional
+        Translation mode interpreted using ``dth.opt`` translation groups.
+    xincr, yincr : float, optional
+        Axis-specific increments.
+    xnew, ynew : float, optional
+        Axis-specific target coordinates.
+    xynew : list, optional
+        ``[x, y]`` target coordinate.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object
+        New point, status string, or ``None`` depending on control flags.
+    """
     if saa or make_new:
         if method in dth.opt.translate_xyincr:
             _x, _y = point.x+xyincr[0], point.y+xyincr[1]
@@ -994,8 +1487,28 @@ def translate(point, xyincr: list = [0.0, 0.0], method: str = 'xyincr',
 def rotate(point, t=0.0, o=(0.0, 0.0), nd=12,
            saa=False, make_new=True, lean='ignore', throw=True):
     """
-    Rotate counterclockwise.
-    nd: number of decimal places to round off to
+    Rotate ``point`` counterclockwise about origin ``o``.
+
+    Parameters
+    ----------
+    point : object
+        Point-like object exposing ``x``, ``y``, and ``make_new``.
+    t : float, optional
+        Rotation angle in degrees.
+    o : tuple of float, optional
+        Rotation origin ``(ox, oy)``.
+    nd : int, optional
+        Number of decimal places to round off to.
+    saa, make_new, throw : bool, optional
+        Control in-place update, new-object creation, and return behavior.
+    lean : str, optional
+        Forwarded to ``point.make_new``.
+
+    Returns
+    -------
+    object or tuple
+        New point/status object when ``throw`` is True; otherwise the rotated
+        ``(x, y)`` coordinate tuple.
     """
     if saa or make_new:
         t, ox, oy, px, py = radians(t), o[0], o[1], point.x, point.y
@@ -1020,6 +1533,28 @@ def rotate(point, t=0.0, o=(0.0, 0.0), nd=12,
 ###############################################################################
 def distance(self, otype='point2d', obj=None, cor=0.1, nworkers=1):
     """
+    Compute distance from a point-like object to another object.
+
+    Parameters
+    ----------
+    self : object
+        Point-like object exposing ``x`` and ``y``.
+    otype : str, optional
+        Object type selector.
+    obj : object, optional
+        Object or coordinate data to measure against.
+    cor : float, optional
+        Chunking or correction parameter retained by the implementation.
+    nworkers : int, optional
+        Worker count retained by the implementation.
+
+    Returns
+    -------
+    object
+        Distance value or array, depending on ``otype`` and ``obj``.
+
+    Notes
+    -----
     1. Single UPXO point2d object - DONE
     2. List of upxo point2d objects - DONE
     3. A single coordinate pair of point2d - DONE
