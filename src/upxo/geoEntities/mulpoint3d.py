@@ -61,6 +61,12 @@ class MPoint3d():
     metadata : dict
         User/provenance metadata carried with this point cloud.
 
+    Notes
+    -----
+    The stored coordinate convention is always row-major ``[x, y, z]``.
+    Construction helpers may add provenance metadata for downstream Voronoi
+    seed workflows.
+
     Standard coordinate format
     --------------------------
     ::
@@ -73,7 +79,16 @@ class MPoint3d():
     __slots__ = ('coords', 'tree', 'pdist', 'metadata')
 
     def __init__(self, coords=None, metadata=None):
-        """Initialise from an ``(N, 3)`` numpy array of 3D coordinates."""
+        """
+        Initialise from 3D coordinates.
+
+        Parameters
+        ----------
+        coords : array-like, shape (N, 3), optional
+            Coordinate array. ``None`` creates an empty point cloud.
+        metadata : dict, optional
+            Provenance or workflow metadata copied onto the instance.
+        """
         self.coords = self._coerce_coords(coords)
         self.tree = None
         self.pdist = pdist
@@ -81,7 +96,24 @@ class MPoint3d():
 
     @staticmethod
     def _coerce_coords(coords):
-        """Return ``coords`` as a numeric contiguous ``(N, 3)`` array."""
+        """
+        Return ``coords`` as a numeric contiguous ``(N, 3)`` array.
+
+        Parameters
+        ----------
+        coords : array-like or None
+            Input coordinate data.
+
+        Returns
+        -------
+        numpy.ndarray
+            Contiguous floating-point coordinate array with shape ``(N, 3)``.
+
+        Raises
+        ------
+        ValueError
+            If non-empty coordinates cannot be interpreted as 3D points.
+        """
         if coords is None:
             return np.empty((0, 3), dtype=float)
 
@@ -99,7 +131,24 @@ class MPoint3d():
 
     @staticmethod
     def _coerce_bounds(bounds):
-        """Return axis-aligned RVE bounds as a numeric ``(3, 2)`` array."""
+        """
+        Return axis-aligned RVE bounds as a numeric ``(3, 2)`` array.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2)
+            Axis bounds as ``[[xmin, xmax], [ymin, ymax], [zmin, zmax]]``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Contiguous floating-point bounds array.
+
+        Raises
+        ------
+        ValueError
+            If bounds shape, finiteness, or min/max ordering is invalid.
+        """
         bounds = np.asarray(bounds, dtype=float)
         if bounds.shape != (3, 2):
             raise ValueError('bounds must have shape (3, 2).')
@@ -111,7 +160,25 @@ class MPoint3d():
 
     @staticmethod
     def _coerce_boundary(boundary):
-        """Return canonical boundary label and per-axis periodic flags."""
+        """
+        Return canonical boundary label and per-axis periodic flags.
+
+        Parameters
+        ----------
+        boundary : str
+            Boundary condition label.
+
+        Returns
+        -------
+        tuple
+            ``(boundary_label, periodic_flags)`` where periodic flags are a
+            length-3 tuple of booleans.
+
+        Raises
+        ------
+        ValueError
+            If ``boundary`` is not recognised.
+        """
         boundary = str(boundary).strip().lower()
         if boundary in ('aperiodic', 'nonperiodic', 'non-periodic', 'open'):
             return 'aperiodic', (False, False, False)
@@ -121,7 +188,26 @@ class MPoint3d():
 
     @staticmethod
     def _effective_bounds(bounds, face_clearance):
-        """Return the bounds available after applying face clearance."""
+        """
+        Return the bounds available after applying face clearance.
+
+        Parameters
+        ----------
+        bounds : numpy.ndarray, shape (3, 2)
+            Original RVE bounds.
+        face_clearance : float
+            Minimum distance from generated points to each RVE face.
+
+        Returns
+        -------
+        numpy.ndarray
+            Bounds shrunk inward by ``face_clearance`` on every face.
+
+        Raises
+        ------
+        ValueError
+            If clearance is non-finite, negative, or too large for any axis.
+        """
         face_clearance = float(face_clearance)
         if not np.isfinite(face_clearance):
             raise ValueError('face_clearance must be finite.')
@@ -142,7 +228,31 @@ class MPoint3d():
     @staticmethod
     def _seed_metadata(generator_type, boundary, periodic, bounds,
                        effective_bounds, face_clearance, extra=None):
-        """Return standard Voronoi-seed provenance metadata."""
+        """
+        Return standard Voronoi-seed provenance metadata.
+
+        Parameters
+        ----------
+        generator_type : str
+            Seed generator type label.
+        boundary : str
+            Boundary condition label.
+        periodic : tuple of bool
+            Per-axis periodic flags.
+        bounds : numpy.ndarray
+            Original RVE bounds.
+        effective_bounds : numpy.ndarray
+            Bounds available after face-clearance application.
+        face_clearance : float
+            Applied face-clearance distance.
+        extra : dict, optional
+            Additional metadata to merge into the result.
+
+        Returns
+        -------
+        dict
+            Metadata dictionary for Voronoi seed provenance.
+        """
         seed_metadata = {
             'seed_role': 'voronoi_generator',
             'generator_type': generator_type,
@@ -158,20 +268,64 @@ class MPoint3d():
 
     @staticmethod
     def _points_in_bounds(coords, bounds):
-        """Return mask for coordinates inside closed axis-aligned bounds."""
+        """
+        Return mask for coordinates inside closed axis-aligned bounds.
+
+        Parameters
+        ----------
+        coords : array-like, shape (N, 3)
+            Coordinates to test.
+        bounds : numpy.ndarray, shape (3, 2)
+            Closed axis-aligned bounds.
+
+        Returns
+        -------
+        numpy.ndarray
+            Boolean mask with one value per coordinate.
+        """
         coords = np.asarray(coords, dtype=float)
         return np.all((coords >= bounds[:, 0]) & (coords <= bounds[:, 1]),
                       axis=1)
 
     @staticmethod
     def _wrap_coords_to_bounds(coords, bounds):
-        """Wrap coordinates into an axis-aligned periodic box."""
+        """
+        Wrap coordinates into an axis-aligned periodic box.
+
+        Parameters
+        ----------
+        coords : numpy.ndarray, shape (N, 3)
+            Coordinates to wrap.
+        bounds : numpy.ndarray, shape (3, 2)
+            Periodic box bounds.
+
+        Returns
+        -------
+        numpy.ndarray
+            Wrapped coordinates.
+        """
         lengths = bounds[:, 1] - bounds[:, 0]
         return ((coords - bounds[:, 0]) % lengths) + bounds[:, 0]
 
     @staticmethod
     def _periodic_delta(coords, refs, bounds):
-        """Return minimum-image deltas from ``coords`` to ``refs``."""
+        """
+        Return minimum-image deltas from ``coords`` to ``refs``.
+
+        Parameters
+        ----------
+        coords : numpy.ndarray, shape (N, 3)
+            Query coordinates.
+        refs : numpy.ndarray, shape (M, 3)
+            Reference coordinates.
+        bounds : numpy.ndarray, shape (3, 2)
+            Periodic box bounds.
+
+        Returns
+        -------
+        numpy.ndarray
+            Minimum-image displacement array with shape ``(N, M, 3)``.
+        """
         delta = coords[:, None, :] - refs[None, :, :]
         lengths = bounds[:, 1] - bounds[:, 0]
         return delta - lengths*np.round(delta/lengths)
@@ -179,7 +333,27 @@ class MPoint3d():
     @classmethod
     def _nearest_seed_indices(cls, points, seeds, bounds=None,
                               periodic=False, batch_size=20000):
-        """Return nearest seed index for every point."""
+        """
+        Return nearest seed index for every point.
+
+        Parameters
+        ----------
+        points : array-like, shape (N, 3)
+            Query coordinates.
+        seeds : array-like, shape (M, 3)
+            Candidate seed coordinates.
+        bounds : array-like, shape (3, 2), optional
+            Periodic bounds, required when ``periodic`` is true.
+        periodic : bool, optional
+            Whether to use minimum-image periodic distances.
+        batch_size : int, optional
+            Number of query points processed per batch.
+
+        Returns
+        -------
+        numpy.ndarray
+            Integer seed index nearest to each query point.
+        """
         points = np.asarray(points, dtype=float)
         seeds = np.asarray(seeds, dtype=float)
         nearest = np.empty(points.shape[0], dtype=int)
@@ -197,7 +371,32 @@ class MPoint3d():
 
     @staticmethod
     def _apply_jitter(coords, jitter, rng, bounds, periodic):
-        """Apply bounded random jitter to generated lattice coordinates."""
+        """
+        Apply bounded random jitter to generated lattice coordinates.
+
+        Parameters
+        ----------
+        coords : numpy.ndarray, shape (N, 3)
+            Coordinates to perturb.
+        jitter : float
+            Maximum absolute uniform perturbation per coordinate component.
+        rng : numpy.random.Generator
+            Random-number generator.
+        bounds : numpy.ndarray, shape (3, 2)
+            Domain bounds used for wrapping or clipping.
+        periodic : bool
+            Whether to wrap perturbed coordinates periodically.
+
+        Returns
+        -------
+        numpy.ndarray
+            Jittered coordinates retained inside the domain.
+
+        Raises
+        ------
+        ValueError
+            If ``jitter`` is negative.
+        """
         jitter = float(jitter)
         if jitter < 0:
             raise ValueError('jitter must be non-negative.')
@@ -211,7 +410,28 @@ class MPoint3d():
 
     @staticmethod
     def _select_points(coords, n, rng):
-        """Select exactly ``n`` points without replacement when requested."""
+        """
+        Select exactly ``n`` points without replacement when requested.
+
+        Parameters
+        ----------
+        coords : numpy.ndarray, shape (N, 3)
+            Candidate coordinates.
+        n : int or None
+            Number of points to select. ``None`` returns all candidates.
+        rng : numpy.random.Generator
+            Random-number generator.
+
+        Returns
+        -------
+        numpy.ndarray
+            Selected coordinate subset.
+
+        Raises
+        ------
+        ValueError
+            If ``n`` is invalid or more points are requested than available.
+        """
         if n is None:
             return coords
         n = int(n)
@@ -229,7 +449,25 @@ class MPoint3d():
 
     @staticmethod
     def _estimate_lattice_spacing(bounds, n, lattice, ca_ratio):
-        """Estimate lattice spacing needed to generate roughly ``n`` points."""
+        """
+        Estimate lattice spacing needed to generate roughly ``n`` points.
+
+        Parameters
+        ----------
+        bounds : numpy.ndarray, shape (3, 2)
+            Lattice generation bounds.
+        n : int
+            Target number of points.
+        lattice : str
+            Lattice type.
+        ca_ratio : float
+            HCP c/a ratio.
+
+        Returns
+        -------
+        float
+            Estimated lattice spacing.
+        """
         n = int(n)
         volume = np.prod(bounds[:, 1] - bounds[:, 0])
         lattice = str(lattice).lower()
@@ -934,7 +1172,25 @@ class MPoint3d():
         return cls(coords=seeds, metadata=seed_metadata)
 
     def _resolve_seed_bounds(self, bounds=None):
-        """Resolve RVE bounds from user input or seed metadata."""
+        """
+        Resolve RVE bounds from user input or seed metadata.
+
+        Parameters
+        ----------
+        bounds : array-like, shape (3, 2), optional
+            Explicit bounds. If omitted, metadata or coordinate extents are
+            used.
+
+        Returns
+        -------
+        numpy.ndarray
+            Validated RVE bounds.
+
+        Raises
+        ------
+        ValueError
+            If bounds cannot be resolved for an empty point cloud.
+        """
         if bounds is None:
             bounds = self.metadata.get('bounds')
         if bounds is None:
@@ -946,7 +1202,24 @@ class MPoint3d():
         return self._coerce_bounds(bounds)
 
     def _resolve_periodic(self, periodic=None):
-        """Resolve periodic flags from user input or seed metadata."""
+        """
+        Resolve periodic flags from user input or seed metadata.
+
+        Parameters
+        ----------
+        periodic : bool or iterable of bool, optional
+            Explicit periodic setting. If omitted, metadata is used.
+
+        Returns
+        -------
+        tuple of bool
+            Length-3 per-axis periodic flags.
+
+        Raises
+        ------
+        ValueError
+            If periodic cannot be interpreted as a bool or length-3 iterable.
+        """
         if periodic is None:
             periodic = self.metadata.get('periodic', (False, False, False))
         if isinstance(periodic, bool):
@@ -1592,37 +1865,86 @@ class MPoint3d():
 
     @property
     def n(self):
-        """Number of points in the collection."""
+        """
+        Number of points in the collection.
+
+        Returns
+        -------
+        int
+            Number of coordinate rows in ``self.coords``.
+        """
         return len(self.coords)
 
     @property
     def centroid(self):
-        """Mean 3D coordinate of all points as a ``(3,)`` array."""
+        """
+        Mean 3D coordinate of all points.
+
+        Returns
+        -------
+        numpy.ndarray
+            Centroid coordinate with shape ``(3,)``.
+        """
         return np.mean(self.coords, axis=0)
 
     @property
     def points(self):
-        """Return a list of ``Point3d`` objects built from ``self.coords``."""
+        """
+        Return point objects built from ``self.coords``.
+
+        Returns
+        -------
+        list of Point3d
+            One ``Point3d`` object per coordinate row.
+        """
         return [Point3d(x, y, z) for x, y, z in zip(self.x, self.y, self.z)]
 
     @property
     def x(self):
-        """x-coordinates of all points as a 1-D array."""
+        """
+        x-coordinates of all points.
+
+        Returns
+        -------
+        numpy.ndarray
+            One-dimensional x-coordinate array.
+        """
         return self.coords[:, 0]
 
     @property
     def y(self):
-        """y-coordinates of all points as a 1-D array."""
+        """
+        y-coordinates of all points.
+
+        Returns
+        -------
+        numpy.ndarray
+            One-dimensional y-coordinate array.
+        """
         return self.coords[:, 1]
 
     @property
     def z(self):
-        """z-coordinates of all points as a 1-D array."""
+        """
+        z-coordinates of all points.
+
+        Returns
+        -------
+        numpy.ndarray
+            One-dimensional z-coordinate array.
+        """
         return self.coords[:, 2]
 
     @property
     def ckd_tree(self):
-        """Build and return a ``cKDTree`` for fast nearest-neighbour queries."""
+        """
+        Build and return a ``cKDTree`` for fast nearest-neighbour queries.
+
+        Returns
+        -------
+        scipy.spatial.cKDTree
+            Cached or newly built KD-tree over ``self.coords``.
+        """
         if self.tree is None:
             self.tree = self.maketree(treeType='ckdtree', throw=True)
         return self.tree
@@ -1752,7 +2074,14 @@ class MPoint3d():
                                                          points_type=points_type))
 
     def convex_hull(self):
-        """Compute the convex hull of the 3D point set. Not yet implemented."""
+        """
+        Compute the convex hull of the 3D point set.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because convex-hull construction is not implemented.
+        """
         raise NotImplementedError("convex_hull is not yet implemented.")
 
     def maketree(self, treeType='ckdtree', saa=False,
@@ -1798,11 +2127,25 @@ class MPoint3d():
             return tree
 
     def get_self_distance_max(self):
-        """Return the maximum pairwise distance among all points in ``self.coords``."""
+        """
+        Return the maximum pairwise distance among all points.
+
+        Returns
+        -------
+        float
+            Maximum pairwise distance in ``self.coords``.
+        """
         return self.pdist(self.coords).max()
 
     def get_self_distance_min(self):
-        """Return the minimum pairwise distance among all points in ``self.coords``."""
+        """
+        Return the minimum pairwise distance among all points.
+
+        Returns
+        -------
+        float
+            Minimum pairwise distance in ``self.coords``.
+        """
         return self.pdist(self.coords).min()
 
     def find_first_order_neigh_CUBIC(self, coord, vox_size,
