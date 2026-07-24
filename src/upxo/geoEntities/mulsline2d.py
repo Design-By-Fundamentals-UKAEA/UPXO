@@ -1882,6 +1882,29 @@ class ring2d():
         return coordinates, C
 
 class mulring2d():
+    """
+    Collection of 2D ring objects with shared interface bookkeeping.
+
+    Parameters
+    ----------
+    rings : list
+        Ring objects to be grouped into the multi-ring container.
+
+    Attributes
+    ----------
+    rings : list
+        Individual ring objects supplied at construction.
+    jp : object
+        Junction-point storage placeholder.
+    ip : object
+        Interface-point storage placeholder.
+
+    Notes
+    -----
+    The implementation is currently a placeholder for future multi-ring
+    workflows. Existing notes below describe the intended data model and are
+    retained for development continuity.
+    """
     __slots__ = ('rings', 'jp', 'ip')
 
     """
@@ -1897,21 +1920,57 @@ class mulring2d():
     """
 
     def __init__(self, rings):
-        """Initialise from a list of ring objects."""
+        """
+        Initialise from a list of ring objects.
+
+        Parameters
+        ----------
+        rings : list
+            Ring objects to store in the multi-ring container.
+        """
         self.rings = rings
 
     def build_points_list(self):
-        """Build a flat list of all points from the ring collection. Not yet implemented."""
+        """
+        Build a flat list of all points from the ring collection.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because point-list construction is not implemented.
+        """
         raise NotImplementedError("build_points_list is not yet implemented.")
 
     def set_coords(self):
-        """Set coordinate arrays from the ring collection. Not yet implemented."""
+        """
+        Set coordinate arrays from the ring collection.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because multi-ring coordinate caching is not
+            implemented.
+        """
         raise NotImplementedError("set_coords is not yet implemented.")
 
     def export_abaqus_for_meshing(self):
-        """Export the geometry in Abaqus mesh-input format. Not yet implemented."""
+        """
+        Export the geometry in Abaqus mesh-input format.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because Abaqus export is not implemented.
+        """
         raise NotImplementedError("export_abaqus_for_meshing is not yet implemented.")
 
     def mesh(self):
-        """Generate a mesh for the ring collection. Not yet implemented."""
+        """
+        Generate a mesh for the ring collection.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because multi-ring meshing is not implemented.
+        """
         raise NotImplementedError("mesh is not yet implemented.")
