@@ -24,7 +24,15 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 class Plane:
-    """Represent a 3D plane using a point and a normal vector."""
+    """Represent a 3D plane using a point and a normal vector.
+
+    Parameters
+    ----------
+    point : array-like, shape (3,)
+        Any point lying on the plane.
+    normal : array-like, shape (3,)
+        Plane normal vector.
+    """
 
     def __init__(self, point, normal):
         """
@@ -41,7 +49,13 @@ class Plane:
         self.normal = np.array(normal).astype(float)
 
     def __repr__(self):
-        """Return a concise string representation of the plane."""
+        """Return a concise string representation of the plane.
+
+        Returns
+        -------
+        str
+            Plane summary containing rounded point and normal coordinates.
+        """
         return f"Plane(point={[round(xyz, 6) for xyz in self.point]}, normal={[round(x, 6) for x in self.normal]})"
 
     @classmethod
@@ -744,17 +758,50 @@ class Plane:
         return circle_points
 
     def _rotation_matrix_x(self, angle):
-        """Return 3x3 rotation matrix about x-axis for ``angle`` radians."""
+        """Return a 3x3 rotation matrix about the x-axis.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle in radians.
+
+        Returns
+        -------
+        numpy.ndarray, shape (3, 3)
+            Rotation matrix.
+        """
         c, s = np.cos(angle), np.sin(angle)
         return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
 
     def _rotation_matrix_y(self, angle):
-        """Return 3x3 rotation matrix about y-axis for ``angle`` radians."""
+        """Return a 3x3 rotation matrix about the y-axis.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle in radians.
+
+        Returns
+        -------
+        numpy.ndarray, shape (3, 3)
+            Rotation matrix.
+        """
         c, s = np.cos(angle), np.sin(angle)
         return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
 
     def _rotation_matrix_z(self, angle):
-        """Return 3x3 rotation matrix about z-axis for ``angle`` radians."""
+        """Return a 3x3 rotation matrix about the z-axis.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle in radians.
+
+        Returns
+        -------
+        numpy.ndarray, shape (3, 3)
+            Rotation matrix.
+        """
         c, s = np.cos(angle), np.sin(angle)
         return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
 
