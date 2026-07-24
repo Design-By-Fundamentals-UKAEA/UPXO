@@ -335,7 +335,19 @@ class edge2d():
         # sunil
 
     def calculate_level01_basics(self, length_method='coords'):
-        """Compute and store centroid, length, and slope immediately after construction."""
+        """
+        Compute and store centroid, length, and slope after construction.
+
+        Parameters
+        ----------
+        length_method : str, optional
+            Method passed to ``calc_length``. Default is ``'coords'``.
+
+        Returns
+        -------
+        None
+            Updates derived geometric attributes in place.
+        """
         # Calculate centre of the edge
         self.calc_centre(saa=True, throw=False)
         # Calculate the length of the edge
@@ -1760,9 +1772,23 @@ class edge2d():
         """
         Subtract a value or edge from this edge's endpoints.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Parameters
+        ----------
+        edge : object, optional
+            Edge-like object to subtract.
+        edge_type : str, optional
+            Edge representation type.
+        value : object, optional
+            Scalar or coordinate-like subtraction value.
+
+        Returns
+        -------
+        None
+            Placeholder return value; operation is not yet implemented.
+
+        Notes
+        -----
+        This method is reserved for future arithmetic support.
         """
         pass
 
@@ -1893,9 +1919,15 @@ class edge2d():
         """
         Float conversion of edge endpoint coordinates.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Returns
+        -------
+        None
+            Placeholder return value; conversion is not yet implemented.
+
+        Notes
+        -----
+        This conversion hook is reserved for future numeric representations of
+        an edge.
         """
         pass
 
@@ -1903,9 +1935,15 @@ class edge2d():
         """
         Complex conversion of the edge object.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Returns
+        -------
+        None
+            Placeholder return value; conversion is not yet implemented.
+
+        Notes
+        -----
+        This conversion hook is reserved for future complex-coordinate
+        representations.
         """
         pass
 
@@ -1913,9 +1951,15 @@ class edge2d():
         """
         Truncate endpoint coordinates toward zero.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Returns
+        -------
+        None
+            Placeholder return value; truncation is not yet implemented.
+
+        Notes
+        -----
+        This conversion hook is reserved for future integer-style endpoint
+        transformations.
         """
         pass
 
@@ -1967,9 +2011,14 @@ class edge2d():
         """
         Iterate over constituent point objects.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Returns
+        -------
+        None
+            Placeholder return value; iteration is not yet implemented.
+
+        Notes
+        -----
+        This method is reserved for future point-object iteration support.
         """
         pass
 
@@ -1977,9 +2026,15 @@ class edge2d():
         """
         Advance the iterator over constituent points.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Returns
+        -------
+        None
+            Placeholder return value; iterator advancement is not yet
+            implemented.
+
+        Notes
+        -----
+        This method is reserved for future iterator protocol support.
         """
         pass
 
@@ -2279,9 +2334,23 @@ class edge2d():
         """
         Stretch the edge by a given strain about a center point.
 
-        Limitations
-        -----------
-        - Not yet implemented; returns None.
+        Parameters
+        ----------
+        method : str, optional
+            Stretching method. Default is ``'strain'``.
+        center : str, optional
+            Reference center for stretching. Default is ``'A'``.
+        strain : float, optional
+            Strain value to apply.
+
+        Returns
+        -------
+        None
+            Placeholder return value; stretching is not yet implemented.
+
+        Notes
+        -----
+        This method is reserved for future edge deformation workflows.
         """
         pass
 
@@ -3746,7 +3815,25 @@ class edge2d():
         return edge_splits
 
     def split_at_muledge2d_intersection(self, edges):
-        """Split this edge at all intersection points with a multi-edge chain. Not yet implemented."""
+        """
+        Split this edge at intersections with a multi-edge chain.
+
+        Parameters
+        ----------
+        edges : muledge2d
+            Multi-edge chain to intersect with this edge.
+
+        Returns
+        -------
+        None
+            Placeholder return value; multi-edge splitting is not yet
+            implemented.
+
+        Notes
+        -----
+        The neighbouring ``split_at_edge2d_intersection`` method contains the
+        implemented single-edge splitting workflow.
+        """
         pass
 
     def contains_point(self, obj=None, method='parallelity', tdist=0.0):
@@ -4201,7 +4288,19 @@ class edge2d():
             self.slope = INFINITY
 
     def _calc_slope_(self, x1, x2, y1, y2):
-        """Return ``(y2 - y1) / (x2 - x1)`` as float64."""
+        """
+        Return the slope between two coordinate pairs.
+
+        Parameters
+        ----------
+        x1, x2, y1, y2 : float
+            Endpoint coordinate components.
+
+        Returns
+        -------
+        numpy.float64
+            ``(y2 - y1) / (x2 - x1)``.
+        """
         return np.float64(y2-y1)/(x2-x1)
 
     def calc_length(self, method='points', saa=True, throw=False):
@@ -4560,27 +4659,78 @@ class edge2d():
 
     @property
     def _xa_(self):
-        """x-coordinate of endpoint A (``pnta``). Setter triggers deformation updates."""
+        """
+        x-coordinate of endpoint A.
+
+        Returns
+        -------
+        float
+            Current x-coordinate of ``pnta``.
+
+        Notes
+        -----
+        The setter triggers endpoint and deformation updates.
+        """
         return self.__x[0]
 
     @property
     def _xb_(self):
-        """x-coordinate of endpoint B (``pntb``). Setter triggers deformation updates."""
+        """
+        x-coordinate of endpoint B.
+
+        Returns
+        -------
+        float
+            Current x-coordinate of ``pntb``.
+
+        Notes
+        -----
+        The setter triggers endpoint and deformation updates.
+        """
         return self.__x[1]
 
     @property
     def _ya_(self):
-        """y-coordinate of endpoint A (``pnta``). Setter triggers deformation updates."""
+        """
+        y-coordinate of endpoint A.
+
+        Returns
+        -------
+        float
+            Current y-coordinate of ``pnta``.
+
+        Notes
+        -----
+        The setter triggers endpoint and deformation updates.
+        """
         return self.__y[0]
 
     @property
     def _yb_(self):
-        """y-coordinate of endpoint B (``pntb``). Setter triggers deformation updates."""
+        """
+        y-coordinate of endpoint B.
+
+        Returns
+        -------
+        float
+            Current y-coordinate of ``pntb``.
+
+        Notes
+        -----
+        The setter triggers endpoint and deformation updates.
+        """
         return self.__y[1]
 
     @ _xa_.setter
     def _xa_(self, x):
-        """Set x of endpoint A and trigger deformation updates."""
+        """
+        Set x of endpoint A and trigger deformation updates.
+
+        Parameters
+        ----------
+        x : float
+            New x-coordinate for endpoint A.
+        """
         if self.__x[0] != x:
             self.__x[0] = x
             self.update_end_points_from_x_and_y()
@@ -4588,7 +4738,14 @@ class edge2d():
 
     @ _xb_.setter
     def _xb_(self, x):
-        """Set x of endpoint B and trigger deformation updates."""
+        """
+        Set x of endpoint B and trigger deformation updates.
+
+        Parameters
+        ----------
+        x : float
+            New x-coordinate for endpoint B.
+        """
         if self.__x[1] != x:
             self.__x[1] = x
             self.update_end_points_from_x_and_y()
@@ -4596,7 +4753,14 @@ class edge2d():
 
     @ _ya_.setter
     def _ya_(self, y):
-        """Set y of endpoint A and trigger deformation updates."""
+        """
+        Set y of endpoint A and trigger deformation updates.
+
+        Parameters
+        ----------
+        y : float
+            New y-coordinate for endpoint A.
+        """
         if self.__y[0] != y:
             self.__y[0] = y
             self.update_end_points_from_x_and_y()
@@ -4604,7 +4768,14 @@ class edge2d():
 
     @ _yb_.setter
     def _yb_(self, y):
-        """Set y of endpoint B and trigger deformation updates."""
+        """
+        Set y of endpoint B and trigger deformation updates.
+
+        Parameters
+        ----------
+        y : float
+            New y-coordinate for endpoint B.
+        """
         if self.__y[1] != y:
             self.__y[1] = y
             self.update_end_points_from_x_and_y()
@@ -4634,7 +4805,16 @@ class edge2d_lean_highest():
                  start=[0.0, 0.0],
                  end=[1.0, 1.0]
                  ):
-        """Initialise with ``start`` and ``end`` endpoint coordinates."""
+        """
+        Initialise with ``start`` and ``end`` endpoint coordinates.
+
+        Parameters
+        ----------
+        start : list of float, optional
+            Start endpoint coordinate ``[x, y]``.
+        end : list of float, optional
+            End endpoint coordinate ``[x, y]``.
+        """
         self.xy = [[start[0], end[0]], [start[1], end[1]]]
 
 
@@ -4664,7 +4844,16 @@ class edge2d_from_point2d():
                  pnta=None,
                  pntb=None
                  ):
-        """Initialise from two ``Point2d`` endpoints and compute Euclidean length."""
+        """
+        Initialise from two ``Point2d`` endpoints and compute length.
+
+        Parameters
+        ----------
+        pnta : Point2d, optional
+            Start endpoint.
+        pntb : Point2d, optional
+            End endpoint.
+        """
         self.pnta = pnta
         self.pntb = pntb
         self.length = np.sqrt((pnta.x-pntb.x)**2+(pnta.y-pntb.y)**2)
