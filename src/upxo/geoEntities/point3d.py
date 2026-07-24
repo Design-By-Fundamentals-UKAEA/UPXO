@@ -34,9 +34,24 @@ from upxo._sup.validation_values import find_spec_of_points
 from upxo._sup.validation_values import isinstance_many
 
 class _coord_():
+    """Lightweight raw 3D coordinate holder.
+
+    Parameters
+    ----------
+    x, y, z : float
+        Coordinate values to store.
+    """
+
     __slots__ = ('x', 'y', 'z')
+
     def __init__(self, x, y, z):
-        """Store raw 3D coordinate values in ``x``, ``y``, ``z``."""
+        """Store raw 3D coordinate values in ``x``, ``y``, ``z``.
+
+        Parameters
+        ----------
+        x, y, z : float
+            Coordinate values to store.
+        """
         self.x, self.y, self.z = x, y, z
 
 
@@ -61,11 +76,23 @@ class p3d_leanest():
     __slots__ = ('_x', '_y', '_z')
 
     def __init__(self, x, y, z):
-        """Initialise the leanest 3D point with ``x``, ``y``, ``z`` coordinates."""
+        """Initialise the leanest 3D point.
+
+        Parameters
+        ----------
+        x, y, z : float
+            Cartesian coordinates.
+        """
         self._x, self._y, self._z = x, y, z
 
     def __repr__(self):
-        """Return string representation of self."""
+        """Return string representation of self.
+
+        Returns
+        -------
+        str
+            Human-readable summary containing coordinates and object ID.
+        """
         return f'Lean 3D point at ({self._x}, {self._y}, {self._z}, {id(self)})'
 
 
@@ -107,14 +134,28 @@ class Point3d(UPXO_Point):
     __slots__ = UPXO_Point.__slots__ + ('z', )
 
     def __init__(self, x, y, z=0.0):
-        """Initialise a 3D point with Cartesian coordinates ``x``, ``y``, ``z``."""
+        """Initialise a 3D point with Cartesian coordinates.
+
+        Parameters
+        ----------
+        x, y : float
+            In-plane Cartesian coordinates.
+        z : float, optional
+            Out-of-plane Cartesian coordinate.
+        """
         super().__init__(x, y, z)
         self.x = x
         self.y = y
         self.z = z
 
     def __repr__(self):
-        """Return a string representation of point3d instance."""
+        """Return a string representation of point3d instance.
+
+        Returns
+        -------
+        str
+            Human-readable coordinate summary.
+        """
         return f"uxpo-p3d ({self.x},{self.y},{self.z})"
 
     def __eq__(self, plist):
@@ -323,11 +364,49 @@ class Point3d(UPXO_Point):
         return cmp
 
     def add(self, d, update=True, throw=False, mydecatlen2NUM='b'):
-        """Add scalar or vector ``d`` to self coordinates. Not yet implemented."""
+        """Add scalar or vector ``d`` to self coordinates.
+
+        Parameters
+        ----------
+        d : scalar or array-like
+            Value intended to be added to the point coordinates.
+        update : bool, optional
+            Intended flag controlling in-place update.
+        throw : bool, optional
+            Intended flag controlling whether a result is returned.
+        mydecatlen2NUM : str, optional
+            Reserved implementation option.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("add is not yet implemented.")
 
     def __mul__(self, f=1.0, update=True, throw=False):
-        """Scale self coordinates by factor ``f``."""
+        """Scale self coordinates by factor ``f``.
+
+        Parameters
+        ----------
+        f : float, optional
+            Multiplicative scale factor.
+        update : bool, optional
+            If True, update this point in place.
+        throw : bool, optional
+            If True, return either a copy of this point or a new scaled point
+            depending on ``update``.
+
+        Returns
+        -------
+        Point3d or None
+            Returned only when ``throw`` is True.
+
+        Raises
+        ------
+        TypeError
+            If ``f`` is not numeric.
+        """
         # Validate f
         # ----------------------------------
         # DEVELOPMENT STAGE - 1
@@ -388,7 +467,13 @@ class Point3d(UPXO_Point):
 
     @property
     def coords(self):
-        """Return ``[x, y]`` as a numpy array (2D projection of this 3D point)."""
+        """Return ``[x, y]`` as a NumPy array.
+
+        Returns
+        -------
+        numpy.ndarray, shape (2,)
+            Two-dimensional projection of this 3D point.
+        """
         return np.array([self.x, self.y])
 
     def squared_distance(self, plist=None, point_spec=-1):
@@ -597,7 +682,27 @@ class Point3d(UPXO_Point):
                            self.y+distances[2])
 
     def translate_to(self, *, point=None, update=False, throw=True):
-        """Translate self to the location of ``point``."""
+        """Translate self to the location of ``point``.
+
+        Parameters
+        ----------
+        point : Point3d or array-like
+            Target point or coordinate specification.
+        update : bool, optional
+            If True, update this point in place.
+        throw : bool, optional
+            If True, return the updated copy or a new translated point.
+
+        Returns
+        -------
+        Point3d or None
+            Returned only when ``throw`` is True.
+
+        Raises
+        ------
+        ValueError
+            If ``point`` is not provided or cannot be validated.
+        """
         if not point:
             raise ValueError('Must provide point object. Could also be coord.')
         xloc, yloc, zloc = Point3d.validate_single_point_input(point)
@@ -611,7 +716,24 @@ class Point3d(UPXO_Point):
 
     @staticmethod
     def val_points_and_get_coords(points):
-        """Docstring."""
+        """Validate points and return coordinate component lists.
+
+        Parameters
+        ----------
+        points : Point3d or array-like
+            Single point, point collection, or coordinate specification.
+
+        Returns
+        -------
+        tuple of list
+            x and y coordinate lists. The current implementation validates
+            3D-compatible inputs but returns only ``x`` and ``y``.
+
+        Raises
+        ------
+        ValueError
+            If no points are supplied or the input type is unsupported.
+        """
         if not points:
             raise ValueError('Points OR coords not provided.')
         if type(points) in dth.dt.ITERABLES:
@@ -646,7 +768,22 @@ class Point3d(UPXO_Point):
         return x, y
 
     def attach_feature(self, *, feature=None, feature_id=None):
-        """Attach a feature object to ``self.f[feature_id]``."""
+        """Attach a feature object to this point.
+
+        Parameters
+        ----------
+        feature : object
+            Feature object to attach.
+        feature_id : hashable
+            Feature identifier used as the dictionary key.
+
+        Raises
+        ------
+        ValueError
+            If ``feature`` or ``feature_id`` is empty.
+        KeyError
+            If the feature ID already exists for this feature class.
+        """
         if not feature:
             raise ValueError('feature cannot be empty.')
         if not feature_id:
@@ -665,6 +802,35 @@ class Point3d(UPXO_Point):
                                      on_boundary=True,
                                      threshold_perp_dist=0.0):
         """
+        Find neighbouring points within a distance threshold.
+
+        Parameters
+        ----------
+        plist : array-like
+            Candidate point coordinates.
+        plane : str, optional
+            Plane selector reserved for future plane-aware searches.
+        r : float, optional
+            Distance threshold. If ``r`` is near zero, the closest point is
+            returned.
+        on_boundary : bool, optional
+            If True, include points at exactly distance ``r``.
+        threshold_perp_dist : float, optional
+            Reserved perpendicular-distance tolerance for future plane-aware
+            searches.
+
+        Returns
+        -------
+        numpy.ndarray
+            Candidate indices satisfying the distance criterion.
+
+        Raises
+        ------
+        TypeError
+            If ``r`` is not numeric.
+
+        Notes
+        -----
         Things to do:
             1. validations
             2. consider plane in calculations. If plane is None, then all
@@ -725,44 +891,167 @@ class Point3d(UPXO_Point):
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
-        """Find neighbouring multi-point objects within radius ``r``. Not yet implemented."""
+        """Find neighbouring multi-point objects within radius ``r``.
+
+        Parameters
+        ----------
+        mplist : array-like, optional
+            Candidate multi-point objects.
+        plane : str, optional
+            Plane selector reserved for future use.
+        r : float, optional
+            Search radius.
+        tolf : float, optional
+            Tolerance factor reserved for future use.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         # Use the ckdtree option.
         raise NotImplementedError("find_neigh_mulpoint_by_distance is not yet implemented.")
 
     def find_neigh_edge_by_distance(self, *, elist=None,
                                     plane='xy', refloc='starting', r=0):
-        """Find neighbouring edges within radius ``r``. Not yet implemented."""
+        """Find neighbouring edges within radius ``r``.
+
+        Parameters
+        ----------
+        elist : array-like, optional
+            Candidate edge objects.
+        plane : str, optional
+            Plane selector reserved for future use.
+        refloc : str, optional
+            Reference location on each edge.
+        r : float, optional
+            Search radius.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("find_neigh_edge_by_distance is not yet implemented.")
 
     def find_neigh_muledge_by_distance(self, *, melist=None,
                                        plane='xy', refloc='starting', r=0):
-        """Find neighbouring multi-edges within radius ``r``. Not yet implemented."""
+        """Find neighbouring multi-edges within radius ``r``.
+
+        Parameters
+        ----------
+        melist : array-like, optional
+            Candidate multi-edge objects.
+        plane : str, optional
+            Plane selector reserved for future use.
+        refloc : str, optional
+            Reference location on each edge.
+        r : float, optional
+            Search radius.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("find_neigh_muledge_by_distance is not yet implemented.")
 
     def find_neigh_xtal_by_distance(self, *, xlist=None,
                                     plane='xy', refloc='starting', r=0):
-        """Find neighbouring crystals within radius ``r``. Not yet implemented."""
+        """Find neighbouring crystals within radius ``r``.
+
+        Parameters
+        ----------
+        xlist : array-like, optional
+            Candidate crystal objects.
+        plane : str, optional
+            Plane selector reserved for future use.
+        refloc : str, optional
+            Reference location on each crystal.
+        r : float, optional
+            Search radius.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("find_neigh_xtal_by_distance is not yet implemented.")
 
     def set_gmsh_props(self, prop_dict):
-        """Apply GMSH mesh properties from ``prop_dict`` to this point. Not yet implemented."""
+        """Apply GMSH mesh properties from ``prop_dict`` to this point.
+
+        Parameters
+        ----------
+        prop_dict : dict
+            GMSH property dictionary intended for this point.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("set_gmsh_props is not yet implemented.")
 
     def array_translation(self, *,
                           ncopies=10,
                           vector=[[0, 0, 0], [0, 0, 1]],
                           spacing='constant'):
-        """Generate an array of translated copies along ``vector``. Not yet implemented."""
+        """Generate an array of translated copies along ``vector``.
+
+        Parameters
+        ----------
+        ncopies : int, optional
+            Number of translated copies to generate.
+        vector : array-like, optional
+            Direction or endpoint specification for translation.
+        spacing : str, optional
+            Spacing mode for translated copies.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("array_translation is not yet implemented.")
 
     def lies_on_which_line(self, *, llist=None, consider_ends=True):
-        """Return which line(s) in ``llist`` this point lies on. Not yet implemented."""
+        """Return which line(s) in ``llist`` this point lies on.
+
+        Parameters
+        ----------
+        llist : array-like, optional
+            Candidate line objects.
+        consider_ends : bool, optional
+            Whether line endpoints should be considered part of the line.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("lies_on_which_line is not yet implemented.")
 
     def lies_in_which_xtal(self, *, xlist=None,
                            cosider_boundary=True,
                            consider_boundary_ends=True):
-        """Return which crystal(s) in ``xlist`` contain this point. Not yet implemented."""
+        """Return which crystal(s) in ``xlist`` contain this point.
+
+        Parameters
+        ----------
+        xlist : array-like, optional
+            Candidate crystal objects.
+        cosider_boundary : bool, optional
+            Whether crystal boundaries should be considered. Name retained as
+            implemented.
+        consider_boundary_ends : bool, optional
+            Whether boundary endpoints should be considered.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("lies_in_which_xtal is not yet implemented.")
 
     def make_vtk_point(self, z=0):
@@ -802,7 +1091,13 @@ class Point3d(UPXO_Point):
                 'help': "return['pd'].GetPoint(return['id'])"}
 
     def make_shape(self):
-        """Create a geometric shape representation of this point. Not yet implemented."""
+        """Create a geometric shape representation of this point.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("make_shape is not yet implemented.")
 
 
