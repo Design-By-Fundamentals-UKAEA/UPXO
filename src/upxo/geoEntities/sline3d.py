@@ -68,6 +68,18 @@ class Sline3d_leanest():
     Provides a minimal footprint for high-frequency operations where only
     coordinate access, length, and iteration are required.
 
+    Attributes
+    ----------
+    x0, y0, z0 : float
+        Start-point coordinates.
+    x1, y1, z1 : float
+        End-point coordinates.
+
+    Notes
+    -----
+    This class intentionally stores no ``Point3d`` endpoint objects. Use
+    ``Sline3d`` when richer geometry state or mutation helpers are required.
+
     Usage
     -----
     ::
@@ -360,6 +372,11 @@ class Sline3d():
     def mid(self):
         """Midpoint of the line as ``(xmid, ymid, zmid)`` tuple.
 
+        Returns
+        -------
+        tuple of float
+            Midpoint coordinate tuple.
+
         Examples
         --------
         .. code-block:: python
@@ -372,6 +389,11 @@ class Sline3d():
     @property
     def xmid(self):
         """x-coordinate of the midpoint.
+
+        Returns
+        -------
+        float
+            Midpoint x-coordinate.
 
         Examples
         --------
@@ -386,6 +408,11 @@ class Sline3d():
     def ymid(self):
         """y-coordinate of the midpoint.
 
+        Returns
+        -------
+        float
+            Midpoint y-coordinate.
+
         Examples
         --------
         .. code-block:: python
@@ -398,6 +425,11 @@ class Sline3d():
     @property
     def zmid(self):
         """z-coordinate of the midpoint.
+
+        Returns
+        -------
+        float
+            Midpoint z-coordinate.
 
         Examples
         --------
@@ -414,6 +446,11 @@ class Sline3d():
 
         Returns ``math.inf`` in the corresponding component when the line is
         horizontal (``z0 == z1``).
+
+        Returns
+        -------
+        list of float
+            Direction gradients ``[dx/dz, dy/dz]``.
 
         Examples
         --------
@@ -434,6 +471,11 @@ class Sline3d():
     def delxyz(self):
         """Length increments ``(dx, dy, dz)`` along each axis.
 
+        Returns
+        -------
+        tuple of float
+            Signed endpoint differences ``(dx, dy, dz)``.
+
         Examples
         --------
         .. code-block:: python
@@ -446,6 +488,11 @@ class Sline3d():
     @property
     def dx(self):
         """Signed length increment along x (``x1 - x0``).
+
+        Returns
+        -------
+        float
+            Signed x-increment.
 
         Examples
         --------
@@ -460,6 +507,11 @@ class Sline3d():
     def dy(self):
         """Signed length increment along y (``y1 - y0``).
 
+        Returns
+        -------
+        float
+            Signed y-increment.
+
         Examples
         --------
         .. code-block:: python
@@ -472,6 +524,11 @@ class Sline3d():
     @property
     def dz(self):
         """Signed length increment along z (``z1 - z0``).
+
+        Returns
+        -------
+        float
+            Signed z-increment.
 
         Examples
         --------
@@ -491,6 +548,11 @@ class Sline3d():
         ``angle_y = atan2(dx, dz)``,
         ``angle_z = atan2(dy, dx)``.
 
+        Returns
+        -------
+        list of float
+            Orientation angles in radians.
+
         Examples
         --------
         .. code-block:: python
@@ -508,6 +570,11 @@ class Sline3d():
     def angd(self):
         """Orientation angles in degrees as ``[angle_x, angle_y, angle_z]``.
 
+        Returns
+        -------
+        list of float
+            Orientation angles in degrees.
+
         Examples
         --------
         .. code-block:: python
@@ -521,6 +588,11 @@ class Sline3d():
     def length(self):
         """Euclidean length of the line segment.
 
+        Returns
+        -------
+        float
+            Segment length.
+
         Examples
         --------
         .. code-block:: python
@@ -533,6 +605,11 @@ class Sline3d():
     @property
     def dc(self):
         """Direction cosines ``(dx/L, dy/L, dz/L)`` where L is the length.
+
+        Returns
+        -------
+        tuple of float
+            Direction cosines along x, y, and z.
 
         Examples
         --------
@@ -549,6 +626,11 @@ class Sline3d():
     def coords(self):
         """Flat coordinate list ``[x0, y0, z0, x1, y1, z1]``.
 
+        Returns
+        -------
+        list of float
+            Flat endpoint coordinate list.
+
         Examples
         --------
         .. code-block:: python
@@ -561,6 +643,11 @@ class Sline3d():
     @property
     def coord_list(self):
         """Endpoint coordinates as ``[[x0, y0, z0], [x1, y1, z1]]``.
+
+        Returns
+        -------
+        list of list of float
+            Start and end endpoint coordinate lists.
 
         Examples
         --------
