@@ -103,7 +103,15 @@ class MPoint2d():
     __slots__ = ('coords', 'points')
 
     def __init__(self, coords=None, points=None):
-        """Initialise from raw coordinate array or a list of ``Point2d`` objects."""
+        """Initialise from coordinates or ``Point2d`` objects.
+
+        Parameters
+        ----------
+        coords : array-like, shape (N, 2), optional
+            Raw ``(x, y)`` coordinate pairs.
+        points : list of Point2d, optional
+            Existing point objects. If supplied, ``coords`` should be None.
+        """
         if coords is not None and points is None:
             self.coords = np.array(coords)
             self.points = [Point2d(xy[0], xy[1]) for xy in coords]
@@ -112,7 +120,13 @@ class MPoint2d():
             self.coords = np.array([[p.x, p.y] for p in points])
 
     def __repr__(self):
-        """Return ``UPXO-mp2d. n=<N>.`` summary string."""
+        """Return ``UPXO-mp2d. n=<N>.`` summary string.
+
+        Returns
+        -------
+        str
+            Human-readable collection summary.
+        """
         return f'UPXO-mp2d. n={self.n}.'
 
     def __iter__(self):
@@ -308,12 +322,39 @@ class MPoint2d():
 
     @classmethod
     def from_upxo_points2d(cls, points, zloc=0.0):
-        """Construct from a list of ``Point2d`` objects."""
+        """Construct from a list of ``Point2d`` objects.
+
+        Parameters
+        ----------
+        points : list of Point2d
+            Point objects used to populate the collection.
+        zloc : float, optional
+            Retained for API compatibility; not used by the current 2D
+            implementation.
+
+        Returns
+        -------
+        MPoint2d
+            Multi-point collection built from ``points``.
+        """
         return cls(coords=None, points=points)
 
     @classmethod
     def from_mulpoint2d(cls, mp2d, zloc=0.0):
-        """Construct from an existing ``MPoint2d`` instance. Not yet implemented."""
+        """Construct from an existing ``MPoint2d`` instance.
+
+        Parameters
+        ----------
+        mp2d : MPoint2d
+            Source multi-point object.
+        zloc : float, optional
+            Retained for API compatibility.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("from_mulpoint2d is not yet implemented.")
 
     @classmethod
@@ -448,27 +489,57 @@ class MPoint2d():
 
     @property
     def n(self):
-        """Number of points in the collection."""
+        """Number of points in the collection.
+
+        Returns
+        -------
+        int
+            Number of coordinate rows.
+        """
         return len(self.coords)
 
     @property
     def centroid(self):
-        """Mean coordinate of all points (``numpy.ndarray`` of shape ``(2,)``)."""
+        """Mean coordinate of all points.
+
+        Returns
+        -------
+        numpy.ndarray, shape (2,)
+            Arithmetic mean of the stored ``(x, y)`` coordinates.
+        """
         return np.mean(self.coords, axis=0)
 
     @property
     def get_points(self):
-        """Return a list of ``Point2d`` objects built from ``self.coords``."""
+        """Return point objects built from ``self.coords``.
+
+        Returns
+        -------
+        list of Point2d
+            One point object per coordinate row.
+        """
         return [Point2d(x, y) for x, y in self.coords]
 
     @property
     def x(self):
-        """x-coordinates of all points as a 1-D array."""
+        """x-coordinates of all points.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            x-coordinate column.
+        """
         return self.coords[:, 0]
 
     @property
     def y(self):
-        """y-coordinates of all points as a 1-D array."""
+        """y-coordinates of all points.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            y-coordinate column.
+        """
         return self.coords[:, 1]
 
     def __contains__(self, point, validate=False):
@@ -489,8 +560,22 @@ class MPoint2d():
 
     def squared_distances_to_point(self, point, validate=True):
         """
-        When validate is True, then point can be any of the permitted forms.
-        When validate is False, then point must be in UPXO point format.
+        Return squared distances from all points to ``point``.
+
+        Parameters
+        ----------
+        point : Point2d or array-like
+            Target point. When ``validate`` is True, accepted coordinate forms
+            are delegated to ``val_point_and_get_coord``. When ``validate`` is
+            False, ``point`` must expose ``x`` and ``y`` attributes.
+        validate : bool, optional
+            Whether to validate and coerce ``point`` before distance
+            calculation.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Squared Euclidean distances.
         """
         if validate:
             point = val_point_and_get_coord(point, return_type='coord',
@@ -500,7 +585,18 @@ class MPoint2d():
             return (self.x-point.x)**2 + (self.y-point.y)**2
 
     def distances_to_point(self, point):
-        """Return Euclidean distances from all points to ``point``."""
+        """Return Euclidean distances from all points to ``point``.
+
+        Parameters
+        ----------
+        point : Point2d or array-like
+            Target point.
+
+        Returns
+        -------
+        numpy.ndarray, shape (N,)
+            Euclidean distances.
+        """
         return np.sqrt(self.squared_distances_to_point(point))
 
     def squared_distance_to_centroid(self, points,
@@ -577,20 +673,49 @@ class MPoint2d():
                                                          points_type=points_type))
 
     def linreg(self):
-        """Fit a linear regression line through all points. Not yet implemented."""
+        """Fit a linear regression line through all points.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("linreg is not yet implemented.")
 
     def relax(self):
-        """Relax point positions (e.g., Lloyd iteration). Not yet implemented."""
+        """Relax point positions.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("relax is not yet implemented.")
 
     def convex_hull(self):
-        """Compute the convex hull of the point set. Not yet implemented."""
+        """Compute the convex hull of the point set.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
+        """
         raise NotImplementedError("convex_hull is not yet implemented.")
 
     def find_boundary(self, boundary_type='chull'):
         """
-        Use convex hull and find boundaries
+        Find boundary points using the requested boundary method.
+
+        Parameters
+        ----------
+        boundary_type : str, optional
+            Boundary-detection strategy. ``'chull'`` indicates convex-hull
+            based detection.
+
+        Raises
+        ------
+        NotImplementedError
+            This method is not yet implemented.
         """
         raise NotImplementedError("find_boundary is not yet implemented.")
 
