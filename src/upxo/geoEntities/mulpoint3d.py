@@ -482,7 +482,30 @@ class MPoint3d():
 
     @staticmethod
     def _generate_lattice_points(lattice, bounds, spacing, ca_ratio):
-        """Generate FCC, BCC, or HCP lattice points inside ``bounds``."""
+        """
+        Generate FCC, BCC, or HCP lattice points inside ``bounds``.
+
+        Parameters
+        ----------
+        lattice : {'fcc', 'bcc', 'hcp'}
+            Lattice family to generate.
+        bounds : numpy.ndarray, shape (3, 2)
+            Axis-aligned generation bounds.
+        spacing : float
+            Lattice spacing.
+        ca_ratio : float
+            HCP c/a ratio.
+
+        Returns
+        -------
+        numpy.ndarray
+            Generated lattice coordinates clipped to ``bounds``.
+
+        Raises
+        ------
+        ValueError
+            If lattice type or spacing is invalid.
+        """
         lattice = str(lattice).strip().lower()
         spacing = float(spacing)
         if spacing <= 0 or not np.isfinite(spacing):
@@ -534,11 +557,23 @@ class MPoint3d():
         return coords[MPoint3d._points_in_bounds(coords, bounds)]
 
     def __repr__(self):
-        """Return ``UPXO-mp3d. n=<N>.`` summary string."""
+        """
+        Return a compact multi-point summary string.
+
+        Returns
+        -------
+        str
+            Summary in the form ``UPXO-mp3d. n=<N>.``.
+        """
         return f'UPXO-mp3d. n={self.n}.'
 
     def __iter__(self):
         """Iterate over the point coordinates in ``self.coords``.
+
+        Returns
+        -------
+        iterator
+            Iterator over coordinate rows in ``self.coords``.
 
         Yields
         ------
@@ -1593,7 +1628,21 @@ class MPoint3d():
 
     @classmethod
     def from_mulpoint2d(cls, mp2d, zloc=0.0):
-        """Construct from a ``MPoint2d`` by appending a constant z-value. Not yet implemented."""
+        """
+        Construct from a ``MPoint2d`` by appending a constant z-value.
+
+        Parameters
+        ----------
+        mp2d : MPoint2d
+            Source 2D multi-point object.
+        zloc : float, optional
+            Constant z-coordinate to append.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because this constructor is not implemented.
+        """
         raise NotImplementedError("from_mulpoint2d is not yet implemented.")
 
     @classmethod
@@ -1767,7 +1816,19 @@ class MPoint3d():
 
     @classmethod
     def from_mulsline3d(cls, msline3d):
-        """Construct from a ``MSline3d`` endpoint collection. Not yet implemented."""
+        """
+        Construct from a ``MSline3d`` endpoint collection.
+
+        Parameters
+        ----------
+        msline3d : MSline3d
+            Source 3D multi-line object.
+
+        Raises
+        ------
+        NotImplementedError
+            Always raised because this constructor is not implemented.
+        """
         raise NotImplementedError("from_mulsline3d is not yet implemented.")
 
     @classmethod
