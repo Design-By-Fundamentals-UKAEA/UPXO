@@ -344,6 +344,20 @@ class Sline2d():
         1. start (i.e. i): x0 & y0
         2. end (i.e. j): x1 & y1
 
+    Attributes
+    ----------
+    x0, y0 : float
+        Start-point coordinates.
+    x1, y1 : float
+        End-point coordinates.
+    pnta, pntb : Point2d
+        UPXO point objects representing the start and end points.
+
+    Notes
+    -----
+    This is the mutable, feature-rich line representation. Use
+    ``Sline2d_leanest`` for lightweight coordinate-only workflows.
+
     Following are the creation methods:
         * Default creation is by specifying __init__(x0, y0, x1, y1).
         * by_coord(start, end).
@@ -2699,7 +2713,19 @@ class Sline2d():
         # Validate user input
         # ------------------------------------------
         def splot(r):
-            """Plot the bounding rectangle ``r`` for visualisation."""
+            """
+            Plot the bounding rectangle ``r`` for visualisation.
+
+            Parameters
+            ----------
+            r : shapely.geometry.Polygon
+                Rectangle polygon to draw.
+
+            Returns
+            -------
+            None
+                Adds the rectangle to the active Matplotlib axes.
+            """
             x, y = r.boundary.xy
             # ..........
             # plt.plot(x[0], y[0], 'ro', markersize=6)
@@ -2829,7 +2855,23 @@ class Sline2d():
         # ------------------------------------------
 
         def splot(r, x, y, inside):
-            """Plot the bounding rectangle ``r`` and highlight inside/outside points."""
+            """
+            Plot rectangle and highlight inside/outside points.
+
+            Parameters
+            ----------
+            r : shapely.geometry.Polygon
+                Rectangle polygon.
+            x, y : array-like
+                Candidate point coordinate arrays.
+            inside : array-like
+                Boolean inside/outside flags.
+
+            Returns
+            -------
+            None
+                Adds the diagnostic plot to the active Matplotlib axes.
+            """
             rx, ry = r.boundary.xy
             # ..........
             plt.plot([rx[0], rx[1]], [ry[0], ry[1]], '--ko', markersize=6)
@@ -3095,7 +3137,23 @@ class Sline2d():
         import matplotlib.pyplot as plt
 
         def splot(line, x, y, xnearest, ynearest):
-            """Plot the line, all points, and nearest-neighbour highlights."""
+            """
+            Plot the line, all points, and nearest-neighbour highlights.
+
+            Parameters
+            ----------
+            line : Sline2d
+                Reference line.
+            x, y : array-like
+                Candidate point coordinates.
+            xnearest, ynearest : array-like
+                Coordinates of points selected as nearest neighbours.
+
+            Returns
+            -------
+            None
+                Adds the diagnostic plot to the active Matplotlib axes.
+            """
             plt.plot(line.x0, line.y0, 'gs', markersize=12)
             plt.plot(line.x1, line.y1, 'gs', markersize=16)
             # ..........
@@ -3491,7 +3549,19 @@ class Sline2d():
         # Validate user inputs
         # ------------------------------------
         def plot(points):
-            """Plot the seed line endpoints and the generated seed points."""
+            """
+            Plot the seed line endpoints and generated seed points.
+
+            Parameters
+            ----------
+            points : list
+                Generated point objects to display.
+
+            Returns
+            -------
+            None
+                Creates a Matplotlib figure for the generated points.
+            """
             plt.figure()
             plt.plot(self.x0, self.y0, 'ks', markersize=6)
             plt.plot(self.x1, self.y1, 'ks', markersize=8)
