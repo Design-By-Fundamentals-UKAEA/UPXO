@@ -1911,8 +1911,20 @@ class mulpoint2d():
         from scipy.spatial import Voronoi as scipy_voronoi
 
         def _constrain_points(points):
-            '''Update any points that have drifted beyond the boundaries of
-            this space'''
+            """
+            Constrain points to the relaxation bounds.
+
+            Parameters
+            ----------
+            points : list
+                Mutable point coordinates.
+
+            Returns
+            -------
+            list
+                Point coordinates clipped to ``bounds`` when bounds are
+                available.
+            """
             if bounds is not None:
                 for point in points:
                     if point[0] < bounds[0]:
@@ -1926,9 +1938,25 @@ class mulpoint2d():
             return points
 
         def _find_centroid(vertices):
-            '''The equation for the method used here to find the centroid of
-            a 2D polygon is given here:
-                https://en.wikipedia.org/wiki/Centroid#Of_a_polygon'''
+            """
+            Find the centroid of a 2D polygon.
+
+            Parameters
+            ----------
+            vertices : numpy.ndarray
+                Polygon vertices.
+
+            Returns
+            -------
+            list
+                Centroid coordinate constrained to the relaxation bounds.
+
+            Notes
+            -----
+            The centroid equation used here is the 2D polygon centroid
+            expression described at:
+            https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
+            """
             area = 0
             centroid_x = 0
             centroid_y = 0
@@ -1945,9 +1973,19 @@ class mulpoint2d():
             return _constrain_points([[centroid_x, centroid_y]])[0]
 
         def _relax(voronoi):
-            '''Moves each point to the centroid of its cell in the voronoi
-            map to "relax" the points (i.e. jitter the points so as
-            to spread them out within the space).'''
+            """
+            Move each point to the centroid of its Voronoi cell.
+
+            Parameters
+            ----------
+            voronoi : scipy.spatial.Voronoi
+                Voronoi tessellation of the current point set.
+
+            Returns
+            -------
+            list
+                Relaxed point coordinates constrained to the bounds.
+            """
             centroids = []
             for idx in voronoi.point_region:
                 # the region is a series of indices into voronoi.vertices
