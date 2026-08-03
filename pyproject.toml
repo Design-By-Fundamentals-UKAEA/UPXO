@@ -4,6 +4,9 @@ filterwarnings = [
     # to Python int (int64) during iteration — upstream Numba behaviour.
     "ignore::numba.core.errors.NumbaTypeSafetyWarning",
 ]
+markers = [
+    "gui: tests that require a live Tkinter display (use -m 'not gui' for headless CI)",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
