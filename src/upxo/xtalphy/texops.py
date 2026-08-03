@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+from typing import Union, List, Tuple, Optional, Any
 from math import floor
 from random import Random
 from itertools import permutations, product, combinations
@@ -168,6 +169,69 @@ class tops:
         default_title = f"{{{pole_family}}} Pole Figure"
         ax.set_title(title or default_title, fontsize=14)
         plt.show()
+
+    def plot_pole_figure_density(
+        self,
+        euler_angles_deg: np.ndarray,
+        pole_family: Union[str, List[int], Tuple[int, int, int]] = '100',
+        ax: Optional[plt.Axes] = None,
+        projection: str = 'equal_area',
+        grid_points: Union[int, str] = 'auto',
+        half_width_deg: float = 7.5,
+        contour_scale: str = 'linear',  # 'linear' | 'log' | 'sqrt'
+        clabel: bool = False,
+        overlay_scatter: bool = False,
+        scatter_color_by: str = 'ipf',
+        cmap: str = 'viridis',
+        levels: int = 10,
+        title: Optional[str] = None,
+        symmetry: Union[str, np.ndarray] = 'cubic'
+    ):
+        """
+        Creates a pole figure density/MUD contour plot.
+        """
+        from upxo.viz.xphy.pole_figure import PoleFigure
+        pf = PoleFigure(euler_angles_deg, convention='euler_deg', symmetry=symmetry)
+        return pf.plot_density(
+            pole_family=pole_family,
+            ax=ax,
+            projection=projection,
+            grid_points=grid_points,
+            half_width_deg=half_width_deg,
+            contour_scale=contour_scale,
+            clabel=clabel,
+            overlay_scatter=overlay_scatter,
+            scatter_color_by=scatter_color_by,
+            cmap=cmap,
+            levels=levels,
+            title=title
+        )
+
+    def plot_pole_figure_density_3d(
+        self,
+        euler_angles_deg: np.ndarray,
+        pole_family: Union[str, List[int], Tuple[int, int, int]] = '100',
+        grid_points: int = 60,
+        half_width_deg: float = 7.5,
+        cmap: str = 'viridis',
+        backend: str = 'pyvista',  # 'pyvista' | 'matplotlib'
+        title: Optional[str] = None,
+        symmetry: Union[str, np.ndarray] = 'cubic'
+    ) -> Any:
+        """
+        Plot continuous MUD density as a 3D spherical dome.
+        """
+        from upxo.viz.xphy.pole_figure import PoleFigure
+        pf = PoleFigure(euler_angles_deg, convention='euler_deg', symmetry=symmetry)
+        return pf.plot_density_3d(
+            pole_family=pole_family,
+            grid_points=grid_points,
+            half_width_deg=half_width_deg,
+            cmap=cmap,
+            backend=backend,
+            title=title
+        )
+
 
     def cubic_Rz(self, a):
         """Cubic rz."""
