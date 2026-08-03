@@ -242,3 +242,63 @@ def test_welcome_page_instantiates(app):
 def test_welcome_page_class(app):
     from upxo.pxtal.fm_steel_3d.gui.pages import WelcomePage
     assert isinstance(app.current_frame, WelcomePage)
+
+
+# ---------------------------------------------------------------------------
+# Full page-construction sweep (added when RunPage's dead-code footprint --
+# the class itself plus ~25 scattered lines across app.py -- was removed as
+# unreachable through any sidebar entry or Next/Back transition). Guards
+# against RunPage or an equivalent orphaned page silently reappearing, and
+# more generally against any future page-registry/routing mistake in
+# app.py's _section_sequence()/next_page()/back_page().
+# ---------------------------------------------------------------------------
+
+def test_runpage_no_longer_exists():
+    """RunPage (~151 lines, pages_pag.py) was confirmed unreachable from
+    every navigation path and removed. If this ever fails, someone
+    re-added it (or something with the same name) without re-wiring it
+    into the sidebar/routing -- re-litigate the removal, don't just relax
+    this assertion."""
+    from upxo.pxtal.fm_steel_3d.gui import pages
+    assert "RunPage" not in pages.__all__
+    assert not hasattr(pages, "RunPage")
+
+
+def test_all_registered_pages_construct(app):
+    """Construct every page class referenced anywhere in
+    _section_sequence()'s per-row cls_set (not just each row's own
+    target_cls -- e.g. the "Voronoi / MC" row's cls_set also includes
+    Step2b1Page/Step2c1Page/Step2d1Page/Step2a1PlaceholderPage, which are
+    real pages reachable via BaseGrainPage's method-branch routing, just
+    not this particular sidebar row's own click target), across both
+    pipeline modes (some pages, e.g. SubblockGenerationPage, only appear
+    in subblock mode), and confirm every one constructs without raising."""
+    orig_mode = app.shared_state.get("pipeline_mode", "block")
+    orig_frame_cls = type(app.current_frame)
+
+    seen = set()
+    failures = []
+    for mode in ("block", "subblock"):
+        app.shared_state["pipeline_mode"] = mode
+        for _section_label, items in app._section_sequence():
+            for _label, cls_set, _target_cls in items:
+                for cls in cls_set:
+                    if cls in seen:
+                        continue
+                    seen.add(cls)
+                    try:
+                        app.show_page_by_class(cls)
+                        app.update_idletasks()
+                    except Exception as exc:
+                        failures.append((cls.__name__, mode, f"{type(exc).__name__}: {exc}"))
+
+    app.shared_state["pipeline_mode"] = orig_mode
+    app.show_page_by_class(orig_frame_cls)
+    app.update_idletasks()
+
+    assert not failures, f"{len(failures)} page(s) failed to construct: {failures}"
+    assert len(seen) >= 24, (
+        f"expected at least 24 distinct page classes (the count confirmed "
+        f"after removing RunPage), got {len(seen)}: "
+        f"{sorted(c.__name__ for c in seen)}"
+    )
