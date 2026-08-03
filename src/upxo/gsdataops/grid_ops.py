@@ -39,6 +39,14 @@ from copy import deepcopy
 from collections import deque
 import upxo._sup.decorators as decorators
 
+
+def merge_label_into(label_image, parent_id, other_id, copy=False):
+    """Merge ``other_id`` into ``parent_id`` in a labelled image."""
+    out = np.array(label_image, copy=True) if copy else label_image
+    out[out == other_id] = parent_id
+    return out
+
+
 # ###########################################################################
 # ###########################################################################
 #                         SECTIONING OPERATIPONS
@@ -485,6 +493,14 @@ def rescale_grid_3d(data, scale_factor, method='nearest'):
     new_d = int(round(d*scale_factor))
     new_h = int(round(h*scale_factor))
     new_w = int(round(w*scale_factor))
+    if new_d == d and new_h == h and new_w == w:
+        # scale_factor == 1.0 (the common/default case) means the requested
+        # shape is identical to the input -- running a full grid
+        # interpolation over every voxel just to reproduce the same values
+        # is pure wasted cost (measurable at large RVEs, e.g. 200^3), so
+        # skip it. Still returns a fresh array (matching _interpolate_grid_3d's
+        # own contract of never handing back a reference to the input).
+        return data.copy()
     return _interpolate_grid_3d(data, new_d, new_h, new_w, method)
 
 def detect_grains_cc3d(image_data, connectivity=18, delta=0, return_num_grains=True,
