@@ -41,6 +41,13 @@ import random
 import cc3d
 from collections import defaultdict
 
+
+def merge_label_into(label_image, parent_id, other_id, copy=False):
+    """Merge ``other_id`` into ``parent_id`` in a labelled image."""
+    out = np.array(label_image, copy=True) if copy else label_image
+    out[out == other_id] = parent_id
+    return out
+
 DXY_8 = np.array([(-1, -1), (-1, 0), (-1, 1), 
                   ( 0, -1),          ( 0, 1),
                   ( 1, -1), ( 1, 0), ( 1, 1),], dtype=np.int32)
