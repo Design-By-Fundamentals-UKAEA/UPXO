@@ -48,7 +48,8 @@ class BlockGenerator3D:
                                       grain_locs: Dict[int, np.ndarray],
                                       pag_orientations: Dict[int, Tuple[float, float, float]],
                                       block_thickness_range: Tuple[float, float] = (2.0, 5.0),
-                                      random_seed: Optional[int] = None) -> Tuple[Dict[str, np.ndarray], Dict[int, List[str]], Dict[int, int], Dict[str, np.ndarray]]:
+                                      random_seed: Optional[int] = None,
+                                      slab_connectivity: int = 26) -> Tuple[Dict[str, np.ndarray], Dict[int, List[str]], Dict[int, int], Dict[str, np.ndarray]]:
         """
         Generate blocks for all PAGs.
 
@@ -86,7 +87,6 @@ class BlockGenerator3D:
         grain_to_blocks_map: Dict[int, List[str]] = {}
         grain_to_plane_idx: Dict[int, int] = {}
         block_slicing_normals: Dict[str, np.ndarray] = {}
-        global_block_id = 1
 
         for pag_id, grain_ids in clusters_dict.items():
             # Each grain in the PAG is one packet — a spatially distinct region
@@ -121,13 +121,13 @@ class BlockGenerator3D:
                 # this packet inherit the same slicing direction.
                 packet_unit_n = slicing_plane.unit_normal.copy()
 
-                new_blocks, global_block_id = self.slice_packet_into_blocks(
+                new_blocks = self.slice_packet_into_blocks(
                     packet_gid=grain_id,
                     cluster_id=pag_id,
                     voxel_coords=grain_voxels,
                     block_thickness=packet_thickness,
                     slicing_plane=slicing_plane,
-                    global_block_id_start=global_block_id,
+                    slab_connectivity=slab_connectivity,
                 )
                 all_blocks.update(new_blocks)
                 grain_to_blocks_map[grain_id] = list(new_blocks.keys())
@@ -187,7 +187,7 @@ class BlockGenerator3D:
                                   voxel_coords: np.ndarray,
                                   block_thickness: float,
                                   slicing_plane: Plane,
-                                  global_block_id_start: int = 0) -> Tuple[Dict[str, np.ndarray], int]:
+                                  slab_connectivity: int = 26) -> Dict[str, np.ndarray]:
         """
         Slice a PAG/packet into contiguous blocks using plane-normal projection.
 
@@ -195,7 +195,8 @@ class BlockGenerator3D:
         1. Project all voxels onto the slicing-plane unit normal via signed distance.
         2. Divide the projection range into parallel slabs of width block_thickness.
         3. Within each slab, rasterise voxels into a local 3D boolean grid and run
-           6-connected component labeling (cc3d) to find spatially contiguous blocks.
+           connected-component labeling (cc3d, connectivity=slab_connectivity,
+           default 26) to find spatially contiguous blocks.
         4. Return each component as a named block with its global voxel coordinates.
 
         Parameters
@@ -211,18 +212,16 @@ class BlockGenerator3D:
         slicing_plane : Plane
             Plane whose unit_normal defines the slicing direction and whose
             point is the projection origin (typically the PAG centroid).
-        global_block_id_start : int, optional
-            Starting value for the global block counter. Default 0.
 
         Returns
         -------
         newly_created_blocks : dict
-            {block_name: (n_voxels, 3) array of global voxel coordinates}
-        next_global_block_id : int
-            Next available global block ID after this call.
+            {block_name: (n_voxels, 3) array of global voxel coordinates}.
+            Names are already globally unique (cluster_id + packet_gid +
+            a local per-packet counter), so no separate global id is needed.
         """
         if len(voxel_coords) < 1:
-            return {}, global_block_id_start
+            return {}
 
         unit_n = slicing_plane.unit_normal
         # Signed distance of each voxel from the slicing plane
@@ -234,7 +233,6 @@ class BlockGenerator3D:
 
         newly_created_blocks: Dict[str, np.ndarray] = {}
         local_block_counter = 1
-        global_block_id = global_block_id_start
 
         for i in range(num_slices):
             slab_min = min_dist + i * block_thickness
@@ -258,7 +256,7 @@ class BlockGenerator3D:
             local_image[local_coords[:, 0], local_coords[:, 1], local_coords[:, 2]] = 1
 
             labeled, num_comp = cc3d.connected_components(
-                local_image, connectivity=26, return_N=True)
+                local_image, connectivity=slab_connectivity, return_N=True)
 
             for comp_id in range(1, num_comp + 1):
                 block_coords_local = np.argwhere(labeled == comp_id)
@@ -266,9 +264,8 @@ class BlockGenerator3D:
                 block_name = f'B_{cluster_id}_{packet_gid}_{local_block_counter}'
                 newly_created_blocks[block_name] = block_coords_global
                 local_block_counter += 1
-                global_block_id += 1
 
-        return newly_created_blocks, global_block_id
+        return newly_created_blocks
 
 
 __all__ = ['BlockGenerator3D']

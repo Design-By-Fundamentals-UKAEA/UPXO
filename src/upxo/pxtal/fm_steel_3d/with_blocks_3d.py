@@ -183,51 +183,71 @@ class FMSteel3DWithBlocks:
         """Isolated grains from parent PAG level."""
         return self._parent.isolated_grains
 
+    @property
+    def isolated_grain_orientations(self):
+        """Isolated-grain orientations from parent PAG level (see
+        FMSteel3DWithPAGs docstring)."""
+        return self._parent.isolated_grain_orientations
+
+    @property
+    def retained_austenite_pag_ids(self):
+        """Retained-austenite PAG IDs from parent PAG level (see
+        FMSteel3DWithPAGs docstring). These PAG IDs were skipped by
+        generate_blocks(), so they never appear in all_blocks/
+        grain_to_blocks_map."""
+        return self._parent.retained_austenite_pag_ids
+
+    @property
+    def neigh_gid(self) -> Dict[int, List[int]]:
+        """Grain-level neighbour graph from base level."""
+        return self._parent.neigh_gid
+
+    @property
+    def n_retained_austenite_pags(self) -> int:
+        """Number of retained-austenite PAGs from parent PAG level."""
+        return self._parent.n_retained_austenite_pags
+
+    @property
+    def n_transformed_pags(self) -> int:
+        """Number of transformed (martensite-forming) PAGs from parent PAG level."""
+        return self._parent.n_transformed_pags
+
+    def ensure_isolated_grain_orientations(self, random_seed: Optional[int] = None) -> None:
+        """See FMSteel3DWithPAGs.ensure_isolated_grain_orientations."""
+        self._parent.ensure_isolated_grain_orientations(random_seed=random_seed)
+
+    def get_isolated_grain_orientation(self, gid: int) -> Optional[Tuple[float, float, float]]:
+        """See FMSteel3DWithPAGs.get_isolated_grain_orientation."""
+        return self._parent.get_isolated_grain_orientation(gid)
+
     # ========== Pipeline continuation ==========
     
     def assign_orientations(self,
-                            pag_ori_mode: str = 'random',
-                            pag_ori_params: Optional[Dict] = None,
                             ks_variant_selection: str = 'random_per_block',
                             random_seed: Optional[int] = None) -> 'FMSteel3DWithOrientations':
         """
-        Assign BCC crystal orientations to blocks via Kurdjumov-Sachs relationship.
-        
-        For each block, assigns a BCC (ferrite) orientation by:
-        1. Using parent FCC (austenite) orientation of the PAG
-        2. Generating all 24 Kurdjumov-Sachs variant orientations
-        3. Grouping variants into 4 packets (physically constrained)
-        4. Randomly selecting one variant from the chosen packet
-        
-        Returns a new FMSteel3DWithOrientations instance.
-        
+        Assign BCC crystal orientations to blocks via the Kurdjumov-Sachs relationship.
+
+        PAG orientations must already be set (via ``assign_pag_orientations`` on the
+        parent ``FMSteel3DWithPAGs``). Each block receives one of the 24 KS variants
+        from the physically appropriate packet for its habit plane.
+
         Parameters
         ----------
-        pag_ori_mode : str, optional
-            How to assign parent FCC orientations (if not already set).
-            Options: 'random', 'texture', 'explicit'.
-            Default 'random'.
-        
-        pag_ori_params : dict, optional
-            Parameters for pag_ori_mode (e.g., texture components, weights).
-        
         ks_variant_selection : str, optional
-            How to select KS variants for blocks.
-            'random_per_block' (each block gets random variant from packet),
-            'deterministic' (first variant in packet), etc.
-            Default 'random_per_block'.
-        
+            ``'random_per_block'`` — adjacency-aware greedy graph-colouring:
+            adjacent blocks within a packet receive different KS variants where
+            possible, with a random choice among the free variants.
+            ``'deterministic'`` — always assigns KS variant index 0 from the
+            packet; reproducible for geometry verification.
+            Default ``'random_per_block'``.
         random_seed : int, optional
-            Random seed for orientation assignment.
-        
+            Random seed for reproducibility.
+
         Returns
         -------
         FMSteel3DWithOrientations
-            New instance with computed orientations.
-        
-        Notes
-        -----
-        Does not modify self; returns new instance.
+            New instance with computed orientations; does not modify self.
         """
         if random_seed is not None:
             np.random.seed(random_seed)
@@ -237,11 +257,12 @@ class FMSteel3DWithBlocks:
         from .orientation_assigner_3d import OrientationAssigner3D
         from .with_orientations_3d import FMSteel3DWithOrientations
         
-        ori_assigner = OrientationAssigner3D(verbosity=self._verbosity)
-        block_orientations = ori_assigner.assign_orientations_to_all_blocks(
+        ori_assigner = OrientationAssigner3D(verbosity=self._verbosity, log_sink=self._log_sink)
+        block_orientations, block_to_variant_idx = ori_assigner.assign_orientations_to_all_blocks(
             all_blocks=self.all_blocks, clusters_dict=self.clusters_dict,
             pag_orientations=self.pag_orientations,
             grain_to_plane_idx=self.grain_to_plane_idx,
+            ks_variant_selection=ks_variant_selection,
             random_seed=random_seed
         )
 
@@ -253,10 +274,76 @@ class FMSteel3DWithBlocks:
         return FMSteel3DWithOrientations(
             parent=self, grain_orientations={},
             block_orientations=block_orientations,
+            block_to_variant_idx=block_to_variant_idx,
             pag_orientations=self.pag_orientations, random_seed=random_seed,
             verbosity=self._verbosity, log_sink=self._log_sink
         )
     
+    def assign_custom_block_orientations(
+        self,
+        euler_dict: Dict[str, Tuple[float, float, float]],
+        random_seed: Optional[int] = None,
+    ) -> 'FMSteel3DWithOrientations':
+        """
+        Bypass KS variant assignment with a user-supplied block orientation dict.
+
+        Use this as injection point C: apply any arbitrary orientation distribution
+        to the existing block morphology without re-running the KS pipeline.
+
+        Parameters
+        ----------
+        euler_dict : dict
+            {block_id: (phi1, Phi, phi2)} — Bunge ZXZ Euler angles in degrees.
+            Extra keys not in ``all_blocks`` are ignored (warning issued).
+            Missing blocks will have no orientation in the returned object.
+        random_seed : int, optional
+            Stored in the returned ``FMSteel3DWithOrientations`` for reproducibility.
+
+        Returns
+        -------
+        FMSteel3DWithOrientations
+        """
+        import warnings
+        from .with_orientations_3d import FMSteel3DWithOrientations
+
+        known = set(self.all_blocks.keys())
+        provided = set(euler_dict.keys())
+
+        extra = provided - known
+        if extra:
+            warnings.warn(
+                f"assign_custom_block_orientations: {len(extra)} key(s) in euler_dict "
+                f"not in all_blocks, ignored (first 5: {sorted(extra)[:5]}).",
+                UserWarning, stacklevel=2,
+            )
+
+        missing = known - provided
+        if missing:
+            warnings.warn(
+                f"assign_custom_block_orientations: {len(missing)} block(s) have no "
+                f"entry in euler_dict — they carry no orientation "
+                f"(first 5: {sorted(missing)[:5]}).",
+                UserWarning, stacklevel=2,
+            )
+
+        valid_dict = {k: v for k, v in euler_dict.items() if k in known}
+
+        self._emit(
+            1,
+            f"Custom block orientations: {len(valid_dict)} applied, "
+            f"{len(missing)} missing, {len(extra)} extra ignored.",
+        )
+
+        return FMSteel3DWithOrientations(
+            parent=self,
+            grain_orientations={},
+            block_orientations=valid_dict,
+            pag_orientations=self.pag_orientations,
+            random_seed=random_seed,
+            verbosity=self._verbosity,
+            log_sink=self._log_sink,
+        )
+
     def get_block_statistics(self) -> Dict:
         """Compute statistics on block structure."""
         block_sizes = [len(v) for v in self.all_blocks.values()]

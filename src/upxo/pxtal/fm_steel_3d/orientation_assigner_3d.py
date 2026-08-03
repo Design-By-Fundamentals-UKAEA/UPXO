@@ -41,19 +41,37 @@ class OrientationAssigner3D:
     All methods are instance methods to allow storing session config.
     """
     
-    __slots__ = ('_verbosity',)
-    
-    def __init__(self, verbosity: int = 0):
+    __slots__ = ('_verbosity', '_log_sink')
+
+    def __init__(self, verbosity: int = 0, log_sink=None):
         """
         Initialize OrientationAssigner3D.
-        
+
         Parameters
         ----------
         verbosity : int, optional
             Verbosity level. Default 0.
+        log_sink : callable, optional
+            callable(str) -> None. If given, progress/diagnostic messages are
+            routed through it instead of bare print() -- lets a GUI page
+            capture them into its own console widget the same way every
+            other stage of this pipeline does (see _emit below). Without
+            this, messages went straight to the real process stdout, which
+            is invisible from inside a GUI console (they'd only show up in
+            whatever terminal launched the GUI, not the app itself).
         """
         self._verbosity = int(verbosity)
-    
+        self._log_sink = log_sink
+
+    def _emit(self, level: int, msg: str, component: str = 'ORI') -> None:
+        if self._verbosity < int(level):
+            return
+        text = f"[{component}][L{level}] {msg}"
+        if self._log_sink is not None:
+            self._log_sink(text)
+        else:
+            print(text)
+
     @staticmethod
     def get_ks_rotations() -> np.ndarray:
         """
@@ -102,7 +120,9 @@ class OrientationAssigner3D:
                                            clusters_dict: Dict[int, List[int]],
                                            pag_orientations: Dict[int, Tuple[float, float, float]],
                                            grain_to_plane_idx: Dict[int, int],
-                                           random_seed: Optional[int] = None) -> Dict[str, Tuple[float, float, float]]:
+                                           ks_variant_selection: str = 'random_per_block',
+                                           random_seed: Optional[int] = None
+                                           ) -> Tuple[Dict[str, Tuple[float, float, float]], Dict[str, int]]:
         """
         Assign BCC orientations to all blocks using the KS orientation relationship.
 
@@ -123,18 +143,38 @@ class OrientationAssigner3D:
             {pag_id: (phi1_deg, Phi_deg, phi2_deg)}.
         grain_to_plane_idx : dict
             {grain_id: plane_index (0-3)} — produced by generate_blocks_for_all_pags.
+        ks_variant_selection : str, optional
+            How to pick a KS variant for each block within its packet.
+
+            * ``'random_per_block'`` (default) — adjacency-aware greedy
+              graph-colouring: adjacent blocks within the same packet are
+              assigned different KS variants wherever possible, with a random
+              choice among the free variants.
+            * ``'deterministic'`` — always assign KS variant index 0 from the
+              packet, ignoring adjacency.  Produces a fully reproducible,
+              spatially uniform variant map useful for debugging and analytical
+              checks of the KS geometry.
         random_seed : int, optional
             Random seed for reproducibility.
 
         Returns
         -------
-        dict
-            {block_id: (phi1_deg, Phi_deg, phi2_deg)}.
+        tuple of (block_orientations, block_to_variant_idx)
+            block_orientations : dict
+                {block_id: (phi1_deg, Phi_deg, phi2_deg)}.
+            block_to_variant_idx : dict
+                {block_id: variant_index (0-5)} — which of the 6 KS variants
+                within its packet this block received.  Preserved (rather than
+                discarded once used to compute the Euler angles above) so
+                callers can build per-packet variant-balance statistics, or
+                group blocks by shared variant, without re-deriving it from
+                the orientation matrices.
         """
         if random_seed is not None:
             np.random.seed(random_seed)
 
         block_orientations: Dict[str, Tuple[float, float, float]] = {}
+        block_to_variant_idx: Dict[str, int] = {}
         ks_rotations = self.get_ks_rotations()
 
         # Group block IDs by PAG (compute pag_R once per PAG)
@@ -143,10 +183,23 @@ class OrientationAssigner3D:
             pag_id = int(block_id.split('_')[1])
             blocks_by_pag.setdefault(pag_id, []).append(block_id)
 
+        _n_pags_total = len(blocks_by_pag)
+        self._emit(1, f"Assigning KS variants across {_n_pags_total} PAG(s), "
+                      f"{len(all_blocks)} block(s), selection={ks_variant_selection!r}")
+
         _uneven_pag_ids: List[int] = []
         _first_uneven_sizes: Optional[Dict[int, int]] = None
+        _total_forced_repeats = 0
+        _pags_with_forced_repeats = 0
+        # Detailed per-PAG lines for small runs stay readable; large runs (the
+        # ones that actually take long enough to need progress) get periodic
+        # percentage updates instead of one line per PAG, so the console
+        # doesn't drown in thousands of near-identical lines at, say, 100^3
+        # scale (several thousand PAGs).
+        _per_pag_detail = _n_pags_total <= 50
+        _progress_step = max(1, _n_pags_total // 20)
 
-        for pag_id, block_ids in blocks_by_pag.items():
+        for _pag_i, (pag_id, block_ids) in enumerate(blocks_by_pag.items(), start=1):
             pag_euler = pag_orientations.get(pag_id, (0.0, 0.0, 0.0))
             pag_R = self.cubic_euler_bunge_to_matrix_v1(
                 np.array([pag_euler[0]]), np.array([pag_euler[1]]),
@@ -169,83 +222,117 @@ class OrientationAssigner3D:
             packet_block_map: Dict[int, List[str]] = {}
             for block_id in block_ids:
                 gid  = int(block_id.split('_')[2])
-                pidx = grain_to_plane_idx.get(gid, np.random.randint(4))
+                # `.get(gid, np.random.randint(4))` would evaluate the random
+                # draw eagerly on every call (Python evaluates both .get()
+                # arguments up front) even though gid is in the dict for
+                # essentially every block -- wasting a draw and silently
+                # perturbing the reproducible sequence almost every time.
+                pidx = grain_to_plane_idx[gid] if gid in grain_to_plane_idx \
+                    else np.random.randint(4)
                 packet_block_map.setdefault(pidx, []).append(block_id)
 
+            if _per_pag_detail:
+                self._emit(1, f"  [{_pag_i}/{_n_pags_total}] PAG {pag_id}: "
+                              f"{len(block_ids)} block(s) across {len(packet_block_map)} packet(s)")
+            elif _pag_i % _progress_step == 0 or _pag_i == _n_pags_total:
+                self._emit(1, f"  ...{_pag_i}/{_n_pags_total} PAGs processed "
+                              f"({100 * _pag_i / _n_pags_total:.0f}%)")
+
+            _pag_forced_repeats = 0
             for plane_idx, pp_block_ids in packet_block_map.items():
                 packet_variants = raw_packets.get(plane_idx, [])
                 if not packet_variants:
                     packet_variants = [v for vs in raw_packets.values() for v in vs]
                 n_v = len(packet_variants)
 
-                # Build intra-packet block adjacency from voxel face-neighbours.
-                # Two blocks are adjacent if any voxel of one face-touches a voxel
-                # of the other.  Used for adjacency-aware variant assignment below.
-                vox2bid: Dict[Tuple[int, int, int], str] = {}
-                for bid in pp_block_ids:
-                    vox = all_blocks.get(bid)
-                    if vox is not None and len(vox):
-                        for row in vox:
-                            vox2bid[(int(row[0]), int(row[1]), int(row[2]))] = bid
-                _face_off = [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]
-                adjacency: Dict[str, set] = {bid: set() for bid in pp_block_ids}
-                for bid in pp_block_ids:
-                    vox = all_blocks.get(bid)
-                    if vox is None or not len(vox):
-                        continue
-                    for row in vox:
-                        z, y, x = int(row[0]), int(row[1]), int(row[2])
-                        for dz, dy, dx in _face_off:
-                            nbid = vox2bid.get((z+dz, y+dy, x+dx))
-                            if nbid is not None and nbid != bid:
-                                adjacency[bid].add(nbid)
-
-                # Greedy graph-colouring: assign variant indices so that no two
-                # adjacent blocks share the same variant.  Process highest-degree
-                # blocks first to minimise forced repeats when n_b > n_v.
-                ordered = sorted(pp_block_ids,
-                                 key=lambda b: len(adjacency[b]), reverse=True)
                 var_idx_map: Dict[str, int] = {}
-                _forced_repeats = 0
-                for bid in ordered:
-                    nbr_used = {var_idx_map[nb]
-                                for nb in adjacency[bid] if nb in var_idx_map}
-                    free = [v for v in range(n_v) if v not in nbr_used]
-                    if free:
-                        var_idx_map[bid] = free[np.random.randint(len(free))]
-                    else:
-                        # All variants appear among neighbours — forced repeat.
-                        # Pick the variant least represented in the full map so far.
-                        freq = [sum(1 for vi in var_idx_map.values() if vi == v)
-                                for v in range(n_v)]
-                        var_idx_map[bid] = int(np.argmin(freq))
-                        _forced_repeats += 1
 
-                if _forced_repeats and self._verbosity >= 1:
-                    import warnings as _w
-                    _w.warn(
-                        f"PAG {pag_id}, packet {plane_idx}: {_forced_repeats} block(s) "
-                        f"could not be assigned a unique KS variant without adjacency "
-                        f"conflict (packet has {len(pp_block_ids)} blocks but only "
-                        f"{n_v} variants). Least-used variant chosen as fallback.",
-                        RuntimeWarning, stacklevel=4)
+                if ks_variant_selection == 'deterministic':
+                    # Every block in this packet receives KS variant index 0.
+                    # Fully reproducible regardless of random_seed; useful for
+                    # debugging KS geometry with a known, spatially uniform map.
+                    for bid in pp_block_ids:
+                        var_idx_map[bid] = 0
+                else:
+                    # 'random_per_block' — adjacency-aware greedy graph-colouring.
+                    # Build intra-packet block adjacency from voxel face-neighbours.
+                    vox2bid: Dict[Tuple[int, int, int], str] = {}
+                    for bid in pp_block_ids:
+                        vox = all_blocks.get(bid)
+                        if vox is not None and len(vox):
+                            for row in vox:
+                                vox2bid[(int(row[0]), int(row[1]), int(row[2]))] = bid
+                    _face_off = [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]
+                    adjacency: Dict[str, set] = {bid: set() for bid in pp_block_ids}
+                    for bid in pp_block_ids:
+                        vox = all_blocks.get(bid)
+                        if vox is None or not len(vox):
+                            continue
+                        for row in vox:
+                            z, y, x = int(row[0]), int(row[1]), int(row[2])
+                            for dz, dy, dx in _face_off:
+                                nbid = vox2bid.get((z+dz, y+dy, x+dx))
+                                if nbid is not None and nbid != bid:
+                                    adjacency[bid].add(nbid)
+
+                    # Process highest-degree blocks first to minimise forced repeats.
+                    ordered = sorted(pp_block_ids,
+                                     key=lambda b: len(adjacency[b]), reverse=True)
+                    _forced_repeats = 0
+                    for bid in ordered:
+                        nbr_used = {var_idx_map[nb]
+                                    for nb in adjacency[bid] if nb in var_idx_map}
+                        free = [v for v in range(n_v) if v not in nbr_used]
+                        if free:
+                            var_idx_map[bid] = free[np.random.randint(len(free))]
+                        else:
+                            freq = [sum(1 for vi in var_idx_map.values() if vi == v)
+                                    for v in range(n_v)]
+                            var_idx_map[bid] = int(np.argmin(freq))
+                            _forced_repeats += 1
+
+                    if _forced_repeats:
+                        _total_forced_repeats += _forced_repeats
+                        _pag_forced_repeats += _forced_repeats
+                        self._emit(
+                            1, f"    PAG {pag_id}, packet {plane_idx}: {_forced_repeats} "
+                               f"block(s) could not get a unique KS variant without an "
+                               f"adjacency conflict (packet has {len(pp_block_ids)} blocks "
+                               f"but only {n_v} variants) -- least-used variant used as "
+                               f"fallback")
+                        import warnings as _w
+                        _w.warn(
+                            f"PAG {pag_id}, packet {plane_idx}: {_forced_repeats} block(s) "
+                            f"could not be assigned a unique KS variant without adjacency "
+                            f"conflict (packet has {len(pp_block_ids)} blocks but only "
+                            f"{n_v} variants). Least-used variant chosen as fallback.",
+                            RuntimeWarning, stacklevel=4)
 
                 for block_id in pp_block_ids:
-                    raw_variant = packet_variants[var_idx_map[block_id]]
+                    v_idx       = var_idx_map[block_id]
+                    raw_variant = packet_variants[v_idx]
                     variant_R   = pag_R @ raw_variant
                     block_orientations[block_id] = self.matrix_to_euler_bunge(
                         variant_R, degrees=True)
+                    block_to_variant_idx[block_id] = v_idx
 
-        _n_pags = len(blocks_by_pag)
+            if _pag_forced_repeats:
+                _pags_with_forced_repeats += 1
+
         if self._verbosity >= 2:
             if not _uneven_pag_ids:
-                print(f"[ORI][L2] KS grouping: all {_n_pags} PAGs have balanced 4x6 packet structure")
+                self._emit(2, f"KS grouping: all {_n_pags_total} PAGs have balanced 4x6 packet structure")
             else:
-                print(f"[ORI][L2] KS grouping uneven in {len(_uneven_pag_ids)}/{_n_pags} PAGs "
-                      f"(expected 6 per packet; first occurrence: {_first_uneven_sizes}); "
-                      "assignment continued using available variants")
+                self._emit(2, f"KS grouping uneven in {len(_uneven_pag_ids)}/{_n_pags_total} PAGs "
+                              f"(expected 6 per packet; first occurrence: {_first_uneven_sizes}); "
+                              "assignment continued using available variants")
 
-        return block_orientations
+        self._emit(
+            1, f"Done: {len(block_orientations)} block orientation(s) assigned across "
+               f"{_n_pags_total} PAG(s) -- {_total_forced_repeats} forced-repeat fallback(s) "
+               f"in {_pags_with_forced_repeats} PAG(s)"
+        )
+        return block_orientations, block_to_variant_idx
     
     @staticmethod
     def group_ks_variants_into_packets(
@@ -390,16 +477,28 @@ class OrientationAssigner3D:
         tuple
             (phi1, Phi, phi2) in degrees (or radians).
         """
+        # arccos already returns Phi canonically in [0, pi] -- do NOT reduce
+        # it mod pi afterwards: that used to map the exact Phi=pi case down
+        # to 0, silently turning a 180 degree tilt into "no tilt".
         Phi = np.arccos(np.clip(R[2, 2], -1, 1))
         if np.sin(Phi) > 1e-6:
             phi1 = np.arctan2(R[2, 0], -R[2, 1])
             phi2 = np.arctan2(R[0, 2], R[1, 2])
         else:
+            # Gimbal lock (Phi = 0 or pi): only phi1+/-phi2 is determined, so
+            # phi1 is fixed at 0 and phi2 absorbs the free combination. At
+            # Phi=0, R[0,0]=R[1,1]=cos(phi1+phi2) and R[0,1]=-R[1,0]=
+            # sin(phi1+phi2); at Phi=pi, R[0,0]=cos(phi1-phi2) and
+            # R[0,1]=R[1,0]=sin(phi1-phi2). In both cases the correct
+            # recovered phi2 is atan2(-R[1,0], R[0,0]) -- verified by direct
+            # round-trip reconstruction. The previous atan2(R[1,0], R[0,0])
+            # returned the negated angle, so matrix_to_euler_bunge(R) did not
+            # reconstruct the input R for any orientation with Phi at (or
+            # numerically touching) 0 or 180 degrees.
             phi1 = 0.0
-            phi2 = np.arctan2(R[1, 0], R[0, 0])
+            phi2 = np.arctan2(-R[1, 0], R[0, 0])
         phi1 = phi1 % (2 * np.pi)
         phi2 = phi2 % (2 * np.pi)
-        Phi = Phi % np.pi
         if degrees:
             return float(np.degrees(phi1)), float(np.degrees(Phi)), float(np.degrees(phi2))
         return float(phi1), float(Phi), float(phi2)
@@ -603,12 +702,12 @@ class OrientationAssigner3D:
 
             if not found:
                 n_fallbacks += 1
-                if self._verbosity >= 1:
-                    print(
-                        f"[ORI][HAGB] PAG {pag_id}: exhausted {max_attempts} attempts; "
-                        f"best min-misorientation={best_min_mis:.2f}° "
-                        f"(threshold={hagb_threshold:.1f}°), using best candidate"
-                    )
+                self._emit(
+                    1, f"PAG {pag_id}: exhausted {max_attempts} attempts; "
+                       f"best min-misorientation={best_min_mis:.2f}° "
+                       f"(threshold={hagb_threshold:.1f}°), using best candidate",
+                    component='ORI-HAGB',
+                )
 
             assigned[pag_id] = best_ea
 
@@ -621,11 +720,11 @@ class OrientationAssigner3D:
                 stacklevel=2,
             )
 
-        if self._verbosity >= 1:
-            print(
-                f"[ORI][HAGB] Assigned {len(assigned)}/{len(pag_order)} PAG orientations "
-                f"(threshold={hagb_threshold:.1f}°, fallbacks={n_fallbacks})"
-            )
+        self._emit(
+            1, f"Assigned {len(assigned)}/{len(pag_order)} PAG orientations "
+               f"(threshold={hagb_threshold:.1f}°, fallbacks={n_fallbacks})",
+            component='ORI-HAGB',
+        )
 
         return assigned
 
@@ -669,7 +768,7 @@ class OrientationAssigner3D:
 
         for sb_id in all_subblocks:
             # Recover parent block_id: strip 'SB_' prefix, drop final '_N' counter
-            inner = sb_id[3:]                       # 'B_pag_pkt_blk_N' → 'B_pag_pkt_blk_N'
+            inner = sb_id[3:]                       # 'SB_B_pag_pkt_blk_N' → 'B_pag_pkt_blk_N'
             block_id = '_'.join(inner.split('_')[:-1])  # drop the trailing sub-block counter
 
             parent_ea = block_orientations.get(block_id)

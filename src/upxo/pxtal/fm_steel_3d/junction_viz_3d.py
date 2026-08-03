@@ -284,4 +284,7 @@ def view_junction_lines(
     pl.set_background(background_color)
     pl.show_axes()
     print(f'  Total: {n_total_segs:,} line segments, {n_total_jps:,} junction points')
-    pl.show()
+    try:
+        pl.show()
+    finally:
+        pl.close()
