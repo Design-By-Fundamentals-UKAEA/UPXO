@@ -9,6 +9,8 @@ Usage
 import upxo.viz.ebsdviz as ebsdviz
 """
 
+from typing import Optional
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import sobel
@@ -143,8 +145,8 @@ def plot_euler_maps(rdr,
         if show_boundaries:
             _overlay_boundaries(ax, gb, color=boundary_color)
 
-    plt.suptitle(suptitle, y=1.01)
-    plt.tight_layout()
+    plt.suptitle(suptitle, y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.show()
     return fig, axes
 
@@ -765,8 +767,14 @@ def plot_parent_twin_map(
         ax.legend(handles=patches, loc='upper right', fontsize=7, framealpha=0.9)
 
     if suptitle:
-        fig.suptitle(suptitle, fontsize=11, y=1.01)
-    plt.tight_layout()
+        # y kept under 1.0 and tight_layout given an explicit rect so the
+        # reserved top margin actually accounts for the suptitle -- y>1.0
+        # combined with an un-reserved tight_layout() clips the top of the
+        # text against the canvas/window edge.
+        fig.suptitle(suptitle, fontsize=11, y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.94])
+    else:
+        plt.tight_layout()
     return fig, axes
 
 
@@ -779,16 +787,20 @@ def plot_combined_parent_twin_map(
         color_parent: str = '#4878CF',
         color_twin: str = '#D65F5F',
         color_intermediate: str = '#59A14F',
-        suptitle: str | None = 'Pure-parent and pure-twin grains (all CSL types combined)',
+        color_non_participating: str = '#E8A33D',
+        highlight: str = 'combined',
+        suptitle: str | None = None,
 ) -> tuple:
     """
-    Single map showing pure-parent, pure-twin and intermediate grains
-    aggregated across **all** CSL types in *parent_info*.
+    Single map showing pure-parent, pure-twin, intermediate, and/or
+    non-participating grains aggregated across **all** CSL types in
+    *parent_info*, depending on *highlight*.
 
-    A grain that is a pure-parent in *any* CSL type → coloured as parent.
-    A grain that is a pure-twin   in *any* CSL type → coloured as twin.
-    A grain that is intermediate  in *any* CSL type → coloured as intermediate.
+    A grain that is a pure-parent in *any* CSL type → parent role.
+    A grain that is a pure-twin   in *any* CSL type → twin role.
+    A grain that is intermediate  in *any* CSL type → intermediate role.
     Priority when a grain appears in multiple roles: intermediate > parent > twin.
+    A grain that is none of the above in *any* CSL type → non-participating.
 
     Parameters
     ----------
@@ -799,11 +811,19 @@ def plot_combined_parent_twin_map(
     figsize, dpi
         Figure size and resolution.
     alpha_bg : float
-        Opacity of non-role grains.
-    color_parent, color_twin, color_intermediate : str
+        Opacity of the dimmed (non-highlighted) grains.
+    color_parent, color_twin, color_intermediate, color_non_participating : str
         Matplotlib colour specs for each role.
+    highlight : {'combined', 'parent', 'non_participating'}
+        ``'combined'`` (default): parent/twin/intermediate all coloured,
+        non-participating grains dimmed — the original behaviour.
+        ``'parent'``: only pure-parent grains coloured; twins,
+        intermediates, and non-participating grains all dimmed alike.
+        ``'non_participating'``: only non-participating grains coloured;
+        every role grain (parent/twin/intermediate) is dimmed instead.
     suptitle : str or None
-        Figure title.
+        Figure title. When ``None`` (default), an auto-generated title
+        matching *highlight* is used.
 
     Returns
     -------
@@ -811,6 +831,11 @@ def plot_combined_parent_twin_map(
     """
     import matplotlib.colors as mcolors
     import matplotlib.patches as mpatches
+
+    if highlight not in ('combined', 'parent', 'non_participating'):
+        raise ValueError(
+            "highlight must be one of 'combined'/'parent'/'non_participating', "
+            f"got {highlight!r}")
 
     lfi    = np.asarray(lfi, dtype=int)
     ny, nx = lfi.shape
@@ -831,6 +856,24 @@ def plot_combined_parent_twin_map(
     pure_parent_final   = only_pp & all_pp
     pure_twin_final     = only_pp & all_pt - pure_parent_final
     intermediate_final  = all_im
+    all_role_gids        = pure_parent_final | pure_twin_final | intermediate_final
+    non_participating    = set(int(g) for g in np.unique(lfi[lfi > 0])) - all_role_gids
+
+    if highlight == 'combined':
+        highlighted = [
+            (pure_twin_final,     color_twin,         f'Pure twins ({len(pure_twin_final)})'),
+            (pure_parent_final,   color_parent,        f'Pure parents ({len(pure_parent_final)})'),
+            (intermediate_final,  color_intermediate,  f'Intermediates ({len(intermediate_final)})'),
+        ]
+        dimmed_gids, dimmed_label = non_participating, 'Non-participating grains'
+    elif highlight == 'parent':
+        highlighted = [(pure_parent_final, color_parent, f'Pure parents ({len(pure_parent_final)})')]
+        dimmed_gids = pure_twin_final | intermediate_final | non_participating
+        dimmed_label = 'Other grains'
+    else:  # 'non_participating'
+        highlighted = [(non_participating, color_non_participating,
+                         f'Non-participating grains ({len(non_participating)})')]
+        dimmed_gids, dimmed_label = all_role_gids, 'Parent / twin / intermediate grains'
 
     # ── Build RGBA image ──────────────────────────────────────────────────────
     rgba      = np.ones((ny, nx, 4), dtype=float)
@@ -840,20 +883,12 @@ def plot_combined_parent_twin_map(
     gid_flat  = lfi.ravel()
     rgba_flat = rgba.reshape(-1, 4)
 
-    all_role_gids = pure_parent_final | pure_twin_final | intermediate_final
+    for gid in dimmed_gids:
+        mask = gid_flat == gid
+        rgba_flat[mask, :3] = 0.85
+        rgba_flat[mask,  3] = alpha_bg
 
-    # Dim non-role grains
-    for gid in np.unique(lfi[lfi > 0]):
-        if int(gid) not in all_role_gids:
-            mask = gid_flat == gid
-            rgba_flat[mask, :3] = 0.85
-            rgba_flat[mask,  3] = alpha_bg
-
-    for gid_set, colour_str in [
-        (pure_twin_final,     color_twin),
-        (pure_parent_final,   color_parent),
-        (intermediate_final,  color_intermediate),
-    ]:
+    for gid_set, colour_str, _label in highlighted:
         c = np.array(mcolors.to_rgba(colour_str), dtype=float)
         for gid in gid_set:
             mask = gid_flat == gid
@@ -866,14 +901,16 @@ def plot_combined_parent_twin_map(
     ax.imshow(rgba, interpolation='nearest', aspect='equal')
     ax.set_axis_off()
 
-    patches = [
-        mpatches.Patch(color=color_parent,      label=f'Pure parents ({len(pure_parent_final)})'),
-        mpatches.Patch(color=color_twin,         label=f'Pure twins ({len(pure_twin_final)})'),
-        mpatches.Patch(color=color_intermediate, label=f'Intermediates ({len(intermediate_final)})'),
-        mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)), label='Non-role grains'),
-    ]
+    patches = [mpatches.Patch(color=colour_str, label=label) for _, colour_str, label in highlighted]
+    patches.append(mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)), label=dimmed_label))
     ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
 
+    if suptitle is None:
+        suptitle = {
+            'combined': 'Pure-parent and pure-twin grains (all CSL types combined)',
+            'parent': 'Pure-parent grains (all CSL types combined)',
+            'non_participating': 'Non-participating grains (all CSL types combined)',
+        }[highlight]
     if suptitle:
         ax.set_title(suptitle, fontsize=10)
     plt.tight_layout()
@@ -883,6 +920,220 @@ def plot_combined_parent_twin_map(
 # ---------------------------------------------------------------------------
 # Grain-role morphological / topological statistics
 # ---------------------------------------------------------------------------
+
+GRAIN_ROLE_ALL_PROPS  = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
+GRAIN_ROLE_ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
+GRAIN_ROLE_PROP_LABELS = {
+    'area':         'Area (µm²)',
+    'aspect_ratio': 'Aspect ratio',
+    'perimeter':    'Perimeter (µm)',
+    'solidity':     'Solidity',
+    'n_neighbours': 'Nneigh',
+}
+GRAIN_ROLE_GROUP_COLORS = {
+    'pure_parents':  '#4878CF',
+    'pure_twins':    '#D65F5F',
+    'intermediates': '#59A14F',
+    'non_role':      '#888888',
+}
+GRAIN_ROLE_GROUP_LABELS_DISPLAY = {
+    'pure_parents':  'Pure parents',
+    'pure_twins':    'Pure twins',
+    'intermediates': 'Intermediates',
+    'non_role':      'Non-role',
+}
+
+
+def compute_pct_interior_grains(lfi: 'np.ndarray', grain_ids) -> Optional[float]:
+    """
+    Percentage of ``grain_ids`` that are completely interior to ``lfi``
+    -- i.e. have no pixel on any of the map's 4 edges (top/bottom row,
+    left/right column). The EBSD-side equivalent of
+    ``TwinnedSimple3DBase.rank_temporal_slices_by_n``'s per-slice
+    ``pct_ng_in_2d`` computation, for direct comparison against a
+    synthetic candidate's ``<%.NgIn.2D>``.
+
+    Note this is inherently sensitive to the absolute size of the
+    imaged/simulated region: a bigger map has relatively more grains
+    that safely avoid the edge purely because there's more area to be
+    interior in, independent of anything about representativeness.
+    Comparing this percentage between an EBSD map and a synthetic RVE of
+    a different physical extent should be done cautiously.
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field (e.g. ``rg.lfi_ebsd``).
+    grain_ids : array-like of int
+        The grain IDs to classify (e.g.
+        ``parent_info['S3  (twin)']['pure_parents']``).
+
+    Returns
+    -------
+    float or None
+        Percentage (0-100) of ``grain_ids`` with no pixel on any of
+        ``lfi``'s 4 edges. ``None`` if ``grain_ids`` is empty.
+    """
+    grain_ids = set(int(g) for g in grain_ids)
+    if not grain_ids:
+        return None
+
+    edge_ids = set()
+    edge_ids.update(np.unique(lfi[0, :]).tolist())
+    edge_ids.update(np.unique(lfi[-1, :]).tolist())
+    edge_ids.update(np.unique(lfi[:, 0]).tolist())
+    edge_ids.update(np.unique(lfi[:, -1]).tolist())
+    edge_ids.discard(0)
+
+    n_interior = len(grain_ids - edge_ids)
+    return 100.0 * n_interior / len(grain_ids)
+
+
+def compute_grain_role_property_distributions(
+        lfi: 'np.ndarray',
+        parent_info: dict,
+        prop: dict,
+        neigh_gid: dict,
+        selected_props: list | None = None,
+        selected_groups: list | None = None,
+        step_size: float = 1.0,
+) -> dict:
+    """
+    Extract per-grain-role-group property value arrays -- the pure data
+    step of ``plot_grain_role_property_stats``, with no plotting. Split out
+    so a caller can compute once and plot (or replot) separately, e.g. a
+    an interactive caller's "Compute" vs "Plot" action pair.
+
+    Parameters
+    ----------
+    lfi : ndarray, shape (ny, nx)
+        Integer grain label field.
+    parent_info : dict
+        Output of ``identify_parent_grains()``.
+    prop : dict
+        Per-grain property dict (grain_id → dict) as from ``prop_ebsd``.
+        Expected keys: ``'area'``, ``'aspect_ratio'``, ``'perimeter'``,
+        ``'solidity'``.
+    neigh_gid : dict
+        Neighbour-grain dict (grain_id → list of neighbour IDs) as from
+        ``neigh_gid_ebsd``.  Used to derive ``n_neighbours``.
+    selected_props : list of str, optional
+        Subset of ``GRAIN_ROLE_ALL_PROPS``.  Defaults to all five.
+    selected_groups : list of str, optional
+        Subset of ``GRAIN_ROLE_ALL_GROUPS``.  Defaults to all four.
+    step_size : float
+        EBSD step size (µm).  Multiplied into area (px² → µm²) and
+        perimeter (px → µm) values.
+
+    Returns
+    -------
+    dict
+        ``{prop_name: {group_name: ndarray of values}}`` -- pass directly
+        as the ``data`` argument of
+        :func:`~upxo.viz.vizDistr.plot_grouped_distributions`, or to
+        ``plot_grain_role_property_stats``'s companion plot call.
+    """
+    if selected_props  is None:
+        selected_props  = GRAIN_ROLE_ALL_PROPS
+    if selected_groups is None:
+        selected_groups = GRAIN_ROLE_ALL_GROUPS
+
+    # Build grain-role sets (merged across all CSL types)
+    all_pp: set[int] = set()
+    all_pt: set[int] = set()
+    all_im: set[int] = set()
+    for info in parent_info.values():
+        all_pp.update(info['pure_parents'].tolist())
+        all_pt.update(info['pure_twins'].tolist())
+        all_im.update(info['intermediates'].tolist())
+
+    only_pp_or_pt    = (all_pp | all_pt) - all_im
+    pure_parent_set  = only_pp_or_pt & all_pp
+    pure_twin_set    = (only_pp_or_pt & all_pt) - pure_parent_set
+    intermediate_set = all_im
+    all_role         = pure_parent_set | pure_twin_set | intermediate_set
+    indexed_gids     = set(int(g) for g in np.unique(lfi[lfi > 0]))
+    non_role_set     = indexed_gids - all_role
+
+    grain_sets = {
+        'pure_parents':  pure_parent_set,
+        'pure_twins':    pure_twin_set,
+        'intermediates': intermediate_set,
+        'non_role':      non_role_set,
+    }
+
+    # Extract property values per group into plain arrays
+    def _get_vals(gids: set, pname: str) -> np.ndarray:
+        """ get vals."""
+        vals = []
+        for gid in gids:
+            if pname == 'n_neighbours':
+                nb = neigh_gid.get(gid)
+                if nb is not None:
+                    vals.append(len(nb))
+            else:
+                p = prop.get(gid)
+                if p is not None and pname in p:
+                    v = float(p[pname])
+                    if pname == 'area':
+                        v *= step_size ** 2
+                    elif pname == 'perimeter':
+                        v *= step_size
+                    vals.append(v)
+        arr = np.array(vals, dtype=float)
+        return arr[np.isfinite(arr)]
+
+    return {
+        pname: {grp: _get_vals(grain_sets[grp], pname) for grp in selected_groups}
+        for pname in selected_props
+    }
+
+
+def plot_grain_role_property_distributions(
+        data: dict,
+        selected_groups: list | None = None,
+        bins: int = 40,
+        bw_method: str = 'scott',
+        peak_prominence: float = 0.01,
+        figsize_per: tuple[float, float] = (5, 4),
+        dpi: int = 110,
+        suptitle: str = 'Grain morphological & topological statistics by role',
+        ncols: int | None = None,
+        fontsize: float = 9.0,
+) -> tuple:
+    """
+    Plot overlaid histograms + KDE + detected peaks from a pre-computed
+    ``data`` dict (output of ``compute_grain_role_property_distributions``).
+
+    Parameters mirror ``plot_grain_role_property_stats``'s plotting-related
+    arguments; see that function's docstring for details.  ``selected_groups``
+    must match what was passed to ``compute_grain_role_property_distributions``
+    (defaults to all four groups, same as there).
+
+    Returns
+    -------
+    fig, axes
+    """
+    from upxo.viz.vizDistr import plot_grouped_distributions
+
+    if selected_groups is None:
+        selected_groups = GRAIN_ROLE_ALL_GROUPS
+
+    return plot_grouped_distributions(
+        data            = data,
+        prop_labels     = GRAIN_ROLE_PROP_LABELS,
+        group_colors    = {g: GRAIN_ROLE_GROUP_COLORS[g] for g in selected_groups},
+        group_labels    = {g: GRAIN_ROLE_GROUP_LABELS_DISPLAY[g] for g in selected_groups},
+        bins            = bins,
+        bw_method       = bw_method,
+        peak_prominence = peak_prominence,
+        figsize_per     = figsize_per,
+        dpi             = dpi,
+        suptitle        = suptitle,
+        ncols           = ncols,
+        fontsize        = fontsize,
+    )
+
 
 def plot_grain_role_property_stats(
         lfi: 'np.ndarray',
@@ -905,6 +1156,12 @@ def plot_grain_role_property_stats(
     For each selected property, plot overlaid histograms + KDE + detected peaks
     for each selected grain-role group (pure parents, pure twins, intermediates,
     non-role).  Min / max / mean / std are embedded in the legend labels.
+
+    One-shot compute + plot convenience wrapper around
+    ``compute_grain_role_property_distributions`` +
+    ``plot_grain_role_property_distributions`` -- kept for existing callers
+    (notebooks, ``repgen2d.see_grain_role_property_stats``) that don't need
+    the compute/plot split.
 
     Parameters
     ----------
@@ -954,90 +1211,20 @@ def plot_grain_role_property_stats(
     -------
     fig, axes
     """
-    from upxo.viz.vizDistr import plot_grouped_distributions
-
-    ALL_PROPS  = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
-    ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
-    PROP_LABELS = {
-        'area':         'Area (µm²)',
-        'aspect_ratio': 'Aspect ratio',
-        'perimeter':    'Perimeter (µm)',
-        'solidity':     'Solidity',
-        'n_neighbours': 'Number of neighbours',
-    }
-    GROUP_COLORS = {
-        'pure_parents':  '#4878CF',
-        'pure_twins':    '#D65F5F',
-        'intermediates': '#59A14F',
-        'non_role':      '#888888',
-    }
-    GROUP_LABELS_DISPLAY = {
-        'pure_parents':  'Pure parents',
-        'pure_twins':    'Pure twins',
-        'intermediates': 'Intermediates',
-        'non_role':      'Non-role',
-    }
-
     if selected_props  is None:
-        selected_props  = ALL_PROPS
+        selected_props  = GRAIN_ROLE_ALL_PROPS
     if selected_groups is None:
-        selected_groups = ALL_GROUPS
+        selected_groups = GRAIN_ROLE_ALL_GROUPS
 
-    # Build grain-role sets (merged across all CSL types)
-    all_pp: set[int] = set()
-    all_pt: set[int] = set()
-    all_im: set[int] = set()
-    for info in parent_info.values():
-        all_pp.update(info['pure_parents'].tolist())
-        all_pt.update(info['pure_twins'].tolist())
-        all_im.update(info['intermediates'].tolist())
+    data = compute_grain_role_property_distributions(
+        lfi, parent_info, prop, neigh_gid,
+        selected_props=selected_props, selected_groups=selected_groups,
+        step_size=step_size,
+    )
 
-    only_pp_or_pt    = (all_pp | all_pt) - all_im
-    pure_parent_set  = only_pp_or_pt & all_pp
-    pure_twin_set    = (only_pp_or_pt & all_pt) - pure_parent_set
-    intermediate_set = all_im
-    all_role         = pure_parent_set | pure_twin_set | intermediate_set
-    indexed_gids     = set(int(g) for g in np.unique(lfi[lfi > 0]))
-    non_role_set     = indexed_gids - all_role
-
-    grain_sets = {
-        'pure_parents':  pure_parent_set,
-        'pure_twins':    pure_twin_set,
-        'intermediates': intermediate_set,
-        'non_role':      non_role_set,
-    }
-
-    # Extract property values per group into plain arrays
-    def _get_vals(gids: set, pname: str) -> np.ndarray:
-        """ get vals."""
-        vals = []
-        for gid in gids:
-            if pname == 'n_neighbours':
-                nb = neigh_gid.get(gid)
-                if nb is not None:
-                    vals.append(len(nb))
-            else:
-                p = prop.get(gid)
-                if p is not None and pname in p:
-                    v = float(p[pname])
-                    if pname == 'area':
-                        v *= step_size ** 2
-                    elif pname == 'perimeter':
-                        v *= step_size
-                    vals.append(v)
-        arr = np.array(vals, dtype=float)
-        return arr[np.isfinite(arr)]
-
-    data = {
-        pname: {grp: _get_vals(grain_sets[grp], pname) for grp in selected_groups}
-        for pname in selected_props
-    }
-
-    return plot_grouped_distributions(
+    return plot_grain_role_property_distributions(
         data            = data,
-        prop_labels     = PROP_LABELS,
-        group_colors    = {g: GROUP_COLORS[g] for g in selected_groups},
-        group_labels    = {g: GROUP_LABELS_DISPLAY[g] for g in selected_groups},
+        selected_groups = selected_groups,
         bins            = bins,
         bw_method       = bw_method,
         peak_prominence = peak_prominence,
@@ -1277,8 +1464,10 @@ def plot_twin_introduction_map(
     axes[1].legend(handles=patches, loc='upper right', fontsize=7, framealpha=0.9)
 
     if suptitle:
-        fig.suptitle(suptitle, fontsize=11, y=1.01)
-    plt.tight_layout()
+        fig.suptitle(suptitle, fontsize=11, y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.94])
+    else:
+        plt.tight_layout()
     return fig, axes
 
 
