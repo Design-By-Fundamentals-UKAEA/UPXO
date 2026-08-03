@@ -41,7 +41,13 @@ class GrainStructureViz3D:
             poly['grain_id'] = np.concatenate(colors)
             plotter.add_mesh(poly, scalars='grain_id', cmap=cmap, opacity=alpha, point_size=5)
         plotter.set_background('white')
-        plotter.show(title=title)
+        try:
+            plotter.show(title=title)
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            plotter.close()
     
     def plot_pag_map_pyvista(self, clusters_dict: Dict[int, List[int]],
                              grain_locs: Dict[int, np.ndarray],
@@ -61,7 +67,13 @@ class GrainStructureViz3D:
             poly['pag_id'] = np.concatenate(colors_all)
             plotter.add_mesh(poly, scalars='pag_id', cmap='tab20', opacity=opacity, point_size=5)
         plotter.set_background('white')
-        plotter.show(title=title)
+        try:
+            plotter.show(title=title)
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            plotter.close()
     
     def visualize_block_morphology(self, blocks_dict: Dict[str, np.ndarray],
                                    title: str = 'Block Morphology',
@@ -77,7 +89,13 @@ class GrainStructureViz3D:
             poly['block_id'] = np.concatenate(colors_all)
             plotter.add_mesh(poly, scalars='block_id', cmap='nipy_spectral', opacity=opacity, point_size=5)
         plotter.set_background('white')
-        plotter.show(title=title)
+        try:
+            plotter.show(title=title)
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            plotter.close()
     
     def visualize_block_morphology_v1(self, blocks_dict: Dict[str, np.ndarray],
                                       title: str = 'Block Morphology',
@@ -94,7 +112,13 @@ class GrainStructureViz3D:
             plotter.add_mesh(poly, scalars='block_index', cmap='viridis', point_size=5,
                            scalar_bar_args={'title': 'Block ID'})
         plotter.set_background('white')
-        plotter.show(title=title)
+        try:
+            plotter.show(title=title)
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            plotter.close()
     
     def visualize_blocks_in_packet(self, blocks_dict: Dict[str, np.ndarray],
                                    packet_gid=None, voxel_size: float = 1.0,
@@ -144,6 +168,113 @@ class GrainStructureViz3D:
         """Visualize a grain structure subset."""
         self.plot_gs_pvvox(lgi_subset, grain_locs_subset, **kwargs)
 
+    @staticmethod
+    def _scatter_exploded_grid(feature_voxels: Dict[object, np.ndarray],
+                               offsets: Dict[object, np.ndarray]):
+        """Shared bounding-box + scatter step for the two exploded-grid builders
+        below: rigidly shift each feature's voxels by its own offset, then lay
+        every feature into one int32 label grid sized to fit all of them.
+        Returns (grid, n_features)."""
+        ids = list(feature_voxels.keys())
+        shifted = {}
+        all_coords = []
+        for fid in ids:
+            voxels = feature_voxels[fid]
+            if voxels is None or len(voxels) == 0:
+                continue
+            sv = voxels + offsets.get(fid, np.zeros(3))
+            shifted[fid] = sv
+            all_coords.append(sv)
+
+        if not all_coords:
+            return np.zeros((1, 1, 1), dtype=np.int32), 0
+
+        stacked = np.concatenate(all_coords, axis=0)
+        mins = stacked.min(axis=0)
+        maxs = stacked.max(axis=0)
+        shape = (maxs - mins + 1).astype(int)
+        grid = np.zeros(tuple(shape), dtype=np.int32)
+
+        for idx, fid in enumerate(ids, start=1):
+            if fid not in shifted:
+                continue
+            sv = (shifted[fid] - mins).astype(int)
+            grid[sv[:, 0], sv[:, 1], sv[:, 2]] = idx
+
+        return grid, len(ids)
+
+    @staticmethod
+    def build_exploded_block_grid(all_blocks: Dict[str, np.ndarray],
+                                  clusters_dict: Dict[int, List[int]],
+                                  grain_locs: Dict[int, np.ndarray],
+                                  grain_to_pag_id: Dict[int, int],
+                                  grain_to_blocks_map: Dict[int, List[str]],
+                                  explosion_factor: float):
+        """
+        Build a 3D int32 label grid where each active voxel holds a 1-based
+        block index, with every block's full voxel set rigidly translated by
+        explosion_factor * (its own centroid minus its parent PAG's centroid).
+        explosion_factor=0 reproduces the true, unexploded layout exactly --
+        translation preserves each block's shape, it only relocates it.
+
+        Returns (grid, n_blocks).
+        """
+        pag_centroid = {}
+        for pag_id, gids in clusters_dict.items():
+            parts = [grain_locs[g] for g in gids if g in grain_locs and len(grain_locs[g])]
+            if parts:
+                pag_centroid[pag_id] = np.concatenate(parts, axis=0).mean(axis=0)
+
+        block_to_pag = {}
+        for gid, blk_list in grain_to_blocks_map.items():
+            pag_id = grain_to_pag_id.get(gid)
+            if pag_id is None:
+                continue
+            for bid in blk_list:
+                block_to_pag[bid] = pag_id
+
+        offsets = {}
+        for block_id, voxels in all_blocks.items():
+            if voxels is None or len(voxels) == 0:
+                continue
+            pag_c = pag_centroid.get(block_to_pag.get(block_id))
+            if pag_c is None:
+                continue
+            offsets[block_id] = np.round(
+                (voxels.mean(axis=0) - pag_c) * explosion_factor).astype(int)
+
+        return GrainStructureViz3D._scatter_exploded_grid(all_blocks, offsets)
+
+    @staticmethod
+    def build_exploded_subblock_grid(all_subblocks: Dict[str, np.ndarray],
+                                     all_blocks: Dict[str, np.ndarray],
+                                     block_to_subblocks_map: Dict[str, List[str]],
+                                     explosion_factor: float):
+        """
+        Same idea one level down: each sub-block's full voxel set is rigidly
+        translated by explosion_factor * (its own centroid minus its parent
+        block's centroid) -- blocks/PAGs stay in their true positions.
+
+        Returns (grid, n_subblocks).
+        """
+        subblock_to_block = {}
+        for block_id, sb_list in block_to_subblocks_map.items():
+            for sb_id in sb_list:
+                subblock_to_block[sb_id] = block_id
+
+        offsets = {}
+        for sb_id, voxels in all_subblocks.items():
+            if voxels is None or len(voxels) == 0:
+                continue
+            block_voxels = all_blocks.get(subblock_to_block.get(sb_id))
+            if block_voxels is None or len(block_voxels) == 0:
+                continue
+            offsets[sb_id] = np.round(
+                (voxels.mean(axis=0) - block_voxels.mean(axis=0)) * explosion_factor
+            ).astype(int)
+
+        return GrainStructureViz3D._scatter_exploded_grid(all_subblocks, offsets)
+
     def lfi_to_polydata(self, lfi, scalar_array, voxel_size=1.0, cmap='tab20',
                         title='', scalar_name='value', show_scalar_bar=True,
                         threshold_min=0.5, clim=None, below_color=None,
@@ -173,7 +304,13 @@ class GrainStructureViz3D:
         pl.add_title(title, font_size=14)
         pl.set_background('white')
         pl.show_axes()
-        pl.show()
+        try:
+            pl.show()
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            pl.close()
 
     def feature_fid_to_polydata(self, lgi_shape, iso_grain_map, block_fid_map,
                                 voxel_size=1.0,
@@ -218,7 +355,13 @@ class GrainStructureViz3D:
         pl.add_title(title, font_size=14)
         pl.set_background('white')
         pl.show_axes()
-        pl.show()
+        try:
+            pl.show()
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            pl.close()
 
     def subblock_family_polydata(self, fid_map, fid_to_rgb, voxel_size=1.0,
                                  title='Sub-block Family Color Map', show_edges=True):
@@ -245,7 +388,13 @@ class GrainStructureViz3D:
         pl.add_title(title, font_size=14)
         pl.set_background('white')
         pl.show_axes()
-        pl.show()
+        try:
+            pl.show()
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main application window is closed.
+            pl.close()
 
 
 __all__ = ['GrainStructureViz3D']

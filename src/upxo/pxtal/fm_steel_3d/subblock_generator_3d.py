@@ -54,6 +54,7 @@ class SubBlockGenerator3D:
         subblock_thickness_range: Tuple[float, float] = (1.0, 2.0),
         thin_block_strategy: str = 'skip',
         random_seed: Optional[int] = None,
+        slab_connectivity: int = 26,
     ) -> Tuple[Dict[str, np.ndarray], Dict[str, List[str]], Dict[str, np.ndarray]]:
         """
         Generate sub-blocks for every block in all_blocks.
@@ -125,7 +126,8 @@ class SubBlockGenerator3D:
                 continue
 
             sb_thickness = float(np.random.uniform(t_lo, t_hi))
-            new_subblocks = self._slice_block(block_id, voxel_coords, unit_n, sb_thickness)
+            new_subblocks = self._slice_block(block_id, voxel_coords, unit_n, sb_thickness,
+                                               connectivity=slab_connectivity)
 
             all_subblocks.update(new_subblocks)
             block_to_subblocks_map[block_id] = list(new_subblocks.keys())
@@ -144,13 +146,15 @@ class SubBlockGenerator3D:
         voxel_coords: np.ndarray,
         unit_n: np.ndarray,
         subblock_thickness: float,
+        connectivity: int = 26,
     ) -> Dict[str, np.ndarray]:
         """
         Slice one block into sub-blocks along unit_n.
 
         Identical algorithm to BlockGenerator3D.slice_packet_into_blocks:
-        signed-distance slabs + 6-connected cc3d labeling. All voxels are
-        covered — the final slab absorbs any remainder.
+        signed-distance slabs + cc3d labeling (connectivity default 26,
+        see the `connectivity` parameter). All voxels are covered — the
+        final slab absorbs any remainder.
 
         Parameters
         ----------
@@ -198,7 +202,7 @@ class SubBlockGenerator3D:
             local_image[local_coords[:, 0], local_coords[:, 1], local_coords[:, 2]] = 1
 
             labeled, num_comp = cc3d.connected_components(
-                local_image, connectivity=26, return_N=True)
+                local_image, connectivity=connectivity, return_N=True)
 
             for comp_id in range(1, num_comp + 1):
                 sb_local = np.argwhere(labeled == comp_id)

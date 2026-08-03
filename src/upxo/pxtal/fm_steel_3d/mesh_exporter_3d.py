@@ -55,6 +55,8 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
 
+from .phases_3d import PHASE_MARTENSITE, PHASE_RETAINED_AUSTENITE, PHASE_NAMES
+
 
 # ── Module-level constants ────────────────────────────────────────────────────
 
@@ -145,17 +147,22 @@ class MeshExporter3D:
                  '_ignore_ids', '_phase_id', '_mat_data_flag')
 
     def __init__(self, verbosity: int = 0,
-                 phase_id: int = 2, mat_data_flag: int = 0):
+                 phase_id: int = PHASE_MARTENSITE, mat_data_flag: int = 0):
         self._verbosity: int = int(verbosity)
         self._limits: Dict = {k: dict(v) for k, v in DEFAULT_LIMITS.items()}
         self._output_unit: Optional[str] = None
         self._output_base: Path = _DEFAULT_OUTPUT_BASE
         self._ignore_ids: Set[int] = set()
-        if int(phase_id) != 2:
+        if int(phase_id) != PHASE_MARTENSITE:
             raise ValueError(
                 f"phase_id={phase_id} is not supported. "
-                "Only phase_id=2 (martensite/ferrite) is currently valid; "
-                "multi-phase support is planned for a future release."
+                f"Only phase_id={PHASE_MARTENSITE} (martensite/ferrite, the "
+                "transformed matrix) is a configurable value here; retained "
+                f"austenite is auto-tagged phase_id={PHASE_RETAINED_AUSTENITE} "
+                "wherever a retained-austenite PAG is present (see "
+                "retained_austenite_pag_ids on FMSteel3DWithPAGs) and is not "
+                "user-overridable. Other phases (e.g. delta-ferrite, bainite) "
+                "are not yet supported."
             )
         self._phase_id: int = int(phase_id)
         if int(mat_data_flag) not in (0, 1):
@@ -276,6 +283,32 @@ class MeshExporter3D:
         print(f"Output directory created: {candidate}")
         return candidate
 
+    def check_voxel_threshold(self, n_vox: int, elem_type: str,
+                              max_voxels_override: Optional[int] = None) -> Dict:
+        """Pure (no I/O, no prompting) size/threshold check -- the computation
+        `_preflight_check` uses internally, exposed as its own public method so
+        a caller that cannot answer an interactive `input()` prompt (this is
+        exactly the problem an interactive caller hit: `_preflight_check`'s hard-limit branch
+        blocks on `input()` with no attached stdin when run from a background
+        thread, permanently wedging the app-wide busy-lock) can decide up front
+        whether to ask its own confirmation dialog, then call export with
+        force=True to bypass `_preflight_check`'s interactive prompt entirely.
+
+        Returns
+        -------
+        dict with keys: exceeds_hard, exceeds_warn, hard, warn, est_mb
+        """
+        limits = self._limits[elem_type]
+        hard = int(max_voxels_override) if max_voxels_override else limits['max_voxels']
+        warn = limits['warn_voxels']
+        return {
+            'exceeds_hard': n_vox >= hard,
+            'exceeds_warn': n_vox >= warn,
+            'hard': hard,
+            'warn': warn,
+            'est_mb': self._estimate_file_mb(n_vox, elem_type),
+        }
+
     def _preflight_check(self, n_vox: int, elem_type: str,
                          max_voxels_override: Optional[int],
                          force: bool) -> None:
@@ -372,6 +405,58 @@ class MeshExporter3D:
             return 'block'
         return 'pag'
 
+    @staticmethod
+    def _leftover_isolated_grains(fm_state) -> set:
+        """isolated_grains not covered by a tracked retained_austenite_pag_ids
+        entry.
+
+        A grain covered by a tracked retained-austenite PAG gets a proper
+        PAG-level *Elset/*Material/*Solid Section (es_pag_*/MAT_PAG_*, with
+        the PAG's own correctly-assigned FCC orientation -- see
+        _write_materials); the legacy per-grain es_iso_*/MAT_ISO_* path is
+        only needed for grains that have no such PAG identity to fall back
+        on (FMSteel3DBase.generate_pag_clusters's pre-filter path, which
+        excludes grains before clustering ever forms a PAG around them).
+        """
+        isolated = getattr(fm_state, 'isolated_grains', set())
+        if not isolated:
+            return set()
+        retained_pag_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
+        if not retained_pag_ids:
+            return set(isolated)
+        clusters_dict = getattr(fm_state, 'clusters_dict', {})
+        covered: set = set()
+        for pid in retained_pag_ids:
+            covered.update(clusters_dict.get(pid, []))
+        return isolated - covered
+
+    def _count_phase_active_elements(self, fm_state, active_mask: np.ndarray,
+                                     NY: int, NZ: int, em: int, n_active: int) -> Dict[int, int]:
+        """Active element count per phase (see phases_3d.py), for the
+        *Heading* summary. Retained austenite = active elements belonging to
+        a tracked retained_austenite_pag_ids PAG, plus any leftover
+        (legacy, untracked) isolated grains; martensite = everything else.
+        """
+        retained_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
+        retained_grains: set = set()
+        clusters_dict = getattr(fm_state, 'clusters_dict', {})
+        for pid in retained_ids:
+            retained_grains.update(clusters_dict.get(pid, []))
+        retained_grains |= self._leftover_isolated_grains(fm_state)
+
+        retained_active = 0
+        grain_locs = getattr(fm_state, 'grain_locs', {})
+        for gid in retained_grains:
+            vox = grain_locs.get(gid)
+            if vox is not None and len(vox):
+                retained_active += int(self._vox_to_hex_eids(vox, NY, NZ, active_mask).size)
+        retained_active *= em
+
+        return {
+            PHASE_RETAINED_AUSTENITE: retained_active,
+            PHASE_MARTENSITE: max(0, n_active - retained_active),
+        }
+
     def _build_global_id_map(self, fm_state, blk_map: Dict, sb_map: Dict) -> Dict:
         """
         Assign a unique 0-based global integer ID to every elset, in write order:
@@ -411,7 +496,7 @@ class MeshExporter3D:
             gmap[('sb', sb_id)] = counter
             counter += 1
 
-        isolated = getattr(fm_state, 'isolated_grains', set())
+        isolated = self._leftover_isolated_grains(fm_state)
         for gid in sorted(isolated):
             vox = fm_state.grain_locs.get(gid)
             if vox is not None and len(vox):
@@ -991,8 +1076,15 @@ class MeshExporter3D:
             f.write(', '.join(str(x) for x in flat[start:start + 10]) + '\n')
 
     def _write_elsets_pag(self, f, fm_state, NY: int, NZ: int,
-                          active_mask: np.ndarray, em: int) -> None:
+                          active_mask: np.ndarray, em: int) -> set:
+        """Write PAG elsets; return the set of pag_ids that actually got a
+        non-empty *Elset* (a PAG can end up with zero active voxels once
+        ignore_lfi_ids() has voided out all its member grains, or if it is a
+        singleton PAG whose sole grain is voided) -- callers must not emit a
+        *Material*/*Solid Section* for any pag_id missing from this set, or
+        Abaqus will reject the deck for referencing an undefined elset."""
         f.write("** PAG elsets\n")
+        written: set = set()
         for pag_id, grain_ids in fm_state.clusters_dict.items():
             parts = []
             for gid in grain_ids:
@@ -1001,7 +1093,10 @@ class MeshExporter3D:
                     parts.append(self._vox_to_hex_eids(vox, NY, NZ, active_mask))
             if parts:
                 merged = np.concatenate(parts)
-                self._write_elset_ids(f, f"es_pag_{pag_id}", merged, em)
+                if merged.size:
+                    self._write_elset_ids(f, f"es_pag_{pag_id}", merged, em)
+                    written.add(pag_id)
+        return written
 
     def _write_elsets_pck(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int) -> None:
@@ -1018,41 +1113,65 @@ class MeshExporter3D:
 
     def _write_elsets_blk(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int,
-                          block_id_map: Dict) -> None:
+                          block_id_map: Dict) -> set:
+        """Write block elsets; return the set of block_ids that actually got
+        a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
         f.write("** Block elsets\n")
+        written: set = set()
         for block_id, vox in fm_state.all_blocks.items():
             if block_id not in block_id_map or vox is None or len(vox) == 0:
                 continue
             pag_id, pkt_idx, blk_local = block_id_map[block_id]
             eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
+            if eids.size == 0:
+                continue
             self._write_elset_ids(
                 f, f"es_blk_{pag_id}_{pkt_idx}_{blk_local}", eids, em
             )
+            written.add(block_id)
+        return written
 
     def _write_elsets_subblk(self, f, fm_state, NY: int, NZ: int,
                               active_mask: np.ndarray, em: int,
-                              subblock_id_map: Dict) -> None:
+                              subblock_id_map: Dict) -> set:
+        """Write sub-block elsets; return the set of sb_ids that actually got
+        a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
         f.write("** Sub-block elsets\n")
+        written: set = set()
         for sb_id, vox in fm_state.all_subblocks.items():
             if sb_id not in subblock_id_map or vox is None or len(vox) == 0:
                 continue
             pag_id, pkt_idx, blk_local, sb_local = subblock_id_map[sb_id]
             eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
+            if eids.size == 0:
+                continue
             self._write_elset_ids(
                 f, f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", eids, em
             )
+            written.add(sb_id)
+        return written
 
     def _write_elsets_isolated(self, f, fm_state, NY: int, NZ: int,
-                                active_mask: np.ndarray, em: int) -> None:
-        isolated = getattr(fm_state, 'isolated_grains', set())
+                                active_mask: np.ndarray, em: int) -> set:
+        """Write isolated-grain elsets for the legacy flat-isolated-grain
+        case only (see _leftover_isolated_grains); return the set of grain
+        ids that actually got a non-empty *Elset* (see _write_elsets_pag for
+        why this matters). Grains covered by a tracked retained-austenite
+        PAG get a proper PAG-level elset from _write_elsets_pag instead."""
+        isolated = self._leftover_isolated_grains(fm_state)
+        written: set = set()
         if not isolated:
-            return
-        f.write("** Isolated grain elsets\n")
+            return written
+        f.write("** Isolated grain elsets (legacy, no tracked retained-austenite PAG)\n")
         for gid in sorted(isolated):
             vox = fm_state.grain_locs.get(gid)
             if vox is not None and len(vox):
                 eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
+                if eids.size == 0:
+                    continue
                 self._write_elset_ids(f, f"es_iso_{gid}", eids, em)
+                written.add(gid)
+        return written
 
     # ── Boundary-condition node set writer ───────────────────────────────────
 
@@ -1090,16 +1209,40 @@ class MeshExporter3D:
     def _write_materials(self, f, fm_state, level: str,
                          block_id_map: Dict, sb_id_map: Dict,
                          global_id_map: Dict,
-                         phase_id: int, mat_data_flag: int) -> None:
+                         phase_id: int, mat_data_flag: int,
+                         written_pags: set, written_blocks: set,
+                         written_subblocks: set, written_iso: set) -> None:
+        """Write *Material stubs.
+
+        written_pags/written_blocks/written_subblocks/written_iso are the id
+        sets that _write_elsets_pag/blk/subblk/isolated actually emitted a
+        non-empty *Elset* for (a feature can end up with zero active voxels
+        after ignore_lfi_ids(), or be a singleton PAG whose sole grain was
+        voided). Any id missing from the relevant set is skipped here too --
+        otherwise this would emit a *Material* for an elset that was never
+        written, and (worse) _write_sections would reference it in a
+        *Solid Section*, which Abaqus rejects outright.
+
+        phase_id is the id for the transformed matrix (martensite,
+        PHASE_MARTENSITE); retained-austenite PAGs always get
+        PHASE_RETAINED_AUSTENITE regardless, since they are a different
+        phase by construction, not a configurable choice.
+        """
         f.write(
             "** *User Material stubs with Bunge-Euler angles (phi1, Phi, phi2, degrees).\n"
             "** constants=6: phi1, Phi, phi2 [Bunge-Euler deg],"
             " grain_id [global elset ID], phase_id, mat_data_flag.\n"
+            f"** phase_id: {PHASE_MARTENSITE}={PHASE_NAMES[PHASE_MARTENSITE]}, "
+            f"{PHASE_RETAINED_AUSTENITE}={PHASE_NAMES[PHASE_RETAINED_AUSTENITE]}.\n"
             "** Replace with your CPFEM constitutive definition as needed.\n**\n"
         )
 
+        retained_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
+
         def _mat(mat_name: str, phi1: float, PHI: float, phi2: float,
-                 grain_id: int, extra_comment: str = '') -> None:
+                 grain_id: int, extra_comment: str = '',
+                 phase_id_override: Optional[int] = None) -> None:
+            eff_phase = phase_id if phase_id_override is None else phase_id_override
             f.write(f"*Material, name={mat_name}\n")
             if extra_comment:
                 f.write(f"** {extra_comment}\n")
@@ -1107,57 +1250,117 @@ class MeshExporter3D:
                 f"** Bunge-Euler (deg): phi1={phi1:.4f}, Phi={PHI:.4f}, phi2={phi2:.4f}\n"
                 f"*User Material, constants=6\n"
                 f"{phi1:.6f}, {PHI:.6f}, {phi2:.6f},"
-                f" {grain_id}, {phase_id}, {mat_data_flag}\n"
+                f" {grain_id}, {eff_phase}, {mat_data_flag}\n"
                 f"*Depvar\n100\n**\n"
             )
 
         if level == 'subblock':
             for sb_id, (pag_id, pkt_idx, blk_local, sb_local) in sb_id_map.items():
+                if sb_id not in written_subblocks:
+                    continue
                 ori = fm_state.subblock_orientations.get(sb_id, (0.0, 0.0, 0.0))
                 gid_val = global_id_map.get(('sb', sb_id), -1)
                 _mat(f"MAT_SUBBLK_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", *ori,
                      grain_id=gid_val)
         elif level == 'block':
             for block_id, (pag_id, pkt_idx, blk_local) in block_id_map.items():
+                if block_id not in written_blocks:
+                    continue
                 ori = fm_state.block_orientations.get(block_id, (0.0, 0.0, 0.0))
                 gid_val = global_id_map.get(('blk', block_id), -1)
                 _mat(f"MAT_BLK_{pag_id}_{pkt_idx}_{blk_local}", *ori,
                      grain_id=gid_val)
         elif level == 'pag':
             for pag_id, ori in fm_state.pag_orientations.items():
+                if pag_id not in written_pags:
+                    continue
                 gid_val = global_id_map.get(('pag', pag_id), -1)
-                _mat(f"MAT_PAG_{pag_id}", *ori, grain_id=gid_val)
+                is_retained = pag_id in retained_ids
+                _mat(f"MAT_PAG_{pag_id}", *ori, grain_id=gid_val,
+                     extra_comment=f"Retained austenite PAG {pag_id} (untransformed)."
+                                   if is_retained else '',
+                     phase_id_override=PHASE_RETAINED_AUSTENITE if is_retained else None)
 
-        for gid in sorted(getattr(fm_state, 'isolated_grains', set())):
-            vox = fm_state.grain_locs.get(gid)
-            if vox is None or len(vox) == 0:
+        # Retained-austenite PAGs never produced blocks/sub-blocks (see
+        # generate_blocks()), so when the rest of the structure's lowest
+        # level is 'block' or 'subblock' they still need their own PAG-level
+        # *Material here -- the level=='pag' branch above only covers them
+        # when there are no blocks anywhere in the structure at all.
+        if level != 'pag':
+            for pag_id in sorted(retained_ids):
+                if pag_id not in written_pags:
+                    continue
+                ori = fm_state.pag_orientations.get(pag_id, (0.0, 0.0, 0.0))
+                gid_val = global_id_map.get(('pag', pag_id), -1)
+                _mat(f"MAT_PAG_{pag_id}", *ori, grain_id=gid_val,
+                     extra_comment=f"Retained austenite PAG {pag_id} (untransformed).",
+                     phase_id_override=PHASE_RETAINED_AUSTENITE)
+
+        get_iso_ori = getattr(fm_state, 'get_isolated_grain_orientation', None)
+        for gid in sorted(self._leftover_isolated_grains(fm_state)):
+            if gid not in written_iso:
                 continue
             gid_val = global_id_map.get(('iso', gid), -1)
-            _mat(f"MAT_ISO_{gid}", 0.0, 0.0, 0.0, grain_id=gid_val,
-                 extra_comment=f"Isolated grain {gid}: no KS orientation — edit as needed.")
+            ori = get_iso_ori(gid) if get_iso_ori is not None else None
+            if ori is not None:
+                _mat(f"MAT_ISO_{gid}", *ori, grain_id=gid_val,
+                     extra_comment=f"Isolated grain {gid} (retained austenite).",
+                     phase_id_override=PHASE_RETAINED_AUSTENITE)
+            else:
+                _mat(f"MAT_ISO_{gid}", 0.0, 0.0, 0.0, grain_id=gid_val,
+                     extra_comment=f"Isolated grain {gid}: no KS orientation — edit as needed.",
+                     phase_id_override=PHASE_RETAINED_AUSTENITE)
 
     def _write_sections(self, f, fm_state, level: str,
-                        block_id_map: Dict, sb_id_map: Dict) -> None:
+                        block_id_map: Dict, sb_id_map: Dict,
+                        written_pags: set, written_blocks: set,
+                        written_subblocks: set, written_iso: set) -> None:
+        """Write *Solid Section cards -- see _write_materials for why every
+        loop here is filtered against the written_* sets: a *Solid Section*
+        referencing an elset that _write_elsets_* skipped (zero active
+        voxels) makes Abaqus reject the whole input deck."""
         f.write("** *Solid Section — lowest hierarchy level only.\n**\n")
+
+        retained_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
 
         if level == 'subblock':
             for sb_id, (pag_id, pkt_idx, blk_local, sb_local) in sb_id_map.items():
+                if sb_id not in written_subblocks:
+                    continue
                 eset = f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 mat  = f"MAT_SUBBLK_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'block':
             for block_id, (pag_id, pkt_idx, blk_local) in block_id_map.items():
+                if block_id not in written_blocks:
+                    continue
                 eset = f"es_blk_{pag_id}_{pkt_idx}_{blk_local}"
                 mat  = f"MAT_BLK_{pag_id}_{pkt_idx}_{blk_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'pag':
             for pag_id in fm_state.clusters_dict:
+                if pag_id not in written_pags:
+                    continue
                 f.write(
                     f"*Solid Section, elset=es_pag_{pag_id},"
                     f" material=MAT_PAG_{pag_id}\n,\n"
                 )
 
-        for gid in sorted(getattr(fm_state, 'isolated_grains', set())):
+        # See _write_materials: retained-austenite PAGs never get a block/
+        # sub-block section, so they need their own PAG-level section here
+        # whenever the rest of the structure's lowest level went further.
+        if level != 'pag':
+            for pag_id in sorted(retained_ids):
+                if pag_id not in written_pags:
+                    continue
+                f.write(
+                    f"*Solid Section, elset=es_pag_{pag_id},"
+                    f" material=MAT_PAG_{pag_id}\n,\n"
+                )
+
+        for gid in sorted(self._leftover_isolated_grains(fm_state)):
+            if gid not in written_iso:
+                continue
             f.write(f"*Solid Section, elset=es_iso_{gid}, material=MAT_ISO_{gid}\n,\n")
 
     # ── Stub writers ──────────────────────────────────────────────────────────
@@ -1180,16 +1383,28 @@ class MeshExporter3D:
 
     def _write_master(self, out_dir: Path, elem_type: str, has_subblk: bool,
                       custom_message: str, src_unit: str, dst_unit: str,
-                      dx: float, NX: int, NY: int, NZ: int, n_active: int) -> None:
+                      dx: float, NX: int, NY: int, NZ: int, n_active: int,
+                      phase_element_counts: Optional[Dict[int, int]] = None) -> None:
         with open(out_dir / 'model_master.inp', 'w') as f:
             f.write(_UPXO_HEADER)
             if custom_message:
                 f.write(f"** {custom_message}\n**\n")
+            phase_line = ""
+            if phase_element_counts and n_active:
+                parts = [
+                    f"{PHASE_NAMES.get(pid, f'phase{pid}')}={cnt:,} "
+                    f"({100.0 * cnt / n_active:.1f}%)"
+                    for pid, cnt in sorted(phase_element_counts.items())
+                    if cnt > 0
+                ]
+                if parts:
+                    phase_line = f"** Phase breakdown: {', '.join(parts)}\n"
             f.write(
                 f"*Heading\n"
                 f"** FM steel microstructure — element type: {elem_type}\n"
                 f"** Grid: {NX} x {NY} x {NZ} voxels  "
                 f"|  Active elements: {n_active:,}\n"
+                f"{phase_line}"
                 f"** Voxel size: {dx:.6g} {dst_unit}  "
                 f"(structure defined in {src_unit})\n"
                 f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}\n**\n"
@@ -1220,15 +1435,20 @@ class MeshExporter3D:
         """Shared pipeline for all element types."""
         eff_phase_id  = phase_id      if phase_id      is not None else self._phase_id
         eff_mat_flag  = mat_data_flag if mat_data_flag is not None else self._mat_data_flag
-        if int(eff_phase_id) != 2:
+        if int(eff_phase_id) != PHASE_MARTENSITE:
             raise ValueError(
                 f"phase_id={eff_phase_id} is not supported. "
-                "Only phase_id=2 is currently valid; multi-phase support is planned."
+                f"Only phase_id={PHASE_MARTENSITE} (martensite, the transformed "
+                "matrix) is configurable; retained austenite is auto-tagged "
+                f"phase_id={PHASE_RETAINED_AUSTENITE} automatically."
             )
         if int(eff_mat_flag) not in (0, 1):
             raise ValueError(
                 f"mat_data_flag={eff_mat_flag} is invalid. Must be 0 or 1."
             )
+
+        if hasattr(fm_state, 'ensure_isolated_grain_orientations'):
+            fm_state.ensure_isolated_grain_orientations()
 
         NX, NY, NZ = fm_state.lgi.shape
         n_vox = NX * NY * NZ
@@ -1262,6 +1482,14 @@ class MeshExporter3D:
             _step[0] += 1
             if _v:
                 print(f"  [{_step[0]:2d}/{_total}] Written: {fname}")
+
+        def _starting(label, total=None):
+            # Companion to _done(): steps before this only ever printed on
+            # completion, so a slow/stuck step was indistinguishable from the
+            # previous one still finishing -- this pinpoints which step it is.
+            if _v:
+                t = total if total is not None else _total
+                print(f"  [{_step[0] + 1:2d}/{t}] Starting: {label}...")
 
         # 01 nodes
         with open(out_dir / '01_nodes.inp', 'w') as f:
@@ -1300,7 +1528,7 @@ class MeshExporter3D:
 
         # 03a PAG elsets
         with open(out_dir / '03a_elsets_pag.inp', 'w') as f:
-            self._write_elsets_pag(f, fm_state, NY, NZ, active_mask, em)
+            written_pags = self._write_elsets_pag(f, fm_state, NY, NZ, active_mask, em)
         _done('03a_elsets_pag.inp')
 
         # 03b packet elsets
@@ -1309,32 +1537,41 @@ class MeshExporter3D:
         _done('03b_elsets_pck.inp')
 
         # 03c block + isolated elsets
+        written_blocks: set = set()
         with open(out_dir / '03c_elsets_blk.inp', 'w') as f:
             if hasattr(fm_state, 'all_blocks') and fm_state.all_blocks:
-                self._write_elsets_blk(f, fm_state, NY, NZ, active_mask, em, blk_map)
-            self._write_elsets_isolated(f, fm_state, NY, NZ, active_mask, em)
+                written_blocks = self._write_elsets_blk(f, fm_state, NY, NZ, active_mask, em, blk_map)
+            written_iso = self._write_elsets_isolated(f, fm_state, NY, NZ, active_mask, em)
         _done('03c_elsets_blk.inp')
 
         # 03d sub-block elsets
+        written_subblocks: set = set()
         if has_subblk:
             with open(out_dir / '03d_elsets_subblk.inp', 'w') as f:
-                self._write_elsets_subblk(f, fm_state, NY, NZ, active_mask, em, sb_map)
+                written_subblocks = self._write_elsets_subblk(f, fm_state, NY, NZ, active_mask, em, sb_map)
             _done('03d_elsets_subblk.inp')
 
         # 04 BC node sets
+        _starting('04_nsets_bc.inp')
         with open(out_dir / '04_nsets_bc.inp', 'w') as f:
             self._write_nsets_bc(f, NX, NY, NZ, node_mask)
         _done('04_nsets_bc.inp')
 
         # 05 materials
+        _starting('05_materials.inp')
         with open(out_dir / '05_materials.inp', 'w') as f:
             self._write_materials(f, fm_state, level, blk_map, sb_map,
-                                  global_id_map, eff_phase_id, eff_mat_flag)
+                                  global_id_map, eff_phase_id, eff_mat_flag,
+                                  written_pags, written_blocks,
+                                  written_subblocks, written_iso)
         _done('05_materials.inp')
 
         # 06 sections
+        _starting('06_sections.inp')
         with open(out_dir / '06_sections.inp', 'w') as f:
-            self._write_sections(f, fm_state, level, blk_map, sb_map)
+            self._write_sections(f, fm_state, level, blk_map, sb_map,
+                                 written_pags, written_blocks,
+                                 written_subblocks, written_iso)
         _done('06_sections.inp')
 
         # 07 interactions
@@ -1348,8 +1585,11 @@ class MeshExporter3D:
         _done('08_steps_output.inp')
 
         # master
+        _starting('model_master.inp', total=_total + 1)
+        phase_counts = self._count_phase_active_elements(fm_state, active_mask, NY, NZ, em, n_active)
         self._write_master(out_dir, elem_type, has_subblk, custom_message,
-                           src_unit, dst_unit, dx, NX, NY, NZ, n_active)
+                           src_unit, dst_unit, dx, NX, NY, NZ, n_active,
+                           phase_element_counts=phase_counts)
         if _v:
             print(f"  [{_total + 1}/{_total + 1}] Written: model_master.inp")
 
