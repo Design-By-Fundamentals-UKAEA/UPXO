@@ -1,6 +1,5 @@
 """3D Voronoi tessellation grain structure for UPXO."""
 import numpy as np
-import pyvoro
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -407,7 +406,7 @@ class gtess3d():
                 [x, y, z] + basis for x in x_vals for y in y_vals for z in z_vals for basis in hcp_basis
             ])
 
-            # **Remove duplicates** to prevent pyvoro issues
+            # Remove duplicates before downstream tessellation/meshing.
             hcp_lattice = np.unique(hcp_lattice, axis=0)
 
             # **Filter points inside bounding box**
@@ -444,6 +443,158 @@ class gtess3d():
             diamond_lattice = np.array([
                 [x, y, z] + basis for x in x_vals for y in y_vals for z in z_vals for basis in diamond_basis
             ])
+
+    @staticmethod
+    def _coerce_voronoi_bounds(bounds):
+        """Return 3D bounds as ``[[xmin, xmax], [ymin, ymax], [zmin, zmax]]``."""
+        bounds = np.asarray(bounds, dtype=float)
+        if bounds.shape != (3, 2):
+            raise ValueError('bounds must have shape (3, 2).')
+        if not np.all(np.isfinite(bounds)):
+            raise ValueError('bounds must contain only finite values.')
+        if np.any(bounds[:, 1] <= bounds[:, 0]):
+            raise ValueError('Each bounds row must satisfy min < max.')
+        return bounds.tolist()
+
+    @staticmethod
+    def _seed_periodic_flags(seed_points, periodic):
+        """Resolve periodic flags from explicit input or seed metadata."""
+        if periodic is None:
+            periodic = getattr(seed_points, 'metadata', {}).get(
+                'periodic', (False, False, False))
+        if isinstance(periodic, bool):
+            periodic = (periodic, periodic, periodic)
+        if len(periodic) != 3:
+            raise ValueError('periodic must be a bool or length-3 iterable.')
+        return [bool(flag) for flag in periodic]
+
+    @staticmethod
+    def _mean_nearest_neighbour_distance(coords):
+        """Return mean nearest-neighbour distance for a seed cloud."""
+        if coords.shape[0] < 2:
+            return None
+        distances, _ = TREE(coords).query(coords, k=2)
+        return float(np.mean(distances[:, 1]))
+
+    @classmethod
+    def from_mpoint3d(cls, seed_points, bounds=None, periodic=None,
+                      block_size=1.0, phid=None, metadata=None,
+                      make_delaunay=True, alpha=0.0):
+        """Construct a PyVista-backed 3D seed structure from ``MPoint3d``.
+
+        Parameters
+        ----------
+        seed_points : MPoint3d
+            UPXO multi-point seed object. Its ``coords`` array is retained as
+            the canonical seed cloud and converted to ``pyvista.PolyData``.
+        bounds : array-like, shape (3, 2), optional
+            Tessellation RVE bounds. If omitted, ``seed_points.metadata['bounds']``
+            is used when present; otherwise bounds are inferred from the seed
+            coordinate extrema.
+        periodic : bool or iterable of bool, optional
+            Periodic boundary flags. If omitted, seed metadata is used.
+        block_size : float, optional
+            Retained for API compatibility with older calls.
+        phid : object, optional
+            Phase ID assigned to the base cells.
+        metadata : dict, optional
+            Extra user metadata stored in ``self.info['uinputs']``.
+        make_delaunay : bool, optional
+            If True, build a PyVista 3D Delaunay grid from the seed cloud.
+        alpha : float, optional
+            Alpha value passed to ``PolyData.delaunay_3d``. Default 0.0.
+
+        Notes
+        -----
+        This path is a PyVista-native seed handoff layer. Exact bounded
+        Voronoi cell recovery can be added later with VTK/PyVista-compatible
+        machinery.
+        """
+        if not isinstance(seed_points, mp3d):
+            raise TypeError('seed_points must be an MPoint3d instance.')
+
+        coords = np.ascontiguousarray(seed_points.coords, dtype=float)
+        if coords.ndim != 2 or coords.shape[1] != 3:
+            raise ValueError('seed_points.coords must have shape (N, 3).')
+        if coords.shape[0] < 1:
+            raise ValueError('seed_points must contain at least one seed.')
+
+        seed_metadata = dict(getattr(seed_points, 'metadata', {}))
+        if bounds is None:
+            bounds = seed_metadata.get('bounds')
+        if bounds is None:
+            mins = coords.min(axis=0)
+            maxs = coords.max(axis=0)
+            span = maxs - mins
+            pad = np.where(span > 0.0, 0.05*span, 0.5)
+            bounds = np.column_stack((mins - pad, maxs + pad))
+
+        bounding_box = cls._coerce_voronoi_bounds(bounds)
+        periodic_flags = cls._seed_periodic_flags(seed_points, periodic)
+        block_size = float(block_size)
+        if block_size <= 0.0 or not np.isfinite(block_size):
+            raise ValueError('block_size must be a positive finite value.')
+
+        seed_poly = pv.PolyData(coords)
+        seed_poly['seed_id'] = np.arange(coords.shape[0])
+        delaunay_grid = None
+        if make_delaunay and coords.shape[0] >= 4:
+            delaunay_grid = seed_poly.delaunay_3d(alpha=float(alpha))
+
+        sepdist_mean = cls._mean_nearest_neighbour_distance(coords)
+        if seed_metadata:
+            seed_points.metadata.update(seed_metadata)
+
+        domain_volume = np.prod(np.diff(np.asarray(bounding_box), axis=1))
+        cell_volume = float(domain_volume/coords.shape[0])
+        pxtal = [{
+            'id': int(i),
+            'original': coords[i].tolist(),
+            'volume': cell_volume,
+            'vertices': [],
+            'faces': [],
+            'backend': 'pyvista',
+        } for i in range(coords.shape[0])]
+
+        uinputs = {
+            'sp_input': 'mpoint3d',
+            'seed_metadata': seed_metadata,
+            'bounds': bounding_box,
+            'periodic': periodic_flags,
+            'block_size': block_size,
+            'backend': 'pyvista',
+            'seed_polydata': seed_poly,
+            'delaunay_grid': delaunay_grid,
+            'delaunay_alpha': float(alpha),
+            'exact_voronoi_cells': False,
+        }
+        if metadata is not None:
+            uinputs.update(dict(metadata))
+
+        pxtals = {
+            'pxtals': {1: pxtal},
+            'sps': {1: seed_points},
+            'sp_sepdist_mean': [sepdist_mean],
+            'sp_coords': [coords],
+            'sp_coords_all': [coords],
+            'sp_coords_mp3d': [seed_points],
+            'n_instances': 1,
+            'gen_method': 'from_mpoint3d',
+            'uinputs': uinputs,
+            'xbound': bounding_box[0],
+            'ybound': bounding_box[1],
+            'zbound': bounding_box[2],
+            'bounding_box': [bounding_box],
+        }
+        return cls(pxtals=pxtals, gen_method='seed_point_extrusion',
+                   phid=phid)
+
+    @classmethod
+    def from_seed_points(cls, seed_points, **kwargs):
+        """Construct from ``MPoint3d`` or raw ``(N, 3)`` seed coordinates."""
+        if not isinstance(seed_points, mp3d):
+            seed_points = mp3d.from_custom_seeds(seed_points)
+        return cls.from_mpoint3d(seed_points, **kwargs)
 
     @classmethod
     def from_seed_point_extrusion(cls, sp_input='gen', seed_coords=None,
@@ -880,12 +1031,22 @@ class gtess3d():
                         [bounds['min_z']-dl,
                          bounds['max_z']+dl]]
         # --------------------------------------------------------------
-        '''Compute the actual voronoi tessellation in 3D using coords_all.'''
-        pxtal = pyvoro.compute_voronoi(coords_all.tolist(),
-                                       bounding_box, 1.0,
-                                       periodic=[periodic[0],
-                                                 periodic[1],
-                                                 periodic[2]])
+        '''Build PyVista-backed seed records using coords_all.'''
+        seed_poly = pv.PolyData(coords_all)
+        seed_poly['seed_id'] = np.arange(coords_all.shape[0])
+        delaunay_grid = None
+        if coords_all.shape[0] >= 4:
+            delaunay_grid = seed_poly.delaunay_3d()
+        domain_volume = np.prod(np.diff(np.asarray(bounding_box), axis=1))
+        cell_volume = float(domain_volume/coords_all.shape[0])
+        pxtal = [{
+            'id': int(i),
+            'original': coords_all[i].tolist(),
+            'volume': cell_volume,
+            'vertices': [],
+            'faces': [],
+            'backend': 'pyvista',
+        } for i in range(coords_all.shape[0])]
         # --------------------------------------------------------------
         pxt = {'pxtal': pxtal,
                'zbound': [0, bounding_box[2][1]],
@@ -896,6 +1057,8 @@ class gtess3d():
                'sepdist_mean': sepdist_mean,
                'bounds': bounds,
                'bounding_box': bounding_box,
+               'seed_polydata': seed_poly,
+               'delaunay_grid': delaunay_grid,
                }
         return pxt
 

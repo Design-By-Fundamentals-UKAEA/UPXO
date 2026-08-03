@@ -1689,7 +1689,7 @@ class gtess2d():
         else:
             # print(10*'\n', len(cids), 10*'\n')  # sunil
             if len(cids) > 0:
-                if not all([isinstance(cid, int) or isinstance(cid, np.int32)
+                if not all([isinstance(cid, int) or isinstance(cid, np.int32) or isinstance(cid, np.int64)
                             for cid in cids]):
                     raise TypeError('Invalid cids value type.')
         # ----------------------------------------------
