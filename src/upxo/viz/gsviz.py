@@ -358,14 +358,42 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
     
     return fig, ax
 
+def pvgrid_dimensions_from_scalar(scalar):
+    """Return PyVista point dimensions for a UPXO scalar array."""
+    return np.array(np.asarray(scalar).shape[::-1]) + 1
+
+
+def pvgrid_cell_data_from_scalar(scalar):
+    """Return cell data in PyVista's x-y-z ordering."""
+    scalar = np.asarray(scalar)
+    if scalar.ndim == 3:
+        scalar = np.transpose(scalar, (2, 1, 0))
+    return scalar.flatten(order="F")
+
+
 def make_pvgrid(lfi, scalar_name='lfi', origin=(0, 0, 0), spacing=(1, 1, 1)):
     """Build and return pvgrid."""
     pvgrid = pv.ImageData()
-    pvgrid.dimensions = np.array(lfi.shape) + 1
+    pvgrid.dimensions = pvgrid_dimensions_from_scalar(lfi)
+    pvgrid.origin = origin
+    pvgrid.spacing = spacing
+    pvgrid.cell_data[str(scalar_name)] = pvgrid_cell_data_from_scalar(lfi)
+    pvgrid.set_active_scalars(str(scalar_name))
+    return pvgrid
+
+
+def make_pvgrid_2d(lfi, scalar_name='lfi', origin=(0, 0, 0),
+                   spacing=(1, 1, 0)):
+    """Build and return a 2D PyVista image grid with one cell layer."""
+    lfi = np.asarray(lfi)
+    pvgrid = pv.ImageData()
+    pvgrid.dimensions = np.array(lfi.shape + (0,)) + 1
     pvgrid.origin = origin
     pvgrid.spacing = spacing
     pvgrid.cell_data[str(scalar_name)] = lfi.flatten(order="F")
+    pvgrid.set_active_scalars(str(scalar_name))
     return pvgrid
+
 
 def plot_pvgrid(pvgrid, scalar_name='lfi', show_edges=False, alpha=1.0, title='',
                 cmap='nipy_spectral', _xname_='', _yname_='', _zname_=''):
@@ -378,8 +406,11 @@ def plot_pvgrid(pvgrid, scalar_name='lfi', show_edges=False, alpha=1.0, title=''
     from upxo.viz import gsviz
     """
     pvp = pv.Plotter()
-    pvp.add_mesh(pvgrid, scalars=scalar_name,
-                 show_edges=show_edges, opacity=alpha, cmap=cmap)
+    mesh_kwargs = {'scalars': scalar_name, 'show_edges': show_edges,
+                   'opacity': alpha}
+    if cmap is not None:
+        mesh_kwargs['cmap'] = cmap
+    pvp.add_mesh(pvgrid, **mesh_kwargs)
     pvp.add_text(f"{title}", font_size=10)
     _ = pvp.add_axes(line_width=5, cone_radius=0.6,
                      shaft_length=0.7, tip_length=0.3,
@@ -408,9 +439,9 @@ def grain_viewer(lfi):
     """
     max_gid = int(np.max(lfi))
 
-    grid = pv.ImageData(dimensions=np.array(lfi.shape)+1,
-        spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0),)
-    grid.cell_data["gid"] = lfi.ravel(order="F")
+    grid = make_pvgrid(lfi, scalar_name="gid",
+                       spacing=(1.0, 1.0, 1.0),
+                       origin=(0.0, 0.0, 0.0))
 
     plotter = pv.Plotter()
     actor = {"mesh": None}
@@ -536,7 +567,7 @@ def view_selected_grain_boundary_voxels(lfi, grain_ids, viewInternalOnly=True, s
 def viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
                    cmap='viridis', invert=True, crinkle=True,
                    normal_rotation=True, add_outline=False, throw=False,
-                   pvp=None):
+                   pvp=None, pvgrid=None):
     """
     Visualize grain structure along a clip plane.
 
@@ -586,7 +617,9 @@ def viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
                      normal_rotation=True, add_outline=False, throw=False, pvp=None)
 
     """
-    pvgrid = make_pvgrid(lfi, scalar_name=scalarName, origin=(0, 0, 0), spacing=(1, 1, 1))
+    if pvgrid is None:
+        pvgrid = make_pvgrid(lfi, scalar_name=scalarName,
+                             origin=(0, 0, 0), spacing=(1, 1, 1))
     if pvp is None or not isinstance(pvp, pv.Plotter):
         pvp = pv.Plotter()
     # -------------------------------------
@@ -606,7 +639,7 @@ def viz_clip_plane(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lfi',
 
 def viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lgi',
                     cmap='viridis', normal_rotation=True, add_outline=False,
-                    throw=False, pvp=None):
+                    throw=False, pvp=None, pvgrid=None):
     """
     Visualize grain structure along a slice plane.
 
@@ -647,7 +680,9 @@ def viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lgi',
                     cmap='viridis', normal_rotation=True, add_outline=False,
                     throw=False, pvp=None)
     """
-    pvgrid = make_pvgrid(lfi, scalar_name=scalarName, origin=(0, 0, 0), spacing=(1, 1, 1))
+    if pvgrid is None:
+        pvgrid = make_pvgrid(lfi, scalar_name=scalarName,
+                             origin=(0, 0, 0), spacing=(1, 1, 1))
 
     if pvp is None or not isinstance(pvp, pv.Plotter):
         pvp = pv.Plotter()
@@ -668,7 +703,7 @@ def viz_mesh_slice(lfi, normal='x', origin=[5.0, 5.0, 5.0], scalarName='lgi',
 
 def viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='viridis',
                          style='surface', add_outline=False,
-                         throw=False, pvp=None):
+                         throw=False, pvp=None, pvgrid=None):
     """
     Viz. grain str. along three fundamental mutually orthogonal planes.
 
@@ -703,7 +738,9 @@ def viz_mesh_slice_ortho(lfi, scalarName='lfi', cmap='viridis',
                          style='surface', add_outline=False,
                          throw=False, pvp=None)
     """
-    pvgrid = make_pvgrid(lfi, scalar_name=scalarName, origin=(0, 0, 0), spacing=(1, 1, 1))
+    if pvgrid is None:
+        pvgrid = make_pvgrid(lfi, scalar_name=scalarName,
+                             origin=(0, 0, 0), spacing=(1, 1, 1))
 
     if pvp is None or not isinstance(pvp, pv.Plotter):
         pvp = pv.Plotter()

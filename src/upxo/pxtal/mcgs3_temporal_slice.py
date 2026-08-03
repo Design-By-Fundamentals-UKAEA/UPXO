@@ -281,6 +281,15 @@ from scipy.ndimage import label as spndimg_label
 import upxo._sup.data_ops as DO
 from upxo.viz.plot_artefacts import cuboid_data
 from upxo.viz.helpers import arrange_subplots
+from upxo.viz import gsviz
+from upxo.pxtal import gridops
+from upxo.imageOps import labelops
+from upxo.netops import neighops
+from upxo.propOps import morphops
+from upxo.fdbOps import fdbops
+from upxo.geoEntities import geoOps3D
+from upxo.gsdataops import grid_ops as gs_grid_ops
+from upxo.gbops import gbpoint_ops
 from numba.typed import Dict, List
 from numba.types import int32, ListType
 from scipy.spatial.transform import Rotation
@@ -778,18 +787,7 @@ class mcgs3_grain_structure():
         numpy.ndarray
             A 3D numpy array with reindexed labels.
         """
-        unique_labels = np.unique(udata)
-        # Remove 0 from unique labels if it exists
-        unique_labels = unique_labels[unique_labels != 0]
-        # Create a mapping from old labels to new labels
-        label_map = {old_label: new_label
-                     for new_label, old_label in enumerate(unique_labels,
-                                                           start=1)}
-        # Vectorize the mapping function
-        vectorized_map = np.vectorize(lambda x: label_map.get(x, 0))
-        # Apply the mapping to the input array
-        remapped_data = vectorized_map(udata)
-        return remapped_data
+        return labelops.reindex_labels(udata)
 
     @property
     def lfi(self):
@@ -824,9 +822,9 @@ class mcgs3_grain_structure():
 
     def set_binaryStructure3D(self, n=3):
         """Set the binary structure used for grain identification."""
-        if n in (1, 2, 3):
-            self.binaryStructure3D = generate_binary_structure(3, n)
-        else:
+        try:
+            self.binaryStructure3D = labelops.binary_structure(3, n)
+        except ValueError:
              print('Invalid binary structure-3D. n must be in (1, 2, 3). Value not set')
 
     def set_pxtal(self, bea=None):
@@ -862,23 +860,8 @@ class mcgs3_grain_structure():
         Returns:
             list[np.ndarray]: A list of new 1D arrays with the IDs re-indexed according to the new_image.
         """
-        # 1. Create the mapping from old IDs to new IDs efficiently.
-        # We find the unique pairs of (old_id, new_id) across the entire dataset.
-        unique_pairs = np.unique(np.vstack((old_image.ravel(), new_image.ravel())).T, axis=0)
-    
-        # 2. Convert the unique pairs into a fast lookup dictionary.
-        old_to_new_map = {old_id: new_id for old_id, new_id in unique_pairs}
-    
-        # 3. Apply the mapping to each of the old ID arrays.
-        new_arrays = []
-        for old_array in old_arrays:
-            # Use the map to translate each ID. .get() is used for safety in case
-            # an ID in the list somehow doesn't appear in the image.
-            new_array = np.array([old_to_new_map.get(old_id) for old_id in old_array],
-                                 dtype=np.int32)
-            new_arrays.append(new_array)
-    
-        return new_arrays
+        return labelops.reindex_arrays_by_image_pair(old_image, new_image,
+                                                     old_arrays)
 
     def char_morphology_of_grains(self,
                                   sf_name='s',
@@ -1262,25 +1245,14 @@ class mcgs3_grain_structure():
         # VALIDATIONS
         # -----------------------------
         print(40*'-', '\nFinding grains.')
-        self.set_binaryStructure3D(n=label_str_order)
-        _STR_ = self.get_binaryStructure3D()
-        for i, _s_ in enumerate(np.unique(self.s)):
-            # Mark the presence of this state
+        states = np.unique(self.s)
+        self.lgi, s_gid, _, self.gid_s = labelops.label_multistate_components(
+            self.s, states=states, connectivity=label_str_order, labeler=pck
+        )
+        for _s_ in states:
             self.spart_flag[_s_] = True
-            # Recognize the grains belonging to this state
-            bin_img = (self.s == _s_).astype(np.uint8)
-            labels, num_labels = pck(bin_img, structure=_STR_)
-            if i == 0:
-                self.lgi = labels
-            else:
-                labels[labels > 0] += self.lgi.max()
-                self.lgi = self.lgi + labels
-            self.s_gid[_s_] = tuple(np.delete(np.unique(labels), 0))
-
-            # print(20*'-', '\n', _s_)
-
+            self.s_gid[_s_] = s_gid[int(_s_)]
             self.s_n[_s_-1] = len(self.s_gid[_s_])
-        self.lgi = np.int32(self.lgi)
         # Get the total number of grains
         self.calc_num_grains()
         # self.n = np.unique(self.lgi).size  # self.n = num_labels
@@ -1323,13 +1295,7 @@ class mcgs3_grain_structure():
 
         """
 
-        if type(lgi) == np.ndarray and np.size(lgi) > 0 and np.ndim(lgi) == 2:
-            if self.lgi.dtype.name != 'uint8':
-                self.lgi = lgi.astype(np.uint8)
-            else:
-                self.lgi = lgi
-        else:
-            self.lgi = None
+        self.lgi = labelops.coerce_lgi_uint8(lgi)
 
     def set_gid(self):
         """Set grain IDs from the current labelled image."""
@@ -1357,7 +1323,6 @@ class mcgs3_grain_structure():
                 return self.n
 
     @staticmethod
-    @njit
     def find_neigh_gid_numba(lgi):
         """
         Compute neighbouring grain IDs using a numba-friendly implementation.
@@ -1367,148 +1332,37 @@ class mcgs3_grain_structure():
         numba.typed.Dict
             Grain ID to neighbouring grain ID arrays.
         """
-        dxdydz = np.array([
-            (-1, -1, -1), (-1, -1, 0), (-1, -1, 1), (-1,  0, -1),
-            (-1,  0, 0), (-1,  0, 1), (-1,  1, -1), (-1,  1, 0),
-            (-1,  1, 1), (0, -1, -1), (0, -1, 0), (0, -1, 1),
-            (0,  0, -1), (0,  0, 1), (0,  1, -1), (0,  1, 0), (0,  1, 1),
-            (1, -1, -1), (1, -1, 0), (1, -1, 1), (1,  0, -1), (1,  0, 0),
-            (1,  0, 1), (1,  1, -1), (1,  1, 0), (1,  1, 1)
-        ], dtype=int32)
-
-        shape_x, shape_y, shape_z = lgi.shape
-        max_gid = np.max(lgi)
-
-        # Use a Numba-compatible dictionary with fixed-size NumPy arrays
-        neigh_gid = Dict.empty(
-            key_type=int32,
-            value_type=int32[:]
-        )
-
-        # Max possible neighbors (26 for 3D Moore neighborhood)
-        max_neighbors = 26
-
-        # Preallocate storage for each grain ID
-        for gid in range(max_gid + 1):
-            neigh_gid[gid] = np.full(max_neighbors, -1, dtype=int32)  # -1 for unused slots
-
-        # Track the actual count of neighbors for each grain ID
-        neighbor_counts = np.zeros(max_gid + 1, dtype=int32)
-
-        for x in range(shape_x):
-            for y in range(shape_y):
-                for z in range(shape_z):
-                    grain_id = lgi[x, y, z]
-
-                    for dx, dy, dz in dxdydz:
-                        nx, ny, nz = x + dx, y + dy, z + dz
-                        if 0 <= nx < shape_x and 0 <= ny < shape_y and 0 <= nz < shape_z:
-                            neighbor_id = lgi[nx, ny, nz]
-
-                            if neighbor_id != grain_id:
-                                count = neighbor_counts[grain_id]
-
-                                # Avoid duplicates
-                                found = False
-                                for i in range(count):
-                                    if neigh_gid[grain_id][i] == neighbor_id:
-                                        found = True
-                                        break
-
-                                if not found:
-                                    neigh_gid[grain_id][count] = neighbor_id
-                                    neighbor_counts[grain_id] += 1
-
-        # Convert to final format (truncate unused values)
-        final_neigh_gid = Dict.empty(
-            key_type=int32,
-            value_type=int32[:]
-        )
-
-        for gid in range(max_gid + 1):
-            final_neigh_gid[gid] = neigh_gid[gid][:neighbor_counts[gid]]  # Remove `-1` slots
-
-        return neigh_gid
+        return neighops.adjacency_from_labels(lgi, connectivity=6)
 
     def find_neigh_gid_v1(self):
         """
         Populate ``self.neigh_gid`` using the numba-based neighbour lookup.
         """
         print("Calculating neigh_gid database.")
-        self.neigh_gid = self.find_neigh_gid_numba(self.lgi)
+        self.neigh_gid = neighops.adjacency_from_labels(self.lgi,
+                                                        connectivity=6)
 
     def find_neigh_gid_V1(self):
         """
         Populate ``self.neigh_gid`` using the numba-based neighbour lookup.
         """
         print("Calculating neigh_gid database.")
-        _neigh_gid_ = self.find_neigh_gid_numba(self.lgi)
-        self.neigh_gid = {key: value for key, value in _neigh_gid_.items()}
+        self.neigh_gid = neighops.adjacency_from_labels(self.lgi,
+                                                        connectivity=6)
 
     def find_neigh_gid(self):
         """
         Set neighbouring grain IDs for all grains.
         """
         print('Calculating 1st order neighbours.')
-
-        lgi = self.lgi
-        neigh_gid = {}
-        unique_grains = np.unique(lgi)
-
-        dxdydz = np.array([
-            (-1, -1, -1), (-1, -1, 0), (-1, -1, 1), (-1, 0, -1), (-1, 0, 0),
-            (-1, 0, 1), (-1, 1, -1), (-1, 1, 0), (-1, 1, 1), (0, -1, -1),
-            (0, -1, 0), (0, -1, 1), (0, 0, -1), (0, 0, 1), (0, 1, -1),
-            (0, 1, 0), (0, 1, 1), (1, -1, -1), (1, -1, 0), (1, -1, 1),
-            (1, 0, -1), (1, 0, 0), (1, 0, 1), (1, 1, -1), (1, 1, 0), (1, 1, 1)
-        ])
-
-        nvox = unique_grains.size
-        progress_interval = max(nvox // 4, 1)
-        i = 1
-        for grain_id in unique_grains:
-            neighbours = np.unique(self.find_neigh_gid_core_numba(lgi, grain_id, dxdydz))
-            neigh_gid[grain_id] = list(np.unique(neighbours))
-            if i % progress_interval == 0:
-                print(f'    {np.round(i*100/nvox)}% complete.')
-            i += 1
-
-        self.neigh_gid = neigh_gid
+        self.neigh_gid = neighops.adjacency_from_labels(self.lgi,
+                                                        connectivity=6)
 
     @staticmethod
-    @njit
     def find_neigh_gid_core_numba(lgi, gid, dxdydz):
         """Return neighbouring grain IDs for one grain ID."""
-        shape_x, shape_y, shape_z = lgi.shape
-        max_neighbors = 26  # Maximum possible neighbors in a 3D grid
-
-        # Preallocate a NumPy array for neighbor storage
-        neighbors = np.full(max_neighbors, -1, dtype=int32)  # -1 means empty
-        neighbor_count = 0
-
-        for dx, dy, dz in dxdydz:
-            for x in range(shape_x):
-                for y in range(shape_y):
-                    for z in range(shape_z):
-                        if lgi[x, y, z] == gid:  # Only process grain voxels
-                            nx, ny, nz = x + dx, y + dy, z + dz
-                            if 0 <= nx < shape_x and 0 <= ny < shape_y and 0 <= nz < shape_z:
-                                neighbor_id = lgi[nx, ny, nz]
-
-                                if neighbor_id != gid:  # Ignore same grain
-                                    # Check if the neighbor_id is already in the list
-                                    found = False
-                                    for i in range(neighbor_count):
-                                        if neighbors[i] == neighbor_id:
-                                            found = True
-                                            break
-
-                                    if not found and neighbor_count < max_neighbors:
-                                        neighbors[neighbor_count] = neighbor_id
-                                        neighbor_count += 1
-
-        # Return only the valid part of the array
-        return neighbors[:neighbor_count]
+        neigh = neighops.adjacency_from_labels(lgi, connectivity=6)
+        return np.array(neigh.get(int(gid), []), dtype=np.int32)
 
     def find_neigh_fdb(self, feature_name='base', instance_name='lgi',
                        disp_msg=False, verbosity=500, save_to_neigh_gid=False):
@@ -1527,27 +1381,7 @@ class mcgs3_grain_structure():
             else:
                 raise ValueError("Invalid instance name specified")
 
-        neigh_fid = {}
-        unique_grains = np.unique(FDB)
-
-        dxdydz = np.array([
-            (-1, -1, -1), (-1, -1, 0), (-1, -1, 1), (-1, 0, -1), (-1, 0, 0),
-            (-1, 0, 1), (-1, 1, -1), (-1, 1, 0), (-1, 1, 1), (0, -1, -1),
-            (0, -1, 0), (0, -1, 1), (0, 0, -1), (0, 0, 1), (0, 1, -1),
-            (0, 1, 0), (0, 1, 1), (1, -1, -1), (1, -1, 0), (1, -1, 1),
-            (1, 0, -1), (1, 0, 0), (1, 0, 1), (1, 1, -1), (1, 1, 0), (1, 1, 1)
-        ])
-
-        nvox = unique_grains.size
-        verbosity = max(int(np.round(nvox / max(int(verbosity), 1))), 1)
-        i = 1
-        for grain_id in unique_grains:
-            neighbours = np.unique(self.find_neigh_gid_core_numba(FDB, grain_id, dxdydz))
-            neigh_fid[grain_id] = list(np.unique(neighbours))
-            if i%verbosity == 0:
-                print(f'    {np.round(i*100/nvox)}% complete.')
-            i += 1
-
+        neigh_fid = neighops.adjacency_from_labels(FDB, connectivity=6)
         self.neigh_gid = neigh_fid
         if save_to_neigh_gid:
             self.neigh_gid = {int(fid): np.array(neigh_fid[fid], dtype=np.int32) for fid in neigh_fid}
@@ -1561,35 +1395,8 @@ class mcgs3_grain_structure():
         """
         print('Calculating 1st order neighbours.')
 
-        lgi = self.lgi
-        neigh_gid = {}
-        unique_grains = np.unique(lgi)
-
-        dxdydz = np.array([
-            (-1, -1, -1), (-1, -1, 0), (-1, -1, 1), (-1, 0, -1), (-1, 0, 0),
-            (-1, 0, 1), (-1, 1, -1), (-1, 1, 0), (-1, 1, 1), (0, -1, -1),
-            (0, -1, 0), (0, -1, 1), (0, 0, -1), (0, 0, 1), (0, 1, -1),
-            (0, 1, 0), (0, 1, 1), (1, -1, -1), (1, -1, 0), (1, -1, 1),
-            (1, 0, -1), (1, 0, 0), (1, 0, 1), (1, 1, -1), (1, 1, 0), (1, 1, 1)
-        ])
-
-        nvox = unique_grains.size
-        progress_interval = max(nvox // 4, 1)
-        i = 1
-        for grain_id in unique_grains:
-            # neighbors = set()
-            neighbors = []
-            grain_mask = (lgi == grain_id)
-            if i % progress_interval == 0:
-                print(f'    {np.round(i*100/nvox)}% complete.')
-            for dx, dy, dz in dxdydz:
-                shifted_lgi = np.roll(lgi, shift=(dx, dy, dz), axis=(0, 1, 2))
-                neighbor_mask = (shifted_lgi != grain_id) & grain_mask
-                neighbors.extend(shifted_lgi[neighbor_mask])
-            neigh_gid[grain_id] = list(np.unique(neighbors))
-            i += 1
-
-        self.neigh_gid = neigh_gid
+        self.neigh_gid = neighops.adjacency_from_labels(self.lgi,
+                                                        connectivity=6)
 
     def check_for_neigh(self, parent_gid, other_gid):
         """
@@ -1608,7 +1415,7 @@ class mcgs3_grain_structure():
         bool
             True when ``other_gid`` is a valid first-order neighbour.
         """
-        return True if other_gid in self.neigh_gid[parent_gid] else False
+        return neighops.has_neighbor(self.neigh_gid, parent_gid, other_gid)
 
     def get_upto_nth_order_neighbors(self, grain_id, neigh_order,
                                      recalculate=False, include_parent=True,
@@ -1661,17 +1468,10 @@ class mcgs3_grain_structure():
         if recalculate or not self.neigh_gid:
             self.find_neigh_gid()
             # self.find_neigh_gid_fast_all_grains(include_parent=False)
-        # Start with 1st-order neighbors
-        neighbors = set(self.neigh_gid.get(grain_id, []))
-        # ---------------------------
-        for _ in range(neigh_order - 1):
-            new_neighbors = set()
-            for neighbor in neighbors:
-                new_neighbors.update(self.neigh_gid.get(neighbor, []))
-            neighbors.update(new_neighbors)
-        # ---------------------------
-        if not include_parent:
-            neighbors.discard(grain_id)
+        neighbors = set(neighops.upto_nth_order_neighbors(
+            self.neigh_gid, grain_id, neigh_order,
+            include_parent=include_parent
+        ))
         if output_type == 'list':
             return list(neighbors)
         if output_type == 'nparray':
@@ -1723,22 +1523,11 @@ class mcgs3_grain_structure():
                                              recalculate=False,
                                              include_parent=True)
         """
-        fx = self.get_upto_nth_order_neighbors
-        neigh_upto_n_minus_1 = fx(grain_id, neigh_order-1,
-                                  recalculate=recalculate,
-                                  include_parent=include_parent,
-                                  output_type='set')
-        # --------------------------------
-        if type(neigh_upto_n_minus_1) in dth.dt.NUMBERS:
-            neigh_upto_n_minus_1 = set([neigh_upto_n_minus_1])
-        # --------------------------------
-        fx = self.get_upto_nth_order_neighbors
-        neigh_upto_n = fx(grain_id, neigh_order, recalculate=recalculate,
-                          include_parent=include_parent, output_type='set')
-        # --------------------------------
-        if type(neigh_upto_n) in dth.dt.NUMBERS:
-            neigh_upto_n = set([neigh_upto_n])
-        return list(neigh_upto_n.difference(neigh_upto_n_minus_1))
+        if recalculate or not self.neigh_gid:
+            self.find_neigh_gid()
+        return neighops.nth_order_neighbors(self.neigh_gid, grain_id,
+                                            neigh_order,
+                                            include_parent=include_parent)
 
     def get_upto_nth_order_neighbors_all_grains(self, neigh_order,
                                                 recalculate=False,
@@ -1942,13 +1731,20 @@ class mcgs3_grain_structure():
                           'boundary': [], 'corner': [], 'internal': []
                           }
 
+    def _pvgrid_dimensions_from_scalar(self, scalar):
+        """Return PyVista point dimensions for a UPXO scalar array."""
+        return gsviz.pvgrid_dimensions_from_scalar(scalar)
+
+    def _pvgrid_cell_data_from_scalar(self, scalar):
+        """Return cell data in PyVista's x-y-z ordering."""
+        return gsviz.pvgrid_cell_data_from_scalar(scalar)
+
     def make_pvgrid(self):
         """Build the PyVista grid for the current labelled image."""
         print(40*'-', '\nSetting PyVista grid.')
-        self.pvgrid = pv.ImageData()
-        self.pvgrid.dimensions = np.array(self.lgi.shape) + 1
-        self.pvgrid.origin = (0, 0, 0)
-        self.pvgrid.spacing = (1, 1, 1)
+        self.pvgrid = gsviz.make_pvgrid(
+            self.lgi, scalar_name="lgi", origin=(0, 0, 0), spacing=(1, 1, 1)
+        )
 
     def add_scalar_field_to_pvgrid(self, sf_name="lgi", sf_value=None):
         """
@@ -1968,18 +1764,23 @@ class mcgs3_grain_structure():
         """
         # Validations
         # ------------------------------
-        _str_ = '\nAdding scalar field: {sf_name} to PyVista grid self.pvgrid.'
+        if self.pvgrid is None:
+            self.make_pvgrid()
+        if sf_value is None and sf_name not in ("lgi", "s"):
+            raise ValueError(f"sf_value must be provided for scalar field '{sf_name}'.")
+        _str_ = f'\nAdding scalar field: {sf_name} to PyVista grid self.pvgrid.'
         print(40*'-', _str_)
-        print("Access: self.pvgrid.cell_data['{sf_name}']")
+        print(f"Access: self.pvgrid.cell_data['{sf_name}']")
         if sf_name in self.valid_scalar_fields:
             if sf_name == "lgi":
-                self.pvgrid.cell_data[sf_name] = self.lgi.flatten(order="F")
+                self.pvgrid.cell_data[sf_name] = self._pvgrid_cell_data_from_scalar(self.lgi)
             elif sf_name == "s":
-                self.pvgrid.cell_data[sf_name] = self.s.flatten(order="F")
+                self.pvgrid.cell_data[sf_name] = self._pvgrid_cell_data_from_scalar(self.s)
             elif sf_name[:3].lower() in ("fid"):
-                self.pvgrid.cell_data[sf_name] = sf_value.flatten(order="F")
+                self.pvgrid.cell_data[sf_name] = self._pvgrid_cell_data_from_scalar(sf_value)
         else:
-            self.pvgrid.cell_data[sf_name] = sf_value.flatten(order="F")
+            self.pvgrid.cell_data[sf_name] = self._pvgrid_cell_data_from_scalar(sf_value)
+        self.pvgrid.set_active_scalars(sf_name)
 
     def make_zero_non_gids_in_lgi(self, gids):
         """
@@ -2025,7 +1826,8 @@ class mcgs3_grain_structure():
                       cs_labels='user', scalar="lgi",
                       _xname_='Z: lgi[:,:,n]',
                       _yname_='Y: lgi[:,n,:]',
-                      _zname_='X: lgi[n,:,:]', show_edges=False):
+                      _zname_='X: lgi[n,:,:]', show_edges=False,
+                      cmap=None):
         """
         Plot the grain structure as PyVista voxels.
 
@@ -2045,25 +1847,14 @@ class mcgs3_grain_structure():
             Y on triad will be lgi[n, :, :] -- which is z of numpy array
             X on triad will be lgi[n, :, :] -- which is z of numpy array
         """
-        pvp = pv.Plotter()
-        pvp.add_mesh(self.pvgrid,
-                     scalars=scalar,
-                     show_edges=show_edges,
-                     opacity=alpha)
-        pvp.add_text(f"{title}", font_size=10)
-        if cs_labels == 'user':
-            _ = pvp.add_axes(line_width=5, cone_radius=0.6,
-                             shaft_length=0.7, tip_length=0.3,
-                             ambient=0.5, label_size=(0.4, 0.16),
-                             xlabel=_xname_, ylabel=_yname_, zlabel=_zname_,
-                             viewport=(0, 0, 0.25, 0.25))
-        else:
-            _ = pvp.add_axes(line_width=5, cone_radius=0.6, shaft_length=0.7,
-                             tip_length=0.3, ambient=0.5,
-                             label_size=(0.4, 0.16),
-                             viewport=(0, 0, 0.25, 0.25))
-        # ---------------------------------
-        pvp.show()
+        if self.pvgrid is None:
+            self.make_pvgrid()
+        if cs_labels != 'user':
+            _xname_, _yname_, _zname_ = '', '', ''
+        gsviz.plot_pvgrid(self.pvgrid, scalar_name=scalar,
+                          show_edges=show_edges, alpha=alpha, title=title,
+                          cmap=cmap, _xname_=_xname_, _yname_=_yname_,
+                          _zname_=_zname_)
 
     def plot_gs_pvvox_subset(self, lgi_subset, alpha=1.0,
                              plot_points=False, points=None,
@@ -2102,50 +1893,20 @@ class mcgs3_grain_structure():
         if isolate_gid:
             lgi_subset = self.make_zero_non_gids_in_lgisubset(lgi_subset,
                                                               [gid_to_isolate])
-        pvsubset = pv.UniformGrid()
-        pvsubset.dimensions = np.array(lgi_subset.shape) + 1
-        pvsubset.origin = (0, 0, 0)
-        pvsubset.spacing = (1, 1, 1)
-        pvsubset.cell_data['lgi'] = lgi_subset.flatten(order="F")
-        # --------------------------------
-        pvp = pv.Plotter()
-        pvp.add_mesh(pvsubset, show_edges=True, opacity=alpha)
-        pvp.show()
+        pvsubset = gsviz.make_pvgrid(lgi_subset, scalar_name='lgi',
+                                     origin=(0, 0, 0), spacing=(1, 1, 1))
+        gsviz.plot_pvgrid(pvsubset, scalar_name='lgi', show_edges=True,
+                          alpha=alpha, cmap=None)
 
     @staticmethod
-    @njit
     def _count_labels(lgi_flat, gid_to_idx):
         """Count voxels per label index."""
-        counts = np.zeros(gid_to_idx.max()+1, dtype=np.int64)
-        for t in range(lgi_flat.size):
-            g = lgi_flat[t]
-            idx = gid_to_idx[g]
-            if idx >= 0:
-                counts[idx] += 1
-        return counts
+        return gridops._count_labels(lgi_flat, gid_to_idx)
 
     @staticmethod
-    @njit
     def _fill_coords(lgi, gid_to_idx, counts):
         """Fill coordinate arrays for each label index."""
-        nx, ny, nz = lgi.shape
-        out_i = [np.empty(c, dtype=np.uint16) for c in counts]
-        out_j = [np.empty(c, dtype=np.uint16) for c in counts]
-        out_k = [np.empty(c, dtype=np.uint16) for c in counts]
-        pos = np.zeros(len(counts), dtype=np.int64)
-
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    g = lgi[i, j, k]
-                    idx = gid_to_idx[g]
-                    if idx >= 0:
-                        w = pos[idx]
-                        out_i[idx][w] = i
-                        out_j[idx][w] = j
-                        out_k[idx][w] = k
-                        pos[idx] += 1
-        return out_i, out_j, out_k
+        return gridops._fill_label_coords(lgi, gid_to_idx, counts)
 
     def find_grain_voxel_locs_v1(self, gids=None, disp_msg=False, verbosity=100,
                                  saa=True, throw=False, dtype=np.int32, use_uint16=True):
@@ -2153,26 +1914,10 @@ class mcgs3_grain_structure():
         Find voxel locations of grains in ``self.lgi`` and store them.
         """
         print("\nFinding voxel locations of grains in lgi")
-        if not gids:
+        if gids is None:
             gids = np.asarray(self.gid, dtype=np.int64)
-
-        gid_to_idx = -np.ones(int(gids.max())+1, dtype=np.int64)
+        grain_locs = gridops.find_label_voxel_locs(self.lgi, gids, dtype=dtype)
         for idx, g in enumerate(gids):
-            gid_to_idx[g] = idx
-
-        lgi_flat = self.lgi.ravel(order="C")
-
-        counts = self._count_labels(lgi_flat, gid_to_idx)
-        out_i, out_j, out_k = self._fill_coords(self.lgi, gid_to_idx, counts)
-
-        grain_locs = {}
-        for idx, g in enumerate(gids):
-            coords = np.column_stack((
-                out_i[idx].astype(dtype, copy=False),
-                out_j[idx].astype(dtype, copy=False),
-                out_k[idx].astype(dtype, copy=False)
-            ))
-            grain_locs[int(g)] = coords
             if disp_msg and (idx % verbosity == 0):
                 print(f"gid: {g} of {len(gids)} grains")
 
@@ -2298,9 +2043,8 @@ class mcgs3_grain_structure():
         if disp_msg and ngrains > verbosity:
             verbosity = ngrains//verbosity
 
-        grain_locs = {gid: None for gid in self.gid}
+        grain_locs = gridops.find_label_voxel_locs(self.lgi, self.gid)
         for gid in self.gid:
-            grain_locs[gid] = np.vstack(np.where(self.lgi == gid)).T
             """if gid % verbosity == 0:
                 print(f'gid: {gid} of {ngrains} grains')"""
 
@@ -2426,28 +2170,9 @@ class mcgs3_grain_structure():
         not be extended.
         """
         print('\nFinding normal and extended spatial bounds of all grains.')
-        zmins = np.array([loc[:, 0].min() for loc in self.grain_locs.values()])
-        zmaxs = np.array([loc[:, 0].max() for loc in self.grain_locs.values()])
-        zmins_ex = zmins - (zmins > 0)*1
-        zmaxs_ex = zmaxs + (zmaxs < self.lgi.shape[0]-1)*1
-        # -------------------------------
-        ymins = np.array([loc[:, 1].min() for loc in self.grain_locs.values()])
-        ymaxs = np.array([loc[:, 1].max() for loc in self.grain_locs.values()])
-        ymins_ex = ymins - (ymins > 0)*1
-        ymaxs_ex = ymaxs + (ymaxs < self.lgi.shape[1]-1)*1
-        # -------------------------------
-        xmins = np.array([loc[:, 2].min() for loc in self.grain_locs.values()])
-        xmaxs = np.array([loc[:, 2].max() for loc in self.grain_locs.values()])
-        xmins_ex = xmins - (xmins > 0)*1
-        xmaxs_ex = xmaxs + (xmaxs < self.lgi.shape[2]-1)*1
-        # -------------------------------
-        # Formulate the extended bounding cube bounds.
-        self.spbound = {'xmins': xmins, 'xmaxs': xmaxs,
-                        'ymins': ymins, 'ymaxs': ymaxs,
-                        'zmins': zmins, 'zmaxs': zmaxs}
-        self.spboundex = {'xmins': xmins_ex, 'xmaxs': xmaxs_ex,
-                          'ymins': ymins_ex, 'ymaxs': ymaxs_ex,
-                          'zmins': zmins_ex, 'zmaxs': zmaxs_ex}
+        self.spbound, self.spboundex = gridops.compute_label_bounds(
+            self.grain_locs, self.lgi.shape
+        )
         print('Completed', 40*'-')
 
     def find_bounding_cube_gid(self, gid):
@@ -2463,11 +2188,7 @@ class mcgs3_grain_structure():
         -------
         lgisubset_tightbound : np.ndarray
         """
-        gid = gid-1
-        xsl = slice(self.spbound['xmins'][gid], self.spbound['xmaxs'][gid]+1)
-        ysl = slice(self.spbound['ymins'][gid], self.spbound['ymaxs'][gid]+1)
-        zsl = slice(self.spbound['zmins'][gid], self.spbound['zmaxs'][gid]+1)
-        return self.lgi[zsl, ysl, xsl] # lgisubset_tightbound
+        return gridops.extract_bounded_subarray(self.lgi, self.spbound, gid)
 
     def find_exbounding_cube_gid(self, gid):
         """
@@ -2484,14 +2205,7 @@ class mcgs3_grain_structure():
         np.ndarray
             Loose bounding cube for the requested grain.
         """
-        xsl = slice(self.spboundex['xmins'][gid-1],
-                    self.spboundex['xmaxs'][gid-1]+1)
-        ysl = slice(self.spboundex['ymins'][gid-1],
-                    self.spboundex['ymaxs'][gid-1]+1)
-        zsl = slice(self.spboundex['zmins'][gid-1],
-                    self.spboundex['zmaxs'][gid-1]+1)
-        lgisubset_loosebound = self.lgi[zsl, ysl, xsl]
-        return lgisubset_loosebound
+        return gridops.extract_bounded_subarray(self.lgi, self.spboundex, gid)
 
     def get_bounding_cube_all(self):
         """Find the subsets of lgi which tight binds grains."""
@@ -2753,13 +2467,8 @@ class mcgs3_grain_structure():
         dict or None
             Scalar-field dictionary when ``throw`` is True; otherwise ``None``.
         """
-        LGI = deepcopy(self.lgi)
-
-        for gid in self.gid:
-            if gid in scalars_dict.keys():
-                LGI[LGI == gid] = scalars_dict[gid]
-            else:
-                LGI[LGI == gid] = default_scalar
+        LGI = gridops.map_values_to_labels(self.lgi, self.gid, scalars_dict,
+                                           default_value=default_scalar)
 
         if saa:
             self.fdb[scalar_name] = LGI
@@ -2805,29 +2514,8 @@ class mcgs3_grain_structure():
             Scalar field values in the slice.
         """
         sf_value = self.get_scalar_field(sf_name=sf_name)
-        if sf_value['sf'].ndim != 3:
-            raise ValueError('Invalid sf_value dimensions. Expected 3.')
-        # ----------------------------------
-        if isinstance(slice_normal, str):
-            if slice_normal in ('x', 'y', 'z'):
-                if slice_normal == 'x':
-                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[2]:
-                        sf_slice = sf_value['sf'][:, :, slice_location]
-                    else:
-                        raise ValueError('Invalid slice_location specified.')
-                elif slice_normal == 'y':
-                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[1]:
-                        sf_slice = sf_value['sf'][:, slice_location, :]
-                    else:
-                        raise ValueError('Invalid slice_location specified.')
-                elif slice_normal == 'z':
-                    if slice_location >= 0 and slice_location <= sf_value['sf'].shape[0]:
-                        sf_slice = sf_value['sf'][slice_location, :, :]
-                    else:
-                        raise ValueError('Invalid slice_location specified.')
-            else:
-                raise ValueError("Invalid slice_normal specification.")
-        return sf_slice
+        return gridops.slice_scalar_field_3d(sf_value['sf'], slice_normal,
+                                             slice_location)
 
     def plot_scalar_field_slice_orthogonal(self, sf_name='lgi',
                                            x=5.0, y=5.0, z=5.0):
@@ -3019,7 +2707,8 @@ class mcgs3_grain_structure():
         -----
         Internal use only.
         """
-        self.lgi[self.lgi == other_gid] = parent_gid
+        self.lgi = gs_grid_ops.merge_label_into(self.lgi, parent_gid,
+                                                other_gid, copy=False)
         if print_msg:
             print(f"Grain {other_gid} merged with grain {parent_gid}.")
 
@@ -3189,12 +2878,11 @@ class mcgs3_grain_structure():
         tuple
             Masked ``lgi`` array and the masker value used.
         """
-        lgi_masked = deepcopy(self.lgi).astype(int)
-        for gid in gids:
-            if gid in self.gid:
-                lgi_masked[lgi_masked == gid] = masker
-            else:
-                print(f"Invalid gid: {gid}. Skipped")
+        lgi_masked, masker, skipped = gridops.mask_labels(
+            self.lgi, gids, mask_value=masker, valid_labels=self.gid
+        )
+        for gid in skipped:
+            print(f"Invalid gid: {gid}. Skipped")
         # -----------------------------------------
         return lgi_masked, masker
 
@@ -3506,22 +3194,14 @@ class mcgs3_grain_structure():
                                     normal_rotation=True,
                                     add_outline=False, throw=False)
         """
-        if pvp is None or not isinstance(pvp, pv.Plotter):
-            pvp = pv.Plotter()
-        # -------------------------------------
-        if add_outline:
-            pvp.add_mesh(self.pvgrid.outline())
-        # -------------------------------------
-        pvp.add_mesh_clip_plane(self.pvgrid, normal=normal, origin=origin,
-                                scalars=scalar, cmap=cmap, invert=invert,
-                                crinkle=crinkle,
-                                normal_rotation=normal_rotation, tubing=False,
-                                interaction_event=self._vtk_ievnt_)
-        # -------------------------------------
-        if throw:
-            return pvp
-        else:
-            pvp.show()
+        if self.pvgrid is None:
+            self.make_pvgrid()
+        return gsviz.viz_clip_plane(self.lgi, normal=normal, origin=origin,
+                                    scalarName=scalar, cmap=cmap,
+                                    invert=invert, crinkle=crinkle,
+                                    normal_rotation=normal_rotation,
+                                    add_outline=add_outline, throw=throw,
+                                    pvp=pvp, pvgrid=self.pvgrid)
 
     def viz_mesh_slice(self, normal='x', origin=[5.0, 5.0, 5.0], scalar='lgi',
                        cmap='viridis', normal_rotation=True, add_outline=False,
@@ -3564,21 +3244,13 @@ class mcgs3_grain_structure():
                                     scalar='lgi', cmap='viridis',
                                     add_outline=False, throw=False)
         """
-        if pvp is None or not isinstance(pvp, pv.Plotter):
-            pvp = pv.Plotter()
-        # -------------------------------------
-        if add_outline:
-            pvp.add_mesh(self.pvgrid.outline())
-        # -------------------------------------
-        pvp.add_mesh_slice(self.pvgrid, scalars=scalar,
-                           normal=normal, origin=origin, cmap=cmap,
-                           normal_rotation=False,
-                           interaction_event=self._vtk_ievnt_)
-        # -------------------------------------
-        if throw:
-            return pvp
-        else:
-            pvp.show()
+        if self.pvgrid is None:
+            self.make_pvgrid()
+        return gsviz.viz_mesh_slice(self.lgi, normal=normal, origin=origin,
+                                    scalarName=scalar, cmap=cmap,
+                                    normal_rotation=normal_rotation,
+                                    add_outline=add_outline, throw=throw,
+                                    pvp=pvp, pvgrid=self.pvgrid)
 
     def viz_mesh_slice_ortho(self, scalar='lgi', cmap='viridis',
                               style='surface', add_outline=False,
@@ -3615,20 +3287,13 @@ class mcgs3_grain_structure():
                                           style='surface',
                                           add_outline=False, throw=False)
         """
-        if pvp is None or not isinstance(pvp, pv.Plotter):
-            pvp = pv.Plotter()
-        # -------------------------------------
-        if add_outline:
-            pvp.add_mesh(self.pvgrid.outline())
-        # -------------------------------------
-        pvp.add_mesh_slice_orthogonal(self.pvgrid, scalars=scalar,
-                                      style=style, cmap=cmap,
-                                      interaction_event=self._vtk_ievnt_)
-        # -------------------------------------
-        if throw:
-            return pvp
-        else:
-            pvp.show()
+        if self.pvgrid is None:
+            self.make_pvgrid()
+        return gsviz.viz_mesh_slice_ortho(self.lgi, scalarName=scalar,
+                                          cmap=cmap, style=style,
+                                          add_outline=add_outline,
+                                          throw=throw, pvp=pvp,
+                                          pvgrid=self.pvgrid)
 
     def plot_grain_sets(self, data=None, scalar='lgi',
                         opacities=[1.00, 0.90, 0.75, 0.50],
@@ -3990,7 +3655,7 @@ class mcgs3_grain_structure():
         """
         Calculate grain volumes by voxel count.
         """
-        return np.bincount(lgi.ravel(), minlength=n+1)
+        return morphops.volumes_with_bincount(lgi, n)
 
     def set_mprop_volnv(self, msg=None):
         """
@@ -4003,8 +3668,7 @@ class mcgs3_grain_structure():
             msg = ''
 
         print(40*"-", "\nSetting grain volumes (metric: 'volnv') -> " + msg)
-        unique_counts = self._compute_volumes_with_bincount(self.lgi, self.n)
-        self.mprop['volnv'] = {gid + 1: unique_counts[gid + 1] for gid in range(self.n)}
+        self.mprop['volnv'] = morphops.volume_dict(self.lgi, self.gid)
         print("Grain volumes (metric: 'volnv') -> " + msg + ": have been set.\n",
               40*"-")
 
@@ -4028,8 +3692,7 @@ class mcgs3_grain_structure():
         TO BE NUMBAfied
         """
         print(40*"-", "\nSetting grain volumes (metric: 'volnv').")
-        self.mprop['volnv'] = {gid+1: np.argwhere(self.lgi == gid+1).shape[0]
-                               for gid in range(self.n)}
+        self.mprop['volnv'] = morphops.volume_dict(self.lgi, self.gid)
 
     def set_mprop_pernv(self):
         """Calculate the total perimeter of the grain by number of voxels."""
@@ -4038,7 +3701,7 @@ class mcgs3_grain_structure():
 
     def get_voxel_volume(self):
         """Return the voxel volume from the PyVista grid spacing."""
-        return np.prod(self.pvgrid.spacing)
+        return morphops.voxel_volume(self.pvgrid.spacing)
 
     def get_voxel_surfareas(self, ret_metric='mean'):
         """
@@ -4049,15 +3712,8 @@ class mcgs3_grain_structure():
         ret_metric : str, optional
             Metric to return: ``'mean'``, ``'min'``, ``'max'`` or ``'all'``.
         """
-        sp = self.pvgrid.spacing
-        if ret_metric == 'mean':
-            return (sp[0]*sp[1] + sp[1]*sp[2] + sp[2]*sp[0])/3.0
-        elif ret_metric == 'min':
-            return min(sp[0]*sp[1], sp[1]*sp[2], sp[2]*sp[0])
-        elif ret_metric == 'max':
-            return max(sp[0]*sp[1], sp[1]*sp[2], sp[2]*sp[0])
-        elif ret_metric == 'all':
-            return [sp[0]*sp[1], sp[1]*sp[2], sp[2]*sp[0]]
+        return morphops.voxel_surface_areas(self.pvgrid.spacing,
+                                            ret_metric=ret_metric)
 
     def set_mprop_eqdia(self, base_size_spec='ignore',
                         use_skimrp=True, reset_skimrp=True,
@@ -4440,73 +4096,7 @@ class mcgs3_grain_structure():
         -----
         This helper is used to sample values along a line.
         """
-        x1, y1, z1, x2, y2, z2 = i1, i2, i3, j1, j2, j3
-        ListOfPoints = []
-        ListOfPoints.append((x1, y1, z1))
-        dx = abs(x2 - x1)
-        dy = abs(y2 - y1)
-        dz = abs(z2 - z1)
-        if (x2 > x1):
-            xs = 1
-        else:
-            xs = -1
-        if (y2 > y1):
-            ys = 1
-        else:
-            ys = -1
-        if (z2 > z1):
-            zs = 1
-        else:
-            zs = -1
-
-        # Driving axis is X-axis
-        if (dx >= dy and dx >= dz):
-            p1 = 2 * dy - dx
-            p2 = 2 * dz - dx
-            while (x1 != x2):
-                x1 += xs
-                if (p1 >= 0):
-                    y1 += ys
-                    p1 -= 2 * dx
-                if (p2 >= 0):
-                    z1 += zs
-                    p2 -= 2 * dx
-                p1 += 2 * dy
-                p2 += 2 * dz
-                ListOfPoints.append((x1, y1, z1))
-
-        # Driving axis is Y-axis
-        elif (dy >= dx and dy >= dz):
-            p1 = 2 * dx - dy
-            p2 = 2 * dz - dy
-            while (y1 != y2):
-                y1 += ys
-                if (p1 >= 0):
-                    x1 += xs
-                    p1 -= 2 * dy
-                if (p2 >= 0):
-                    z1 += zs
-                    p2 -= 2 * dy
-                p1 += 2 * dx
-                p2 += 2 * dz
-                ListOfPoints.append((x1, y1, z1))
-
-        # Driving axis is Z-axis
-        else:
-            p1 = 2 * dy - dz
-            p2 = 2 * dx - dz
-            while (z1 != z2):
-                z1 += zs
-                if (p1 >= 0):
-                    y1 += ys
-                    p1 -= 2 * dz
-                if (p2 >= 0):
-                    x1 += xs
-                    p2 -= 2 * dz
-                p1 += 2 * dy
-                p2 += 2 * dx
-                ListOfPoints.append((x1, y1, z1))
-        return ListOfPoints
+        return gridops.bresenham_line_3d((i1, i2, i3), (j1, j2, j3))
 
     def get_values_along_line(self, loci, locj, scalars='lgi'):
         """
@@ -4530,15 +4120,23 @@ class mcgs3_grain_structure():
         """
         # Validations
         # ----------------------------
-        i1, i2, i3 = loci
-        j1, j2, j3 = locj
-        locs = self.generate_bresenham_line_3d(i1, i2, i3, j1, j2, j3)
-        # ----------------------------
-        if scalars == 'lgi':
-            intermediate_locations = np.array([self.lgi[loc[0]][loc[1]][loc[2]]
-                                               for loc in locs])
-        # ----------------------------
-        return intermediate_locations
+        if scalars != 'lgi':
+            raise ValueError("Only scalars='lgi' is currently supported.")
+        return gridops.values_along_line_3d(self.lgi, loci, locj)
+
+    def _default_igs_lines_kwargs1(self, **overrides):
+        """Return default line-generation controls for IGS sampling."""
+        defaults = {'plane': 'z',
+                    'start_skip1': 0, 'start_skip2': 0,
+                    'incr1': 0, 'incr2': 0,
+                    'inclination': 'none',
+                    'inclination_extent': 0,
+                    'shift_seperately': False,
+                    'shift_starts': False,
+                    'shift_ends': False,
+                    'start_shift': 0, 'end_shift': 0}
+        defaults.update(overrides)
+        return defaults
 
     def get_igs_properties_along_line(self, loci, locj, scalars='lgi'):
         """
@@ -4564,21 +4162,7 @@ class mcgs3_grain_structure():
         # ----------------------------
         # Get scalar values aloing tge line between two locations.
         vals_line = self.get_values_along_line(loci, locj, scalars='lgi')
-        vals_line_unique = np.unique(vals_line)  # Unique sclar values on line.
-        ng = vals_line_unique.size  # Np. of grains between intercepts on line.
-        nv = np.array([np.argwhere(vals_line == sv).squeeze().size
-                       for sv in vals_line_unique])  # np. of voxels in grains.
-        # ----------------------------
-        intercept_properties = {'ng': ng,
-                                'nv': nv,
-                                'igs': nv.mean(),
-                                'igs_median': np.median(nv),
-                                'igs_range': np.ptp(nv),
-                                'igs_std': nv.std(),
-                                'igs_var': nv.var(),
-                                'sv': vals_line,
-                                'sv_unique': vals_line_unique}
-        return intercept_properties
+        return gridops.intercept_properties_from_values(vals_line)
 
     def get_igs_along_line(self, loci, locj, metric='mean', minimum=True,
                            maximum=True, std=True, variance=True,
@@ -4623,27 +4207,13 @@ class mcgs3_grain_structure():
         if verbose:
             print(40*'-',
                   f'\nGetting intercept grain size @line: {loci}---{locj}.')
-        # ----------------------------
-        igs, igs_std, igs_var = None, None, None
-        # ----------------------------
         # Get scalar values aloing tge line between two locations.
         vals_line = self.get_values_along_line(loci, locj, scalars='lgi')
-        vals_line_unique = np.unique(vals_line)  # Unique sclar values on line.
-        nv = np.array([np.argwhere(vals_line == sv).squeeze().size
-                       for sv in vals_line_unique])  # np. of voxels in grains.
-        # ----------------------------
-        igs = nv.mean() if metric in ('mean', 'average', 'avg') else None
-        if metric in ('med', 'median'):
-            igs = np.median(nv)
-        # ----------------------------
-        igs_min = nv.min() if minimum else None
-        igs_max = nv.max() if maximum else None
-        igs_std = nv.std() if std else None
-        igs_var = nv.var() if variance else None
-        # ----------------------------
-        igs = {'igs': igs, 'metric': metric, 'min': igs_min, 'max': igs_max,
-               'std': igs_std, 'var': igs_var}
-        return igs
+        return gridops.intercept_summary_from_values(vals_line, metric=metric,
+                                                     minimum=minimum,
+                                                     maximum=maximum,
+                                                     std=std,
+                                                     variance=variance)
 
     def get_opposing_points_on_gs_bound_planes(self, plane='z',
                                                start_skip1=0, start_skip2=0,
@@ -4739,90 +4309,18 @@ class mcgs3_grain_structure():
         -----
         Please refer to the inline comments in this function.
         """
-        # Validations
-        # ----------------------
-        '''Let us make the grid of index locations corrwponsing to the shape of
-        lgi attribute.'''
-        n = np.array(self.lgi.shape)-1
-        locsy, locsz, locsx = np.meshgrid(range(0, n[0]), range(0, n[1]),
-                                          range(0, n[2]))
-        # ----------------------
-        '''We will now sub-sample from this grid to extract only those
-        indices which are specifie3d by the user provided skip and increment
-        values. This is done for both extremes of the each of the three
-        dimensions. In locsz_start, the z actually stands for axis 0, that is
-        plane. Similarly y for axis 1 and x for axis 2. Similar explanations
-        apply for rest.'''
-        locsz_start = locsz[0][start_skip1::incr1, start_skip2::incr2]
-        locsx_start = locsx[0][start_skip1::incr1, start_skip2::incr2]
-        locsy_start = locsy[0][start_skip1::incr1, start_skip2::incr2]
-        locsz_end = locsz[-1][start_skip1::incr1, start_skip2::incr2]
-        locsx_end = locsx[-1][start_skip1::incr1, start_skip2::incr2]
-        locsy_end = locsy[-1][start_skip1::incr1, start_skip2::incr2]
-        # ----------------------
-        if plane == 'z':
-            '''We will make z as z, y as y and x as x for starting and ending
-            points.'''
-            start_points = np.vstack((locsz_start.ravel(), locsy_start.ravel(),
-                                      locsx_start.ravel())).T
-            end_points = np.vstack((locsz_end.ravel(), locsy_end.ravel(),
-                                    locsx_end.ravel())).T
-        elif plane == 'y':
-            '''We will make z as y, y as z and x as x for starting and ending
-            points. Recheck this doc.'''
-            start_points = np.vstack((locsy_start.ravel(), locsz_start.ravel(),
-                                      locsx_start.ravel())).T
-            end_points = np.vstack((locsy_end.ravel(), locsz_end.ravel(),
-                                    locsx_end.ravel())).T
-        elif plane == 'x':
-            '''We will make z as x, y as z and x as y for starting and ending
-            points. Recheck this doc.'''
-            start_points = np.vstack((locsy_start.ravel(), locsx_start.ravel(),
-                                      locsz_start.ravel())).T
-            end_points = np.vstack((locsy_end.ravel(), locsx_start.ravel(),
-                                    locsz_end.ravel())).T
-        # ----------------------
-        '''If user does not want to incline the sampling lines, we will just
-        return the sampling line end point coordinates as is.'''
-        if inclination == 'none':
-            return start_points, end_points
-        # ----------------------
-        '''If user wants constant inclination factor being applied to all,
-        we will do it here. Note that a constant inclination facotr does not
-        necessarily mean a constant inclination anmgle for all sampling lines
-        which would be produced using the end points returned. This has already
-        been explainerd before in the function's parameter documentaion.'''
-        if inclination == 'constant' and inclination_extent == 0:
-            return start_points, end_points
-        if inclination == 'constant' and inclination_extent != 0:
-            if shift_seperately:
-                start_points = np.roll(start_points, start_shift, axis=0)
-                end_points = np.roll(end_points, end_shift, axis=0)
-            else:
-                start_points = np.roll(start_points, inclination_extent,
-                                       axis=0)
-                end_points = np.roll(end_points, -inclination_extent, axis=0)
-            return start_points, end_points
-        # ----------------------
-        '''Depending on shift_starts and shift_ends, the starting points and
-        ending points will be shuffled by unknown distances. Yeah!! I mean
-        shuffled randomly...'''
-        if inclination == 'random':
-            np.random.shuffle(start_points)
-            np.random.shuffle(end_points)
-            return start_points, end_points
+        return gridops.opposing_boundary_points(
+            self.lgi.shape, plane=plane, start_skip1=start_skip1,
+            start_skip2=start_skip2, incr1=incr1, incr2=incr2,
+            inclination=inclination, inclination_extent=inclination_extent,
+            shift_seperately=shift_seperately, shift_starts=shift_starts,
+            shift_ends=shift_ends, start_shift=start_shift,
+            end_shift=end_shift
+        )
 
     def get_igs_along_lines(self, metric='mean', minimum=True, maximum=True,
                             std=True, variance=True, lines_gen_method=1,
-                            lines_kwargs1={'plane': 'z',
-                                           'start_skip1': 0, 'start_skip2': 0,
-                                           'incr1': 0, 'incr2': 0,
-                                           'inclination': 'none',
-                                           'inclination_extent': 0,
-                                           'shift_seperately': False,
-                                           'shift_starts': False,
-                                           'shift_ends': False,
-                                           'start_shift': 0, 'end_shift': 0}):
+                            lines_kwargs1=None):
         """
         Measure intercept properties along lines defined by location sets i, j.
 
@@ -4878,6 +4376,7 @@ class mcgs3_grain_structure():
         """
         # Validations
         # -------------------------
+        lines_kwargs1 = self._default_igs_lines_kwargs1(**(lines_kwargs1 or {}))
         igs = {'igs': [], 'metric': metric}
         if minimum:
             igs['min'] = []
@@ -4936,33 +4435,14 @@ class mcgs3_grain_structure():
                                              minimum=True, maximum=True,
                                              std=True, variance=True,
                                              lines_gen_method=1,
-                                             lines_kwargs1={'plane': 'z',
-                                                            'start_skip1': 0,
-                                                            'start_skip2': 0,
-                                                            'incr1': 0,
-                                                            'incr2': 0,
-                                                            'inclination': 'none',
-                                                            'inclination_extent': 0,
-                                                            'shift_seperately': False,
-                                                            'shift_starts': False,
-                                                            'shift_ends': False,
-                                                            'start_shift': 0,
-                                                            'end_shift': 0},
+                                             lines_kwargs1=None,
                                              plot=True):
         """Return intercept grain-size statistics for multiple samples."""
         raise NotImplementedError("igs_along_lines_multiple_samples is not yet implemented.")
 
     def igs_sed_ratio(self, metric='mean', lines_gen_method=1,
                       reset_grain_size=True, base_size_spec='volnv',
-                      lines_kwargs1={'plane': 'z',
-                                     'start_skip1': 0, 'start_skip2': 0,
-                                     'incr1': 3, 'incr2': 3,
-                                     'inclination': 'none',
-                                     'inclination_extent': 0,
-                                     'shift_seperately': False,
-                                     'shift_starts': False,
-                                     'shift_ends': False,
-                                     'start_shift': 0, 'end_shift': 0}):
+                      lines_kwargs1=None):
         """
         Calculate the ratio of intercept grain size to sphere eq. diameter.
 
@@ -4993,19 +4473,10 @@ class mcgs3_grain_structure():
         float
             Characteristic average grain-size ratio.
         """
-        temp1 = lines_kwargs1['inclination_extent']
-        lines_kwargs1 = {'plane': lines_kwargs1['plane'],
-                         'start_skip1': lines_kwargs1['start_skip1'],
-                         'start_skip2': lines_kwargs1['start_skip2'],
-                         'incr1': lines_kwargs1['incr1'],
-                         'incr2': lines_kwargs1['incr2'],
-                         'inclination': lines_kwargs1['inclination'],
-                         'inclination_extent': temp1,
-                         'shift_seperately': lines_kwargs1['shift_seperately'],
-                         'shift_starts': lines_kwargs1['shift_starts'],
-                         'shift_ends': lines_kwargs1['shift_ends'],
-                         'start_shift': lines_kwargs1['start_shift'],
-                         'end_shift': lines_kwargs1['end_shift']}
+        default_lines_kwargs1 = self._default_igs_lines_kwargs1(incr1=3,
+                                                                incr2=3)
+        default_lines_kwargs1.update(lines_kwargs1 or {})
+        lines_kwargs1 = default_lines_kwargs1
         # -----------------------------------
         _lgm_ = lines_gen_method
         igs = self.get_igs_along_lines(metric=metric,
@@ -5070,7 +4541,7 @@ class mcgs3_grain_structure():
     @property
     def nvoxels_values(self):
         """Return the stored per-grain voxel counts."""
-        return np.array(list(self.mprop['volnv'].values()))
+        return morphops.values_array(self.mprop['volnv'])
 
     def get_largest_gids(self):
         """
@@ -5080,7 +4551,7 @@ class mcgs3_grain_structure():
         all([gstslice.nvoxels[i]==maxgs for i in gstslice.get_smallest_gids()])
         Above returns True. Therefore, works fine.
         """
-        return np.where(self.nvoxels_values == self.nvoxels_values.max())[0]+1
+        return morphops.gids_with_max(self.mprop['volnv'])
 
     def get_smallest_gids(self):
         """
@@ -5090,7 +4561,7 @@ class mcgs3_grain_structure():
         all([gstslice.nvoxels[i]==mings for i in gstslice.get_smallest_gids()])
         Above returns True. Therefore, works fine.
         """
-        return np.where(self.nvoxels_values == self.nvoxels_values.min())[0]+1
+        return morphops.gids_with_min(self.mprop['volnv'])
 
     def get_s_gids(self, s):
         """Return the grain IDs stored in ``s``."""
@@ -5099,7 +4570,7 @@ class mcgs3_grain_structure():
     @property
     def single_voxel_grains(self):
         """Return the grain IDs that contain a single voxel."""
-        return np.where(self.nvoxels_values == 1)[0]+1
+        return morphops.gids_with_value(self.mprop['volnv'], 1)
 
     @property
     def smallest_volume(self):
@@ -5118,20 +4589,20 @@ class mcgs3_grain_structure():
         vth : int or float
             Volume threshold.
         """
-        return np.where(self.nvoxels_values <= vth)[0]+1
+        return morphops.gids_le(self.mprop['volnv'], vth)
 
     def large_grains(self, vth=2):
         """Return the grain IDs classified as large."""
-        return np.where(self.nvoxels_values >= vth)[0]+1
+        return morphops.gids_ge(self.mprop['volnv'], vth)
 
     def find_grains_by_nvoxels(self, nvoxels=2):
         """Find grains using voxel-count criteria."""
-        return np.where(self.nvoxels_values == nvoxels)[0]+1
+        return morphops.gids_with_value(self.mprop['volnv'], nvoxels)
 
     def get_volnv_gids(self, gids):
         """Return the grain IDs for the requested voxel-volume set."""
         # Validations
-        return [floor(self.mprop['volnv'][gid]) for gid in gids]
+        return morphops.prop_values_for_gids(self.mprop['volnv'], gids)
 
     def find_grains_by_mprop_range(self, prop_name='volnv', low=10, high=15,
                                    low_ineq='ge', high_ineq='le'):
@@ -5185,28 +4656,9 @@ class mcgs3_grain_structure():
             gstslice.nvoxels_values[gids-1]
             [gstslice.mprop['volnv'][gid] for gid in gids]
         """
-        if low_ineq not in ('ge', 'gt'):
-            low_ineq = 'ge'
-        if high_ineq not in ('le', 'lt'):
-            low_ineq = 'le'
-        # -----------------------------
-        prop = np.array(list(self.mprop[prop_name].values()))
-        # -----------------------------
-        if low_ineq == 'ge' and high_ineq == 'le':
-            prop_flag = np.logical_and(prop >= low, prop <= high)
-        elif low_ineq == 'ge' and high_ineq == 'lt':
-            prop_flag = np.logical_and(prop >= low, prop < high)
-        elif low_ineq == 'gt' and high_ineq == 'le':
-            prop_flag = np.logical_and(prop > low, prop <= high)
-        elif low_ineq == 'gt' and high_ineq == 'lt':
-            prop_flag = np.logical_and(prop > low, prop < high)
-        # -----------------------------
-        gids = np.argwhere(prop_flag).squeeze() + 1
-        if type(gids) in dth.dt.NUMBERS:
-            gids = np.array(gids)
-        if gids.ndim == 0:
-            gids = np.expand_dims(gids, 0)
-        return gids
+        return morphops.gids_in_range(self.mprop[prop_name], low=low,
+                                      high=high, low_ineq=low_ineq,
+                                      high_ineq=high_ineq)
 
     def plot_single_voxel_grains(self):
         """Visualise single voxel grains using Matplotlib or PyVista."""
@@ -5214,29 +4666,11 @@ class mcgs3_grain_structure():
 
     def get_lgi_subset_around_location(self, loc):
         """Return the lgi subset around location."""
-        # Validations
-        if any(loc_ < 0 or loc_ > mxsz-1
-               for loc_, mxsz in zip(loc, self.lgi.shape)):
-            raise ValueError('Invalid location specirfication.')
-        # ------------------------------
-        def get_slice(i, imax):
-            """Return the slice."""
-            if i == 0:
-                return slice(0, 2)
-            elif i == imax-1:
-                return slice(imax-2, imax)
-            else:
-                return slice(i-1, i+2)
-        # ------------------------------
-        lgi_subset = self.lgi[get_slice(loc[0], self.lgi.shape[0]),
-                              get_slice(loc[1], self.lgi.shape[1]),
-                              get_slice(loc[2], self.lgi.shape[2])]
-        return lgi_subset
+        return gridops.local_neighborhood(self.lgi, loc, radius=1)
 
     def get_neigh_grains_next_to_location(self, loc):
         """Return the neigh grains next to location."""
-        lgi_subset = self.get_lgi_subset_around_location(loc)
-        return set(np.unique(lgi_subset)) - set([self.lgi[loc[0]][loc[1]][loc[2]]])
+        return gridops.neighbor_labels_at_location(self.lgi, loc, radius=1)
 
     def export_vtk3d(self, grid: dict, grid_fields: dict, file_path: str,
                      file_name: str, add_suffix: bool = True) -> None:
@@ -5307,19 +4741,12 @@ class mcgs3_grain_structure():
 
             scalar = gstslice.get_slice(slice_plane='xy', loc=0, scalar='lgi')
         """
-        # Validations
-        # ---------------------------
-        if slice_plane not in ('xy', 'yx', 'yz', 'zy', 'xz', 'zx'):
-            raise ValueError('Invalid axis specification.')
-        # ---------------------------
-        if slice_plane in ('xy', 'yx') and scalar == 'lgi':
-            scalar = self.lgi[loc, :, :]
-        if slice_plane in ('yz', 'zy') and scalar == 'lgi':
-            scalar = self.lgi[:, :, loc]
-        if slice_plane in ('xz', 'zx') and scalar == 'lgi':
-            scalar = self.lgi[:, loc, :]
-        # ---------------------------
-        return scalar
+        if isinstance(scalar, str):
+            if scalar == 'lgi':
+                scalar = self.lgi
+            else:
+                return scalar
+        return gridops.plane_slice(scalar, plane=slice_plane, index=loc)
 
     def reset_slice_lgi(self, scalar_slice, library='scikit-image',
                         kernel_order=2):
@@ -5366,7 +4793,6 @@ class mcgs3_grain_structure():
                                  f" Recieved {kernel_order}")'''
             return None
         elif library in dth.opt.ski_options:
-            from skimage.measure import label as skim_label
             # Acceptable values for opencv: 1, 2
             if kernel_order in (4, 8):
                 KO = int(kernel_order/4)
@@ -5376,18 +4802,8 @@ class mcgs3_grain_structure():
                 raise ValueError("Input must be in (1, 2, 4, 8)."
                                  f" Recieved {kernel_order}")
         # --------------------
-        for i, _s_ in enumerate(np.unique(scalar_slice)):
-            b = (scalar_slice == _s_).astype(np.uint8)
-            if library in dth.opt.ocv_options:
-                _, labels = concomp(b*255, connectivity=KO)
-            elif library in dth.opt.ski_options:
-                labels, _ = skim_label(b, return_num=True, connectivity=KO)
-            if i == 0:
-                lgi = labels
-            else:
-                labels[labels > 0] += lgi.max()
-                lgi = lgi + labels
-        return lgi
+        return gridops.relabel_multistate_slice_2d(scalar_slice,
+                                                   connectivity=KO)
 
     def char_slice_gid_psitions(self, lgi):
         """
@@ -5844,17 +5260,15 @@ class mcgs3_grain_structure():
         self.lgi_slice['lgi_masked'] = data
         # -------------------------
         if ignore_border_grains_2d:
-            grid = pv.ImageData()
-            grid.dimensions = np.array(self.lgi_slice['lgi_masked'].shape+(0,)) + 1
-            grid.origin, grid.spacing = (0, 0, 0), (1, 1, 0)
-            grid.cell_data['lgi'] = self.lgi_slice['lgi_masked'].flatten(order='f')
-            self.lgi_slice['pvgrid_masked'] = grid
+            self.lgi_slice['pvgrid_masked'] = gsviz.make_pvgrid_2d(
+                self.lgi_slice['lgi_masked'], scalar_name='lgi',
+                origin=(0, 0, 0), spacing=(1, 1, 0)
+            )
         # ------------------------
-        grid = pv.ImageData()
-        grid.dimensions = np.array(self.lgi_slice['lgi'].shape+(0,)) + 1
-        grid.origin, grid.spacing = (0, 0, 0), (1, 1, 0)
-        grid.cell_data['lgi'] = self.lgi_slice['lgi'].flatten(order='f')
-        self.lgi_slice['pvgrid'] = grid
+        self.lgi_slice['pvgrid'] = gsviz.make_pvgrid_2d(
+            self.lgi_slice['lgi'], scalar_name='lgi',
+            origin=(0, 0, 0), spacing=(1, 1, 0)
+        )
         # -------------------------
         if save_plot2d_grains:
             # ------------------------
@@ -6879,8 +6293,7 @@ class mcgs3_grain_structure():
 
     def initiate_gbp(self):
         """Initialise grain-boundary points."""
-        self.Lgbp_all = {gid: None for gid in self.gid}
-        self.Ggbp_all = {gid: None for gid in self.gid}
+        self.Lgbp_all, self.Ggbp_all = gbpoint_ops.initialise_gbp(self.gid)
 
     def set_Lgbp_gid(self, gid, saa=True, throw=False, verbose=True):
         """
@@ -6907,13 +6320,7 @@ class mcgs3_grain_structure():
             if gid % 50 == 0:
                 print(f'Findging local gbp, gid: {gid}')
         lgiss = self.find_exbounding_cube_gid(gid)
-        locs = np.argwhere(lgiss == gid)
-        mean_gid_loc = locs.mean(axis=0)
-        gbp = np.array(find_boundaries(self.make_zero_non_gids_in_lgisubset(lgiss, [gid]),
-                                       connectivity=1, mode='subpixel',
-                                       background=0), dtype=int)
-        # gbp[gbp > 0] = 1
-        Lgbp_all = np.argwhere(gbp > 0)/2
+        Lgbp_all = gbpoint_ops.local_gbp_for_gid(lgiss, gid)
         if saa:
             self.Lgbp_all[gid] = Lgbp_all
         else:
@@ -6951,52 +6358,28 @@ class mcgs3_grain_structure():
         The local boundary points are shifted by a half-voxel offset and the
         grain-specific minimum extents to obtain global coordinates.
         """
-        # Form the gbpltv, the gbp local translation vector
-        gbpltv = np.array([0.5, 0.5, 0.5])
-        # Form the gbp global translation vector
-        minextreme = {gid: [self.spboundex['zmins'][gid-1],
-                            self.spboundex['ymins'][gid-1],
-                            self.spboundex['xmins'][gid-1]]
-                      for gid in self.gid}
-        # Translate all the Lgbp points by total translation vector
-        self.Ggbp_all = {gid: self.Lgbp_all[gid] + gbpltv + minextreme[gid]
-                         for gid in self.gid}
+        self.Ggbp_all = gbpoint_ops.globalise_gbp(self.Lgbp_all,
+                                                  self.spboundex,
+                                                  self.gid)
 
     def create_neigh_gid_pair_ids(self):
         """Build and return neighbour grain-ID pair identifiers."""
         print('\nCreating neigh_gid_pair_ids.')
-        self.gid_pair_ids = {}
-        pair_id = 1
-        # ----------------------------------------
-        for gid, neighbors in self.neigh_gid.items():
-            for neighbor in neighbors:
-                # Create a sorted tuple of the pair (ensures uniqueness)
-                pair = tuple(int(_) for _ in sorted((gid, neighbor)))
-
-                # Assign a new pair ID if not seen before
-                if pair not in self.gid_pair_ids:
-                    self.gid_pair_ids[pair_id] = pair
-                    pair_id += 1
-        # ----------------------------------------
-        self.gid_pair_ids_unique_lr = np.unique(np.array(list(self.gid_pair_ids.values())), axis=0)
-        self.gid_pair_ids_unique_rl = np.flip(self.gid_pair_ids_unique_lr, axis=1)
+        pair_data = gbpoint_ops.create_neighbor_pair_ids(self.neigh_gid)
+        self.gid_pair_ids = pair_data[0]
+        self.gid_pair_ids_unique_lr = pair_data[1]
+        self.gid_pair_ids_unique_rl = pair_data[2]
         # ----------------------------------------
         print('Creating neigh_gid_pair_ids reveresed.')
-        self.gid_pair_ids_rev = {v: k for k, v in self.gid_pair_ids.items()}
+        self.gid_pair_ids_rev = pair_data[3]
         # ----------------------------------------
         print(f'.... a total of {len(self.gid_pair_ids_unique_lr)} unique gid pairs exit.')
 
     def is_gid_pair_in_lr_or_rl(self, gid_pair):
         """Check or validate is gid pair in lr or rl."""
-        def is_a_in_b(a, b):
-            """Check or validate is a in b."""
-            return any((b[:, 0] == a[0]) & (b[:, 1] == a[1]))
-        if is_a_in_b(gid_pair, self.gid_pair_ids_unique_lr):
-            return 'lr'
-        elif is_a_in_b(gid_pair, self.gid_pair_ids_unique_rl):
-            return 'rl'
-        else:
-            raise ValueError('Invalid gid_pair or corrupt database.')
+        return gbpoint_ops.gid_pair_orientation(gid_pair,
+                                                self.gid_pair_ids_unique_lr,
+                                                self.gid_pair_ids_unique_rl)
 
     def build_gbp_stack(self):
         """
@@ -7010,16 +6393,11 @@ class mcgs3_grain_structure():
         -------
         None
         """
-        self.gbpstack = np.vstack((self.Ggbp_all[1], self.Ggbp_all[2]))
-        for gid in self.gid[2:]:
-            if gid%250 == 0:
-                print(f'... @gid: {gid}')
-            self.gbpstack = np.vstack((self.gbpstack, self.Ggbp_all[gid]))
-        self.gbpstack = np.unique(self.gbpstack, axis=0)
+        self.gbpstack = gbpoint_ops.build_gbp_stack(self.Ggbp_all, self.gid)
 
     def build_gbpids(self):
         """Build and return grain-boundary point IDs."""
-        self.gbpids = [i for i in range(self.gbpstack.shape[0])]
+        self.gbpids = gbpoint_ops.build_gbp_ids(self.gbpstack)
 
     def build_gbp(self):
         """
@@ -7057,21 +6435,9 @@ class mcgs3_grain_structure():
         First create {gbp coord tuple: gbp ID} dictionary --> self.gbp_id_maps
         Then use this to create a {gid: gbp IDs} dictionary --> self.gbp_ids
         """
-        # Form self.gbp_id_maps
-        self.gbp_id_maps, gbpids_max = {}, max(self.gbpids)
-        for i, (point, pointid) in enumerate(zip(self.gbpstack, self.gbpids),
-                                             start=0):
-            if i % 1E5 == 0 or i == gbpids_max:
-                print(f'Creating global IDs for gbpstack: gbp no.{i}/{gbpids_max}')
-            self.gbp_id_maps[(int(point[0]), int(point[1]), int(point[2]))] = pointid
-        # -----------------------------------------
-        # From self.gbp_ids
-        self.gbp_ids = {gid: None for gid in self.gid}
-        for gid in self.gid:
-            if gid % 500 == 0:
-                print(f'Forming local-global ID maps for gid no. {gid}')
-            self.gbp_ids[gid] = set([self.gbp_id_maps[(int(point[0]), int(point[1]), int(point[2]))]
-                                     for point in self.Ggbp_all[gid]])
+        self.gbp_id_maps, self.gbp_ids = gbpoint_ops.build_gbp_id_mappings(
+            self.gbpstack, self.gbpids, self.Ggbp_all, self.gid
+        )
 
     def find_gbsp(self):
         """
@@ -7093,14 +6459,9 @@ class mcgs3_grain_structure():
 
         """
         print(40*'-', '\nIdentifying gbp IDs of grain neigh pairs.')
-        self.gbsurf_pids_vox = {i: None for i in self.gid_pair_ids.keys()}
-        # gp_id: grain pair ID
-        # gp: grain pair
-        for gp_id, gp in self.gid_pair_ids.items():
-            # gb = self.gid_pair_ids[1]
-            gbp_gpl = self.gbp_ids[gp[0]]
-            gbp_gpr = self.gbp_ids[gp[1]]
-            self.gbsurf_pids_vox[gp_id] = gbp_gpl.intersection(gbp_gpr)
+        self.gbsurf_pids_vox = gbpoint_ops.grain_boundary_surface_point_ids(
+            self.gid_pair_ids, self.gbp_ids
+        )
         print('    Use self.gbpstack[list(gstslice.gbsurf_pids_vox[i])] to get coords of ')
         print('        gbp at gb^th interface surface. This surface is between')
         print('        gid = gp[0] and gid = gb[1].')
@@ -7109,7 +6470,9 @@ class mcgs3_grain_structure():
     def setup_gid_pair_gbp_IDs_DS(self):
         """Set up the grain-pair boundary-point ID dictionary."""
         print(40*'-', '\nSetting up {gid pair id: gbp ID list} data structure')
-        self.gid_pair_gbp_IDs = {k: None for k, v in self.gid_pair_ids.items()}
+        self.gid_pair_gbp_IDs = gbpoint_ops.setup_gid_pair_gbp_ids(
+            self.gid_pair_ids
+        )
 
     def find_gid_pair_gbp_IDs(self, gidl, gidr):
         """
@@ -7129,27 +6492,11 @@ class mcgs3_grain_structure():
         The interface ID is resolved from the ordered grain-pair mapping and
         the stored interfacial point-ID sets.
         """
-        # gidl = 1
-        # gidr = self.neigh_gid[gidl][2]
-        # -----------------------------------------
-        gbp_ids_core_grain = list(self.gbp_ids[gidl])
-        gbp_coords_core_grain = self.gbpstack[gbp_ids_core_grain]  # gbp_coords_core_grain.shape
-        # -----------------------------------------
-        gbp_coords_core_grain = self.Ggbp_all[gidl]  # gbp_coords_core_grain.shape
-        # -----------------------------------------
-        gid_pair = (gidl, gidr)
-        lrrl = self.is_gid_pair_in_lr_or_rl(gid_pair)
-        if lrrl == 'lr':
-            # Things are correctr. Nothing more to do.
-            pass
-        elif lrrl == 'rl':
-            # gid_pair neede to be reversed.
-            gid_pair = (gidr, gidl)
-        interface_id = self.gid_pair_ids_rev[gid_pair]
-        # -----------------------------------------
-        return list(self.gbsurf_pids_vox[interface_id])
-        # -----------------------------------------
-        # self.gid_pair_gbp_coords = self.gbpstack[self.gid_pair_gbp_IDs]
+        return gbpoint_ops.find_gid_pair_gbp_ids(
+            gidl, gidr, self.gid_pair_ids_rev,
+            self.gid_pair_ids_unique_lr, self.gid_pair_ids_unique_rl,
+            self.gbsurf_pids_vox
+        )
 
     def set_gid_pair_gbp_IDs(self):
         """
@@ -7175,9 +6522,10 @@ class mcgs3_grain_structure():
         We can then repeat this for every (gidl, gidr) pair in the dictionary
         gstslice.gid_pair_ids.
         """
-        for i, (gid_pair_id, gid_pairs) in enumerate(self.gid_pair_ids.items(),
-                                                     start=1):
-            self.gid_pair_gbp_IDs[gid_pair_id] = self.find_gid_pair_gbp_IDs(*gid_pairs)
+        self.gid_pair_gbp_IDs = gbpoint_ops.set_gid_pair_gbp_ids(
+            self.gid_pair_ids, self.find_gid_pair_gbp_IDs
+        )
+        i = len(self.gid_pair_gbp_IDs)
         print(f'    Finished finding {i} gid_pair_gbp_IDs[gid_pair_id] gbp ID lists.')
 
     def build_gid__gid_pair_IDs(self):
@@ -7209,16 +6557,9 @@ class mcgs3_grain_structure():
         of the core gid. That is, gidl is core gid and gidr is one of the
         O(1) gid.
         """
-        self.gid_gpid = {gid: [] for gid in self.gid}
-        for intid, gpid in self.gid_pair_ids.items():
-            '''
-            intid: Interface ID: key in gstslice.gid_pair_ids.
-            gpid: grain pair ID: (gidl, gidr). Value in gstslice.gid_pair_ids.
-            '''
-            self.gid_gpid[gpid[0]].append(intid)
-            self.gid_gpid[gpid[1]].append(intid)
-        for gid in self.gid:
-            self.gid_gpid[gid] = set(self.gid_gpid[gid])
+        self.gid_gpid = gbpoint_ops.build_gid_to_gid_pair_ids(
+            self.gid, self.gid_pair_ids
+        )
 
     def set_neigh_gid_interaction_pairs(self, verbose=True):
         """
@@ -7562,28 +6903,10 @@ class mcgs3_grain_structure():
         -----
         1. Intended for internal use.
         """
-        # initial Validations for fname
-        # -----------------------------------------
-        '''if fname in self.fdb.keys():
-            raise ValueError(f'[fname: {fname}] is an existing feature.',
-                             'Use gstslice.reset_fdb(..) to reset.')'''
-        # -----------------------------------------
-        # Validations for infokeys
-        if not isinstance(info, dict):
-            raise ValueError('info must be a dictionary')
-        if not all([isinstance(info_, str) for info_ in info.keys()]):
-            raise ValueError('infokey_list are not all strings.')
-        # -----------------------------------------
-        if type(dnames) not in dth.dt.ITERABLES:
-            dnames = (dnames,)
-        if type(datas) not in dth.dt.ITERABLES:
-            datas = (datas,)
-        # -----------------------------------------
-        self.fdb[fname] = {}
-        self.fdb[fname]['data'] = {}
-        for dname, data in zip(dnames, datas):
-            self.fdb[fname]['data'][dname] = data
-        self.fdb[fname]['info'] = info
+        self.fdb = fdbops.add_feature_database_entry(
+            self.fdb, fname, dnames, datas, info,
+            iterable_types=dth.dt.ITERABLES
+        )
 
     def reset_fdb(self, fname, data, info, retain_info=False):
         """Reset or clear the feature database."""
@@ -7746,15 +7069,14 @@ class mcgs3_grain_structure():
 
     def get_local_global_coord_offset(self, gid):
         """Return the local global coord offset."""
-        gloffset = np.array([self.spbound['zmins'][gid-1],
-                             self.spbound['ymins'][gid-1],
-                             self.spbound['xmins'][gid-1]])
-        return gloffset
+        return geoOps3D.local_global_offset(self.spbound, gid)
 
     def offset_local_to_global(self, gid, local_coord):
         """
         """
-        return local_coord + self.get_local_global_coord_offset(gid)
+        return geoOps3D.offset_local_to_global(
+            local_coord, self.get_local_global_coord_offset(gid)
+        )
 
     def get_cutoff_twvol(self, gid, cutoff_twin_vf):
         """Return the twin-volume cutoff."""
@@ -8601,12 +7923,10 @@ class mcgs3_grain_structure():
         # -----------------------------------------------------------
         self.fdb[instance_name]['info']['pvgrid'] = False
         if make_sep_pvgrds:
-            pvgrid = pv.ImageData()
-            pvgrid.dimensions = np.array(self.lgi.shape) + 1
-            pvgrid.origin = (0, 0, 0)
-            pvgrid.spacing = (1, 1, 1)
-            pvgrid.cell_data['fid'] = self.fdb[instance_name]['data']['fid'].flatten(order="F")
-            self.fdb[instance_name]['data']['pvgrid'] = pvgrid
+            self.fdb[instance_name]['data']['pvgrid'] = gsviz.make_pvgrid(
+                self.fdb[instance_name]['data']['fid'], scalar_name='fid',
+                origin=(0, 0, 0), spacing=(1, 1, 1)
+            )
             self.fdb[instance_name]['info']['pvgrid'] = True
         # -----------------------------------------------------------
         '''
@@ -8781,22 +8101,17 @@ class mcgs3_grain_structure():
         pfids = gstslice.fdb['twin.0']['data']['feat_host_ids']
         # Parent minus childs
         pminuscs_coords = gstslice.get_coords_parents_minus_childrens(pfids=pfids,
-                                                             pfeatname='grain',
-                                                             instance_name='twin.0',
-                                                             disp_msg=True)
+                                                              pfeatname='grain',
+                                                              instance_name='twin.0',
+                                                              disp_msg=True)
         """
         print(40*'-', "\nCalculating coordinates of parent-children voxels of parent pfids.")
-        pc_rem = {pfid: -1 for pfid in pfids}
-        for pfid in pfids:
-            if pfid in self.fdb[instance_name]['data']['feat_host_ids']:
-                pc = self.grain_locs[pfid]
-                twc = self.fdb[instance_name]['data']['twin_map_g_t_coords'][pfid]
-                twc_acc = np.vstack(tuple(twc.values()))
-                pc = np.ascontiguousarray(pc)
-                twc_acc = np.ascontiguousarray(twc_acc)
-                mask = ~np.in1d(pc.view([('', pc.dtype)]*3),
-                                twc_acc.view([('', twc_acc.dtype)]*3))
-                pc_rem[pfid] = pc[mask]
+        pc_rem = fdbops.parent_minus_child_coordinates(
+            pfids,
+            self.grain_locs,
+            self.fdb[instance_name]['data']['twin_map_g_t_coords'],
+            valid_parent_ids=self.fdb[instance_name]['data']['feat_host_ids']
+        )
         if disp_msg:
             print("\nNOTE:", "\n-----")
             print("A 'key:value' pair, 'pfid:-1' indicates invalid pfid due to:")
@@ -8842,32 +8157,32 @@ class mcgs3_grain_structure():
         # -----------------------------------------
         # Validations
         if use_parent_ids:
-            if not pfids:
+            if pfids is None:
+                raise ValueError("Invalid pfids specied.")
+            if type(pfids) in dth.dt.ITERABLES and len(pfids) == 0:
                 raise ValueError("Invalid pfids specied.")
             if type(pfids) not in dth.dt.ITERABLES:
                 pfids = [pfids]
         else:
-            if not cfids:
+            if cfids is None:
+                raise ValueError("Invalid cfids specied.")
+            if type(cfids) in dth.dt.ITERABLES and len(cfids) == 0:
                 raise ValueError("Invalid cfids specied.")
             if type(cfids) not in dth.dt.ITERABLES:
-                pfids = [cfids]
+                cfids = [cfids]
         # -----------------------------------------
         if instance_name[:4] == 'twin':
             if feature_name == 'twins':
                 fc_global = self.fdb[instance_name]['data']['twin_map_g_t_coords']
                 if use_parent_ids:
-                    # idmap = gstslice.fdb[instance_name]['data']['twin_map_g_t']
-                    # fids = {pfid: idmap[pfid] for pfid in pfids}
-                    fc = {pfid: fc_global[pfid] for pfid in pfids}
+                    fc = fdbops.extract_nested_feature_coordinates(
+                        fc_global, use_parent_ids=True, parent_ids=pfids
+                    )
                 else:
-                    # Retrieve the parent IDs first of the given cfids
-                    pfids = {cid: self.fdb[instance_name]['data']['map_cp'][cid]
-                             for cid in cfids}
-                    # Child feature set coordinates
-                    cfset_coords = {cfid: None for cfid in cfids}
-                    for cfid in cfids:
-                        cfset_coords[cfid] = fc_global[pfids[cfid]][cfid]
-                    fc = cfset_coords
+                    fc = fdbops.extract_nested_feature_coordinates(
+                        fc_global, use_parent_ids=False, child_ids=cfids,
+                        child_parent_map=self.fdb[instance_name]['data']['map_cp']
+                    )
         return fc
 
     def calc_bounds(self, instance_name='base', featname='grains', recalc=True,
@@ -9081,58 +8396,35 @@ class mcgs3_grain_structure():
 
     def validate_instance_name(self, instance_name):
         """Check or validate validate instance name."""
-        validated = False
-        if instance_name in ('base', 'lgi'):
-            validated = True
-        elif instance_name[:4] == 'twin':
-            validated = True
-        return validated
+        return fdbops.validate_instance_name(instance_name)
 
     def validate_fids(self, instance_name='twin.0',
                       feature_name='twin', fids=None):
         """Check or validate feature IDs."""
-        validated = False
-        if type(fids) not in dth.dt.ITERABLES:
-            if type(fids) not in dth.dt.NUMBERS:
-                print("Invalid fid type.")
-                return validated, fids
-            else:
-                fids = [int(fids)]
-        else:
-            fids_ = np.array([int(fid)
-                              for fid in fids if type(fid) in dth.dt.NUMBERS])
-            if len(fids_) != len(fids):
-                print("Invalid typed fids have been removed.")
-
         if feature_name in ('base', 'lgi'):
-            reffids = self.gid()
+            reffids = self.gid
         if feature_name == 'twin':
             reffids = self.fdb[instance_name]['data']['twin_id']
-
-        fids = np.array([fid for fid in fids_ if fid in reffids])
-        if len(fids_) != len(fids):
-            print("Invalid fid values have been removed.")
-
-        if len(fids_) == 0:
-            print("No fids to process.")
-        else:
-            validated = True
-        return validated, fids
+        return fdbops.validate_fids(fids, reffids,
+                                    number_types=dth.dt.NUMBERS)
 
     @property
     def gridx(self):
         """Return the grid extent in x."""
-        return np.arange(self.uigrid.xmin, self.uigrid.xmax, self.uigrid.xinc)
+        return gridops.grid_axis(self.uigrid.xmin, self.uigrid.xmax,
+                                 self.uigrid.xinc)
 
     @property
     def gridy(self):
         """Return the grid extent in y."""
-        return np.arange(self.uigrid.ymin, self.uigrid.ymax, self.uigrid.yinc)
+        return gridops.grid_axis(self.uigrid.ymin, self.uigrid.ymax,
+                                 self.uigrid.yinc)
 
     @property
     def gridz(self):
         """Return the grid extent in z."""
-        return np.arange(self.uigrid.zmin, self.uigrid.zmax, self.uigrid.zinc)
+        return gridops.grid_axis(self.uigrid.zmin, self.uigrid.zmax,
+                                 self.uigrid.zinc)
 
     @property
     def domsizex(self):
@@ -9152,7 +8444,8 @@ class mcgs3_grain_structure():
     @property
     def domvol(self):
         """Return the domain volume."""
-        return self.domsizex*self.domsizey*self.domsizez
+        return gridops.domain_volume_from_axes(self.gridx, self.gridy,
+                                               self.gridz)
 
     @property
     def domsa(self):
@@ -9168,19 +8461,18 @@ class mcgs3_grain_structure():
         -------
 
         """
-        pvgrid = pv.UniformGrid()
-        pvgrid.origin = (self.uigrid.xmin, self.uigrid.ymin, self.uigrid.zmin)
-        pvgrid.spacing = (self.uigrid.xinc, self.uigrid.yinc, self.uigrid.zinc)
         # -------------------------------------
         if instance_name == 'base':
             _data_ = self.lgi
         elif 'twin' in instance_name:
             _data_ = self.fdb[instance_name]['data']['fid']
         # -------------------------------------
-        pvgrid.dimensions = np.array(_data_.shape) + 1
-        pvgrid.cell_data[instance_name] = _data_.flatten(order="F")
-        # -------------------------------------
-        return pvgrid
+        return gsviz.make_pvgrid(
+            _data_,
+            scalar_name=instance_name,
+            origin=(self.uigrid.xmin, self.uigrid.ymin, self.uigrid.zmin),
+            spacing=(self.uigrid.xinc, self.uigrid.yinc, self.uigrid.zinc),
+        )
 
     def plot_gs_instance(self,
                          check=False,
@@ -9276,27 +8568,13 @@ class mcgs3_grain_structure():
         if instance_name not in self.fdb.keys():
             raise ValueError('Inva;lid instance name.')
 
-        '''Ensure that fid_mask_value is negative. '''
-        if fid_mask_value >= 0:
-            fid_mask_value = -fid_mask_value
-        if non_fid_mask_value >= 0:
-            non_fid_mask_value = -non_fid_mask_value
-
-        '''Deepcopy the data for modification.'''
-        _data_ = deepcopy(self.fdb[instance_name]['data']['fid'])
-
-        '''Mask the values with user specified values'''
-        for tid in self.fdb[instance_name]['data']['twin_id']:
-            _data_[np.where(_data_ == tid)] = fid_mask_value
-
-        '''If non_fid_mask is specified as True, values which does not belong
-        to the feature ID will be masked to user specifed value of
-        non_fid_mask_value. If non_fid_mask is specified as False, a maskig
-        value of 0 is used.'''
-        if non_fid_mask:
-            _data_[np.where(_data_ != fid_mask_value)] = non_fid_mask_value
-        else:
-            _data_[np.where(_data_ != fid_mask_value)] = 0
+        _data_ = fdbops.mask_feature_ids(
+            self.fdb[instance_name]['data']['fid'],
+            self.fdb[instance_name]['data']['twin_id'],
+            fid_mask_value=fid_mask_value,
+            non_fid_mask=non_fid_mask,
+            non_fid_mask_value=non_fid_mask_value
+        )
 
         '''Wri5e data to sdisk if requetsed for.'''
         if write_to_disk:
@@ -9333,12 +8611,10 @@ class mcgs3_grain_structure():
                                write_to_disk=write_to_disk,
                                write_sparse=write_sparse,
                                throw=throw)
-        pvgrid = pv.ImageData()
-        pvgrid.dimensions = np.array(_data_.shape) + 1
-        pvgrid.origin = (0, 0, 0)
-        pvgrid.spacing = (1, 1, 1)
-        pvgrid.cell_data[instance_name] = _data_.flatten(order="F")
-        return pvgrid
+        return gsviz.make_pvgrid(
+            _data_, scalar_name=instance_name, origin=(0, 0, 0),
+            spacing=(1, 1, 1)
+        )
 
     def mask_fid_and_plot(self,
                           feature='twins',
@@ -9639,17 +8915,11 @@ class mcgs3_grain_structure():
             _base_data_ = self.fdb[feature_name]['data']['fid']
         # ---------------------------------------------
         print(40*'-', f'\nExtracting {n} subdomains at random.')
-        P, Q, R = (PQR-pqr+1 for pqr, PQR in zip((p, q, r), _base_data_.shape))
-        # ---------------------------------------------
-        subdomains = []
+        subdomains, _ = gridops.extract_random_subdomains(_base_data_,
+                                                          (p, q, r), n=n)
         sdnames = []
         pvgrids = []
-
         for _ in range(n):
-            x, y, z = np.random.randint(0, [P, Q, R])
-            subdomain = _base_data_[x:x+p, y:y+q, z:z+r]
-            subdomains.append(subdomain)
-
             if feature_name in ('s', 'state'):
                 sdnames.append('s.sd')
             if feature_name in ('base', 'base_gs'):
@@ -9696,13 +8966,10 @@ class mcgs3_grain_structure():
         else:
             fid = user_fid
 
-        pvgrid = pv.UniformGrid()
-        pvgrid.dimensions = np.array(fid.shape) + 1
-        pvgrid.origin = pvgrid_origin
-        pvgrid.spacing = pvgrid_spacing
-        pvgrid.cell_data[str(scalar_name)] = fid.flatten(order="F")
-
-        return pvgrid
+        return gsviz.make_pvgrid(
+            fid, scalar_name=scalar_name, origin=pvgrid_origin,
+            spacing=pvgrid_spacing
+        )
 
     def smoothen_sds(self, k=1, feature_name='base', instance_name='lgi',
                      user_fid=None,  down_order=0, down_mode='nearest',
@@ -12124,6 +11391,10 @@ class mcgs3_grain_structure():
         Returns the 24 Kurdjumov-Sachs (K-S) orientation relationship
         operators as 3x3 rotation matrices.
         """
+        warnings.warn(
+            "get_ks_rotations is deprecated. Use OrientationAssigner3D.get_ks_rotations() "
+            "from upxo.pxtal.fm_steel_3d.orientation_assigner_3d instead.",
+            FutureWarning, stacklevel=2)
         # Define a single, specific K-S variant
         r1 = Rotation.from_euler('Z', 45, degrees=True)
         r2 = Rotation.from_rotvec(np.deg2rad(54.7356) * np.array([-1, 1, 0]) / np.sqrt(2))
@@ -12155,6 +11426,12 @@ class mcgs3_grain_structure():
         Assigns parent FCC orientations to clusters (PAGs) and final BCC
         orientations to individual grains.
         """
+        warnings.warn(
+            "assign_pag_and_grain_orientations is deprecated. Use "
+            "OrientationAssigner3D.assign_pag_orientations_with_hagb() and "
+            "OrientationAssigner3D.assign_orientations_to_all_blocks() from "
+            "upxo.pxtal.fm_steel_3d.orientation_assigner_3d instead.",
+            FutureWarning, stacklevel=2)
         print("Assigning parent FCC orientations to PAGs...")
 
         pag_orientations = {}
@@ -12240,6 +11517,12 @@ class mcgs3_grain_structure():
             (pag_id_1, pag_id_2, calculated_misorientation).
             An empty list signifies success.
         """
+        warnings.warn(
+            "verify_hagb_constraint is deprecated. Use "
+            "OrientationAssigner3D.assign_pag_orientations_with_hagb() which enforces "
+            "the constraint during assignment, from "
+            "upxo.pxtal.fm_steel_3d.orientation_assigner_3d instead.",
+            FutureWarning, stacklevel=2)
         violations = []
         checked_pairs = set()
 
@@ -12947,6 +12230,10 @@ class mcgs3_grain_structure():
                                            tcs=target_sizes,
                                            tcp=target_probs)
         """
+        warnings.warn(
+            "cluster_grains is deprecated. Use FMSteel3DWithPAGs.generate_pag_clusters() "
+            "via the fm_steel_3d pipeline (FMSteel3DBase → FMSteel3DWithPAGs).",
+            FutureWarning, stacklevel=2)
         # ======================================
         print(40*'-', '\nIdentifying grain clusters to form packets')
         prob_sum = sum(tcp)
@@ -13034,6 +12321,10 @@ class mcgs3_grain_structure():
         dict
             A new dictionary, neigh_clid, mapping {cluster_id: [list_of_neighbor_cluster_ids]}.
         """
+        warnings.warn(
+            "generate_neigh_clid is deprecated. PAG adjacency is computed automatically "
+            "in FMSteel3DWithPAGs (stored as neigh_clid property) via the fm_steel_3d pipeline.",
+            FutureWarning, stacklevel=2)
         clusters = self.cluster_grains(neigh_gid, tcs=tcs, tcp=tcs)
         # 1. Create a fast reverse map from grain_id to cluster_id
         grain_to_cluster_map = {}
@@ -13069,6 +12360,10 @@ class mcgs3_grain_structure():
                                       tcp=[0.05, 0.25, 0.50, 0.15, 0.05],
                                       ninstances=1):
         """Generate neighbour CIDs instances."""
+        warnings.warn(
+            "generate_neigh_clid_instances is deprecated. Use the fm_steel_3d pipeline "
+            "which handles PAG clustering and adjacency automatically.",
+            FutureWarning, stacklevel=2)
         cluster_sets = {clsid+1: None for clsid in range(ninstances)}
         for clsid in range(ninstances):
             clusters, neigh_clid = self.generate_neigh_clid(neigh_gid, tcs=tcs, tcp=tcp)
@@ -13229,6 +12524,10 @@ class mcgs3_grain_structure():
             to assign any unassigned voxels (due to edge cases) to their
             nearest block, ensuring a complete partition.
         """
+        warnings.warn(
+            "slice_packet_into_blocks is deprecated. Use BlockGenerator3D from "
+            "upxo.pxtal.fm_steel_3d.block_generator_3d instead.",
+            FutureWarning, stacklevel=2)
         if len(voxel_coords) < 1:
             return {}, global_block_id_start
 
@@ -13750,6 +13049,11 @@ class mcgs3_grain_structure():
         Main orchestrator to generate and assign orientations to all blocks
         in an entire microstructure.
         """
+        warnings.warn(
+            "generate_and_orient_all_blocks is deprecated. Use the fm_steel_3d pipeline: "
+            "FMSteel3DWithPAGs.generate_blocks() followed by "
+            "FMSteel3DWithBlocks.assign_orientations().",
+            FutureWarning, stacklevel=2)
         clusters_dict = clset['clusters']['clusters']
 
         print("Step 1/3: Calculating all possible slicing planes...")
@@ -14431,6 +13735,11 @@ class mcgs3_grain_structure():
         -------
         ndarray: A 3D array (Z, Y, X) containing the integer Block IDs (1, 2, 3...).
         """
+        warnings.warn(
+            "generate_integer_block_map is deprecated. Block voxel data is stored "
+            "in FMSteel3DWithBlocks.all_blocks (dict of block_id → voxel coords) "
+            "in the fm_steel_3d pipeline.",
+            FutureWarning, stacklevel=2)
 
         # Determine the shape of the RVE from the reference array (self.lgi)
         RVE_shape = lgi.shape
@@ -14508,6 +13817,10 @@ class mcgs3_grain_structure():
         -------
         ndarray: A 3D array (Z, Y, X) containing the integer PAG IDs.
         """
+        warnings.warn(
+            "generate_integer_cluster_map is deprecated. PAG clustering is stored "
+            "in FMSteel3DWithPAGs.clusters_dict in the fm_steel_3d pipeline.",
+            FutureWarning, stacklevel=2)
 
         # Determine the shape of the RVE
         RVE_shape = lgi.shape
@@ -14570,6 +13883,11 @@ class mcgs3_grain_structure():
         tuple: (phi1_map_3D, Phi_map_3D, phi2_map_3D)
             Three 3D arrays (Z, Y, X) containing the Euler angle components.
         """
+        warnings.warn(
+            "generate_euler_angle_3d_maps is deprecated. Use "
+            "FMSteel3DWithOrientations.build_euler_angle_3d_maps() from "
+            "upxo.pxtal.fm_steel_3d.with_orientations_3d instead.",
+            FutureWarning, stacklevel=2)
 
         # Determine the shape of the RVE
         RVE_shape = lgi.shape
@@ -15051,6 +14369,10 @@ class mcgs3_grain_structure():
         output_filename : str
             The name of the .inp file to be created.
         """
+        warnings.warn(
+            "mesh_fm_steel_C3D8 is deprecated. Use MeshExporter3D.export_c3d8() "
+            "from upxo.pxtal.fm_steel_3d.mesh_exporter_3d instead.",
+            FutureWarning, stacklevel=2)
         if lbi_array.ndim != 3:
             raise ValueError("Input array 'lbi_array' must be 3-dimensional.")
 
@@ -15119,6 +14441,10 @@ class mcgs3_grain_structure():
         Generates a C3D20 quadratic hexahedral mesh for the FM Steel
         microstructure, including all hierarchical sets and orientations.
         """
+        warnings.warn(
+            "mesh_fm_steel_C3D20 is deprecated. Use MeshExporter3D.export_c3d20() "
+            "from upxo.pxtal.fm_steel_3d.mesh_exporter_3d instead.",
+            FutureWarning, stacklevel=2)
         if lbi_array.ndim != 3:
             raise ValueError("Input array 'lbi_array' must be 3-dimensional.")
 
@@ -15189,6 +14515,10 @@ class mcgs3_grain_structure():
         Writes a complete Abaqus .inp file for the FM Steel model, including
         all hierarchical sets (Blocks, Packets, PAGs) and crystal orientations.
         """
+        warnings.warn(
+            "write_fm_steel_abaqus_inp is deprecated. Use MeshExporter3D "
+            "from upxo.pxtal.fm_steel_3d.mesh_exporter_3d instead.",
+            FutureWarning, stacklevel=2)
         try:
             with open(filename, 'w') as f:
                 # --- HEADING ---
