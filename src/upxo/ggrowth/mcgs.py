@@ -298,7 +298,8 @@ class grid():
             #self.xgr, self.ygr, self.zgr = np.mgrid[xmin:xmax:nx*1j,
             #                                        ymin:ymax:ny*1j,
             #                                        zmin:zmax:nz*1j]
-            self.xgr, self.ygr, self.zgr = np.meshgrid(xarr, yarr, zarr)
+            zgr, ygr, xgr = np.meshgrid(zarr, yarr, xarr, indexing='ij')
+            self.xgr, self.ygr, self.zgr = xgr, ygr, zgr
 
     def build_original_state_matrix(self):
         """
@@ -667,20 +668,9 @@ class grid():
             self.sa[-1, -1, -1] = self.S[0, 0, 0]
             # VERTEX @FRONT-RIGHT-TOP FACES
             self.sa[-1, 0, -1] = self.S[0, -1, 0]
+            self.sa = np.pad(self.S, 1, mode='wrap')
             # ------------------------------------------------------------
-            self.xind = np.zeros((OCG_size[0], OCG_size[1], OCG_size[2]), dtype=int)
-            self.yind = np.zeros((OCG_size[0], OCG_size[1], OCG_size[2]), dtype=int)
-            self.zind = np.ones((OCG_size[0], OCG_size[1], OCG_size[2]), dtype=int)
-            # ------------------------------------------------------------
-            tempx = np.tile(np.arange(OCG_size[0]), (OCG_size[0], 1))
-            for xaxiscount in range(OCG_size[0]):
-                self.xind[xaxiscount] = tempx
-            tempy = np.tile(np.array([np.arange(OCG_size[1])]).T,
-                            (1, OCG_size[1]))
-            for yaxiscount in range(OCG_size[1]):
-                self.yind[yaxiscount] = tempy
-            for zaxiscount in range(OCG_size[2]):
-                self.zind[zaxiscount] = float(zaxiscount)*self.zind[zaxiscount]
+            self.zind, self.yind, self.xind = np.indices(OCG_size, dtype=int)
             # ------------------------------------------------------------
             self.xinda = np.zeros((OCG_size[0]+2, OCG_size[1]+2, OCG_size[2]+2), dtype=int)
             self.yinda = np.zeros((OCG_size[0]+2, OCG_size[1]+2, OCG_size[2]+2), dtype=int)
@@ -847,6 +837,9 @@ class grid():
             self.zinda[-1, -1, -1] = self.zind[0, 0, 0]
             # VERTEX @FRONT-RIGHT-TOPFACES
             self.zinda[-1, 0, -1] = self.zind[0, -1, 0]
+            self.xinda = np.pad(self.xind, 1, mode='wrap')
+            self.yinda = np.pad(self.yind, 1, mode='wrap')
+            self.zinda = np.pad(self.zind, 1, mode='wrap')
 
     def SquareSubsetMatrix(self):
         """

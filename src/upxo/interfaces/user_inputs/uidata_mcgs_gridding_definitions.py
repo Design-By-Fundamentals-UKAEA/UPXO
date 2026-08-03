@@ -146,7 +146,9 @@ class _uidata_mcgs_gridding_definitions_:
         Returns:
             numpy.ndarray: Linear space for the z-coordinate.
         """
-        pass
+        return np.linspace(self.zmin,
+                           self.zmax,
+                           int((self.zmax-self.zmin)/self.zinc+1))
 
     @property
     def grid(self):

@@ -10,9 +10,9 @@ def mcloop_alg300a(Qmax, cbp, sbp, S, xinda, yinda, zinda):
     """Mcloop alg300a."""
     xi, yi, zi = xinda, yinda, zinda
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
-    for P in range(S_sz2):  # along axis 2, along plane
-        for R in range(S_sz0):  # along axis 1, along row
-            for C in range(S_sz1):  # along axis 0, along column.
+    for P in range(S_sz0):  # along axis 0, z/plane
+        for R in range(S_sz1):  # along axis 1, y/row
+            for C in range(S_sz2):  # along axis 2, x/column
                 P0, R0, C0 = P, R, C
                 P1, R1, C1 = P+1, R+1, C+1
                 P2, R2, C2 = P+2, R+2, C+2
