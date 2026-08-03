@@ -2,7 +2,7 @@ import random
 import numpy as np
 import string
 
-from upxo.material.Material import *
+# from upxo.material.Material import *  # Unused
 
 class PolyXTAL():
     """
@@ -612,7 +612,7 @@ class PolyXTAL():
     def setPolyXTAL(self):
         """Setpolyxtal."""
         self.setMD
-        self.setMPD
+        # self.setMPD  # Not implemented/defined in codebase
         self.setGSD
         self.setPXID
         self.setOrigin()

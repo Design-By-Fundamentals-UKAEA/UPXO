@@ -1,8 +1,49 @@
-from dataclasses import dataclass, field#, asdict
+"""
+Material.py
+============
+Aggregates a material's data across many categories -- identity,
+processing route, crystal structure, texture, mechanical/physical
+properties, irradiation condition, EBSD-derived statistics, etc. -- into
+one ``MaterialRegistry`` (see ``registry.py``), replacing the old
+``ObjectDataDictionary``-based ``build()``, which flattened every category
+to a plain dict on write (discarding type information immediately) and
+offered no validation or extensibility beyond editing this function
+directly every time a category was added.
+
+See ``admin/material/scoping.md`` and
+``admin/material/implementation_plan.md`` for the full redesign rationale.
+Categories that used to live directly in this file --
+``MaterialIdentity``, ``ProcessingCondition``, ``TexCompVolFracFCC``,
+``TexFibreVolFracFCC``, ``TexCompWidth`` -- have moved to their own files
+(``identity.py``, ``processing.py``, ``texture.py``) or been superseded
+outright (``ProcessingCondition`` -> ``ProcessingRoute``; the three
+``Tex*`` classes -> ``TextureComponentProfile``). Everything below is
+carried over unchanged in content -- only the container it's registered
+into has changed.
+
+There is no ``CrossCheckAndAppend`` equivalent here (the old, broken,
+never-exercised update-in-place path -- see
+``admin/material/scoping.md`` §2, item 5): calling
+``MaterialRegistry.ingest()`` again for an already-registered category
+simply replaces its stored instance and provenance, which covers the same
+"update on a segment-by-segment basis" use case without a second method.
+"""
+
+from dataclasses import dataclass, field
 import numpy as np
-'''
-    Module introduction
-'''
+
+# Soft-validation whitelist for CrystalFamily.xtal_family -- the values the
+# texture work (admin/twinnedFccGui/texIntegration/) actually cares about.
+# Deliberately does NOT include this class's own pre-existing default
+# ('mmm', a crystallographic point-group symbol, not a crystal-family
+# name -- a different classification system entirely): build()'s default
+# CrystalFamily() correctly triggers one soft-validation warning as a
+# result, same as MaterialIdentity()'s default 'cu' does against
+# KNOWN_MATERIALS below -- both are informal legacy placeholders, not real
+# entries in their respective curated sets, and flagging that is soft
+# validation doing exactly its job, not a bug to special-case away.
+KNOWN_CRYSTAL_FAMILIES = {'FCC', 'BCC', 'HCP'}
+
 
 def build():
     """
@@ -12,82 +53,61 @@ def build():
 
     Returns
     -------
-    ObjectDataDictionary
-        Material data dictionary accessible via ``matdata.data``.
+    MaterialRegistry
+        Typed, extensible, provenance-tracking material data container
+        (see ``upxo.material.registry``). Access a category's instance via
+        ``matdata.get("CategoryName")``, and its provenance via
+        ``matdata.get_provenance("CategoryName")``.
 
     Examples
     --------
     >>> from upxo.material.Material import build
     >>> matdata = build()
-    >>> matdata.data.keys()
+    >>> matdata.categories()
     """
-    from upxo._sup.ODDict import ObjectDataDictionary
-    matdata = ObjectDataDictionary()
+    from upxo.material.registry import MaterialRegistry
+    from upxo.material.identity import MaterialIdentity, KNOWN_MATERIALS
+    from upxo.material.processing import ProcessingRoute
+    from upxo.material.texture import TextureComponentProfile
 
-    from upxo.material.Material import MaterialIdentity, ProcessingCondition, IrradiationCondition
-    from upxo.material.Material import CrystalFamily, Phases, PhysicalProperty
-    from upxo.material.Material import ElasticProperty, TensileStressStrain, PlasticProperty
-    from upxo.material.Material import ExpDataAvailability, GrainEqDiaEbsd, TexCompVolFracFCC
-    from upxo.material.Material import TexFibreVolFracFCC, TexCompWidth, EBSDParameters
-    from upxo.material.Material import TensileTestParameters
-    
-    # Append for the first time
-    matdata.append(MaterialIdentity())
-    matdata.append(ProcessingCondition())
-    matdata.append(IrradiationCondition())
-    matdata.append(CrystalFamily())
-    matdata.append(Phases())
-    matdata.append(PhysicalProperty())
-    matdata.append(ElasticProperty())
-    matdata.append(TensileStressStrain())
-    matdata.append(PlasticProperty())
-    matdata.append(ExpDataAvailability())
-    matdata.append(GrainEqDiaEbsd())
-    matdata.append(TexCompVolFracFCC())
-    matdata.append(TexFibreVolFracFCC())
-    matdata.append(TexCompWidth())
-    matdata.append(EBSDParameters())
-    matdata.append(TensileTestParameters())
-    
-    # Retain the following lines.  These are to be used, in case, the 
-    # user wishes to update the already existing data on a segment by
-    # segment basis
-    
-    #matdata.CrossCheckAndAppend(MaterialIdentity())
-    #matdata.CrossCheckAndAppend(ProcessingCondition())
-    #matdata.CrossCheckAndAppend(IrradiationCondition())
-    #matdata.CrossCheckAndAppend(CrystalFamily())
-    #matdata.CrossCheckAndAppend(Phases())
-    #matdata.CrossCheckAndAppend(PhysicalProperty())
-    #matdata.CrossCheckAndAppend(ElasticProperty())
-    #matdata.CrossCheckAndAppend(TensileStressStrain())
-    #matdata.CrossCheckAndAppend(PlasticProperty())
-    #matdata.CrossCheckAndAppend(ExpDataAvailability())
-    #matdata.CrossCheckAndAppend(GrainEqDiaEbsd())
-    #matdata.CrossCheckAndAppend(TexCompVolFracFCC())
-    #matdata.CrossCheckAndAppend(TexFibreVolFracFCC())
-    #matdata.CrossCheckAndAppend(TexCompWidth())
-    #matdata.CrossCheckAndAppend(EBSDParameters())
-    #matdata.CrossCheckAndAppend(TensileTestParameters())
-    
+    matdata = MaterialRegistry()
+
+    matdata.register_category("MaterialIdentity", MaterialIdentity,
+                               known_values={"name": KNOWN_MATERIALS})
+    matdata.register_category("ProcessingRoute", ProcessingRoute)
+    matdata.register_category("IrradiationCondition", IrradiationCondition)
+    matdata.register_category("CrystalFamily", CrystalFamily,
+                               known_values={"xtal_family": KNOWN_CRYSTAL_FAMILIES})
+    matdata.register_category("Phases", Phases)
+    matdata.register_category("PhysicalProperty", PhysicalProperty)
+    matdata.register_category("ElasticProperty", ElasticProperty)
+    matdata.register_category("TensileStressStrain", TensileStressStrain)
+    matdata.register_category("PlasticProperty", PlasticProperty)
+    matdata.register_category("ExpDataAvailability", ExpDataAvailability)
+    matdata.register_category("GrainEqDiaEbsd", GrainEqDiaEbsd)
+    matdata.register_category("TextureComponentProfile", TextureComponentProfile)
+    matdata.register_category("EBSDParameters", EBSDParameters)
+    matdata.register_category("TensileTestParameters", TensileTestParameters)
+
+    default_source = "Material.py build() default"
+    matdata.ingest("MaterialIdentity", MaterialIdentity(), source=default_source)
+    matdata.ingest("ProcessingRoute", ProcessingRoute(), source=default_source)
+    matdata.ingest("IrradiationCondition", IrradiationCondition(), source=default_source)
+    matdata.ingest("CrystalFamily", CrystalFamily(), source=default_source)
+    matdata.ingest("Phases", Phases(), source=default_source)
+    matdata.ingest("PhysicalProperty", PhysicalProperty(), source=default_source)
+    matdata.ingest("ElasticProperty", ElasticProperty(), source=default_source)
+    matdata.ingest("TensileStressStrain", TensileStressStrain(), source=default_source)
+    matdata.ingest("PlasticProperty", PlasticProperty(), source=default_source)
+    matdata.ingest("ExpDataAvailability", ExpDataAvailability(), source=default_source)
+    matdata.ingest("GrainEqDiaEbsd", GrainEqDiaEbsd(), source=default_source)
+    matdata.ingest("TextureComponentProfile", TextureComponentProfile(crystal_family="FCC"),
+                   source=default_source)
+    matdata.ingest("EBSDParameters", EBSDParameters(), source=default_source)
+    matdata.ingest("TensileTestParameters", TensileTestParameters(), source=default_source)
+
     return matdata
 
-@dataclass(frozen=False, repr=True)
-class MaterialIdentity:
-    '''
-    MaterialIdentity()
-    '''
-    # Now, we assign the default arguments
-    name : str = field(default = 'cu') # Name of the material
-    alloy: str = field(default = 'value') # Alloy grade
-    comp : str = field(default = 'value', compare = False) # Composition
-
-@dataclass(frozen = True, repr = True)
-class ProcessingCondition:
-    ht    : str = field(default = 'heat treatment') # Heat treatment
-    pro   : str = field(default = 'extruded') # Processing
-    app   : str = field(default = 'cooling pipe') # Application
-    appLoc: str = field(default = 'W-Ci unterface') # Application location
 
 @dataclass(frozen = True, repr = True)
 class IrradiationCondition:
@@ -107,7 +127,7 @@ class Phases:
 
 @dataclass(frozen = True, repr = True)
 class PhysicalProperty:
-    density: float = field(default = '2700') # in kg m^-3
+    density: float = field(default = 2700.0) # in kg m^-3
 
 @dataclass(frozen = True, repr = True)
 class ElasticProperty:
@@ -146,53 +166,18 @@ class GrainEqDiaEbsd:
     dist_grain_prob : np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
-class TexCompVolFracFCC:
-    import random
-    cube_tc_vf  : float = field(default = random.random()/10)
-    ndcube_tc_vf: float = field(default = random.random()/10) 
-    rdcube_tc_vf: float = field(default = random.random()/10)
-    goss_tc_vf  : float = field(default = random.random()/10)
-    brass_tc_vf : float = field(default = random.random()/10)
-    copper_tc_vf: float = field(default = random.random()/10)
-    s_tc_vf     : float = field(default = random.random()/10)
-    t1_tc_vf    : float = field(default = random.random()/10)
-    t2_tc_vf    : float = field(default = random.random()/10)
-    p_tc_vf     : float = field(default = random.random()/10)
-
-@dataclass(frozen = True, repr = True)
-class TexFibreVolFracFCC:
-    import random
-    cube_tf_vf : float = field(default = random.random()/10)
-    alpha_tf_vf: float = field(default = random.random()/10)
-    beta_tf_vf : float = field(default = random.random()/10)
-
-@dataclass(frozen = True, repr = True)
-class TexCompWidth:
-    import random
-    cube_tc_w  : float = field(default = random.random()*10)
-    ndcube_tc_w: float = field(default = random.random()*10)
-    rdcube_tc_w: float = field(default = random.random()*10)
-    goss_tc_w  : float = field(default = random.random()*10)
-    brass_tc_w : float = field(default = random.random()*10)
-    copper_tc_w: float = field(default = random.random()*10)
-    s_tc_w     : float = field(default = random.random()*10)
-    t1_tc_w    : float = field(default = random.random()*10)
-    t2_tc_w    : float = field(default = random.random()*10)
-    p_tc_w     : float = field(default = random.random()*10)
-
-@dataclass(frozen = True, repr = True)
 class EBSDParameters:
-    zero_fraction_uncorrected : float = field(default = 'value')# 0 to 1
-    zero_fraction_corrected : float = field(default = 'value')# 0 to 1
-    phase_fraction: np.ndarray = field(default = 'value')# data for every phase
+    zero_fraction_uncorrected : float = field(default = 0.0)# 0 to 1
+    zero_fraction_corrected : float = field(default = 0.0)# 0 to 1
+    phase_fraction: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))# data for every phase
 
 @dataclass(frozen = True, repr = True)
 class TensileTestParameters:
     sample_type     : str   = field(default = 'value')# 'dogbonegrip','dogboneshoulder'
-    strain_rate     : float = field(default = 'value')
-    test_temperature: float = field(default = 'value')
+    strain_rate     : float = field(default = 0.0)
+    test_temperature: float = field(default = 0.0)
 #______________________________________________________________________________
-# HELPER METHODS:    
+# HELPER METHODS:
 def TempKelvin(temp_celcius):
     """Tempkelvin."""
     # This is only to demonstrate a way of setting value in a dataclass.
@@ -203,6 +188,5 @@ def TempKelvin(temp_celcius):
 def generate():
     '''
     '''
-    import Material
-    return Material.build()
+    return build()
 #______________________________________________________________________________
