@@ -43,6 +43,13 @@ rdr.lfi_ebsd    # (ny, nx) int array
 rdr.euler_ebsd  # (ny, nx, 3) float array, radians
 rdr.quat_ebsd   # (ny, nx, 4) float array
 rdr.step_size   # float, microns
+
+Loading and grain detection as separate steps (e.g. to re-tune detection
+parameters interactively without re-parsing the file from disk each time):
+
+rdr = EBSDReader.load('scan.ctf')       # lfi_ebsd is None here
+rdr.detect_grains(min_grain_size=10, misori_tol=10)
+rdr.detect_grains(min_grain_size=25, misori_tol=5)  # re-tune, no reload
 """
 
 import os
@@ -90,7 +97,7 @@ class EBSDReader:
     """
 
     __slots__ = ('lfi_ebsd', 'euler_ebsd', 'quat_ebsd',
-                 'step_size', 'file_path', 'shape', 'prop')
+                 'step_size', 'file_path', 'shape', 'prop', '_defdap_map')
 
     def __init__(self):
         # Slots are populated by the class-methods; direct construction
@@ -102,11 +109,135 @@ class EBSDReader:
     # ------------------------------------------------------------------
 
     @classmethod
+    def load(cls, file_path, data_type=None):
+        """
+        Load an EBSD map from a .ctf or .crc file WITHOUT detecting
+        grains yet -- builds the quaternion array and extracts
+        ``euler_ebsd`` / ``quat_ebsd`` / ``step_size`` / ``shape`` /
+        ``file_path``, but leaves ``lfi_ebsd`` as ``None`` until
+        :meth:`detect_grains` is called.
+
+        Split out from :meth:`from_file` so grain detection can be
+        re-run with different parameters (``min_grain_size``,
+        ``misori_tol``) without re-parsing the file from disk each time
+        -- the underlying DefDAP map object is retained internally
+        (``self._defdap_map``) for :meth:`detect_grains` to reuse.
+
+        Parameters
+        ----------
+        file_path : str or pathlib.Path
+            Path to the EBSD file.  Extension must be .ctf or .crc
+            unless data_type is supplied explicitly.
+        data_type : str or None, optional
+            Override the DefDAP data_type string.  When None (default)
+            the format is inferred from the file extension:
+            '.ctf'  -> 'OxfordText'
+            '.crc'  -> 'OxfordBinary'
+
+        Returns
+        -------
+        EBSDReader
+            Instance with ``euler_ebsd``, ``quat_ebsd``, ``step_size``,
+            ``file_path``, ``shape`` populated; ``lfi_ebsd`` is ``None``
+            until :meth:`detect_grains` is called.
+
+        Raises
+        ------
+        ImportError
+            If DefDAP is not installed.
+        FileNotFoundError
+            If ``file_path`` does not exist.
+        ValueError
+            If the file extension is not recognised and ``data_type``
+            is not provided.
+        """
+        _require_defdap()
+
+        file_path = pathlib.Path(file_path).resolve()
+        _check_file(file_path)
+
+        if data_type is None:
+            data_type = _infer_data_type(file_path)
+
+        # DefDAP's OxfordTextLoader appends the extension (.ctf/.crc) itself,
+        # so we must pass the path WITHOUT the extension (stem only).
+        ebsd_map = _defdap_ebsd.Map(str(file_path.with_suffix('')), dataType=data_type)
+
+        # buildQuatArray() must be called before findBoundaries() — DefDAP
+        # does not build it automatically on load (0.93.x behaviour).
+        ebsd_map.buildQuatArray()
+
+        obj = cls()
+        obj.file_path = str(file_path)
+        obj.step_size = float(ebsd_map.stepSize)   # stepSize in 0.93.x
+        obj.shape = tuple(ebsd_map.shape)           # (ny, nx)
+
+        obj.euler_ebsd = _extract_euler(ebsd_map)
+        obj.quat_ebsd = _extract_quat(ebsd_map)
+        obj.lfi_ebsd = None
+        obj.prop = None
+        obj._defdap_map = ebsd_map
+
+        return obj
+
+    def detect_grains(self, min_grain_size=10, misori_tol=10):
+        """
+        (Re-)detect grain boundaries and grains on this already-loaded
+        map, reusing the DefDAP map object retained by :meth:`load` --
+        does NOT re-parse the file from disk, so this can be called
+        repeatedly with different parameters to tune detection
+        interactively.
+
+        Requires this instance to have been constructed via
+        :meth:`load` (not :meth:`from_file`, which already calls this
+        internally, or :meth:`crop`, whose cropped copies do not retain
+        a DefDAP map object).
+
+        Parameters
+        ----------
+        min_grain_size : int, optional
+            Minimum grain size in pixels passed to DefDAP's
+            ``find_grains()``.  Grains smaller than this are labelled
+            -2 in ``lfi_ebsd``.  Default 10.
+        misori_tol : float, optional
+            Misorientation tolerance in degrees for grain boundary
+            detection inside DefDAP.  Default 10.
+
+        Returns
+        -------
+        EBSDReader
+            ``self``, for chaining. Populates/overwrites ``lfi_ebsd``.
+
+        Raises
+        ------
+        RuntimeError
+            If this instance has no retained DefDAP map object (i.e. it
+            was not built via :meth:`load`).
+        """
+        ebsd_map = getattr(self, '_defdap_map', None)
+        if ebsd_map is None:
+            raise RuntimeError(
+                'detect_grains() requires this EBSDReader to have been '
+                'constructed via EBSDReader.load() -- the retained DefDAP '
+                'map object is missing (from_file() already runs '
+                'detection internally and does not need a separate '
+                'detect_grains() call; a crop()ped reader has no map '
+                'object to re-detect on).')
+
+        # findBoundaries uses 'boundDef' (not misori_tol) in 0.93.x
+        ebsd_map.findBoundaries(boundDef=misori_tol)
+        ebsd_map.findGrains(minGrainSize=min_grain_size)
+        self.lfi_ebsd = _extract_lfi(ebsd_map)
+        return self
+
+    @classmethod
     def from_file(cls, file_path, min_grain_size=10,
                   misori_tol=10, data_type=None):
         """
         Load an EBSD map from a .ctf or .crc file and extract all
-        UPXO-relevant arrays.
+        UPXO-relevant arrays -- a convenience wrapper combining
+        :meth:`load` and :meth:`detect_grains` for callers who don't
+        need to re-tune detection separately.
 
         Parameters
         ----------
@@ -142,37 +273,8 @@ class EBSDReader:
             If the file extension is not recognised and ``data_type``
             is not provided.
         """
-        _require_defdap()
-
-        file_path = pathlib.Path(file_path).resolve()
-        _check_file(file_path)
-
-        if data_type is None:
-            data_type = _infer_data_type(file_path)
-
-        # DefDAP's OxfordTextLoader appends the extension (.ctf/.crc) itself,
-        # so we must pass the path WITHOUT the extension (stem only).
-        ebsd_map = _defdap_ebsd.Map(str(file_path.with_suffix('')), dataType=data_type)
-
-        # buildQuatArray() must be called before findBoundaries() — DefDAP
-        # does not build it automatically on load (0.93.x behaviour).
-        ebsd_map.buildQuatArray()
-
-        # Detect grain boundaries and grains
-        # findBoundaries uses 'boundDef' (not misori_tol) in 0.93.x
-        ebsd_map.findBoundaries(boundDef=misori_tol)
-        ebsd_map.findGrains(minGrainSize=min_grain_size)
-
-        obj = cls()
-        obj.file_path = str(file_path)
-        obj.step_size = float(ebsd_map.stepSize)   # stepSize in 0.93.x
-        obj.shape = tuple(ebsd_map.shape)           # (ny, nx)
-
-        obj.lfi_ebsd = _extract_lfi(ebsd_map)
-        obj.euler_ebsd = _extract_euler(ebsd_map)
-        obj.quat_ebsd = _extract_quat(ebsd_map)
-        obj.prop = None
-
+        obj = cls.load(file_path, data_type=data_type)
+        obj.detect_grains(min_grain_size=min_grain_size, misori_tol=misori_tol)
         return obj
 
     @classmethod
@@ -1036,6 +1138,20 @@ def _extract_quat(ebsd_map):
     ``ebsd_map.quatArray`` with shape (ny, nx).  Each Quat exposes
     ``.quatCoef`` (camelCase) as a (4,) float array.
     Positive-hemisphere convention applied (q0 >= 0).
+
+    NOTE: an earlier version of this function conjugated the quaternion's
+    vector part here, based on DefDAP's Quat docstring describing its
+    quaternions as "passive" versus upxo's "active" convention for
+    quat_to_R_batch/euler_bunge_to_matrix. That conjugation was verified
+    against DefDAP's own independent Quat.misOri() on real EBSD grain
+    pairs (UKAEA OFHC-Cu dataset) and found to be WRONG -- the
+    unconjugated quatCoef straight from DefDAP matches Quat.misOri()
+    almost exactly (10/10 sample grain pairs within ~0.1 deg), while the
+    conjugated version did not. Reverted. The passive-vs-active framing
+    was correct as a statement about single-orientation matrix
+    reconstruction, but does not correctly predict the behaviour of
+    compute_mdf_from_quats' pairwise disorientation formula -- root cause
+    of that discrepancy not yet fully identified.
 
     Returns shape (ny, nx, 4), float64.
     """

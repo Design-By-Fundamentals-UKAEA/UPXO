@@ -589,11 +589,19 @@ def plot_grouped_distributions(
                 ax.bar(bin_edges[:-1], counts, width=bin_w,
                        color=colour, alpha=0.28, edgecolor='none', align='edge')
 
-            kde = gaussian_kde(vals, bw_method=bw_method)
-            ys  = kde(xs)
-            ax.plot(xs, ys, color=colour, linewidth=1.8)
+            try:
+                kde = gaussian_kde(vals, bw_method=bw_method)
+                ys  = kde(xs)
+                ax.plot(xs, ys, color=colour, linewidth=1.8)
+            except np.linalg.LinAlgError:
+                # Near-zero-variance group (e.g. a role level with very few
+                # grains sharing nearly identical values) -- gaussian_kde
+                # needs a non-singular covariance, so fall back to marking
+                # the mean directly rather than crashing the whole plot.
+                ys = None
+                ax.axvline(vals.mean(), color=colour, linewidth=1.8)
 
-            if show_peaks:
+            if show_peaks and ys is not None:
                 peak_idx, _ = find_peaks(ys, prominence=peak_prominence * ys.max())
                 for pi in peak_idx:
                     ax.axvline(xs[pi], color=colour, linewidth=0.8,
@@ -620,9 +628,14 @@ def plot_grouped_distributions(
                       handlelength=1.2)
         ax.tick_params(labelsize=fontsize - 2)
 
-    fig.suptitle(suptitle, fontsize=fontsize + 1, y=1.02)
+    # y kept under 1.0 and tight_layout given an explicit rect so the
+    # reserved top margin actually accounts for the suptitle -- y>1.0
+    # combined with an un-reserved tight_layout() clips the top of the
+    # text against the canvas/window edge (the axes are per-property
+    # subplots; this suptitle is figure-wide, one level up).
+    fig.suptitle(suptitle, fontsize=fontsize + 1, y=0.98)
     if do_tight_layout:
-        plt.tight_layout()
+        plt.tight_layout(rect=[0, 0, 1, 0.94])
     return fig, axes
 
 
@@ -726,8 +739,8 @@ def plot_repr_rank(
         ax.axvline(nc - 1.5, color='white', linewidth=2)
 
     fig.suptitle('MC–EBSD representativeness ranking',
-                 fontsize=fontsize_suptitle, y=1.01)
-    plt.tight_layout()
+                 fontsize=fontsize_suptitle, y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.show()
 
 
@@ -934,8 +947,8 @@ def plot_qq_comparison(
         axes[spare // _ncols, spare % _ncols].set_visible(False)
 
     fig.suptitle('Q-Q plots — EBSD (merged) vs MC slices  (mean-normalised)',
-                 fontsize=fontsize + 1, y=1.01)
-    plt.tight_layout()
+                 fontsize=fontsize + 1, y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.94])
     plt.show()
 
 

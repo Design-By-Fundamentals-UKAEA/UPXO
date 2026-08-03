@@ -866,7 +866,7 @@ class repgen2d:
     # Twin-merge: de-twinned EBSD label field and properties
     # ------------------------------------------------------------------
 
-    def build_merged_ebsd_lfi(self, parent_info: dict) -> None:
+    def build_merged_ebsd_lfi(self, parent_info: dict, plot: bool = True) -> None:
         """
         Merge twin grains into their parents in a deepcopy of ``lfi_ebsd``,
         re-characterise, store results, and display a side-by-side comparison.
@@ -880,6 +880,12 @@ class repgen2d:
             Output of :meth:`identify_parent_grains`.  Keyed by CSL label;
             each value must have a ``'pairs_labeled'`` key containing a list
             of ``(parent_gid, twin_gid)`` tuples.
+        plot : bool
+            Render the automatic side-by-side original-vs-merged
+            comparison figure. Default ``True``; the GUI's compute step
+            calls this with ``False`` (matching its compute/plot
+            separation convention elsewhere on the same page) and shows
+            the comparison from a separate plot action instead.
 
         Populates
         ---------
@@ -957,15 +963,16 @@ class repgen2d:
         self.prop_ebsd_merged_df.index.name = 'grain_id'
 
         # Step 5 — automatic side-by-side visualisation
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5), dpi=100)
-        axes[0].imshow(self.lfi_ebsd,        origin='lower', cmap='nipy_spectral')
-        axes[0].set_title(f'Original EBSD  ({int(self.lfi_ebsd.max())} grains)')
-        axes[0].axis('off')
-        axes[1].imshow(self.lfi_ebsd_merged, origin='lower', cmap='nipy_spectral')
-        axes[1].set_title(f'Twins merged ({int(self.lfi_ebsd_merged.max())} grains)')
-        axes[1].axis('off')
-        plt.tight_layout()
-        plt.show()
+        if plot:
+            fig, axes = plt.subplots(1, 2, figsize=(12, 5), dpi=100)
+            axes[0].imshow(self.lfi_ebsd,        origin='lower', cmap='nipy_spectral')
+            axes[0].set_title(f'Original EBSD  ({int(self.lfi_ebsd.max())} grains)')
+            axes[0].axis('off')
+            axes[1].imshow(self.lfi_ebsd_merged, origin='lower', cmap='nipy_spectral')
+            axes[1].set_title(f'Twins merged ({int(self.lfi_ebsd_merged.max())} grains)')
+            axes[1].axis('off')
+            plt.tight_layout()
+            plt.show()
 
     # ------------------------------------------------------------------
     # EBSD re-characterisation from a pre-loaded reader
@@ -1182,7 +1189,9 @@ class repgen2d:
             else:
                 warnings.warn('tgs is None or not a supported UPXO 2D type; skipping rechar for tgs.')
 
-    def compute_mdf_ebsd(self):
+    def compute_mdf_ebsd(self, n_bins=65, angle_range=(0.0, 65.0),
+                          prominence=0.002, distance=3, csl=None, csl_tol=2.0,
+                          bw_method='scott', n_kde=500, plot=True):
         """
         Compute the misorientation distribution function (MDF) from the EBSD
         dataset attached to this repgen2d instance and display it.
@@ -1192,6 +1201,32 @@ class repgen2d:
         ``clean_and_rechar_from_rdr`` (or ``rechar``) must have been called
         with ``tgstype='ebsd2d'`` beforehand so that ``self.lfi_ebsd``,
         ``self.quat_ebsd``, and ``self.neigh_gid_ebsd`` are populated.
+
+        Parameters
+        ----------
+        n_bins : int
+            Forwarded to ``compute_mdf_from_quats``. Default 65.
+        angle_range : tuple(float, float)
+            Forwarded to ``compute_mdf_from_quats``. Default (0.0, 65.0).
+        prominence : float
+            Forwarded to ``detect_mdf_peaks``. Default 0.002.
+        distance : int
+            Forwarded to ``detect_mdf_peaks``. Default 3.
+        csl : dict or None
+            Forwarded to ``detect_mdf_peaks``. Default None (built-in
+            ``CUBIC_CSL`` table).
+        csl_tol : float
+            Forwarded to ``detect_mdf_peaks``. Default 2.0.
+        bw_method : str or float
+            Forwarded to ``detect_mdf_peaks``. Default 'scott'.
+        n_kde : int
+            Forwarded to ``detect_mdf_peaks``. Default 500.
+        plot : bool
+            If True (default, matching prior unconditional behaviour),
+            render the MDF histogram via ``ebsdviz.plot_mdf`` +
+            ``plt.show()``. Callers that re-run this repeatedly while tuning
+            parameters (e.g. an interactive GUI) should pass ``plot=False``
+            to avoid a popup window on every call.
 
         Returns
         -------
@@ -1205,20 +1240,25 @@ class repgen2d:
 
         Side Effects
         ------------
-        Calls ``ebsdviz.plot_mdf`` and ``plt.show()``, rendering the MDF
-        histogram with detected peaks in the current matplotlib backend.
+        When ``plot=True``, calls ``ebsdviz.plot_mdf`` and ``plt.show()``,
+        rendering the MDF histogram with detected peaks in the current
+        matplotlib backend.
         """
         from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
-        mdf = compute_mdf_from_quats(self.lfi_ebsd, self.quat_ebsd, self.neigh_gid_ebsd)
+        mdf = compute_mdf_from_quats(self.lfi_ebsd, self.quat_ebsd, self.neigh_gid_ebsd,
+                                     n_bins=n_bins, angle_range=angle_range)
         # -------------------------------------------------
         from upxo.xtalphy.crystal_orientation import detect_mdf_peaks
-        peaks = detect_mdf_peaks(mdf)
+        peaks = detect_mdf_peaks(mdf, prominence=prominence, distance=distance,
+                                 csl=csl, csl_tol=csl_tol, bw_method=bw_method,
+                                 n_kde=n_kde, angle_max=angle_range[1])
         print(f"{'Detected peaks':─^55}")
         for label, (csl_name, delta) in zip(peaks['peak_labels'], peaks['csl_nearest']):
             print(f'  {label}')
         # ------------------------------------------------
-        ebsdviz.plot_mdf(mdf, peaks)
-        plt.show()
+        if plot:
+            ebsdviz.plot_mdf(mdf, peaks)
+            plt.show()
         # -------------------------------------------------
         return mdf, peaks
 
@@ -1604,6 +1644,96 @@ class repgen2d:
             'non_role_frac':       (total - role_area) / total
                                     if total else float('nan'),
             'extended_info':        ext,
+        }
+
+    def compute_ebsd_texture_stages(
+            self,
+            parent_info: dict,
+            csl_label: str | None = None,
+    ) -> dict:
+        """
+        Compute per-grain mean orientations for the five EBSD-only
+        pole-figure visualization stages (see
+        admin/twinnedFccGui/texIntegration/scoping.md §6.1 in the UPXO
+        repo for the full rationale): Full EBSD, EBSD parents (twins
+        merged back into their host), EBSD Primary twins, EBSD Secondary
+        twins (undifferentiated), and All EBSD twins.
+
+        Uses :func:`~upxo.xtalphy.crystal_orientation.grain_avg_quats` to
+        collapse the per-pixel ``self.quat_ebsd`` array down to one
+        representative orientation per grain, and
+        :func:`~upxo.xtalphy.crystal_orientation.classify_grain_roles_extended`
+        (the same function :meth:`compute_ebsd_tvf` uses) to split twins
+        into primary/secondary generations.
+
+        Parameters
+        ----------
+        parent_info : dict
+            Output of :meth:`identify_parent_grains`.
+        csl_label : str or None
+            CSL type to analyse (e.g. ``'S3  (twin)'``). When ``None``
+            (default), the first key in ``parent_info`` is used
+            automatically.
+
+        Returns
+        -------
+        dict
+            ``'csl_label'``         — the CSL label actually used
+            ``'full'``              — ``{'gids': ndarray, 'quats': ndarray}``
+                                       for every grain in ``self.lfi_ebsd``
+            ``'parents'``           — same shape, for the twin-merged
+                                       parent-state structure
+                                       (``self.lfi_ebsd_merged``, built on
+                                       demand if not already present)
+            ``'primary_twins'``     — same shape, restricted to
+                                       first-generation twin grain IDs
+            ``'secondary_twins'``   — same shape, restricted to
+                                       second-generation+ twin grain IDs
+            ``'all_twins'``         — ``primary_twins`` and
+                                       ``secondary_twins`` combined
+
+            Every stage's ``(gids, quats)`` pair is ready to pass directly
+            into ``PoleFigure(quats, gids=gids, convention='quaternion')``.
+        """
+        from upxo.xtalphy.crystal_orientation import (
+            grain_avg_quats, classify_grain_roles_extended)
+
+        gids_full, q_full = grain_avg_quats(self.lfi_ebsd, self.quat_ebsd)
+
+        if getattr(self, 'lfi_ebsd_merged', None) is None:
+            self.build_merged_ebsd_lfi(parent_info, plot=False)
+        gids_parents, q_parents = grain_avg_quats(
+            self.lfi_ebsd_merged, self.quat_ebsd)
+
+        ext = classify_grain_roles_extended(parent_info)
+        if csl_label is None:
+            csl_label = next(iter(ext))
+        elif csl_label not in ext:
+            raise KeyError(
+                f'csl_label "{csl_label}" not found in parent_info.  '
+                f'Available: {list(ext.keys())}'
+            )
+        info = ext[csl_label]
+
+        def _subset(role_gids):
+            role_gids = np.asarray(role_gids, dtype=gids_full.dtype)
+            mask = np.isin(gids_full, role_gids)
+            return gids_full[mask], q_full[mask]
+
+        gids_primary, q_primary = _subset(info['primary_twins'])
+        gids_secondary, q_secondary = _subset(info['secondary_twins'])
+
+        gids_all_twins = np.concatenate([gids_primary, gids_secondary])
+        q_all_twins = (np.concatenate([q_primary, q_secondary], axis=0)
+                       if gids_all_twins.size else np.empty((0, 4)))
+
+        return {
+            'csl_label':        csl_label,
+            'full':             {'gids': gids_full,       'quats': q_full},
+            'parents':          {'gids': gids_parents,    'quats': q_parents},
+            'primary_twins':    {'gids': gids_primary,    'quats': q_primary},
+            'secondary_twins':  {'gids': gids_secondary,  'quats': q_secondary},
+            'all_twins':        {'gids': gids_all_twins,  'quats': q_all_twins},
         }
 
     def allocate_mc_twin_hosts(
@@ -2250,13 +2380,40 @@ class repgen2d:
         else:
             stats['intercept_q1'] = stats['intercept_q2'] = stats['intercept_q3'] = float('nan')
 
+        # Thickness Q1/Q3 -- previously computed only for the console print
+        # (tq1/tq3 local vars) and never stored back, unlike the intercept
+        # quantiles above. Stored now so the GUI (or any other caller) can
+        # read the same numbers the console shows instead of recomputing
+        # them, and so thick_q1/thick_q3 exist symmetrically with
+        # intercept_q1/intercept_q3.
+        thick_um = stats['thick_um']
+        n_twins = int(thick_um.size)
+        stats['n_twins'] = n_twins
+        if n_twins > 0:
+            stats['thick_q1'] = float(np.percentile(thick_um, 25))
+            stats['thick_q3'] = float(np.percentile(thick_um, 75))
+        else:
+            stats['thick_q1'] = stats['thick_q3'] = float('nan')
+
+        # Distribution shape -- twin thickness distributions are typically
+        # right-skewed (many thin twins, a tail of thick ones), so
+        # skewness/kurtosis/CV are more informative than mean+std alone
+        # when picking TWIN_THICK_SCALE_FACTOR downstream (which samples
+        # directly from thick_um, not from these summary stats).
+        if n_twins > 1:
+            from scipy.stats import skew, kurtosis
+            stats['skewness'] = float(skew(thick_um, bias=False))
+            stats['kurtosis'] = float(kurtosis(thick_um, bias=False))  # excess kurtosis (0 = normal)
+            stats['cv'] = float(stats['std'] / stats['mean']) if stats['mean'] else float('nan')
+        else:
+            stats['skewness'] = stats['kurtosis'] = stats['cv'] = float('nan')
+
         print(f'  Twin thickness ({stats["col"]}) and intercept statistics (EBSD):')
         header = f'  {"Metric":<28}  {"Q1":>8}  {"Q2 (med)":>10}  {"Q3":>8}  {"IQR":>8}'
         print(header)
         print('  ' + '─' * (len(header) - 2))
-        thick_um = stats['thick_um']
-        if thick_um.size > 0:
-            tq1, tq2, tq3 = (float(np.percentile(thick_um, p)) for p in (25, 50, 75))
+        if n_twins > 0:
+            tq1, tq2, tq3 = stats['thick_q1'], stats['median'], stats['thick_q3']
             print(f'  {"Thickness (µm)":<28}  {tq1:>8.2f}  {tq2:>10.2f}  {tq3:>8.2f}  {(tq3-tq1):>8.2f}')
         if intercept_px.size > 0:
             iq1, iq2, iq3 = stats['intercept_q1'], stats['intercept_q2'], stats['intercept_q3']
@@ -2264,6 +2421,9 @@ class repgen2d:
         print(f'  Abrupt twins: {stats["n_abrupt_ebsd"]} / '
               f'{len(stats["gids"])}  '
               f'(fraction = {stats["abrupt_frac_ebsd"]:.3f})')
+        if n_twins > 1:
+            print(f'  N = {n_twins}  |  CV = {stats["cv"]:.3f}  |  '
+                  f'skewness = {stats["skewness"]:.3f}  |  kurtosis (excess) = {stats["kurtosis"]:.3f}')
 
         return stats
 
@@ -3620,8 +3780,9 @@ class repgen2d:
 
     def plot_combined_parent_twin_map(self, parent_info, **kwargs):
         """
-        Render a single spatial grain map with pure-parent, pure-twin, and
-        intermediate grains aggregated across all CSL types in *parent_info*.
+        Render a single spatial grain map with pure-parent, pure-twin,
+        intermediate, and/or non-participating grains aggregated across
+        all CSL types in *parent_info*, depending on ``highlight``.
 
         Unlike ``plot_parent_twin_map`` which produces one subplot per CSL
         type, this produces a single combined map.  Priority when a grain
@@ -3635,11 +3796,15 @@ class repgen2d:
             each value must contain ``'pure_parents'``, ``'pure_twins'``,
             and ``'intermediates'``.
         **kwargs
+            - ``highlight``         : {'combined', 'parent',
+              'non_participating'} — which role(s) to highlight vs. dim
+              (default ``'combined'``, i.e. every role coloured)
             - ``combmap_figsize``   : tuple — figure size (default ``(6, 6)``)
             - ``combmap_dpi``       : int — DPI (default ``140``)
-            - ``combmap_alpha_bg``  : float — opacity of non-role grains
+            - ``combmap_alpha_bg``  : float — opacity of dimmed grains
               (default ``0.08``)
             - ``combmap_suptitle``  : str — super-title for the figure
+              (default ``None``, i.e. auto-generated from ``highlight``)
 
         Returns
         -------
@@ -3650,7 +3815,8 @@ class repgen2d:
         plot_combined_parent_twin_map(self.lfi_ebsd, parent_info,
             figsize=kwargs.get('combmap_figsize', (6, 6)), dpi=kwargs.get('combmap_dpi', 140),
             alpha_bg=kwargs.get('combmap_alpha_bg', 0.08),
-            suptitle=kwargs.get('combmap_suptitle', 'Parent / twin grain map — EBSD target'),)
+            highlight=kwargs.get('highlight', 'combined'),
+            suptitle=kwargs.get('combmap_suptitle', None),)
         plt.show()
 
     def selectProps_twinGS(self):
@@ -4612,6 +4778,8 @@ class repgen2d:
                                     in ``TwinGenerator3D``.
             ``intermediate_frac``-- area fraction of intermediate grains
                                     (from parent_info pixel counts).
+            ``n_intermediates``  -- count of intermediate (primary twin)
+                                    grains.
         """
         import numpy as np
         import cc3d
@@ -4663,6 +4831,7 @@ class repgen2d:
             'n_2b':                      len(gids_2b),
             'prob_secondary_outward':    prob_out,
             'intermediate_frac':         vf_int,
+            'n_intermediates':           len(intermediates),
         }
 
         print(f'compute_ebsd_twin_vf_partition  (CSL: {csl_label})')
