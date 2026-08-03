@@ -41,9 +41,9 @@ def mcloop_alg302(cbp, sbp, S, xinda, yinda, zinda, rsfso):
     """Mcloop alg302."""
     xi, yi, zi = xinda, yinda, zinda
     S_sz0, S_sz1, S_sz2 = S.shape[0], S.shape[1], S.shape[2]
-    for P in range(S_sz2):  # along axis 2, along plane
-        for R in range(S_sz0):  # along axis 1, along row
-            for C in range(S_sz1):  # along axis 0, along column.
+    for P in range(S_sz0):  # along axis 0, z/plane
+        for R in range(S_sz1):  # along axis 1, y/row
+            for C in range(S_sz2):  # along axis 2, x/column
                 P0, R0, C0 = P, R, C
                 P1, R1, C1 = P+1, R+1, C+1
                 P2, R2, C2 = P+2, R+2, C+2
@@ -259,9 +259,9 @@ def mc_iterations_3d_alg310(S=None,
                   "...............................")
             break
         else:
-            for P in S_sz2_list:  # along axis 2, along plane
-                for R in S_sz0_list:  # along axis 1, along row
-                    for C in S_sz1_list:  # along axis 0, along column.
+            for P in S_sz0_list:  # along axis 0, z/plane
+                for R in S_sz1_list:  # along axis 1, y/row
+                    for C in S_sz2_list:  # along axis 2, x/column
                         P0, R0, C0 = P, R, C
                         P1, R1, C1 = P+1, R+1, C+1
                         P2, R2, C2 = P+2, R+2, C+2
@@ -429,7 +429,7 @@ def mc_iterations_3d_alg310(S=None,
                                     S[P, R, C] = ssub_111_b
                 if verbose:
                     if m % uiint.mcint_promt_display == 0:
-                        print("Annealing step no.", m, "Kernel core in slice. ", P, "/", S_sz2)
+                        print("Annealing step no.", m, "Kernel core in slice. ", P, "/", S_sz0)
         cond_1 = m % uiint.mcint_save_at_mcstep_interval == 0.0
         save_msg = False
         if m==0 or cond_1 or fully_annealed:
