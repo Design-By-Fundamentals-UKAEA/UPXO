@@ -463,8 +463,37 @@ def _build_pag_lgi(fm) -> Tuple[np.ndarray, dict, dict]:
     return lut[lgi], {}, {}
 
 
+def _build_phase_map(fm) -> np.ndarray:
+    """Per-voxel phase ID (see phases_3d.py), via a grain-id -> phase-id
+    lookup table applied to fm.lgi -- mirrors _build_pag_lgi's remap
+    technique above, one level of grouping over instead of PAG ID.
+
+    Retained-austenite PAGs never host blocks (with_pags_3d.py explicitly
+    skips block generation for them), so this is how a caller asks "which
+    voxels are actually martensite/block-bearing" by phase identity, rather
+    than relying on those PAGs happening to already be label 0 in whatever
+    block/sub-block label array is being filtered.
+    """
+    from .phases_3d import PHASE_MARTENSITE, PHASE_RETAINED_AUSTENITE
+    lgi = fm.lgi
+    max_gid = int(lgi.max())
+    lut = np.full(max_gid + 1, PHASE_MARTENSITE, dtype=np.int32)
+    retained_ids = getattr(fm, 'retained_austenite_pag_ids', set()) or set()
+    for pag_id, grain_ids in fm.clusters_dict.items():
+        if pag_id in retained_ids:
+            for gid in grain_ids:
+                if 0 < gid <= max_gid:
+                    lut[gid] = PHASE_RETAINED_AUSTENITE
+    lut[0] = 0  # background/void voxels carry no real phase
+    return lut[lgi]
+
+
 def _build_packet_lgi(fm) -> Tuple[np.ndarray, dict, dict]:
-    """Packet level: each grain is a packet; LGI is the raw grain LGI."""
+    """Packet level: for visualization, packets are the base grain structure.
+
+    Each grain represents individual packets in the martensitic microstructure.
+    LGI is the raw grain LGI (finest grain-level detail between PAG and Block).
+    """
     return fm.lgi.copy(), {}, {}
 
 
@@ -501,6 +530,95 @@ _LGI_BUILDERS = {
     'block':    _build_block_lgi,
     'subblock': _build_subblock_lgi,
 }
+
+
+def compute_boundary_mask_2d(
+    label_slice: np.ndarray,
+    background_val: int = 0,
+    mode: str = "sharp",
+) -> np.ndarray:
+    """Return a boundary mask for a 2D integer label image.
+
+    A pixel is True (or >0 for smooth/subpixel modes) when it neighbours at
+    least one pixel with a different label value. Pixels whose label equals
+    *background_val* are always False/0, suppressing RVE-edge artefacts.
+
+    Parameters
+    ----------
+    label_slice : ndarray, shape (H, W), dtype int
+        2D label image — one slice of a 3D LGI, already transposed to image
+        orientation (rows = Y axis, cols = X axis).
+    background_val : int, optional
+        Label value treated as background; boundary pixels carrying this
+        label are zeroed out.  Default 0.
+    mode : str, optional
+        Boundary detection mode:
+        - "sharp": Pixel-aligned boundaries via find_boundaries(mode='inner').
+          Returns boolean mask, same shape as input. Fastest.
+        - "smooth" (under dev.): Upsamples label grid 2x, finds boundaries,
+          then downscales. Returns float [0,1] smoothed boundaries.
+        - "subpixel": Pure sub-pixel via find_boundaries(mode='subpixel').
+          Uses scikit-image's mathematical sub-pixel algorithm.
+          Returns float [0,1] downscaled to original shape. Smoothest.
+        Default "sharp".
+
+    Returns
+    -------
+    ndarray, shape (H, W), dtype bool or float
+        Boolean mask for "sharp" mode; float array [0, 1] for smooth/subpixel.
+    """
+    if mode == "sharp":
+        try:
+            from skimage.segmentation import find_boundaries as _fb
+            bnd = _fb(label_slice, connectivity=1, mode='inner')
+        except Exception:
+            bnd = np.zeros(label_slice.shape, dtype=bool)
+            h = label_slice[:, :-1] != label_slice[:, 1:]
+            bnd[:, :-1] |= h
+            bnd[:, 1:]  |= h
+            v = label_slice[:-1, :] != label_slice[1:, :]
+            bnd[:-1, :] |= v
+            bnd[1:, :]  |= v
+        bnd[label_slice == background_val] = False
+        return bnd
+
+    elif mode == "smooth":
+        from scipy.ndimage import zoom
+        zoom_factor = 2
+        zoomed_slice = zoom(label_slice.astype(float), zoom_factor, order=1).astype(int)
+        try:
+            from skimage.segmentation import find_boundaries as _fb
+            bnd_zoomed = _fb(zoomed_slice, connectivity=1, mode='inner')
+        except Exception:
+            bnd_zoomed = np.zeros(zoomed_slice.shape, dtype=bool)
+            h = zoomed_slice[:, :-1] != zoomed_slice[:, 1:]
+            bnd_zoomed[:, :-1] |= h
+            bnd_zoomed[:, 1:]  |= h
+            v = zoomed_slice[:-1, :] != zoomed_slice[1:, :]
+            bnd_zoomed[:-1, :] |= v
+            bnd_zoomed[1:, :]  |= v
+        bnd_zoomed[zoomed_slice == background_val] = False
+        bnd = zoom(bnd_zoomed.astype(float), 1/zoom_factor, order=1)
+        return bnd
+
+    elif mode == "subpixel":
+        from scipy.ndimage import zoom
+        zoom_factor = 2
+        zoomed_slice = zoom(label_slice.astype(float), zoom_factor, order=1).astype(int)
+        try:
+            from skimage.segmentation import find_boundaries as _fb
+            bnd_subpixel = _fb(zoomed_slice, connectivity=1, mode='subpixel')
+        except Exception:
+            bnd_subpixel = np.zeros(zoomed_slice.shape, dtype=bool)
+        if bnd_subpixel.size == 0 or not bnd_subpixel.any():
+            return np.zeros(label_slice.shape, dtype=float)
+        bnd_float = bnd_subpixel.astype(float)
+        scale_back = label_slice.shape[0] / bnd_subpixel.shape[0]
+        bnd = zoom(bnd_float, scale_back, order=1)
+        return bnd
+
+    else:
+        raise ValueError(f"Unknown boundary mode: {mode!r}. Must be 'sharp', 'smooth', or 'subpixel'.")
 
 
 def _resolve_int_label(fmid: FMID, s2i: Dict[str, int]) -> int:

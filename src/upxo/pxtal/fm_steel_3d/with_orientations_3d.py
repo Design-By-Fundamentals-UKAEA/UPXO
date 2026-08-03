@@ -13,6 +13,11 @@ import numpy as np
 from typing import Optional, Dict, List, Tuple
 from itertools import permutations, product as _iproduct
 
+from .phases_3d import (
+    PHASE_MARTENSITE, PHASE_RETAINED_AUSTENITE, PHASE_NAMES,
+    retained_austenite_voxels_and_orientations,
+)
+
 
 class FMSteel3DWithOrientations:
     """
@@ -51,26 +56,28 @@ class FMSteel3DWithOrientations:
         '_parent',
         'grain_orientations',
         'block_orientations',
+        'block_to_variant_idx',
         'pag_orientations',
         '_random_seed',
         '_verbosity',
         '_log_sink',
     )
-    
+
     def __init__(self,
                  parent,
                  grain_orientations: Dict[int, Tuple[float, float, float]],
                  block_orientations: Dict[str, Tuple[float, float, float]],
                  pag_orientations: Optional[Dict[int, Tuple[float, float, float]]] = None,
+                 block_to_variant_idx: Optional[Dict[str, int]] = None,
                  random_seed: Optional[int] = None,
                  verbosity: Optional[int] = None,
                  log_sink=None):
         """
         Initialize FMSteel3DWithOrientations.
-        
+
         Typically called internally by FMSteel3DWithBlocks.assign_orientations().
         Direct instantiation allowed but not recommended.
-        
+
         Parameters
         ----------
         parent : FMSteel3DWithBlocks
@@ -80,13 +87,19 @@ class FMSteel3DWithOrientations:
         block_orientations : dict
             Block BCC orientations: {block_id: (phi1, Phi, phi2)}.
         pag_orientations : dict, optional
-            PAG FCC orientations (if not already in parent). 
+            PAG FCC orientations (if not already in parent).
+        block_to_variant_idx : dict, optional
+            {block_id: KS variant index (0-5)} within its packet -- produced
+            by OrientationAssigner3D.assign_orientations_to_all_blocks().
+            Empty for orientations assigned via assign_custom_block_orientations
+            (no KS variant selection took place). Default empty dict.
         random_seed : int, optional
             Random seed used for orientation assignment.
         """
         self._parent = parent
         self.grain_orientations = grain_orientations
         self.block_orientations = block_orientations
+        self.block_to_variant_idx = block_to_variant_idx or {}
         self.pag_orientations = pag_orientations or parent.pag_orientations
         self._random_seed = random_seed
         self._verbosity = int(getattr(parent, '_verbosity', 0) if verbosity is None else verbosity)
@@ -137,7 +150,18 @@ class FMSteel3DWithOrientations:
     def grain_to_local_pkt_idx(self) -> Dict[int, int]:
         """1-based local packet ordinal within each PAG: grain_id -> local_idx."""
         return self._parent.grain_to_local_pkt_idx
-    
+
+    @property
+    def grain_to_plane_idx(self) -> Dict[int, int]:
+        """grain_id -> {111}FCC habit-plane index (0-3) from parent block level."""
+        return self._parent.grain_to_plane_idx
+
+    @property
+    def block_slicing_normals(self) -> Dict[str, np.ndarray]:
+        """block_id -> unit normal of the {111}FCC habit plane used to slice
+        it, from parent block level (see FMSteel3DWithBlocks docstring)."""
+        return self._parent.block_slicing_normals
+
     @property
     def n_grains(self) -> int:
         """Total grains."""
@@ -171,7 +195,21 @@ class FMSteel3DWithOrientations:
     @property
     def isolated_grains(self):
         """Isolated grains from parent PAG level."""
-        return self._parent._parent.isolated_grains
+        return self._parent.isolated_grains
+
+    @property
+    def retained_austenite_pag_ids(self):
+        """Retained-austenite PAG IDs from parent PAG level (see
+        FMSteel3DWithPAGs docstring)."""
+        return self._parent.retained_austenite_pag_ids
+
+    def ensure_isolated_grain_orientations(self, random_seed: Optional[int] = None) -> None:
+        """See FMSteel3DWithPAGs.ensure_isolated_grain_orientations."""
+        self._parent.ensure_isolated_grain_orientations(random_seed=random_seed)
+
+    def get_isolated_grain_orientation(self, gid: int) -> Optional[Tuple[float, float, float]]:
+        """See FMSteel3DWithPAGs.get_isolated_grain_orientation."""
+        return self._parent.get_isolated_grain_orientation(gid)
 
     # ========== Analysis & statistics ==========
     
@@ -310,6 +348,115 @@ class FMSteel3DWithOrientations:
             'within_pag': np.array(within_angles),
             'across_pag': np.array(across_angles),
         }
+
+    def get_ks_variant_statistics(self) -> Dict:
+        """How evenly the 6 KS variants within each packet were actually used.
+
+        For every (pag_id, plane_idx) packet with 2+ blocks, tallies how many
+        blocks received each variant index that was actually assigned, then
+        summarises that per-packet distribution with the same
+        size_balance_metrics (cv, min_max_ratio, gini) used elsewhere for
+        packet_size_balance -- perfectly even usage across whichever variants
+        were used gives cv=0, min_max_ratio=1, gini=0; a packet where every
+        block ended up sharing one variant (the worst case the adjacency-
+        aware graph-colouring in assign_orientations_to_all_blocks tries to
+        avoid) sits at the opposite extreme.
+
+        Requires block_to_variant_idx, which is only populated when
+        orientations were assigned via assign_orientations_to_all_blocks
+        (i.e. FMSteel3DWithBlocks.assign_orientations()) -- empty if custom
+        block orientations were injected instead.
+        """
+        empty = {'n_packets_with_variants': 0,
+                 'cv': {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0},
+                 'min_max_ratio': {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0},
+                 'gini': {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0}}
+        if not self.block_to_variant_idx:
+            return empty
+
+        from upxo.pxtalops.grain_splitting_3d import size_balance_metrics
+
+        grain_to_plane_idx = self.grain_to_plane_idx
+        packet_variant_counts: Dict[Tuple[int, int], Dict[int, int]] = {}
+        for block_id, v_idx in self.block_to_variant_idx.items():
+            parts = block_id.split('_')
+            pag_id = int(parts[1])
+            gid = int(parts[2])
+            plane_idx = grain_to_plane_idx.get(gid)
+            if plane_idx is None:
+                continue
+            counts = packet_variant_counts.setdefault((pag_id, plane_idx), {})
+            counts[v_idx] = counts.get(v_idx, 0) + 1
+
+        cvs, ratios, ginis = [], [], []
+        for counts in packet_variant_counts.values():
+            sizes = list(counts.values())
+            if len(sizes) < 2:
+                continue
+            m = size_balance_metrics(sizes)
+            cvs.append(m['cv'])
+            ratios.append(m['min_max_ratio'])
+            ginis.append(m['gini'])
+
+        def _agg(vals):
+            if not vals:
+                return {'min': 0.0, 'max': 0.0, 'mean': 0.0, 'median': 0.0}
+            return {'min': float(np.min(vals)), 'max': float(np.max(vals)),
+                   'mean': float(np.mean(vals)), 'median': float(np.median(vals))}
+
+        return {
+            'n_packets_with_variants': len(packet_variant_counts),
+            'cv': _agg(cvs),
+            'min_max_ratio': _agg(ratios),
+            'gini': _agg(ginis),
+        }
+
+    def available_phases(self) -> List[int]:
+        """Phase ids actually present in this structure, for populating a
+        phase-selector dropdown (e.g. the Block-Level IPF Map panel).
+
+        PHASE_MARTENSITE is present whenever any blocks exist; PHASE_
+        RETAINED_AUSTENITE is present whenever isolated_grains is non-empty
+        (the flattened view covering both PAG-covered and leftover-isolated
+        retained-austenite grains -- see FMSteel3DWithPAGs docstring).
+        """
+        phases = []
+        if self.all_blocks:
+            phases.append(PHASE_MARTENSITE)
+        if self.isolated_grains:
+            phases.append(PHASE_RETAINED_AUSTENITE)
+        return phases
+
+    def get_phase_voxels_and_orientations(
+        self, phase_id: int
+    ) -> Tuple[Dict, Dict[int, Tuple[float, float, float]]]:
+        """Feature voxels + orientations for one phase, for phase-filtered
+        IPF maps (see viz/orientation_viz_3d.py and gui/pages_viz.py).
+
+        PHASE_MARTENSITE -> block granularity: (all_blocks, block_orientations),
+        exactly what the existing Block-Level IPF Map already renders (blocks
+        only ever exist for transformed PAGs, so no filtering is needed).
+
+        PHASE_RETAINED_AUSTENITE -> grain granularity (retained austenite is
+        never split into packets/blocks): every retained-austenite grain
+        keyed by grain_id, orientation from either its retained PAG or its
+        own isolated_grain_orientations entry.
+
+        Returns
+        -------
+        (features, orientations) : (dict, dict)
+            features:     {feature_id: (n_voxels, 3) voxel coordinate array}
+            orientations: {feature_id: (phi1, Phi, phi2) Bunge-Euler degrees}
+        """
+        if phase_id == PHASE_MARTENSITE:
+            return dict(self.all_blocks), dict(self.block_orientations)
+        if phase_id == PHASE_RETAINED_AUSTENITE:
+            return retained_austenite_voxels_and_orientations(self)
+        raise ValueError(
+            f"Unknown phase_id={phase_id}. Available phases for this "
+            f"structure: {self.available_phases()} "
+            f"({[PHASE_NAMES.get(p) for p in self.available_phases()]})."
+        )
 
     def get_misorientation_statistics(self) -> Dict[str, any]:
         """
@@ -450,6 +597,7 @@ class FMSteel3DWithOrientations:
         intrablock_ori_spread_deg: float = 2.0,
         thin_block_strategy: str = 'skip',
         random_seed: Optional[int] = None,
+        subblock_slab_connectivity: int = 26,
     ) -> 'FMSteel3DWithSubBlocks':
         """
         Subdivide every block into sub-blocks (laths) with per-sub-block orientations.
@@ -501,6 +649,7 @@ class FMSteel3DWithOrientations:
                 subblock_thickness_range=(t_lo_vox, t_hi_vox),
                 thin_block_strategy=thin_block_strategy,
                 random_seed=random_seed,
+                slab_connectivity=subblock_slab_connectivity,
             )
 
         ori_assigner = OrientationAssigner3D()

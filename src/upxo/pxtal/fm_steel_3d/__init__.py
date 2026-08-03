@@ -40,11 +40,12 @@ Usage Example
 ...     random_seed=42
 ... )
 >>> 
->>> # Generate blocks for this PAG configuration
->>> fm_blk = fm_pag.generate_blocks(block_thickness=5.0, random_seed=42)
->>> 
->>> # Assign orientations
->>> fm_ori = fm_blk.assign_orientations(pag_ori_mode='random', random_seed=42)
+>>> # Assign PAG orientations then generate blocks
+>>> fm_pag.assign_pag_orientations(pag_ori_mode='random', random_seed=42)
+>>> fm_blk = fm_pag.generate_blocks(block_thickness_range=(2.0, 5.0), random_seed=42)
+>>>
+>>> # Assign KS block orientations
+>>> fm_ori = fm_blk.assign_orientations(ks_variant_selection='random_per_block', random_seed=42)
 >>> 
 >>> # Visualize
 >>> fm_ori.visualize_block_ipf_map()

@@ -11,6 +11,11 @@ Classes:
 import numpy as np
 from typing import Optional, Dict, List, Tuple
 
+from .phases_3d import (
+    PHASE_MARTENSITE, PHASE_RETAINED_AUSTENITE, PHASE_NAMES,
+    retained_austenite_voxels_and_orientations,
+)
+
 
 class FMSteel3DWithSubBlocks:
     """
@@ -109,6 +114,28 @@ class FMSteel3DWithSubBlocks:
         return self._parent.grain_to_local_pkt_idx
 
     @property
+    def grain_to_plane_idx(self) -> Dict[int, int]:
+        """grain_id -> {111}FCC habit-plane index (0-3) from parent block level."""
+        return self._parent.grain_to_plane_idx
+
+    @property
+    def grain_orientations(self) -> Dict[int, Tuple[float, float, float]]:
+        """Grain-level BCC orientations from parent orientations level."""
+        return self._parent.grain_orientations
+
+    @property
+    def block_slicing_normals(self) -> Dict[str, np.ndarray]:
+        """block_id -> unit normal of the {111}FCC habit plane used to slice
+        it, from parent block level (see FMSteel3DWithBlocks docstring)."""
+        return self._parent.block_slicing_normals
+
+    @property
+    def block_to_variant_idx(self) -> Dict[str, int]:
+        """block_id -> KS variant index (0-5) within its packet, from parent
+        orientations level (see FMSteel3DWithOrientations docstring)."""
+        return self._parent.block_to_variant_idx
+
+    @property
     def physical_dimensions(self):
         return self._parent.physical_dimensions
 
@@ -125,6 +152,49 @@ class FMSteel3DWithSubBlocks:
     def isolated_grains(self):
         """Isolated grains from parent PAG level."""
         return self._parent.isolated_grains
+
+    @property
+    def retained_austenite_pag_ids(self):
+        """Retained-austenite PAG IDs from parent PAG level (see
+        FMSteel3DWithPAGs docstring)."""
+        return self._parent.retained_austenite_pag_ids
+
+    def ensure_isolated_grain_orientations(self, random_seed: Optional[int] = None) -> None:
+        """See FMSteel3DWithPAGs.ensure_isolated_grain_orientations."""
+        self._parent.ensure_isolated_grain_orientations(random_seed=random_seed)
+
+    def get_isolated_grain_orientation(self, gid: int) -> Optional[Tuple[float, float, float]]:
+        """See FMSteel3DWithPAGs.get_isolated_grain_orientation."""
+        return self._parent.get_isolated_grain_orientation(gid)
+
+    def available_phases(self) -> List[int]:
+        """See FMSteel3DWithOrientations.available_phases."""
+        phases = []
+        if self.all_subblocks:
+            phases.append(PHASE_MARTENSITE)
+        if self.isolated_grains:
+            phases.append(PHASE_RETAINED_AUSTENITE)
+        return phases
+
+    def get_phase_voxels_and_orientations(
+        self, phase_id: int
+    ) -> Tuple[Dict, Dict[int, Tuple[float, float, float]]]:
+        """See FMSteel3DWithOrientations.get_phase_voxels_and_orientations.
+
+        PHASE_MARTENSITE here is sub-block granularity (all_subblocks,
+        subblock_orientations) -- the finer level this class adds; retained
+        austenite has no sub-block subdivision, so it stays grain granularity
+        exactly as at the block level.
+        """
+        if phase_id == PHASE_MARTENSITE:
+            return dict(self.all_subblocks), dict(self.subblock_orientations)
+        if phase_id == PHASE_RETAINED_AUSTENITE:
+            return retained_austenite_voxels_and_orientations(self)
+        raise ValueError(
+            f"Unknown phase_id={phase_id}. Available phases for this "
+            f"structure: {self.available_phases()} "
+            f"({[PHASE_NAMES.get(p) for p in self.available_phases()]})."
+        )
 
     @property
     def n_grains(self) -> int:
@@ -146,12 +216,28 @@ class FMSteel3DWithSubBlocks:
     # Statistics
     # ------------------------------------------------------------------
 
+    def reassign_subblock_orientations(
+        self,
+        intrablock_ori_spread_deg: float = 2.0,
+        random_seed: Optional[int] = None,
+    ) -> None:
+        """Re-assign sub-block orientations in-place with a new spread value."""
+        from .orientation_assigner_3d import OrientationAssigner3D
+        ori_assigner = OrientationAssigner3D()
+        self.subblock_orientations = ori_assigner.assign_subblock_orientations(
+            all_subblocks=self.all_subblocks,
+            block_orientations=self.block_orientations,
+            intrablock_ori_spread_deg=intrablock_ori_spread_deg,
+            random_seed=random_seed,
+        )
+
     def get_subblock_statistics(self) -> Dict:
         """Return basic statistics on the sub-block structure."""
         sb_sizes = [len(v) for v in self.all_subblocks.values()]
         if not sb_sizes:
-            return {'n_subblocks': 0, 'min_voxels': 0, 'max_voxels': 0,
-                    'mean_voxels': 0.0, 'n_blocks_with_subblocks': 0,
+            return {'n_subblocks': 0, 'min_voxels_per_subblock': 0,
+                    'max_voxels_per_subblock': 0, 'mean_voxels_per_subblock': 0.0,
+                    'n_blocks_with_subblocks': 0,
                     'mean_subblocks_per_block': 0.0}
 
         sbb = [len(v) for v in self.block_to_subblocks_map.values() if v]
