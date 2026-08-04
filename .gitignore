@@ -80,6 +80,7 @@ src/upxo/meshing/nonConformalMesher - Copy.py
 src/upxo/ggrowth/mcgs_bu.py
 src/upxo/pxtal/mcgs3_temporal_slice - bu18102025.py
 src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
+/src/upxo/gui/
 /admin/
 docs/_build/
 docs/docs/srcAPIdocs/
