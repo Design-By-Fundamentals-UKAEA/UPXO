@@ -59,6 +59,7 @@ Level 3b  ``'mrf_map'``
 """
 
 import math
+import warnings
 import numpy as np
 from typing import Optional, Dict, Tuple
 
@@ -678,6 +679,10 @@ class OrientationAssigner3D:
 
         elif mode in ('mdf_analytical', 'mdf_targeted'):
             if mode == 'mdf_targeted':
+                warnings.warn(
+                    'orientation_assignment_mode="mdf_targeted" is not '
+                    'implemented; silently using "mdf_analytical" (Level 2b) '
+                    'instead.', stacklevel=2)
                 print(f'  INFO: mode "mdf_targeted" not implemented; '
                       f'using "mdf_analytical" (Level 2b).')
             if self._mdf_ref_angles is None:
@@ -780,6 +785,10 @@ class OrientationAssigner3D:
 
         elif mode in ('mdf_analytical', 'mdf_targeted'):
             if mode == 'mdf_targeted':
+                warnings.warn(
+                    'orientation_assignment_mode="mdf_targeted" is not '
+                    'implemented; silently using "mdf_analytical" (Level 2b) '
+                    'instead.', stacklevel=2)
                 print(f'  INFO: mode "mdf_targeted" not implemented; '
                       f'using "mdf_analytical" (Level 2b).')
             if self._mdf_ref_angles is None:
