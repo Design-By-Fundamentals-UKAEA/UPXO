@@ -12,7 +12,9 @@ def test_add_feature_database_entry_single_value():
         {'method': 'voxel_count', 'unit': 'um^3'}
     )
     assert 'grain_1' in fdb
-    assert 'volume' in fdb['grain_1']
+    # FDB structure is nested: grain -> {'data': {...}, 'info': {...}}
+    assert 'data' in fdb['grain_1']
+    assert 'volume' in fdb['grain_1']['data']
 
 
 def test_add_feature_database_entry_multiple_data():
@@ -23,8 +25,9 @@ def test_add_feature_database_entry_multiple_data():
         [150.5, 420.0],
         {'unit': 'um^3', 'unit_area': 'um^2'}
     )
-    assert 'volume' in fdb['grain_1']
-    assert 'surface_area' in fdb['grain_1']
+    assert 'data' in fdb['grain_1']
+    assert 'volume' in fdb['grain_1']['data']
+    assert 'surface_area' in fdb['grain_1']['data']
 
 
 def test_add_feature_database_entry_info_dict():
@@ -54,7 +57,8 @@ def test_add_feature_database_entry_numpy_array():
         fdb, 'grain_1', 'orientations', data,
         {'format': 'quaternions'}
     )
-    assert 'orientations' in fdb['grain_1']
+    assert 'data' in fdb['grain_1']
+    assert 'orientations' in fdb['grain_1']['data']
 
 
 def test_add_feature_database_entry_multiple_grains():
@@ -81,6 +85,7 @@ def test_add_feature_database_entry_overwrite():
     )
     # Second write should overwrite or update
     assert 'grain_1' in fdb
+    assert fdb['grain_1']['data']['volume'] == 200.0
 
 
 def test_add_feature_database_entry_tuple_data():
@@ -91,9 +96,10 @@ def test_add_feature_database_entry_tuple_data():
         (1.0, 2.0, 3.0),
         {'unit': 'um'}
     )
-    assert 'x' in fdb['grain_1']
-    assert 'y' in fdb['grain_1']
-    assert 'z' in fdb['grain_1']
+    assert 'data' in fdb['grain_1']
+    assert 'x' in fdb['grain_1']['data']
+    assert 'y' in fdb['grain_1']['data']
+    assert 'z' in fdb['grain_1']['data']
 
 
 def test_add_feature_database_entry_list_data():
@@ -104,4 +110,5 @@ def test_add_feature_database_entry_list_data():
         [10, 20],
         {'type': 'scalars'}
     )
-    assert len(fdb['grain_1']) == 2
+    assert 'data' in fdb['grain_1']
+    assert len(fdb['grain_1']['data']) == 2
