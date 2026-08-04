@@ -129,4 +129,9 @@ Further Reading
 - `YouTube channel <https://www.youtube.com/@UPXODBF>`_
 """
 
-__version__ = "1.0.1"
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    __version__ = _version("upxo")
+except PackageNotFoundError:
+    __version__ = "unknown"
