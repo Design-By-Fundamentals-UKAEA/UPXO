@@ -122,6 +122,37 @@ You will learn to:
 
 ----
 
+Interactive GUI Applications
+-----------------------------
+
+For users who prefer graphical workflows, UPXO includes dedicated GUI applications:
+
+**Ferritic-Martensitic Steel Microstructures**
+
+.. code-block:: python
+
+   from upxo.pxtal.fm_steel_3d.gui_launcher import launch_gui
+   launch_gui()
+
+Interactive wizard for hierarchical lath microstructure generation with PAG clustering,
+block/sub-block refinement, and texture assignment. See the
+`FM Steels Use Case <https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Use-Cases-FM-Steels#gui-application>`_
+page for details.
+
+**Twinned FCC Microstructures**
+
+.. code-block:: python
+
+   from upxo.pxtal.twinned_simple_3d.gui_launcher import launch_gui
+   launch_gui()
+
+Interactive wizard for twinned grain generation in Cu, CuCrZr, and OFHC-Cu with EBSD import,
+texture-guided orientation, and Sigma-3 twin embedding. See the
+`CuCrZr/OFHC-Cu Use Case <https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Use-Cases-CuCrZr-OFHC-Cu#gui-application>`_
+page for details.
+
+----
+
 Python Script Demonstrations
 -----------------------------
 
