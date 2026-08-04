@@ -11,8 +11,9 @@ other CSL types (Path B / csl-registry) is deferred -- see project
 memory 'csl-registry-path-b'.
 """
 
+import time
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 _SUPPORTED_CSL = 'S3  (twin)'
 _VALID_NUCLEATION_SITES = ('centroid', 'gb_centroid', 'random_gb')
@@ -60,6 +61,25 @@ class TwinGenerator3D:
     ``tvf['overall_twin_frac'] * (1 + tvf_tolerance)``.
     """
 
+    # Human-readable identity of the twin type this class actually
+    # generates -- always Sigma3 (Path A), regardless of which CSL label
+    # was used upstream to select the host pool or measure the EBSD target
+    # (see the CSL-label-mismatch check in :meth:`diagnose`).  Read by the
+    # GUI's results block instead of re-deriving a label from GUI state, so
+    # a future multi-CSL Path B implementation only needs to change this
+    # (or make it per-instance) rather than touching the GUI.
+    TWIN_TYPE_LABEL = 'Sigma3 -- FCC Annealing Twin (60 deg / <111>)'
+
+    # Diagnostic thresholds (see `diagnose`) -- heuristic cutoffs for
+    # flagging results worth a closer look, not correctness criteria.
+    # Deliberately not exposed as GUI-configurable settings: they gate
+    # advisory notes, not pass/fail, so there's no reason for a user to
+    # need to tune them to get past a screen.
+    DIAG_SHORTFALL_PCT_THRESHOLD = 70.0
+    DIAG_ABRUPT_FRAC_THRESHOLD = 0.5
+    DIAG_CLAMPED_FRAC_THRESHOLD = 0.3
+    DIAG_HOST_SATURATION_THRESHOLD = 0.95
+
     __slots__ = (
         'base',
         'n_lamellae_per_host',
@@ -96,6 +116,7 @@ class TwinGenerator3D:
         'host_schmid_weight',
         'use_schmid_for_variant_selection',
         '_rng',
+        '_grain_coords',   # {gid: ndarray(M,3)} voxel index — built once, updated per carve
     )
 
     def __init__(
@@ -158,6 +179,7 @@ class TwinGenerator3D:
         self.host_schmid_weight: float = float(np.clip(host_schmid_weight, 0.0, 1.0))
         self.use_schmid_for_variant_selection: bool = bool(use_schmid_for_variant_selection)
         self._rng = np.random.default_rng(rng_seed)
+        self._grain_coords: Dict = {}  # populated in introduce_primary_twins
 
         if twin_thick_scale_factor <= 0:
             raise ValueError('twin_thick_scale_factor must be > 0.')
@@ -371,6 +393,11 @@ class TwinGenerator3D:
         self.tvf_2d_ebsd   = tvf.get('overall_twin_frac', 1.0) if tvf else 1.0
         self.tvf_target_3d = self.tvf_2d_ebsd * self.tvf_2d_to_3d_scale_factor
         tvf_stop           = self.tvf_target_3d * (1.0 + self.tvf_tolerance)
+        # tvf_stage1 overrides: use EBSD-partitioned primary target (vf_int + vf_2b)
+        # instead of overall_twin_frac, so Stage-2 secondaries can add vf_2a on top.
+        if tvf_stage1 is not None:
+            self.tvf_target_3d = float(tvf_stage1)
+            tvf_stop           = self.tvf_target_3d * (1.0 + self.tvf_tolerance)
         total_vox          = int(np.sum(self.base.lgi > 0))
 
         # Initialise output structures
@@ -416,6 +443,25 @@ class TwinGenerator3D:
         next_gid   = int(self.lgi_twinned.max()) + 1
         _noted_contacting_override = False
 
+        # ── Build grain voxel index once (replaces O(N_vox) np.argwhere per call) ──
+        print('  [S29] Building grain voxel index...', end='', flush=True)
+        _t_idx = time.perf_counter()
+        _lgi_flat = self.lgi_twinned.ravel()
+        _sort_idx = np.argsort(_lgi_flat, kind='stable')
+        _sorted   = _lgi_flat[_sort_idx]
+        _bounds   = np.where(np.diff(_sorted, prepend=_sorted[0] - 1))[0]
+        _bounds   = np.append(_bounds, len(_sorted))
+        _gc: Dict = {}
+        for _i in range(len(_bounds) - 1):
+            _gid = int(_sorted[_bounds[_i]])
+            if _gid > 0:
+                _flat = _sort_idx[_bounds[_i]:_bounds[_i + 1]]
+                _gc[_gid] = np.stack(
+                    np.unravel_index(_flat, self.lgi_twinned.shape), axis=1)
+        self._grain_coords = _gc
+        _shp = self.lgi_twinned.shape
+        print(f' done  {len(_gc)} grains  ({time.perf_counter()-_t_idx:.1f}s)')
+
         for gid in _host_list:
             self.twin_role[gid] = 'host'
             q_par = host_orientations.get(gid)
@@ -451,8 +497,8 @@ class TwinGenerator3D:
                     self.vf_stopped_early = True
                     break
 
-                # Re-read remaining host voxels after each carving
-                coords = np.argwhere(self.lgi_twinned == gid)
+                # O(1) dict lookup instead of O(N_vox) np.argwhere scan
+                coords = self._grain_coords.get(gid, np.empty((0, 3), dtype=np.intp))
                 if coords.shape[0] < self.min_host_vox_for_lamella:
                     break
 
@@ -526,7 +572,8 @@ class TwinGenerator3D:
 
                 twin_voxels = introduce_twin_lamella_3d(
                     self.lgi_twinned, gid, origin, normal, hw,
-                    next_gid, abrupt=is_abrupt, rng=self._rng)
+                    next_gid, abrupt=is_abrupt, rng=self._rng,
+                    host_coords=coords)   # skip internal argwhere scan
 
                 if twin_voxels is not None and len(twin_voxels) > 0:
                     q_twin = self._apply_sigma3_variant(q_par, var_idx)
@@ -536,6 +583,16 @@ class TwinGenerator3D:
                     self.twin_parent_of[next_gid]         = gid
                     self.twin_halfwidths_vox[next_gid]    = hw
                     self.cumulative_twin_vox             += len(twin_voxels)
+                    # Update voxel index: remove carved voxels from host, add twin entry
+                    _tv_flat  = np.ravel_multi_index(twin_voxels.T, _shp)
+                    _hv_flat  = np.ravel_multi_index(
+                        self._grain_coords[gid].T, _shp)
+                    _hv_new   = np.setdiff1d(_hv_flat, _tv_flat, assume_unique=True)
+                    self._grain_coords[gid] = (
+                        np.stack(np.unravel_index(_hv_new, _shp), axis=1)
+                        if _hv_new.size > 0
+                        else np.empty((0, 3), dtype=np.intp))
+                    self._grain_coords[next_gid] = twin_voxels
                     if is_abrupt:
                         self.n_abrupt_primary += 1
                     # Record first-lamella geometry for contact path
@@ -615,10 +672,17 @@ class TwinGenerator3D:
         total_vox  = int(np.sum(self.base.lgi > 0))
         # Use explicit 2a/2b VF targets when provided (ebsd_partitioned mode)
         # otherwise fall back to 3D-scaled target (simple mode)
-        _secondary_vf_cap = (tvf_2a + tvf_2b) if (tvf_2a is not None and tvf_2b is not None) else None
-        tvf_target = (_secondary_vf_cap if _secondary_vf_cap is not None
-                      else (self.tvf_target_3d if self.tvf_target_3d > 0
-                            else tvf.get('overall_twin_frac', 1.0)))
+        # Cumulative VF target for secondary stage:
+        #   Stage-1 already placed tvf_target_3d (= vf_int + vf_2b).
+        #   2b secondaries relabel within primary — no new parent voxels, so
+        #   cumulative_twin_vox is NOT incremented for them (see below).
+        #   2a secondaries carve new host voxels → cumulative target rises by vf_2a.
+        #   Overall cumulative ceiling = tvf_stage1 + vf_2a ≈ overall_twin_frac.
+        if tvf_2a is not None:
+            tvf_target = self.tvf_target_3d + float(tvf_2a)
+        else:
+            tvf_target = (self.tvf_target_3d if self.tvf_target_3d > 0
+                          else (tvf.get('overall_twin_frac', 1.0) if tvf else 1.0))
         tvf_stop   = tvf_target * (1.0 + self.tvf_tolerance)
 
         _noted_2a_override = False
@@ -706,7 +770,8 @@ class TwinGenerator3D:
                 twin_voxels = introduce_twin_lamella_3d(
                     self.lgi_twinned, tgid,
                     centroid_sec_inward, normal, hw,
-                    next_gid, abrupt=False, rng=self._rng)
+                    next_gid, abrupt=False, rng=self._rng,
+                    host_coords=self._grain_coords.get(tgid))
 
             if twin_voxels is not None and len(twin_voxels) > 0:
                 q_sec = self._apply_sigma3_variant(q_primary_twin, var_idx)
@@ -715,7 +780,10 @@ class TwinGenerator3D:
                 self.twin_role[next_gid]              = 'secondary_twin'
                 self.twin_parent_of[next_gid]         = tgid
                 self.twin_halfwidths_vox[next_gid]    = hw   # actual hw used
-                self.cumulative_twin_vox             += len(twin_voxels)
+                # Only 2a (outward) twins consume new parent voxels.
+                # 2b (inward) twins relabel voxels already counted in Stage 1.
+                if use_outward:
+                    self.cumulative_twin_vox += len(twin_voxels)
                 if use_outward:
                     n_outward += 1
                 else:
@@ -725,6 +793,89 @@ class TwinGenerator3D:
         n_sec = len(self.secondary_twin_quats)
         print(f'TwinGenerator3D: secondary twins: {n_sec} '
               f'(outward 2a: {n_outward}, inward 2b: {n_inward})')
+
+    def compute_achieved_2d_tvf(
+            self,
+            n_slices_per_axis: int = 10,
+            axes=('x', 'y', 'z'),
+            return_raw: bool = False,
+    ) -> Dict:
+        """
+        Cross-sectional (2D) measurement of the achieved twin area fraction
+        in ``lgi_twinned``, for direct comparability with the EBSD 2D twin
+        area fraction -- EBSD data is inherently 2D, but
+        ``tvf_achieved_3d`` is measured over the whole 3D structure, so
+        neither is directly comparable to what a real 2D EBSD
+        cross-section of the synthetic structure would show.
+
+        For each of ``n_slices_per_axis`` evenly-spaced 2D cross-sections
+        along each axis in *axes*, computes twin pixel count / indexed
+        pixel count (role in ``{'primary_twin', 'secondary_twin'}`` vs.
+        any assigned role), then averages (mean and std) across every
+        sampled slice -- matching
+        ``TwinnedSimple3DBase.assess_hosting_representativeness_2d``'s
+        convention of not filtering down to whichever slices happen to
+        already be close to target. No cc3d re-labelling is needed here
+        (unlike that method) since classification is by pixel value
+        against ``twin_role``, not by reassociating disconnected 2D
+        regions back to an original 3D grain ID.
+
+        Must be called after :meth:`introduce_primary_twins` (reads
+        ``lgi_twinned`` / ``twin_role``).
+
+        Parameters
+        ----------
+        n_slices_per_axis : int
+            Evenly-spaced 2D cross-sections sampled per axis.
+        axes : iterable of str
+            Subset of ``('x', 'y', 'z')`` (array axes 0/1/2 respectively --
+            same convention as ``TwinnedSimple3DBase``).
+
+        Returns
+        -------
+        dict with keys ``mean``, ``std``, ``n_slices_used``, and (only when
+        ``return_raw=True``) ``ratios`` -- the raw per-slice twin area
+        fraction values, for callers needing the full distribution rather
+        than its mean/std (e.g. Summary Report's EBSD-vs-MC comparison).
+        """
+        from upxo.gsdataops.grid_ops import section_from_3d
+
+        if self.lgi_twinned is None:
+            raise RuntimeError('Call introduce_primary_twins() first.')
+
+        # lgi_twinned inherits base.lgi's native (nz, ny, nx) axis order
+        # (axis0=Z, axis2=X); array shape is left as-is, only the label
+        # mapping is corrected so 'x'/'z' resolve to the physically
+        # correct index -- see TwinnedSimple3DBase.plot_temporal_slice_3d.
+        axis_map = {'x': 2, 'y': 1, 'z': 0}
+        axes_int = [axis_map[a.lower()] for a in axes if a.lower() in axis_map]
+
+        twin_gids = np.array(sorted(
+            gid for gid, role in self.twin_role.items()
+            if role in ('primary_twin', 'secondary_twin')), dtype=np.int64)
+
+        ratios = []
+        for ax in axes_int:
+            domain_size = self.lgi_twinned.shape[ax]
+            slice_positions = np.linspace(
+                0, domain_size - 1, n_slices_per_axis, dtype=int)
+            for slice_pos in slice_positions:
+                lgi_2d = section_from_3d(
+                    self.lgi_twinned, axis=ax, location=int(slice_pos))
+                total_px = int(np.sum(lgi_2d > 0))
+                if total_px == 0:
+                    continue
+                twin_px = int(np.sum(np.isin(lgi_2d, twin_gids))) if twin_gids.size else 0
+                ratios.append(twin_px / total_px)
+
+        result = {
+            'mean': float(np.mean(ratios)) if ratios else 0.0,
+            'std': float(np.std(ratios)) if len(ratios) > 1 else 0.0,
+            'n_slices_used': len(ratios),
+        }
+        if return_raw:
+            result['ratios'] = ratios
+        return result
 
     def _achieved_tvf(self) -> float:
         """Current achieved twin VF in lgi_twinned."""
@@ -757,6 +908,8 @@ class TwinGenerator3D:
         n_sec = len(self.secondary_twin_quats)
         achieved = self._achieved_tvf()
         return {
+            # Identity
+            'twin_csl_type':                         self.TWIN_TYPE_LABEL,
             # Configuration
             'n_lamellae_per_host':                   self.n_lamellae_per_host,
             'twin_nucleation_site':                  self.twin_nucleation_site,
@@ -776,6 +929,9 @@ class TwinGenerator3D:
             'tvf_achieved_pct_of_target':            (100 * achieved / self.tvf_target_3d
                                                       if self.tvf_target_3d > 0 else 0.0),
             'vf_stopped_early':                      self.vf_stopped_early,
+            'vf_stop_status':                        (
+                'Target reached -- introduction capped early' if self.vf_stopped_early
+                else 'Target NOT reached -- ran through all hosts/lamellae'),
             # Primary twins
             'n_host_grains':                         n_h,
             'n_hosts_with_primary_twin':             self.n_hosts_with_primary_twin,
@@ -794,6 +950,147 @@ class TwinGenerator3D:
             'host_schmid_weight':                    self.host_schmid_weight,
             'use_schmid_for_variant_selection':      self.use_schmid_for_variant_selection,
         }
+
+    def diagnose(self, tvf: Optional[Dict] = None) -> List[Dict]:
+        """
+        Return advisory notes explaining surprising values in :meth:`summary`,
+        in a suggestive (not asserted) tone -- these are heuristic hypotheses
+        about *why* a number looks the way it does, not a pass/fail verdict.
+        They never gate progression to the next GUI page.
+
+        Parameters
+        ----------
+        tvf : dict or None
+            The ``tvf`` dict passed to :meth:`introduce_primary_twins` (output
+            of ``rg.compute_ebsd_tvf``).  When provided, enables the CSL-label
+            mismatch check.  Not stored on the instance, so callers must pass
+            it again here (kept out of ``__slots__`` deliberately -- it's
+            EBSD-side provenance, not twin-generation state).
+
+        Returns
+        -------
+        list of dict
+            Each entry: ``{'anchor_fields': [...], 'message': str}``.
+            ``anchor_fields`` names the :meth:`summary` keys the note
+            explains (a GUI can attach "(Ref N)" to those fields, N = this
+            note's 1-based position in the returned list).
+        """
+        s = self.summary()
+        notes: List[Dict] = []
+
+        host_frac = getattr(self.base, 'actual_hosting_fraction', None)
+        if host_frac is not None and host_frac > 0 and s['tvf_target_3d'] > 0:
+            # A single lamella's half-width is capped at
+            # max_lamella_vf_per_host * grain_eqdia_vox / 2 (see
+            # introduce_primary_twins) -- a HALF-WIDTH bound, not a volume
+            # bound. For a slab through the centre of a roughly spherical
+            # grain, slab volume / grain volume scales as ~3*hw/diameter,
+            # so the true per-host volume fraction such a lamella can reach
+            # is closer to ~1.5x max_lamella_vf_per_host, not the nominal
+            # value directly. This factor was calibrated against two real
+            # runs (host_frac=0.2061 -> achieved 0.1625; host_frac=0.3192
+            # -> achieved 0.2466), both landing within ~5% of a 1.5x
+            # correction -- still an approximation (real hosts aren't
+            # spherical, and multiple lamellae per host compound further),
+            # not a hard bound, so this is phrased as a rough estimate
+            # rather than an impossibility claim.
+            _GEOM_CORRECTION = 1.5
+            ceiling = host_frac * self.max_lamella_vf_per_host * _GEOM_CORRECTION
+            if s['tvf_target_3d'] > ceiling:
+                notes.append({
+                    'anchor_fields': ['tvf_target_3d', 'tvf_achieved_3d', 'vf_stop_status'],
+                    'message': (
+                        f"The target volume fraction ({s['tvf_target_3d']:.4f}) "
+                        f"exceeds a rough structural ceiling estimate of "
+                        f"{ceiling:.4f} (host volume fraction {host_frac:.4f} "
+                        f"x Max Lamella VF per Host "
+                        f"{self.max_lamella_vf_per_host:.2f} x ~"
+                        f"{_GEOM_CORRECTION:.1f} geometric factor) -- this is "
+                        "an approximation, not a hard limit, but suggests "
+                        "reaching target may require more/larger host "
+                        "grains. Consider raising Target Hosting Fraction / "
+                        "2D->3D Scale Factor on Twin-Host Allocation, and/or "
+                        "Max Lamella VF per Host here."
+                    ),
+                })
+
+        if (not self.vf_stopped_early and s['tvf_target_3d'] > 0
+                and s['tvf_achieved_pct_of_target'] < self.DIAG_SHORTFALL_PCT_THRESHOLD):
+            notes.append({
+                'anchor_fields': ['tvf_achieved_3d', 'vf_stop_status'],
+                'message': (
+                    f"Achieved volume fraction reached only "
+                    f"{s['tvf_achieved_pct_of_target']:.1f}% of target without "
+                    "the volume-fraction cap ever triggering -- this suggests "
+                    "the twin-hosting capacity of the currently selected host "
+                    "grains, and/or the Max Lamella VF per Host cap, may be "
+                    "the limiting factor rather than the VF Tolerance setting "
+                    "itself. Consider revisiting the Target Hosting Fraction "
+                    "on Twin-Host Allocation, or raising Max Lamella VF per "
+                    "Host / Max Lamellae per Host here."
+                ),
+            })
+
+        if tvf is not None:
+            csl = tvf.get('csl_label', '')
+            if csl and csl != _SUPPORTED_CSL:
+                notes.append({
+                    'anchor_fields': ['twin_csl_type', 'tvf_2d_ebsd'],
+                    'message': (
+                        f'The CSL label selected upstream ("{csl}") does not '
+                        f'match the twin type actually generated here '
+                        f'({self.TWIN_TYPE_LABEL}) -- Path A of this pipeline '
+                        'only supports Sigma3 twins, so the EBSD 2D twin area '
+                        'fraction above may not correspond one-to-one to '
+                        'genuine Sigma3 twins. Treat it as approximate until '
+                        'CSL Registry Path B is available.'
+                    ),
+                })
+
+        if s['n_primary_twins'] > 0 and s['abrupt_frac_mc'] >= self.DIAG_ABRUPT_FRAC_THRESHOLD:
+            notes.append({
+                'anchor_fields': ['n_abrupt_primary'],
+                'message': (
+                    f"{s['abrupt_frac_mc']:.0%} of primary twins were "
+                    "truncated abruptly inside their host grain rather than "
+                    "fully spanning it -- this reduces effective twinned "
+                    "volume relative to full-span lamellae of the same "
+                    "thickness, and may be contributing to any shortfall "
+                    "between target and achieved volume fraction."
+                ),
+            })
+
+        if s['n_primary_twins'] > 0:
+            clamped_frac = s['n_clamped'] / s['n_primary_twins']
+            if clamped_frac >= self.DIAG_CLAMPED_FRAC_THRESHOLD:
+                notes.append({
+                    'anchor_fields': ['n_clamped'],
+                    'message': (
+                        f"{clamped_frac:.0%} of lamellae had their thickness "
+                        "raised to the configured minimum rather than using "
+                        "the EBSD-sampled value -- the EBSD thickness "
+                        "distribution may be finer than the current voxel "
+                        "size supports at this domain's resolution."
+                    ),
+                })
+
+        if s['n_host_grains'] > 0:
+            coverage = s['n_hosts_with_primary_twin'] / s['n_host_grains']
+            if (coverage >= self.DIAG_HOST_SATURATION_THRESHOLD
+                    and s['tvf_achieved_pct_of_target'] < 100.0):
+                notes.append({
+                    'anchor_fields': ['n_hosts_with_primary_twin'],
+                    'message': (
+                        f"{coverage:.0%} of available host grains already "
+                        "carry at least one twin, yet the target volume "
+                        "fraction was not reached -- reaching target may "
+                        "require more or larger host grains (see Twin-Host "
+                        "Allocation) rather than a twin-generation parameter "
+                        "change."
+                    ),
+                })
+
+        return notes
 
     def print_summary(self) -> None:
         """Print a formatted, detailed summary of twin introduction results."""
