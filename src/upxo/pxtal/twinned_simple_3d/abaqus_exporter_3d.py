@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 import time
 import math
+import warnings
 import numpy as np
 from typing import Optional, Dict, Set
 
@@ -451,11 +452,22 @@ class AbaqusExporter3D:
         if self.twinmake is None or not hasattr(self.twinmake, 'twin_halfwidths_vox'):
             f.write('** twinmake not provided -- variant ELSETs cannot be written.\n')
             return
-        # twinmake needs twin_variant_idx stored per gid; fall back to halfwidths key order
+        # twinmake does not persist the real {111} variant index chosen per
+        # grain during generation (see twin_generator_3d.py var_idx, which is
+        # used locally then discarded) -- only a round-robin assignment is
+        # available here, so the es_variant_ptwin_<v> grouping below does NOT
+        # reflect the actual crystallographic variant of each twin.
+        warnings.warn(
+            "es_variant_ptwin_<v> ELSETs use a round-robin placeholder, not "
+            "the real Sigma3 {111} variant selected during twin generation "
+            "(that index is not currently persisted per grain) -- do not "
+            "assign variant-specific material behaviour based on this grouping.",
+            stacklevel=2,
+        )
         variant_elems: Dict[int, list] = {0: [], 1: [], 2: [], 3: []}
         ptwin_gids = list(self.twinmake.primary_twin_quats.keys())
         for k, gid in enumerate(ptwin_gids):
-            v = k % 4   # placeholder: replace with twinmake.twin_variant_idx[gid] when stored
+            v = k % 4   # round-robin placeholder -- see warning above
             if gid in self._grain_elems:
                 variant_elems[v].extend(self._grain_elems[gid].tolist())
         for v, eids in variant_elems.items():
@@ -520,6 +532,12 @@ class AbaqusExporter3D:
     # 07  interactions (stub)
     # -----------------------------------------------------------------------
     def _write_interactions(self, f):
+        warnings.warn(
+            "07_interactions.inp contains no interaction/constraint definitions "
+            "(cohesive zone, contact, etc.) -- this .inp is not simulation-ready "
+            "as exported and must be edited before submission.",
+            stacklevel=3,
+        )
         f.write('** Interaction definitions (stub).\n')
         f.write('** Extend for cohesive zone models, contact, etc.\n')
 
@@ -527,6 +545,12 @@ class AbaqusExporter3D:
     # 08  steps / output (stub)
     # -----------------------------------------------------------------------
     def _write_steps_output(self, f):
+        warnings.warn(
+            "08_steps_output.inp contains no *Step/boundary-condition/*Output "
+            "definitions -- this .inp is not simulation-ready as exported and "
+            "must be edited before submission.",
+            stacklevel=3,
+        )
         f.write('** Step and output request definitions (stub).\n')
         f.write('** Define *Step, *Static / *Dynamic, *Output as required.\n')
 
