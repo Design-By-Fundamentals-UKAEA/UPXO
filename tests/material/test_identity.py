@@ -7,7 +7,8 @@ def test_material_identity_default():
     """MaterialIdentity with defaults."""
     mid = MaterialIdentity()
     assert mid.name == 'cu'
-    assert mid.grade is not None
+    assert mid.alloy == 'value'
+    assert mid.comp == 'value'
 
 
 def test_material_identity_custom_name():
@@ -34,8 +35,8 @@ def test_material_identity_known_name():
     assert mid.name == 'OFHC-Cu'
 
 
-def test_material_identity_with_grade():
-    """MaterialIdentity with explicit grade."""
-    mid = MaterialIdentity(name='AA7075', grade='T73')
+def test_material_identity_with_alloy():
+    """MaterialIdentity with explicit alloy grade."""
+    mid = MaterialIdentity(name='AA7075', alloy='T73')
     assert mid.name == 'AA7075'
-    assert mid.grade == 'T73'
+    assert mid.alloy == 'T73'
