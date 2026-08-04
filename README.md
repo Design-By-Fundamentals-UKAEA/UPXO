@@ -117,6 +117,28 @@ Large ensembles of statistically representative microstructures can be generated
 
 ---
 
+## Cite As
+
+If you use UPXO in your research, please cite:
+
+> Sunil Anandatheertha, Vikram Phalke, Eralp Demir, Chris Hardie, UKAEA Poly-XTAL operations (UPXO V1.0): An open-source Python package for generating, assessment and meshing of poly-crystalline grain structures, *SoftwareX*, Volume 34, 2026, 102736, ISSN 2352-7110, https://doi.org/10.1016/j.softx.2026.102736
+
+```bibtex
+@article{anandatheertha2026upxo,
+  title   = {UKAEA Poly-XTAL operations (UPXO V1.0): An open-source Python package for
+             generating, assessment and meshing of poly-crystalline grain structures},
+  author  = {Anandatheertha, Sunil and Phalke, Vikram and Demir, Eralp and Hardie, Chris},
+  journal = {SoftwareX},
+  volume  = {34},
+  pages   = {102736},
+  year    = {2026},
+  issn    = {2352-7110},
+  doi     = {10.1016/j.softx.2026.102736}
+}
+```
+
+---
+
 ## Need Help Getting Started?
 
 If you are from an academic institution and feel UPXO could be useful to your project or use case, and need personal help, don't hesitate to contact Dr. Sunil Anandatheertha — I will be happy to help you set up and offer help in using UPXO.
