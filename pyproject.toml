@@ -54,7 +54,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Physics",
-    "Topic :: Scientific/Engineering :: Materials Science",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13"
 ]
