@@ -40,7 +40,7 @@ shapely
 Authors
 -------
 Dr. Sunil Anandatheertha
-vaasu.anandatheertha@ukaea.com
+vaasu.anandatheertha@ukaea.uk
 sunilanandatheertha@gmail.com
 """
 import numpy as np
