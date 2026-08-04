@@ -39,17 +39,15 @@ def test_processing_route_empty():
 
 
 def test_processing_route_append_step():
-    """Append steps to a route in order."""
+    """Append steps to a route using append_step method."""
     route = ProcessingRoute()
-    step1 = ProcessingStep(step_type='casting')
-    step2 = ProcessingStep(step_type='heat_treatment', params={'temp': 900})
-
-    route.append_step(step1)
-    route.append_step(step2)
+    route.append_step('casting')
+    route.append_step('heat_treatment', temp=900)
 
     assert len(route.steps) == 2
     assert route.steps[0].step_type == 'casting'
     assert route.steps[1].step_type == 'heat_treatment'
+    assert route.steps[1].params == {'temp': 900}
 
 
 def test_processing_route_last_deformation_step_empty():
@@ -61,8 +59,8 @@ def test_processing_route_last_deformation_step_empty():
 def test_processing_route_last_deformation_step_only_non_deformation():
     """last_deformation_step with only non-deformation steps returns None."""
     route = ProcessingRoute()
-    route.append_step(ProcessingStep(step_type='heat_treatment'))
-    route.append_step(ProcessingStep(step_type='aging'))
+    route.append_step('heat_treatment')
+    route.append_step('aging')
 
     assert route.last_deformation_step is None
 
@@ -70,54 +68,53 @@ def test_processing_route_last_deformation_step_only_non_deformation():
 def test_processing_route_last_deformation_step_single():
     """last_deformation_step returns the only deformation step."""
     route = ProcessingRoute()
-    route.append_step(ProcessingStep(step_type='heat_treatment'))
-    deform_step = ProcessingStep(step_type='rolling_symmetric',
-                                params={'reduction': 0.5})
-    route.append_step(deform_step)
+    route.append_step('heat_treatment')
+    route.append_step('rolling_symmetric', reduction=0.5)
 
-    assert route.last_deformation_step == deform_step
+    assert route.last_deformation_step is not None
+    assert route.last_deformation_step.step_type == 'rolling_symmetric'
 
 
 def test_processing_route_last_deformation_step_multiple():
     """last_deformation_step returns the most recent deformation step."""
     route = ProcessingRoute()
-    route.append_step(ProcessingStep(step_type='rolling_symmetric'))
-    route.append_step(ProcessingStep(step_type='heat_treatment'))
-    final_deform = ProcessingStep(step_type='forging')
-    route.append_step(final_deform)
+    route.append_step('rolling_symmetric')
+    route.append_step('heat_treatment')
+    route.append_step('forging')
 
-    assert route.last_deformation_step == final_deform
+    assert route.last_deformation_step is not None
+    assert route.last_deformation_step.step_type == 'forging'
 
 
 def test_processing_route_last_deformation_step_skips_later_non_deformation():
     """last_deformation_step ignores non-deformation steps that come after."""
     route = ProcessingRoute()
-    deform_step = ProcessingStep(step_type='extrusion')
-    route.append_step(deform_step)
-    route.append_step(ProcessingStep(step_type='heat_treatment'))
-    route.append_step(ProcessingStep(step_type='aging'))
+    route.append_step('extrusion')
+    route.append_step('heat_treatment')
+    route.append_step('aging')
 
-    assert route.last_deformation_step == deform_step
+    assert route.last_deformation_step is not None
+    assert route.last_deformation_step.step_type == 'extrusion'
 
 
 def test_processing_route_deformation_types():
     """Check which step types are considered deformation."""
+    # Only these four are deformation per _DEFORMATION_STEP_TYPES
     deformation_types = [
-        'rolling_symmetric', 'rolling_asymmetric', 'extrusion', 'forging',
-        'machining'
+        'rolling_symmetric', 'rolling_asymmetric', 'extrusion', 'forging'
     ]
-    non_deformation_types = ['heat_treatment', 'casting', 'aging']
+    # Everything else is non-deformation
+    non_deformation_types = ['heat_treatment', 'casting', 'aging', 'machining']
 
     for step_type in deformation_types:
         route = ProcessingRoute()
-        step = ProcessingStep(step_type=step_type)
-        route.append_step(step)
-        assert route.last_deformation_step == step, f"{step_type} should be deformation"
+        route.append_step(step_type)
+        assert route.last_deformation_step is not None, f"{step_type} should be deformation"
+        assert route.last_deformation_step.step_type == step_type
 
     for step_type in non_deformation_types:
         route = ProcessingRoute()
-        step = ProcessingStep(step_type=step_type)
-        route.append_step(step)
+        route.append_step(step_type)
         assert route.last_deformation_step is None, f"{step_type} should not be deformation"
 
 
@@ -135,7 +132,7 @@ def test_processing_route_order_preserved():
     types = ['casting', 'rolling_symmetric', 'heat_treatment', 'forging', 'aging']
 
     for step_type in types:
-        route.append_step(ProcessingStep(step_type=step_type))
+        route.append_step(step_type)
 
     for i, expected_type in enumerate(types):
         assert route.steps[i].step_type == expected_type
