@@ -14,7 +14,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "upxo"
-version = "1.0.1"
+version = "1.1.0"
 description = "An open-source Python package for generation, analysis, assessment, visualisation, meshing, and export of representative polycrystalline grain structures."
 readme = "README.md"
 requires-python = ">=3.13"
