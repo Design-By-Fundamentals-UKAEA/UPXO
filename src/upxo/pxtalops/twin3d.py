@@ -27,6 +27,7 @@ def introduce_twin_lamella_3d(
         next_gid,
         abrupt=False,
         rng=None,
+        host_coords=None,
 ):
     """
     Carve a single Sigma3 twin lamella out of a host grain in a 3D lgi
@@ -64,6 +65,11 @@ def introduce_twin_lamella_3d(
         along an in-plane axis, mimicking EBSD-measured abrupt twins.
     rng : numpy.random.Generator or None
         Required when *abrupt* is True.
+    host_coords : ndarray (M, 3) or None
+        Pre-built coordinate array of host-grain voxels.  When provided
+        the O(N_total_voxels) ``np.argwhere`` scan is skipped entirely,
+        giving a large speedup for large domains.  If None the scan is
+        performed as a fallback.
 
     Returns
     -------
@@ -71,7 +77,7 @@ def introduce_twin_lamella_3d(
         Global voxel coordinates of the twin region, or None if no
         voxels were selected.
     """
-    coords = np.argwhere(lgi == host_gid)
+    coords = host_coords if host_coords is not None else np.argwhere(lgi == host_gid)
     if coords.shape[0] == 0:
         return None
 
