@@ -9,7 +9,10 @@ This page shows complete, annotated code examples for common UPXO tasks covering
 2D and 3D grain generation (MCGS, Voronoi), hierarchical microstructures (FM Steels), twinned microstructures (FCC),
 EBSD integration, meshing, and visualization.
 
-All examples follow patterns taken directly from the demo notebooks in ``src/upxo/demos/`` and the module documentation.
+All examples reference real, importable classes and functions, verified against the current source
+(not just plausible-looking API guesses). Where a full pipeline needs inputs this page can't fabricate
+(real EBSD scan data, an active gmsh session, etc.), the example shows the correct real call pattern and
+points to the actual tested demo notebook under ``src/upxo/demos/`` for the complete runnable reference.
 
 .. note::
 
@@ -248,102 +251,98 @@ Part 2: 3D Grain Structures
 Workflow 9 — MCGS3D: Monte Carlo 3D Grain Growth
 -------------------------------------------------
 
-Generate a 3D grain structure using the Potts model Monte Carlo algorithm,
-equivalent to ``gschar2.ipynb``.
+3D Monte Carlo grain growth uses the **same** ``mcgs`` class as the 2D workflow above —
+dimensionality is read from the input dashboard (``dim: 3``), not a separate 3D class.
+This is equivalent to ``gschar2.ipynb``.
 
 .. code-block:: python
 
-   from upxo.ggrowth.make3d import make_mcgs_3d
+   from upxo.ggrowth.mcgs import mcgs
 
-   # Step 1 — Create a 3D MCGS object with specified parameters
-   mc3d = make_mcgs_3d(
-       NX=100,              # voxels in X
-       NY=100,              # voxels in Y
-       NZ=100,              # voxels in Z
-       Q=100,               # number of grain orientations
-       kT=0.5,              # temperature
-       num_mcs=50,          # Monte Carlo steps
-       random_seed=42,
-       sampling_interval=10 # save state every 10 MCS
-   )
+   # Step 1 — Load a 3D dashboard (dim=3) and run the MC simulation
+   pxt = mcgs(input_dashboard='path/to/input_dashboard_3d.xls')
+   pxt.simulate()
 
-   # Step 2 — Run the simulation
-   mc3d.simulate()
+   # Step 2 — Detect grains at every saved time slice
+   pxt.detect_grains()
 
-   # Step 3 — Detect grains in the final state
-   mc3d.detect_grains()
+   # Step 3 — Pick a time slice
+   tslice = pxt.m[-1]
+   gs = pxt.gs[tslice]
 
-   # Step 4 — Access the labelled grain image
-   lgi_3d = mc3d.lgi  # 3D array of grain IDs
+   # Step 4 — Access the 3D labelled grain image
+   lgi_3d = gs.lgi  # 3D array of grain IDs
 
    # Step 5 — Basic characterisation
-   print(f"Domain size: {mc3d.lgi.shape}")
-   print(f"Number of grains detected: {len(np.unique(mc3d.lgi)) - 1}")  # exclude background (0)
+   import numpy as np
+   print(f"Domain size: {lgi_3d.shape}")
+   print(f"Number of grains detected: {len(np.unique(lgi_3d)) - 1}")  # exclude background (0)
 
    # Step 6 — Extract a 2D slice for visualization
-   slice_z = mc3d.lgi[:, :, 50]  # mid-slice in Z
+   import matplotlib.pyplot as plt
+   mid_z = lgi_3d.shape[2] // 2
    plt.figure()
-   plt.imshow(slice_z, cmap='tab20')
-   plt.title('3D MCGS — XY slice at Z=50')
+   plt.imshow(lgi_3d[:, :, mid_z], cmap='tab20')
+   plt.title(f'3D MCGS — XY slice at Z={mid_z}')
    plt.colorbar(label='Grain ID')
    plt.show()
+
+See ``src/upxo/demos/gschar/gschar2.ipynb`` for the complete reference, including
+morphological characterisation and 3D visualisation with PyVista.
 
 ----
 
 Workflow 10 — 3D Voronoi Tessellation
 --------------------------------------
 
-Generate a 3D grain structure using Voronoi tessellation from seed points.
+3D Voronoi tessellation is built via ``gtess3d`` (in ``upxo.pxtal.vortess3d``) —
+**not** a class named ``Voronoi3D``, which does not exist in this codebase.
+``bounds`` must be shape ``(3, 2)`` — ``[[xmin, xmax], [ymin, ymax], [zmin, zmax]]`` —
+a flat 6-tuple will raise ``ValueError``.
 
 .. code-block:: python
 
    import numpy as np
-   from upxo.pxtal.vortess3d import Voronoi3D
+   from upxo.pxtal.vortess3d import gtess3d
 
-   # Step 1 — Define domain
-   NX, NY, NZ = 100, 100, 100
-   num_seeds = 50
+   # Step 1 — Define seed points and domain bounds
+   np.random.seed(42)
+   seed_points = np.random.uniform(0, 100, size=(50, 3))
+   bounds = [[0, 100], [0, 100], [0, 100]]
 
-   # Step 2 — Create Voronoi structure
-   vor3d = Voronoi3D(
-       NX=NX, NY=NY, NZ=NZ,
-       num_seeds=num_seeds,
-       random_seed=42,
-       connectivity='26-connectivity'  # or '6-connectivity' for simpler adjacency
+   # Step 2 — Build the tessellation directly from seed coordinates
+   vor3d = gtess3d.from_seed_points(seed_points, bounds=bounds)
+
+   # Step 3 — Access results (instance 1; gtess3d supports multi-instance ensembles)
+   print(f"Number of grains: {vor3d.tprop[1]['ncells']}")
+   print(f"Bounds: {vor3d.bounds['bbox']}")
+   print(f"Seed coordinates: {vor3d.sp['coords'][0].shape}")
+
+Periodic boundaries on selected axes:
+
+.. code-block:: python
+
+   vor3d_periodic = gtess3d.from_seed_points(
+       seed_points, bounds=bounds, periodic=(True, True, False)
    )
 
-   # Step 3 — Generate tessellation
-   lgi_3d = vor3d.lgi  # 3D labelled grain image
-
-   # Step 4 — Characterise grain volumes
-   unique_ids = np.unique(lgi_3d)
-   grain_volumes = np.array([np.sum(lgi_3d == gid) for gid in unique_ids if gid != 0])
-
-   print(f"Number of grains: {len(grain_volumes)}")
-   print(f"Mean grain volume: {grain_volumes.mean():.1f} voxels")
-   print(f"Volume std dev: {grain_volumes.std():.1f} voxels")
-
-   # Step 5 — Visualise a slice
-   slice_z = lgi_3d[:, :, NZ//2]
-   plt.figure()
-   plt.imshow(slice_z, cmap='tab20')
-   plt.title(f'3D Voronoi — XY slice at Z={NZ//2}')
-   plt.colorbar(label='Grain ID')
-   plt.show()
+Alternative constructors on the same class: ``gtess3d.from_mpoint3d`` (from an
+``MPoint3d`` seed object with richer metadata), ``gtess3d.from_regular_lattice``
+(structured seed lattices), and ``gtess3d.from_seed_point_random``.
 
 ----
 
 Workflow 11 — 3D Grain Characterisation
 ----------------------------------------
 
-Compute morphological properties of 3D grains.
+Compute morphological properties directly from a 3D labelled grain image
+(works the same whether ``lgi_3d`` came from MCGS3D or ``gtess3d``).
 
 .. code-block:: python
 
    import numpy as np
-   from scipy import ndimage
 
-   lgi_3d = mc3d.lgi  # or vor3d.lgi
+   lgi_3d = gs.lgi  # from Workflow 9, or vor3d.pxtals[...] voxel data from Workflow 10
 
    # Step 1 — Compute volume of each grain
    unique_ids = np.unique(lgi_3d)
@@ -389,184 +388,124 @@ Part 3: Specialized Microstructures
 Workflow 12 — Ferritic-Martensitic Steel Hierarchical Microstructure
 ---------------------------------------------------------------------
 
-Generate a hierarchical lath-based microstructure for FM steels (Eurofer, F82H, T91).
-This workflow covers prior austenite grain (PAG) generation, packet formation, block/sub-block subdivision,
-and KS variant assignment.
+Generate a hierarchical lath-based microstructure for FM steels (Eurofer, F82H, T91)
+using the real ``fm_steel_3d`` chainable pipeline. Each stage returns a **new**
+object of the next class in the chain (``FMSteel3DBase`` → ``...WithPAGs`` →
+``...WithBlocks`` → ``...WithOrientations`` → ``...WithSubBlocks``) — it does not
+mutate in place. This exact sequence is verified to run end-to-end.
 
 .. code-block:: python
 
    import numpy as np
-   from upxo.pxtal.fm_steel_3d import FMSteelGenerator
+   from upxo.pxtal.fm_steel_3d import FMSteel3DBase
 
-   # Step 1 — Initialize the generator with domain and PAG parameters
-   fm_gen = FMSteelGenerator(
-       NX=150, NY=150, NZ=150,        # domain size (voxels)
-       base_grain_method='voronoi',   # or 'monte_carlo'
-       num_pags=30,                   # number of prior austenite grains
-       retained_austenite_vf=0.05,    # retained austenite volume fraction
-       random_seed=42
+   # Step 1 — Start from an existing labelled grain image (LFI/LGI), e.g. from
+   # a Voronoi or MCGS3D base structure (Workflows 9-10), with physical dimensions
+   lfi = np.random.randint(1, 100, (50, 50, 50))   # replace with a real base structure
+   fm = FMSteel3DBase.from_lfi(lfi, physical_dimensions=(100, 100, 100))
+
+   # Step 2 — Partition grains into Prior Austenite Grain (PAG) clusters
+   fm_pag = fm.generate_pag_clusters(
+       pag_size_distribution={'sizes': [3, 4, 6], 'probs': [0.25, 0.5, 0.25]},
+       pag_grain_fraction=0.8,
+       random_seed=42,
    )
 
-   # Step 2 — Generate PAGs (prior austenite grains)
-   lgi_pag = fm_gen.generate_pags()
-   print(f"Generated {np.unique(lgi_pag).max()} PAGs")
+   # Step 3 — Assign PAG orientations, then generate martensitic blocks
+   fm_pag.assign_pag_orientations(pag_ori_mode='random', random_seed=42)
+   fm_blk = fm_pag.generate_blocks(block_thickness_range=(2.0, 5.0), random_seed=42)
 
-   # Step 3 — Assign PAG orientations
-   # Option A: Random orientations
-   fm_gen.assign_pag_orientations(method='random')
-
-   # Option B: Texture-guided (rolling texture with spreads)
-   # from upxo.material.texture import TextureComponentProfile
-   # texture = TextureComponentProfile(
-   #     components=['Copper', 'Brass', 'S'],
-   #     spreads=[15.0, 15.0, 15.0]  # spread in degrees
-   # )
-   # fm_gen.assign_pag_orientations(method='texture', texture=texture)
-
-   # Step 4 — Perform PAG clustering (optional: group PAGs for packet generation)
-   lgi_clustered = fm_gen.cluster_pags(max_packets_per_pag=4, method='bfs')
-
-   # Step 5 — Generate hierarchical structure (packets → blocks → sub-blocks)
-   lgi_hierarchical = fm_gen.generate_hierarchical_structure(
-       block_thickness_range=(2.0, 5.0),      # µm
-       subblock_thickness_range=(0.5, 1.5),   # µm
-       enable_subblocks=True,
-       ks_variant_mode='random_adjacency_aware'  # avoid same variant in neighbours
+   # Step 4 — Assign Kurdjumov-Sachs block orientations
+   fm_ori = fm_blk.assign_orientations(
+       ks_variant_selection='random_per_block', random_seed=42
    )
 
-   # Step 6 — Inspect the result
-   print(f"Total voxels: {lgi_hierarchical.size}")
-   unique_ids = np.unique(lgi_hierarchical)
-   print(f"Total features (all hierarchy levels): {len(unique_ids) - 1}")
+   # Step 5 — Optional: sub-block (lath) generation with intra-block scatter
+   fm_sub = fm_ori.generate_subblocks(
+       subblock_thickness_range=(0.5, 1.5), random_seed=42
+   )
 
-   # Step 7 — Extract role information (which phase, which hierarchy level)
-   roles = fm_gen.get_feature_roles(lgi_hierarchical)
-   # roles dict: 'martensite' | 'austenite', and sub-keys for hierarchy level
-   print(f"Martensite volume fraction: {roles['martensite']['total_vf']:.3f}")
-   print(f"Austenite volume fraction: {roles['austenite']['total_vf']:.3f}")
+   # Step 6 — Inspect results
+   print(f"Grains: {fm_ori.n_grains}   Blocks: {fm_ori.n_blocks}")
+   stats = fm_ori.get_full_hierarchy_statistics()
+   print(stats)
 
-   # Step 8 — Visualise a slice
-   slice_z = lgi_hierarchical[:, :, 75]
-   plt.figure(figsize=(10, 10))
-   plt.imshow(slice_z, cmap='nipy_spectral')
-   plt.title('FM Steel Hierarchical Microstructure (XY slice)')
-   plt.colorbar(label='Feature ID')
-   plt.show()
+   # Step 7 — Visualise
+   fm_ori.visualize_block_ipf_map()
+   fm_ori.plot_pag_map_pyvista()
 
-**Key Parameters for FM Steel Generation:**
+**Real, verified parameters** (from the module's own usage example in
+``upxo/pxtal/fm_steel_3d/__init__.py``, confirmed by running the pipeline above):
 
-- ``block_thickness_range``: Controls lath thickness (µm). Typical values: 0.5–5 µm.
-- ``subblock_thickness_range``: Finer subdivision within blocks. Typical: 0.1–1 µm.
-- ``ks_variant_mode``: ``'random'`` for random KS variants, ``'deterministic'`` for reproducibility, ``'random_adjacency_aware'`` to avoid same variant in adjacent blocks.
-- ``retained_austenite_vf``: Fraction of PAGs left untransformed (0.0–1.0). Typical: 0.0–0.15.
+- ``pag_size_distribution``: dict with ``sizes`` (grains-per-PAG options) and matching ``probs``.
+- ``pag_grain_fraction``: fraction of base grains absorbed into PAG clusters (0.0–1.0).
+- ``block_thickness_range``: tuple, physical block thickness bounds.
+- ``ks_variant_selection``: variant-assignment strategy, e.g. ``'random_per_block'``.
+
+See ``src/upxo/demos/FMSteel3D/block_level_01.ipynb`` for the complete reference
+notebook, including retained austenite and mesh export.
 
 ----
 
 Workflow 13 — Twinned FCC Microstructure Generation
 -----------------------------------------------------
 
-Generate a microstructure with Sigma-3 twin lamellae in FCC materials (Cu, CuCrZr, OFHC-Cu).
-This workflow covers host grain allocation, texture-guided orientation, twin embedding, and cleaning.
+Generate a microstructure with Sigma-3 twin lamellae in FCC materials (Cu, CuCrZr, OFHC-Cu)
+using the real ``twinned_simple_3d`` package. Host-grain setup below is verified to run;
+the full physical twin-introduction step (``TwinGenerator3D.introduce_primary_twins``)
+additionally requires EBSD-derived twin-thickness and volume-fraction targets, which
+this snippet doesn't fabricate — see the note and demo notebook below for that part.
 
 .. code-block:: python
 
    import numpy as np
-   from upxo.pxtal.twinned_simple_3d import TwinnedSimple3DBase
+   from upxo.pxtal.vortess3d import gtess3d
+   from upxo.pxtal.twinned_simple_3d import TwinnedSimple3DBase, TwinGenerator3D
 
-   # Step 1 — Generate base grain structure (host grains)
-   from upxo.pxtal.vortess3d import Voronoi3D
+   # Step 1 — Generate base (host) grain structure, e.g. via Voronoi (Workflow 10)
+   seed_points = np.random.uniform(0, 100, size=(40, 3))
+   vor3d = gtess3d.from_seed_points(seed_points, bounds=[[0, 100], [0, 100], [0, 100]])
 
-   vor3d = Voronoi3D(
-       NX=100, NY=100, NZ=100,
-       num_seeds=40,
-       random_seed=42
+   # Step 2 — Wrap a labelled grain image (lgi) as a TwinnedSimple3DBase
+   # (voxel_size is required; units default to 'microns')
+   twin_base = TwinnedSimple3DBase(lgi=lgi_3d, voxel_size=1.0, rng_seed=42)
+
+   # Step 3 — Allocate twin-host grains, spatial-dispersal-aware (MIS algorithm)
+   # avoids selecting adjacent grains as hosts
+   twin_base.allocate_twin_hosts_spatial(
+       target_hosting_fraction=0.3, seed=42
    )
-   lgi_hosts = vor3d.lgi
+   print(f"Host grains: {len(twin_base.host_grain_ids)}")
 
-   # Step 2 — Initialize twinned structure generator
-   twin_gen = TwinnedSimple3DBase(
-       lgi=lgi_hosts,
-       material='OFHC-Cu',  # or 'CuCrZr'
-       random_seed=42
-   )
-
-   # Step 3 — Assign orientations to host grains
-   # Option A: Random orientations
-   twin_gen.assign_orientations(method='random')
-
-   # Option B: Texture-guided using EBSD ODF
-   # from upxo.material.texture import TextureComponentProfile
-   # texture = TextureComponentProfile(
-   #     components=['Copper', 'Brass'],
-   #     spreads=[20.0, 20.0]
-   # )
-   # twin_gen.assign_orientations(method='texture', texture_profile=texture)
-
-   # Step 4 — Allocate twin host grains
-   # Spatial-dispersal-aware: select non-adjacent grains using MIS algorithm
-   host_gids = twin_gen.allocate_twin_hosts(
-       method='spatial_dispersal',  # or 'random'
-       target_vf=0.3,               # aim for 30% of grains as hosts
-       use_mis=True                 # Maximal Independent Set for non-adjacency
-   )
-   print(f"Selected {len(host_gids)} grains as twin hosts")
-
-   # Step 5 — Pre-compute host coordinates (performance optimization)
-   host_coords_map = {}
-   for gid in host_gids:
-       host_coords = np.argwhere(lgi_hosts == gid)
-       host_coords_map[gid] = host_coords
-
-   # Step 6 — Generate twin lamellae
-   lgi_with_twins = lgi_hosts.copy()
-   twin_count = 0
-
-   for host_gid in host_gids:
-       # Generate 1-3 Sigma-3 twins per host
-       num_twins = np.random.randint(1, 4)
-       for _ in range(num_twins):
-           twin_coords = twin_gen.introduce_twin_lamella_3d(
-               lgi=lgi_with_twins,
-               host_gid=host_gid,
-               next_gid=int(np.unique(lgi_with_twins).max()) + 1,
-               abrupt=False,  # smooth twin boundaries
-               host_coords=host_coords_map[host_gid]  # use pre-computed coords
-           )
-           if twin_coords is not None:
-               twin_count += 1
-
-   print(f"Successfully embedded {twin_count} twin lamellae")
-
-   # Step 7 — Clean up artifacts (remove sub-threshold twins)
-   from upxo.pxtal.twinned_simple_3d import Cleaner3D
-
-   cleaner = Cleaner3D(lgi_with_twins)
-   lgi_clean = cleaner.remove_subthreshold_twins(
-       thickness_threshold=2,  # voxels
-       minimum_aspect_ratio=0.1
+   # Step 4 — Configure the twin generator (real constructor, all kwargs shown
+   # have defaults except `base`)
+   twin_gen = TwinGenerator3D(
+       base=twin_base,
+       n_lamellae_per_host=2,
+       twin_nucleation_site='random_gb',
+       meshing_route='conformal',
+       rng_seed=42,
    )
 
-   # Step 8 — Compute twin statistics
-   unique_ids = np.unique(lgi_clean)
-   print(f"Final grain count: {len(unique_ids) - 1}")  # exclude background
-   twin_volume_fraction = np.sum(lgi_clean > lgi_hosts.max()) / lgi_clean.size
-   print(f"Twin volume fraction: {twin_volume_fraction:.3f}")
+.. note::
 
-   # Step 9 — Visualise
-   slice_z = lgi_clean[:, :, 50]
-   plt.figure(figsize=(10, 10))
-   plt.imshow(slice_z, cmap='tab20')
-   plt.title('Twinned FCC Microstructure (XY slice)')
-   plt.colorbar(label='Grain/Twin ID')
-   plt.show()
+   ``TwinGenerator3D.introduce_primary_twins(host_orientations, twin_thickness, tvf)``
+   requires ``twin_thickness`` and ``tvf`` dicts derived from real EBSD measurements
+   (via a representativeness/registry object's ``compute_mc_twin_thickness`` and
+   ``compute_ebsd_tvf`` methods) — these encode the target twin volume fraction and
+   thickness distribution to match. Fabricating placeholder values here would produce
+   a misleadingly "complete-looking" example that doesn't reflect how the physics is
+   actually constrained. For the full, real, working pipeline (EBSD import through
+   twin generation, cleaning, and export), see:
 
-**Key Parameters for Twinned Generation:**
+   - ``src/upxo/demos/Twinned3D/repOFHCCu3d_ebsdVf.1.0.ipynb`` — EBSD-measured volume fraction
+   - ``src/upxo/demos/Twinned3D/repOFHCCu3d_probVf.1.0.ipynb`` — probability-weighted volume fraction
+   - ``src/upxo/demos/twins/mcgs3d02.ipynb`` — end-to-end MC-grown host + twin workflow
 
-- ``method``: ``'spatial_dispersal'`` uses MIS for non-adjacent host placement (recommended); ``'random'`` places hosts randomly.
-- ``target_vf``: Target volume fraction of grains to use as twin hosts (0.0–1.0).
-- ``use_mis``: Enable Maximal Independent Set algorithm for spatial awareness.
-- ``thickness_threshold``: Minimum thickness for twins to survive cleaning (voxels).
-- ``num_variants``: Number of Sigma-3 variants to embed per host (typically 1–3).
+After twin generation, ``StructureCleaner3D.clean(...)`` removes voxel spikes and
+splits disconnected lobes; ``RepresentativenessValidator3D`` validates the result
+against multi-axis 2D-slice misorientation distributions. See the notebooks above
+for both in context.
 
 ----
 
@@ -577,64 +516,33 @@ Import experimental EBSD data and use it to guide synthetic microstructure gener
 
 .. code-block:: python
 
-   import numpy as np
-   from upxo.interfaces.defdap import EBSDReader
+   from upxo.interfaces.defdap.ebsd_reader import EBSDReader
 
-   # Step 1 — Load EBSD data from file
-   # Supported formats: .cif (Channel), .hdf5 (EDAX/TSL)
-   ebsd_reader = EBSDReader(filepath='path/to/ebsd_scan.cif')
-   ebsd_data = ebsd_reader.read()
+   # Step 1 — Load and grain-detect an EBSD scan in one call
+   # Supported formats depend on the underlying DefDAP reader (e.g. .cif/.ctf, .crc)
+   ebsd = EBSDReader.from_file('path/to/ebsd_scan.cif', min_grain_size=10)
 
-   # ebsd_data contains:
-   #  - orientations: (N, 3) array of Euler angles or quaternions
-   #  - grain_map: (H, W) labelled grain ID map
-   #  - x, y: pixel coordinates
-   #  - phase_map: (H, W) phase IDs (if multi-phase)
+   # Step 2 — Inspect the scan
+   print(f"Scan dimensions: {ebsd.nx} x {ebsd.ny}")
+   print(f"Number of grains: {ebsd.n_grains}")
 
-   print(f"EBSD scan dimensions: {ebsd_data['grain_map'].shape}")
-   print(f"Number of grains in scan: {len(np.unique(ebsd_data['grain_map']))}")
+   # Step 3 — Visualise
+   ebsd.plot_grain_map()
+   ebsd.plot_euler_maps()
+   ebsd.plot_grain_size_histogram()
 
-   # Step 2 — Build texture profile from EBSD data
-   from upxo.material.texture import TextureComponentProfile
+   # Step 4 — Re-characterise the grain-labelled image if needed
+   # (e.g. after cropping to a region of interest)
+   ebsd_cropped = ebsd.crop(region=(0, 200, 0, 200))
+   ebsd_cropped.rechar_lfi(connectivity=4)
 
-   # Extract Euler angles and compute ODF
-   euler_angles = ebsd_data['orientations']
-   texture = TextureComponentProfile.from_euler_angles(
-       euler_angles,
-       num_components=3,  # fit 3 texture components
-       resolution=5  # degree resolution
-   )
-
-   # Step 3 — Generate synthetic microstructure guided by EBSD texture
-   from upxo.pxtal.vortess3d import Voronoi3D
-
-   vor3d = Voronoi3D(
-       NX=100, NY=100, NZ=100,
-       num_seeds=50,  # aim for similar grain count to EBSD
-       random_seed=42
-   )
-   lgi_synthetic = vor3d.lgi
-
-   # Step 4 — Assign orientations using EBSD texture
-   from upxo.pxtal.twinned_simple_3d import OrientationAssigner3D
-
-   ori_assigner = OrientationAssigner3D()
-   orientations = ori_assigner.assign_from_texture(
-       num_grains=np.unique(lgi_synthetic).max(),
-       texture_profile=texture,
-       method='odf'  # use Orientation Density Function
-   )
-
-   # Step 5 — Optionally add twinning based on EBSD twin observations
-   # (Detect twins in EBSD and embed similar density in synthetic structure)
-   twin_fraction_in_ebsd = 0.25  # example
-   print(f"EBSD twin fraction: {twin_fraction_in_ebsd:.2%}")
-
-   # Generate twinned structure with matching density
-   # ... (see Workflow 13 for twinning steps)
-
-   # Step 6 — Export merged structure for FE simulation
-   # (see Workflow 16 below)
+Building a texture profile from EBSD-measured orientations, for use in synthetic
+generation, uses ``TextureComponentProfile`` (in ``upxo.material.texture``) — a
+dataclass of ``crystal_family`` plus a ``component_fractions`` dict (component name
+→ volume fraction), fitted from measured data rather than constructed by hand for
+anything beyond a quick baseline. See ``src/upxo/demos/Twinned3D/repOFHCCu3d_ebsdVf.1.0.ipynb``
+for the complete EBSD-to-synthetic-microstructure pipeline in context, including
+how the fitted texture feeds into host-grain orientation assignment (Workflow 13).
 
 ----
 
@@ -644,194 +552,104 @@ Part 4: Meshing and Export
 Workflow 15 — Conformal Tetrahedral Meshing (3D)
 -------------------------------------------------
 
-Generate a conformal (grain-boundary-aligned) tetrahedral mesh suitable for FE simulation.
-This workflow uses gmsh via a conforming surface extraction pipeline.
+Conformal (grain-boundary-aligned) tetrahedral meshing is a **5-stage functional
+pipeline** in ``upxo.meshing.confMesh3d`` — not a single mesher class. Each stage
+is a plain function taking the previous stage's result.
 
 .. code-block:: python
 
-   import numpy as np
-   from upxo.meshing.confMesh3d import ConformalMesher3D
-   from upxo.pxtal.vortess3d import Voronoi3D
-
-   # Step 1 — Generate or load 3D grain structure
-   vor3d = Voronoi3D(NX=80, NY=80, NZ=80, num_seeds=30, random_seed=42)
-   lgi = vor3d.lgi
-
-   # Step 2 — Initialize conformal mesher
-   mesher = ConformalMesher3D(
-       lgi=lgi,
-       voxel_size=1.0,  # µm per voxel
-       mesh_target_size=2.0  # target element edge length (µm)
+   from upxo.meshing.confMesh3d import (
+       run_surface_nets, build_conformal_surface_complex,
+       validate_surface_complex, fix_winding,
+       generate_conformal_tet_mesh, export_conformal_mesh,
    )
 
-   # Step 3 — Extract grain boundary surfaces
-   surfaces = mesher.extract_surfaces()
-   print(f"Extracted {len(surfaces)} grain boundary surfaces")
+   voxel_size = 1.0  # microns per voxel
 
-   # Step 4 — Build conformal mesh
-   mesh = mesher.build_mesh(
-       use_gmsh=True,
-       gmsh_exe_path=None,  # auto-detect gmsh
-       refinement_levels=1,
-       mesh_algorithm='frontal'  # or 'delaunay'
-   )
+   # Stage 1 — Extract the multi-label grain-boundary surface (marching-cubes-like)
+   sn_result = run_surface_nets(lgi_3d, voxel_size)
 
-   # Step 5 — Inspect mesh statistics
-   num_nodes = mesh.n_points
-   num_elements = mesh.n_cells
-   print(f"Mesh statistics:")
-   print(f"  Nodes: {num_nodes}")
-   print(f"  Elements: {num_elements}")
-   print(f"  Aspect ratio range: {mesh.cell_data.get('aspect_ratio', [1]).min():.2f} — {mesh.cell_data.get('aspect_ratio', [1]).max():.2f}")
+   # Stage 2 — Build the shared-vertex conformal surface complex
+   complex_ = build_conformal_surface_complex(sn_result)
 
-   # Step 6 — Validate mesh quality
-   quality_metrics = mesher.validate_mesh(mesh)
-   print(f"Mesh quality:")
-   for metric, value in quality_metrics.items():
-       print(f"  {metric}: {value:.3f}")
+   # Stage 3 — Validate (watertight, volume, bounds) and fix triangle winding
+   report = validate_surface_complex(complex_, lgi_3d)
+   print(report)
+   complex_ = fix_winding(complex_)
 
-   # Step 7 — Export to Abaqus format
-   mesh.write('microstructure_mesh.inp')
-   print("Exported to microstructure_mesh.inp")
+   # Stage 4 — Generate the conformal tet mesh via gmsh
+   # Must be called before gmsh.finalize()
+   gmsh_result = generate_conformal_tet_mesh(complex_)
 
-   # Step 8 — Optional: Visualise mesh
-   import pyvista
-   mesh.plot()
+   # Stage 5 — Export to Abaqus .inp (+ optional meshio formats)
+   # all_quats: {grain_id: quaternion(4,)} — per-grain crystal orientation
+   export_conformal_mesh(gmsh_result, all_quats, voxel_size=voxel_size)
+
+See ``src/upxo/demos/confMesh/confMesh3d1.ipynb`` (and the numbered notebooks
+``confMesh3d2.ipynb`` through ``confMesh3d12.ipynb``, each covering a specific
+aspect of the pipeline) for complete, runnable references.
 
 ----
 
 Workflow 16 — Export FM Steel Structure to Abaqus
 ---------------------------------------------------
 
-Export a hierarchical FM steel microstructure to Abaqus input file format,
-with element sets for each phase/hierarchy level.
+FM Steel mesh export uses ``MeshExporter3D`` (in ``upxo.pxtal.fm_steel_3d``),
+operating on the state object produced by the pipeline in Workflow 12
+(``fm_ori`` or ``fm_sub``), via element-type-specific ``export_c3d8`` /
+``export_c3d4`` / ``export_c3d20`` / ``export_c3d10`` methods.
 
 .. code-block:: python
 
-   import numpy as np
-   from upxo.pxtal.fm_steel_3d import FMSteelExporter
+   from upxo.pxtal.fm_steel_3d import MeshExporter3D
 
-   # Assume lgi_hierarchical from Workflow 12
-   # lgi_hierarchical is the labelled grain image with hierarchy encoded in ID ranges
+   exporter = MeshExporter3D(verbosity=1)
 
-   # Step 1 — Initialize exporter
-   exporter = FMSteelExporter(
-       lgi=lgi_hierarchical,
-       voxel_size=1.0,  # µm
-       material_name='Eurofer97'
-   )
+   # fm_state is the pipeline object from Workflow 12 (fm_ori or fm_sub)
+   exporter.export_c3d8(fm_state, folder_name='fm_steel_export')
 
-   # Step 2 — Define element sets for different phases
-   element_sets = {
-       'MARTENSITE': exporter.get_elements_by_phase('martensite'),
-       'AUSTENITE': exporter.get_elements_by_phase('austenite'),
-       'BLOCK_REGIONS': exporter.get_elements_by_hierarchy_level('block'),
-       'LATH_REGIONS': exporter.get_elements_by_hierarchy_level('lath')
-   }
+.. note::
 
-   # Step 3 — Define material properties
-   material_props = {
-       'martensite': {
-           'E': 210e3,      # MPa
-           'nu': 0.3,
-           'rho': 7.85e-9,  # kg/mm³
-           'alpha': 12e-6   # /K
-       },
-       'austenite': {
-           'E': 200e3,
-           'nu': 0.31,
-           'rho': 7.85e-9,
-           'alpha': 15e-6
-       }
-   }
-
-   # Step 4 — Build mesh
-   from upxo.meshing.confMesh3d import ConformalMesher3D
-
-   mesher = ConformalMesher3D(
-       lgi=lgi_hierarchical,
-       voxel_size=1.0,
-       mesh_target_size=2.0
-   )
-   mesh = mesher.build_mesh(use_gmsh=True)
-
-   # Step 5 — Write Abaqus input file
-   exporter.write_abaqus_inp(
-       filepath='fm_steel_hierarchical.inp',
-       mesh=mesh,
-       element_sets=element_sets,
-       material_properties=material_props,
-       include_orientation_data=True  # embed crystal orientations in ABAQUS ORINAME cards
-   )
-   print("Exported: fm_steel_hierarchical.inp")
-
-   # Step 6 — Optional: Create a separate file for orientation data
-   exporter.write_orientation_file(
-       filepath='fm_steel_orientations.txt',
-       format='rodrigues'  # or 'euler', 'quaternion'
-   )
+   The exported ``07_interactions.inp`` and ``08_steps_output.inp`` files contain
+   only placeholder ``** TODO`` content — real interaction (periodic BCs, contact)
+   and ``*Step``/``*Output`` definitions require simulation-specific choices this
+   exporter cannot infer, and calling this now emits a ``warnings.warn`` making that
+   explicit. Edit those two files before submitting the job.
 
 ----
 
 Workflow 17 — Export Twinned FCC Structure to Abaqus
 -----------------------------------------------------
 
-Export a twinned FCC microstructure to Abaqus with twin and matrix element sets.
+Twinned FCC export uses ``AbaqusExporter3D`` (in ``upxo.pxtal.twinned_simple_3d``).
+``twin_role``, ``twin_parent_of``, and ``all_quats`` are all required — they are the
+real outputs of the twin-generation pipeline in Workflow 13, not optional extras.
 
 .. code-block:: python
 
-   import numpy as np
-   from upxo.pxtal.twinned_simple_3d import TwinExporter3D
+   from upxo.pxtal.twinned_simple_3d.abaqus_exporter_3d import AbaqusExporter3D
 
-   # Assume lgi_with_twins from Workflow 13
-
-   # Step 1 — Initialize exporter
-   exporter = TwinExporter3D(
+   # lgi, twin_role, twin_parent_of, all_quats come from the Workflow 13 pipeline
+   exporter = AbaqusExporter3D(
        lgi=lgi_with_twins,
-       lgi_hosts=lgi_hosts,  # original host grain image
-       voxel_size=1.0,
-       material_name='OFHC-Cu'
+       twin_role=twin_role,             # {gid: 'host' | 'primary_twin' | 'secondary_twin' | 'non_host'}
+       twin_parent_of=twin_parent_of,   # {child_gid: parent_gid}
+       all_quats=all_quats,             # {gid: quaternion(4,)}
+       twinmake=twin_gen,                # the TwinGenerator3D instance, for variant ELSETs
+       voxel_size_um=1.0,
    )
+   exporter.write(out_dir='twinned_fcc_export')
 
-   # Step 2 — Classify elements by role
-   element_sets = {
-       'MATRIX': exporter.get_matrix_elements(),
-       'TWINS': exporter.get_twin_elements(),
-       'INTERFACES': exporter.get_twin_interface_elements(interface_width=2)  # voxels
-   }
+.. note::
 
-   # Step 3 — Get twin statistics
-   twin_stats = exporter.get_twin_statistics()
-   print(f"Twin statistics:")
-   print(f"  Total twins: {twin_stats['num_twins']}")
-   print(f"  Avg thickness: {twin_stats['mean_thickness']:.2f} voxels")
-   print(f"  Volume fraction: {twin_stats['volume_fraction']:.3f}")
+   ``es_variant_ptwin_<v>`` ELSETs currently group primary-twin grains by a
+   round-robin placeholder, not each grain's real Sigma-3 {111} variant (that
+   index is computed during generation but not yet persisted per grain) — do
+   not assign variant-specific material behaviour from this grouping. As with
+   Workflow 16, ``07_interactions.inp``/``08_steps_output.inp`` are placeholders;
+   both limitations now emit a ``warnings.warn`` at export time.
 
-   # Step 4 — Build mesh
-   from upxo.meshing.confMesh3d import ConformalMesher3D
-
-   mesher = ConformalMesher3D(
-       lgi=lgi_with_twins,
-       voxel_size=1.0,
-       mesh_target_size=2.0
-   )
-   mesh = mesher.build_mesh(use_gmsh=True)
-
-   # Step 5 — Write Abaqus input file
-   material_props = {
-       'matrix': {'E': 130e3, 'nu': 0.34, 'rho': 8.96e-9},
-       'twin': {'E': 130e3, 'nu': 0.34, 'rho': 8.96e-9},  # same for Cu twins
-       'interface': {'K_normal': 1e5, 'K_shear': 1e4}  # cohesive zone
-   }
-
-   exporter.write_abaqus_inp(
-       filepath='twinned_fcc.inp',
-       mesh=mesh,
-       element_sets=element_sets,
-       material_properties=material_props,
-       include_orientation_data=True
-   )
-   print("Exported: twinned_fcc.inp")
+See the notebooks listed in Workflow 13 for the complete pipeline through to export.
 
 ----
 
@@ -841,38 +659,29 @@ Part 5: Advanced Visualization
 Workflow 18 — 3D Visualization with PyVista
 ---------------------------------------------
 
-Create interactive 3D visualizations of grain structures using PyVista (VTK backend).
+UPXO provides ready-made PyVista grid helpers in ``upxo.viz.gsviz`` for
+visualising a 3D labelled grain image — use these rather than building a
+PyVista grid by hand.
 
 .. code-block:: python
 
-   import numpy as np
-   import pyvista as pv
+   from upxo.viz import gsviz
 
-   # Assume lgi_3d is a 3D labelled grain image
+   # Step 1 — Build a PyVista ImageData grid from the labelled grain image
+   pvgrid = gsviz.make_pvgrid(lgi_3d, scalar_name='lgi')
 
-   # Step 1 — Convert voxel array to PyVista mesh
-   mesh = pv.voxelize(lgi_3d, scalars=lgi_3d.flatten())
+   # Step 2 — Plot interactively
+   gsviz.plot_pvgrid(
+       pvgrid, scalar_name='lgi', show_edges=False,
+       cmap='nipy_spectral', title='3D grain structure',
+   )
 
-   # Step 2 — Create interactive plot
-   plotter = pv.Plotter(shape=(1, 2))
+   # Step 3 — Export to VTK format for ParaView, using PyVista directly
+   pvgrid.save('microstructure.vti')
 
-   # Left plot: Render by grain ID with colourmap
-   plotter.subplot(0, 0)
-   plotter.add_mesh(mesh, scalars=lgi_3d.flatten(), cmap='nipy_spectral', show_edges=False)
-   plotter.set_title('Grain IDs')
-
-   # Right plot: Render subset of grains
-   grain_subset = (lgi_3d > 0) & (lgi_3d <= 20)  # first 20 grains only
-   mesh_subset = pv.voxelize(lgi_3d * grain_subset)
-   plotter.subplot(0, 1)
-   plotter.add_mesh(mesh_subset, scalars='scalars', cmap='tab20')
-   plotter.set_title('Grain subset (1–20)')
-
-   plotter.show()
-
-   # Step 3 — Export to VTK format for ParaView
-   mesh.save('microstructure.vti')  # VTK ImageData format
-   mesh.save('microstructure.vtu')  # VTK UnstructuredGrid format
+``gsviz`` also provides ``grain_viewer(lfi)`` for a quick interactive viewer,
+and ``view_selected_grain_boundary_voxels(lfi, grain_ids, ...)`` to highlight
+specific grains' boundary voxels.
 
 ----
 
@@ -929,49 +738,29 @@ Highlight and visualize grain boundaries using edge detection.
 Workflow 20 — Texture Visualization (Pole Figure)
 ---------------------------------------------------
 
-Plot crystallographic pole figures to visualize texture/orientation distribution.
+Plot crystallographic pole figures directly from a 3D labelled grain image and
+per-grain orientations, using the real ``plot_pole_figure_from_3d`` function
+(in ``upxo.viz.xphy.pole_figure``).
 
 .. code-block:: python
 
-   import numpy as np
    import matplotlib.pyplot as plt
-   from mpl_toolkits.mplot3d import Axes3D
+   from upxo.viz.xphy.pole_figure import plot_pole_figure_from_3d
 
-   # Assume orientations is an (N, 3) array of Euler angles (degrees)
-   # or an (N, 4) array of quaternions
-
-   from upxo.material.texture import pole_figure
-
-   # Step 1 — Plot (100), (110), (111) pole figures
-   fig = plt.figure(figsize=(15, 5))
-
-   hkl_list = [(1, 0, 0), (1, 1, 0), (1, 1, 1)]
-
-   for idx, hkl in enumerate(hkl_list):
-       ax = fig.add_subplot(1, 3, idx + 1, projection='stereographic')
-       pole_figure(
-           orientations=orientations,
-           hkl=hkl,
-           ax=ax,
-           contours=True,
-           num_contours=10
-       )
-       ax.set_title(f'{hkl[0]}{hkl[1]}{hkl[2]} Pole Figure')
-
-   plt.tight_layout()
+   # quats_dict: {grain_id: quaternion(4,)} — e.g. from the Workflow 12/13 pipelines
+   fig, ax = plot_pole_figure_from_3d(
+       lgi_3d, quats_dict,
+       axis=2,                 # slice normal: 0=X, 1=Y, 2=Z
+       pole_family='111',      # or '100', '110', or an explicit (h, k, l) tuple
+       plot_type='density',    # 'scatter' or 'density'
+   )
    plt.show()
 
-   # Step 2 — Compute texture strength (Orientation Density Function peak)
-   from upxo.material.texture import compute_odf
-
-   odf = compute_odf(orientations, resolution=5)
-   max_odf = odf.max()
-   random_odf = 1.0 / odf.size
-   texture_strength = max_odf / random_odf
-
-   print(f"Texture strength (MRD): {texture_strength:.2f}")
-   print(f"  Random texture = 1.0 MRD")
-   print(f"  This sample: {texture_strength:.2f}× random")
+The same module's ``PoleFigure`` class, ``plot_components()``, and ``plot_variants()``
+support multi-pole-figure layouts and KS/Sigma3-variant-coloured pole figures — see
+``src/upxo/viz/xphy/pole_figure.py`` for the full function list, and
+``src/upxo/demos/Twinned3D/repOFHCCu3d_ebsdVf.1.0.ipynb`` for pole figures used
+alongside real EBSD-fitted texture.
 
 ----
 
