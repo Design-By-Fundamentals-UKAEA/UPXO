@@ -51,6 +51,8 @@ C3D8 / C3D20:  elem_id(i,j,k) = i*NY*NZ + j*NZ + k + 1  (1-based, one per voxel)
 C3D4 / C3D10:  elem_id = 6*(i*NY*NZ + j*NZ + k) + tet_local + 1  (tet_local in 0..5)
 """
 
+import warnings
+
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
@@ -1367,6 +1369,12 @@ class MeshExporter3D:
 
     @staticmethod
     def _write_interactions_stub(f) -> None:
+        warnings.warn(
+            "07_interactions.inp contains no interaction/constraint definitions "
+            "(periodic BCs, tie constraints, contact) -- this .inp is not "
+            "simulation-ready as exported and must be edited before submission.",
+            stacklevel=3,
+        )
         f.write(
             "** Interactions / constraints\n"
             "** TODO: Add periodic BCs, tie constraints, or contact definitions.\n"
@@ -1374,6 +1382,12 @@ class MeshExporter3D:
 
     @staticmethod
     def _write_steps_stub(f) -> None:
+        warnings.warn(
+            "08_steps_output.inp contains no *Step/boundary-condition/*Output "
+            "definitions -- this .inp is not simulation-ready as exported and "
+            "must be edited before submission.",
+            stacklevel=3,
+        )
         f.write(
             "** Step definition\n"
             "** TODO: Define *Step, boundary conditions, and *Output requests.\n"
