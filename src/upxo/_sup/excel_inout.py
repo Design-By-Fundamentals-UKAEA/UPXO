@@ -1,3 +1,4 @@
+import numpy as np
 from openpyxl import Workbook, load_workbook
 
 def write_to_excel(wb, dictionary, filename):
@@ -37,33 +38,3 @@ def read_from_excel(filename, sheet_names):
                 data = np.array([[ws.cell(row=r+1, column=c+1).value for c in range(ws.max_column)] for r in range(ws.max_row)])
             data_from_sheets[sheet_name] = data
     return data_from_sheets
-# =========================================
-# DATA FROM UPXO
-variables = {'xc': xc,
-             'yc': yc,
-             'phi1': phi1,
-             'theta': theta,
-             'phi2': phi2,
-             'scale': scale,
-             'grains': grains,
-             'xmax': xmax,
-             'ymax': ymax,
-             'x_map': x_map,
-             'y_map': y_map,
-             'BC': BC,
-             }
-# =========================================
-# WRITING UPXO DATA TO FILE
-filename = r"C:\Development\M2MatMod\upxo_packaged\upxo_private\data\excel_files\data_for_conf_meshing.xlsx"
-# sheet_names = list(variables.keys())
-sheet_names = ['xc', 'yc', 'phi1', 'theta', 'phi2', 'scale', 'grains', 'xmax',
-               'ymax', 'x_map', 'y_map', 'BC']
-
-sheet_names
-
-
-write_to_excel(Workbook(), variables, filename)
-# =========================================
-# READING UPXO DATA TO FILE
-read_variables = read_from_excel(filename, sheet_names)
-# =========================================
