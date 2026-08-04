@@ -22,9 +22,10 @@ license = { text = "GPL-3.0-only" }
 authors = [
     { name = "Dr. Sunil Anandatheertha", email = "vaasu.anandatheertha@ukaea.uk" }
 ]
-contributors = [
-    { name = "Dr. Vikram Phalke", email = "vikram.phalke@ukaea.uk" },
-    { name = "Dr. Chris Hardie", email = "chris.hardie@ukaea.uk" },
+maintainers = [
+    { name = "Dr. Sunil Anandatheertha", email = "vaasu.anandatheertha@ukaea.uk" },
+    { name = "Dr. Vikram Phalke" },
+    { name = "Dr. Chris Hardie" },
     { name = "Dr. Eralp Demir" }
 ]
 keywords = [
