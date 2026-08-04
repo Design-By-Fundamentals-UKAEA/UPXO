@@ -2,11 +2,11 @@
 
 ![UPXO logo and banner](https://raw.githubusercontent.com/Design-By-Fundamentals-UKAEA/UPXO/dev/wikidocs/assets/logo/upxo_logo_and_banner.png)
 
-**UPXO (UKAEA Poly-XTAL Operations)** is an open-source Pythonic computational framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for materials science. Although primarily developed for applications pertaining multi-scale computational studies of nuclear structural materials, it can also solve a wide range of such problems in the Aerospace and Automobile sectors.
+**UPXO (UKAEA Poly-XTAL Operations)** is an open-source Pythonic computational framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for materials science. Although primarily developed for applications pertaining to multi-scale computational studies of nuclear structural materials, it can also solve a wide range of such problems in the Aerospace and Automobile sectors.
 
 UPXO can enable you to create complex **2D and 3D poly-crystalline grain-structures** suitable for Finite Element (FE) simulations, microstructure characterisation, and data-driven materials research involving such computational domains.
 
-Funding: This work has been funded by STEP, a major tehnology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK's prototype fusion powerpoint and a path to the commercial visibility of fusion.
+Funding: This work has been funded by STEP, a major technology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK's prototype fusion power plant and a path to the commercial viability of fusion.
 
 A dedicated wiki has been created to help users. Please find it [here](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki)
 
@@ -14,22 +14,27 @@ A dedicated wiki has been created to help users. Please find it [here](https://g
 
 ## Core capabilities
 
-- **Generation of grain structures** - Voronoi type anbd Monte-Carlo simulation type.
-- **Characterisation and Analysis** - morphology, texture, and topological.
-- **Manipulation Tools** - feature removal, introduction, modification and replacement.
-- **Representativeness Assessment** - morphology, texture, and topological.
-- **FE Meshing** - grain boundary geometry conformant and non-conformant Finite Element meshes.
-- **Data Interface** - import, export, and management of grain structure data.
-- **Visualisation** - tools for plotting 2D and 3D microstructures.
+- **Generation of grain structures** — Voronoi tessellation and Monte Carlo simulation (Potts model); hierarchical lath microstructures; twinned FCC microstructures.
+- **Characterisation and Analysis** — morphology, texture, and topological properties.
+- **Manipulation Tools** — feature removal, introduction, modification, and replacement.
+- **Representativeness Assessment** — morphological, textural, and topological assessment.
+- **GUI Applications** — interactive wizards for FM Steel hierarchical generation and FCC twinned microstructure design.
+- **FE Meshing** — grain boundary geometry conformant and non-conformant Finite Element meshes.
+- **Data Interface** — import, export, and management of grain structure data; EBSD integration.
+- **Visualisation** — tools for plotting 2D and 3D microstructures.
 
 ---
 
 ## Microstructures Supported
+
 UPXO can produce a broad range of synthetic grain structures, including:
 
-- Equiaxed polycrystals generated from tessellation methods  
-- Elongated and directionally structured grains  
-- Hierarchical microstructures such as lath-based morphologies  
+- Equiaxed polycrystals generated from tessellation methods
+- Elongated and directionally structured grains
+- **Hierarchical microstructures** — lath-based morphologies with packets, blocks, and sub-blocks (Ferritic-Martensitic steels)
+- **Twinned microstructures** — Sigma-3 annealing and deformation twins in FCC materials (Cu, CuCrZr, OFHC-Cu)
+- Texture-guided crystal orientation assignment
+- EBSD-derived microstructure input and validation
 - Multi-scale grain arrangements  
 
 ---
