@@ -83,12 +83,17 @@ src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
 /admin/
 docs/_build/
 docs/docs/srcAPIdocs/
-/data/upxo_performance
-/data/images
 src/upxo/Important links.md
-data/temp/
-data/cache/
-data/logs/
+
+# Planning / development notes tracked outside admin/
+/DEFERRED_3D_ANALYSIS_MODULES.md
+/src/upxo/.github/mcgs2_temporal_slice_reference.md
+
+# Ignore all generated run output under data/
+/data/**
+!/data/
+!/data/**/
+!/data/**/.gitkeep
 
 # Ignore all files under demos
 /src/upxo/demos/**
