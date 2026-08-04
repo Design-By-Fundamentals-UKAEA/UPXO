@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 class tops:
 
     __slots__ = ('tc_info', 'ori_count', 'N', 'n_texture_instances',
-                 'n_sampling_instances', 'tex', 'sym_ops')
+                 'n_sampling_instances', 'tex', 'sym_ops', 'apply_symmetry')
 
     fcc_tc_std = {"copper": (90.0, 35.0, 45.0),  # {112}<111> Rolling
                   "brass": (35.0, 45.0, 0.0),  # {110}<112> Rolling
@@ -39,6 +39,7 @@ class tops:
     def __init__(self):
         """Initialise the instance."""
         self.sym_ops = self.cubic_symmetry_operators()
+        self.apply_symmetry = {}
 
     @classmethod
     def synth_fcc(cls, N=1000,
@@ -48,7 +49,8 @@ class tops:
                            "rotated_cube": [0.15, [45.0, 0.0, 0.0]],
                            },
                   n_tex_instances=2,
-                  n_sampling_instances=50):
+                  n_sampling_instances=50,
+                  apply_symmetry: Optional[dict] = None):
         """
         Examples
         --------
@@ -74,9 +76,20 @@ class tops:
         >>> b3 = np.vstack(b2)
         >>> b3.shape
         >>> tex.plot_pole_figure(b3, pole_family='111')
+
+        apply_symmetry : dict {component_name: bool} or None
+            Per-component override of whether a texture component's mean
+            orientation is expanded to its 24 cubic-symmetric equivalents
+            before sampling around it (the default, unconditional
+            behaviour prior to this parameter's introduction) or used as a
+            single literal orientation instead (apply_symmetry[name] =
+            False). Components not present in the dict default to True.
+            None (default): every component uses the symmetry-expanded
+            behaviour, unchanged from prior versions.
         """
         tex = cls()
         tex.set_tc_info(tc_info)
+        tex.apply_symmetry = apply_symmetry or {}
         tex.gen_tex_fcc_synthetic(N=N,
                                   n_tex_instances=n_tex_instances,
                                   n_sampling_instances=n_sampling_instances)
@@ -1070,18 +1083,24 @@ class tops:
                 # SI[siname]['tc_ori_sample_ids'][tc_comp] = tc_ori_sample_ids
                 # 3
                 """
-                Get all 24 symmetric equivalent BEAs of the curerent TC.
+                Get all symmetric equivalent BEAs of the current TC -- 24
+                of them normally, but only 1 when this component's
+                apply_symmetry is False (see gen_symmetric_equivalents_fcc_ori).
                 """
                 beasets = self.tex[tiname]['symeq_full'][tc_comp]['BEA_SYMEQ']
                 # 4
                 """
                 Allocating the total number of samples needed for random
-                picking. These sample counts coorespond to that from each
-                of the 24 orintatipon sample sets.
+                picking. These sample counts correspond to that from each
+                of the len(beasets) orientation sample sets -- NOT
+                hardcoded to 24, since apply_symmetry=False collapses
+                beasets to a single set; using a hardcoded 24 there would
+                silently draw only ~1/24th of nsamples.
                 """
-                pss = nsamples // 24  # preliminary sample size
-                fss = nsamples % 24  # final sample size
-                samplrng, symorirng = range(nsamples), range(24)
+                n_symeq = len(beasets)
+                pss = nsamples // n_symeq  # preliminary sample size
+                fss = nsamples % n_symeq  # final sample size
+                samplrng, symorirng = range(nsamples), range(n_symeq)
 
                 sel_ori = [np.empty((0, 3), dtype=self.ea_dtype) for _ in symorirng]
                 sel_ori_symm_id = [np.empty(0, dtype=np.int16) for _ in symorirng]
@@ -1190,12 +1209,21 @@ class tops:
             """
             # ---------------------
             """
-            1. Gather all symmetric equivalents of this TC EA.
+            1. Gather all symmetric equivalents of this TC EA -- unless
+            apply_symmetry[tc_comp] is explicitly False, in which case
+            loc_symm_eq is just the single literal mean orientation the
+            user supplied (shape (1, 3) instead of the usual (<=24, 3)).
+            Everything below iterates generically over len(loc_symm_eq)
+            via zip()/list-comprehensions, so this needs no further
+            special-casing downstream.
             loc_symm_eq: location - symmetric equivalents in Euler
                          space
             """
-            loc_symm_eq = self.fcc_symmetrise_ori(self.tc_info[tc_comp][1],
-                                                  dtype=self.ea_dtype)
+            if self.apply_symmetry.get(tc_comp, True):
+                loc_symm_eq = self.fcc_symmetrise_ori(self.tc_info[tc_comp][1],
+                                                      dtype=self.ea_dtype)
+            else:
+                loc_symm_eq = np.array([self.tc_info[tc_comp][1]], dtype=self.ea_dtype)
             """
             2. Generate orientations around each ea in loc_symm_eq.
 
