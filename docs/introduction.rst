@@ -26,12 +26,12 @@ A dedicated wiki has been created to help users. Please find it
 Core Capabilities
 -----------------
 
-- **Generation of grain structures** — Voronoi type and Monte-Carlo simulation type.
-- **Characterisation and Analysis** — morphology, texture, and topological.
-- **Manipulation Tools** — feature removal, introduction, modification and replacement.
-- **Representativeness Assessment** — morphology, texture, and topological.
+- **Generation of grain structures** — Voronoi tessellation and Monte Carlo simulation (Potts model); hierarchical lath microstructures; twinned FCC microstructures.
+- **Characterisation and Analysis** — morphology, texture, and topological properties.
+- **Manipulation Tools** — feature removal, introduction, modification, and replacement.
+- **Representativeness Assessment** — morphological, textural, and topological assessment.
 - **FE Meshing** — grain boundary geometry conformant and non-conformant Finite Element meshes.
-- **Data Interface** — import, export, and management of grain structure data.
+- **Data Interface** — import, export, and management of grain structure data; EBSD integration.
 - **Visualisation** — tools for plotting 2D and 3D microstructures.
 
 ----
@@ -43,7 +43,10 @@ UPXO can produce a broad range of synthetic grain structures, including:
 
 - Equiaxed polycrystals generated from tessellation methods
 - Elongated and directionally structured grains
-- Hierarchical microstructures such as lath-based morphologies
+- **Hierarchical microstructures** — lath-based morphologies with packets, blocks, and sub-blocks (Ferritic-Martensitic steels)
+- **Twinned microstructures** — Sigma-3 annealing and deformation twins in FCC materials (Cu, CuCrZr, OFHC-Cu)
+- Texture-guided crystal orientation assignment
+- EBSD-derived microstructure input and validation
 - Multi-scale grain arrangements
 
 ----
