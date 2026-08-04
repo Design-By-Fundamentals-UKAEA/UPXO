@@ -70,10 +70,15 @@ class RepresentativenessValidator3D:
 
         ebsd_norm = ebsd_areas / np.mean(ebsd_areas) if np.mean(ebsd_areas) > 0 else ebsd_areas
 
+        # lgi_3d carries the raw MC array's native (nz, ny, nx) axis order
+        # (axis0=Z, axis2=X -- see TwinnedSimple3DBase.plot_temporal_slice_3d's
+        # P/R/C convention comment); only the axis-index-to-label mapping
+        # is corrected here so 'X'/'Z' resolve to the physically correct
+        # index -- the array itself is left in its native order.
         axes_config = [
-            (0, self.n_slices_x, 'X', self.test_along_x),
+            (2, self.n_slices_x, 'X', self.test_along_x),
             (1, self.n_slices_y, 'Y', self.test_along_y),
-            (2, self.n_slices_z, 'Z', self.test_along_z),
+            (0, self.n_slices_z, 'Z', self.test_along_z),
         ]
 
         for axis, n_slices, axis_name, enabled in axes_config:
@@ -116,10 +121,15 @@ class RepresentativenessValidator3D:
         from upxo.gsdataops.gid_ops import find_neighs2d
         from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
 
+        # lgi_3d carries the raw MC array's native (nz, ny, nx) axis order
+        # (axis0=Z, axis2=X -- see TwinnedSimple3DBase.plot_temporal_slice_3d's
+        # P/R/C convention comment); only the axis-index-to-label mapping
+        # is corrected here so 'X'/'Z' resolve to the physically correct
+        # index -- the array itself is left in its native order.
         axes_config = [
-            (0, self.n_slices_x, 'X', self.test_along_x),
+            (2, self.n_slices_x, 'X', self.test_along_x),
             (1, self.n_slices_y, 'Y', self.test_along_y),
-            (2, self.n_slices_z, 'Z', self.test_along_z),
+            (0, self.n_slices_z, 'Z', self.test_along_z),
         ]
 
         for axis, n_slices, axis_name, enabled in axes_config:
