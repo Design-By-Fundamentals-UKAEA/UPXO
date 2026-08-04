@@ -1,5 +1,10 @@
 # UPXO
 
+[![PyPI version](https://img.shields.io/pypi/v/upxo.svg)](https://pypi.org/project/upxo/)
+[![Python versions](https://img.shields.io/pypi/pyversions/upxo.svg)](https://pypi.org/project/upxo/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Documentation](https://img.shields.io/badge/docs-sphinx-blue.svg)](https://design-by-fundamentals-ukaea.github.io/UPXO/)
+
 ![UPXO logo and banner](https://raw.githubusercontent.com/Design-By-Fundamentals-UKAEA/UPXO/dev/wikidocs/assets/logo/upxo_logo_and_banner.png)
 
 **UPXO (UKAEA Poly-XTAL Operations)** is an open-source Pythonic computational framework for generating, analysing, manipulating, meshing, visualising, and exporting representative polycrystalline grain structures for materials science. Although primarily developed for applications pertaining to multi-scale computational studies of nuclear structural materials, it can also solve a wide range of such problems in the Aerospace and Automobile sectors.
@@ -9,6 +14,50 @@ UPXO can enable you to create complex **2D and 3D poly-crystalline grain-structu
 Funding: This work has been funded by STEP, a major technology and infrastructure programme led by UK Industrial Fusion Solutions Ltd (UKIFS), which aims to deliver the UK's prototype fusion power plant and a path to the commercial viability of fusion.
 
 A dedicated wiki has been created to help users. Please find it [here](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki)
+
+---
+
+## Installation
+
+```bash
+pip install upxo
+```
+
+Install with all optional extras (interactive plots, FE meshing, raster I/O, EBSD import):
+
+```bash
+pip install upxo[all]
+```
+
+Or select specific extras:
+
+| Extra | Adds | Command |
+|---|---|---|
+| `viz` | Interactive plots (Plotly) | `pip install upxo[viz]` |
+| `mesh` | FE meshing (pyvoro, tetgen) | `pip install upxo[mesh]` |
+| `io` | Raster I/O (rasterio) | `pip install upxo[io]` |
+| `ebsd` | EBSD data import (DefDAP) | `pip install upxo[ebsd]` |
+
+Requires **Python >= 3.13**. See the [Getting Started wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Getting-started) for environment setup guides.
+
+---
+
+## Quick Start
+
+```python
+from upxo.ggrowth.mcgs import mcgs
+
+# Run a 2D Monte Carlo grain growth simulation
+pxt = mcgs(input_dashboard='path/to/input_dashboard.xls')
+pxt.simulate()
+pxt.detect_grains()
+
+# Access the grain structure at the final saved time slice
+gs = pxt.gs[pxt.m[-1]]
+print(f"Number of grains: {gs.n}")
+```
+
+More end-to-end examples (2D/3D generation, hierarchical and twinned microstructures, meshing, visualisation) are in the [Workflows documentation](https://design-by-fundamentals-ukaea.github.io/UPXO/workflows.html).
 
 ---
 
@@ -54,7 +103,7 @@ Typical applications include:
 Large ensembles of statistically representative microstructures can be generated and analysed, supporting machine-learning approaches and surrogate modelling.
 
 ### Research in grain growth kinetics
-> Researchers can take advantage of the easy to use pipelines and templates to run existing or custom Pott's model Monte-Carlo simulation algorithms. The frameworks provide multiple entry points to study the grain growth kinetics, such as (a) Energetics (b) Ensemble propertie of space partitioning (statistical - morphological, topological and spatial)
+> Researchers can take advantage of the easy to use pipelines and templates to run existing or custom Pott's model Monte-Carlo simulation algorithms. The frameworks provide multiple entry points to study the grain growth kinetics, such as (a) Energetics (b) Ensemble properties of space partitioning (statistical - morphological, topological and spatial)
 
 ---
 
