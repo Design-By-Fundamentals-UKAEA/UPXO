@@ -182,8 +182,18 @@ class OrientationAssigner3D:
             parent_info: Dict,
             csl_label: str,
             n_fallback: int = 500,
+            fallback_tc_info: Optional[Dict] = None,
+            fallback_apply_symmetry: Optional[Dict[str, bool]] = None,
     ):
-        """Build parent-only and full-EBSD quaternion pools."""
+        """Build parent-only and full-EBSD quaternion pools.
+
+        fallback_tc_info / fallback_apply_symmetry : optional overrides for
+        the synthetic fallback pool's texture-component recipe (name ->
+        [volume_fraction, [phi1, Phi, phi2], ...] / name -> bool). Both
+        default to None, which reproduces the prior unconditional
+        behaviour unchanged: tops.synth_fcc_quats' own hardcoded default
+        recipe (Copper/Brass/Goss/Rotated-Cube), fully symmetry-expanded.
+        """
         from upxo.xtalphy.crystal_orientation import grain_avg_quats
         from upxo.xtalphy.texops import tops
 
@@ -195,8 +205,13 @@ class OrientationAssigner3D:
             [gid2q[g] for g in sorted(ebsd_parent_ids) if g in gid2q])
         self.full_pool = ebsd_q
 
+        fallback_kwargs = {}
+        if fallback_tc_info is not None:
+            fallback_kwargs['tc_info'] = fallback_tc_info
+        if fallback_apply_symmetry is not None:
+            fallback_kwargs['apply_symmetry'] = fallback_apply_symmetry
         self.fallback_quats = tops.synth_fcc_quats(
-            N=max(n_fallback, self.base.n_grains))
+            N=max(n_fallback, self.base.n_grains), **fallback_kwargs)
 
         print(f'OrientationAssigner3D: EBSD parent pool = {len(self.parent_pool)}, '
               f'full pool = {len(self.full_pool)}, '
