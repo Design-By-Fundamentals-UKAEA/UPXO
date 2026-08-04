@@ -13,21 +13,26 @@ def compute_grain_volumes(
         lgi: np.ndarray,
         grain_ids: Optional[List[int]] = None,
 ) -> Dict[int, int]:
+    """Return voxel count per grain using a single np.bincount pass (O(N_vox))."""
+    counts = np.bincount(lgi.ravel(), minlength=int(lgi.max()) + 1)
     if grain_ids is None:
-        grain_ids = sorted(int(g) for g in np.unique(lgi) if g > 0)
-    return {gid: int(np.sum(lgi == gid)) for gid in grain_ids}
+        grain_ids = [int(g) for g in np.unique(lgi) if g > 0]
+    return {gid: int(counts[gid]) for gid in grain_ids}
 
 
 def compute_twin_volume_fraction(
         lgi: np.ndarray,
         twin_gids: List[int],
 ) -> float:
+    """Compute twin VF using a single np.bincount pass (O(N_vox))."""
     if not twin_gids:
         return 0.0
-    total_vox = int(np.sum(lgi > 0))
+    counts   = np.bincount(lgi.ravel(), minlength=int(lgi.max()) + 1)
+    total_vox = int(counts[1:].sum())   # exclude label 0 (background)
     if total_vox == 0:
         return 0.0
-    return sum(int(np.sum(lgi == g)) for g in twin_gids) / total_vox
+    twin_vox = int(sum(counts[g] for g in twin_gids if g < len(counts)))
+    return twin_vox / total_vox
 
 
 def compute_equivalent_diameters(
@@ -221,3 +226,228 @@ def print_ebsd_mc_comparison(stats: dict) -> None:
               f'(+/-{tvf["mc_2d_std"]:.4f})')
     print(f'  {"MC 3D volume fraction":<32}  {tvf["mc_3d"]:>10.4f}')
     print(sep)
+
+
+# ---------------------------------------------------------------------------
+# EBSD-vs-SGS raw data assembly -- shared by Summary Report (which reduces
+# it to descriptive stats via compute_ebsd_mc_comparison_stats) and
+# Distribution Viewer (which plots the raw arrays directly).
+# ---------------------------------------------------------------------------
+
+def assemble_ebsd_sgs_comparison_data(
+        cleaner, tg, base, rg, parent_info, mdf, twin_thickness,
+        n_slices_per_axis: int = 5,
+        axes=('x', 'y', 'z'),
+) -> tuple:
+    """
+    Assemble the ``(ebsd_ref, sgc_ref)`` raw-array input pair consumed by
+    :func:`compute_ebsd_mc_comparison_stats`. Pulled out of
+    ``SummaryReportPage.on_compute`` so Distribution Viewer can reuse the
+    exact same assembly for its raw-array overlay plots instead of
+    duplicating it.
+
+    Parameters
+    ----------
+    cleaner : StructureCleaner3D
+        Post-twin cleaned structure (``lgi_clean``, ``twin_role_clean``,
+        ``all_quats_clean``).
+    tg : TwinGenerator3D
+        Post-introduction twin generator (``twin_halfwidths_vox``,
+        ``summary()``, ``compute_achieved_2d_tvf``, ``base``).
+    base : TwinnedSimple3DBase
+        Pre-twin host structure (``mprop['eqdia']``, ``host_grain_ids``).
+    rg : repgen2d
+        EBSD reference (``lfi_ebsd_merged``, ``quat_ebsd``, ``prop_ebsd``).
+    parent_info : dict
+        Output of ``rg.identify_parent_grains``.
+    mdf : dict
+        Full EBSD MDF, output of ``rg.compute_mdf_ebsd`` (must carry
+        ``'miso_deg'``).
+    twin_thickness : dict
+        Output of ``rg.compute_mc_twin_thickness`` (must carry
+        ``'thick_um'``).
+    n_slices_per_axis, axes
+        Forwarded to ``tg.compute_achieved_2d_tvf`` for the SGS 2D-slice
+        twin-area-fraction distribution.
+
+    Returns
+    -------
+    (ebsd_ref, sgc_ref) : tuple of dict
+        See :func:`compute_ebsd_mc_comparison_stats`'s parameter docs.
+    """
+    from upxo.gsdataops.gid_ops import find_neighs2d, find_neighs3d
+    from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
+
+    vs = tg.base.voxel_size
+
+    if getattr(rg, 'lfi_ebsd_merged', None) is None:
+        rg.build_merged_ebsd_lfi(parent_info, plot=False)
+    neigh_merged = find_neighs2d(rg.lfi_ebsd_merged.astype(np.int32), conn=4)
+    ebsd_mdf_merged = compute_mdf_from_quats(
+        rg.lfi_ebsd_merged, rg.quat_ebsd, neigh_merged,
+        n_bins=65, angle_range=(0.0, 65.0))
+
+    pure_parents = set()
+    for info in parent_info.values():
+        pure_parents.update(int(g) for g in info.get('pure_parents', []))
+    host_eqdia_ebsd = np.array(
+        [rg.prop_ebsd[g]['eq_diameter'] for g in pure_parents if g in rg.prop_ebsd],
+        dtype=float)
+
+    ebsd_ref = {
+        'miso_deg_full':   np.asarray(mdf['miso_deg']),
+        'miso_deg_merged': ebsd_mdf_merged['miso_deg'],
+        'twin_thick_um':   np.asarray(twin_thickness['thick_um'], dtype=float),
+        'host_eqdia_um':   host_eqdia_ebsd,
+        'tvf_2d':          tg.summary()['tvf_2d_ebsd'],
+    }
+
+    quat_3d_clean = np.zeros(cleaner.lgi_clean.shape + (4,), dtype=np.float64)
+    for gid, q in cleaner.all_quats_clean.items():
+        quat_3d_clean[cleaner.lgi_clean == gid] = q
+    neigh_post = find_neighs3d(cleaner.lgi_clean.astype(np.int32), conn=6)
+    neigh_post_list = {int(g): list(ns) for g, ns in neigh_post.items()}
+    mc_mdf_post = compute_mdf_from_quats(
+        cleaner.lgi_clean, quat_3d_clean, neigh_post_list,
+        n_bins=65, angle_range=(0.0, 65.0))
+
+    twin_thick_3d_um = np.array(
+        [2.0 * hw * vs for hw in tg.twin_halfwidths_vox.values()], dtype=float)
+
+    host_eqdia_sgc = np.array(
+        [base.mprop['eqdia'][gid] for gid in (base.host_grain_ids or [])
+         if gid in base.mprop.get('eqdia', {})], dtype=float)
+
+    twin_gids_clean = [gid for gid, role in cleaner.twin_role_clean.items()
+                        if role in ('primary_twin', 'secondary_twin')]
+    tvf_final_3d = compute_twin_volume_fraction(cleaner.lgi_clean, twin_gids_clean)
+
+    achieved_2d = tg.compute_achieved_2d_tvf(
+        n_slices_per_axis=n_slices_per_axis, axes=axes, return_raw=True)
+
+    sgc_ref = {
+        'miso_deg_posttwin': mc_mdf_post['miso_deg'],
+        'twin_thick_3d_um':  twin_thick_3d_um,
+        'host_eqdia_um':     host_eqdia_sgc,
+        'tvf_2d_slices':     np.asarray(achieved_2d.get('ratios', []), dtype=float),
+        'tvf_3d':            tvf_final_3d,
+    }
+    return ebsd_ref, sgc_ref
+
+
+# ---------------------------------------------------------------------------
+# SGS per-role 2D morphological/topological property distributions --
+# Distribution Viewer's SGS side for the 5 EBSD-comparable properties
+# (area, aspect_ratio, perimeter, solidity, n_neighbours).
+# ---------------------------------------------------------------------------
+
+#: twin_role_clean role name -> Distribution Viewer's DIST_LEVELS key.
+#: 'secondary_twin' resolves to 'seca' (outward, parent is a host) or
+#: 'secb' (inward, parent is a primary twin) -- the same 2a/2b split
+#: AbaqusExporter3D uses for its ELSET naming.
+def _sgs_role_to_level(gid, twin_role_clean, twin_parent_of_clean) -> str:
+    role = twin_role_clean.get(gid, 'non_host')
+    if role == 'non_host':
+        return 'nonhost'
+    if role == 'host':
+        return 'host'
+    if role == 'primary_twin':
+        return 'primary'
+    if role == 'secondary_twin':
+        parent = twin_parent_of_clean.get(gid)
+        parent_role = twin_role_clean.get(parent)
+        return 'secb' if parent_role == 'primary_twin' else 'seca'
+    return 'nonhost'
+
+
+def compute_sgs_role_property_distributions(
+        lgi_clean: np.ndarray,
+        twin_role_clean: Dict[int, str],
+        twin_parent_of_clean: Dict[int, int],
+        selected_props: List[str],
+        selected_levels: List[str],
+        n_slices_per_axis: int = 5,
+        axes=('x', 'y', 'z'),
+        voxel_size: float = 1.0,
+) -> Dict[str, Dict[str, np.ndarray]]:
+    """
+    Per-twin-role-level distributions of area / aspect_ratio / perimeter /
+    solidity / n_neighbours, sampled from 2D cross-sections of the cleaned
+    3D structure -- the SGS-side equivalent of EBSD's inherently-2D grain
+    morphology, so the two are directly comparable. Mirrors
+    ``TwinGenerator3D.compute_achieved_2d_tvf``'s slice-sampling
+    convention (evenly-spaced slices per axis, native axis-label mapping,
+    no re-labelling -- a grain's 2D cross-section keeps its 3D grain ID,
+    so ``twin_role_clean``/``twin_parent_of_clean`` apply directly).
+
+    Parameters
+    ----------
+    lgi_clean : ndarray (nz, ny, nx)
+        ``cleaner.lgi_clean`` -- pipeline-native axis order.
+    twin_role_clean, twin_parent_of_clean : dict
+        ``cleaner.twin_role_clean`` / ``cleaner.twin_parent_of_clean``.
+    selected_props : list of str
+        Subset of ``('area', 'aspect_ratio', 'perimeter', 'solidity',
+        'n_neighbours')``.
+    selected_levels : list of str
+        Subset of ``('nonhost', 'host', 'primary', 'seca', 'secb')``.
+    n_slices_per_axis, axes
+        Evenly-spaced 2D cross-sections sampled per axis in *axes*.
+    voxel_size : float
+        Physical voxel edge length (um); scales area (um^2) and
+        perimeter (um).
+
+    Returns
+    -------
+    dict
+        ``{prop_name: {level_key: ndarray}}``.
+    """
+    from skimage.measure import regionprops
+    from upxo.gsdataops.grid_ops import section_from_3d
+    from upxo.gsdataops.gid_ops import find_neighs2d
+
+    axis_map = {'x': 2, 'y': 1, 'z': 0}
+    axes_int = [axis_map[a.lower()] for a in axes if a.lower() in axis_map]
+
+    morph_props = [p for p in selected_props
+                    if p in ('area', 'aspect_ratio', 'perimeter', 'solidity')]
+    needs_neigh = 'n_neighbours' in selected_props
+
+    values: Dict[str, Dict[str, list]] = {
+        p: {lv: [] for lv in selected_levels} for p in selected_props}
+
+    for ax in axes_int:
+        domain_size = lgi_clean.shape[ax]
+        positions = np.linspace(0, domain_size - 1, n_slices_per_axis, dtype=int)
+        for pos in positions:
+            lgi_2d = section_from_3d(lgi_clean, axis=ax, location=int(pos))
+            if lgi_2d.max() <= 0:
+                continue
+
+            if morph_props:
+                for region in regionprops(lgi_2d.astype(np.int32)):
+                    lv = _sgs_role_to_level(region.label, twin_role_clean, twin_parent_of_clean)
+                    if lv not in selected_levels:
+                        continue
+                    if 'area' in morph_props:
+                        values['area'][lv].append(region.area * voxel_size ** 2)
+                    if 'perimeter' in morph_props:
+                        values['perimeter'][lv].append(region.perimeter * voxel_size)
+                    if 'aspect_ratio' in morph_props and region.minor_axis_length > 0:
+                        values['aspect_ratio'][lv].append(
+                            region.major_axis_length / region.minor_axis_length)
+                    if 'solidity' in morph_props:
+                        values['solidity'][lv].append(region.solidity)
+
+            if needs_neigh:
+                neigh = find_neighs2d(lgi_2d.astype(np.int32), conn=4)
+                for gid, nbrs in neigh.items():
+                    lv = _sgs_role_to_level(gid, twin_role_clean, twin_parent_of_clean)
+                    if lv not in selected_levels:
+                        continue
+                    values['n_neighbours'][lv].append(len(nbrs))
+
+    return {
+        p: {lv: np.array(vals, dtype=float) for lv, vals in lv_dict.items()}
+        for p, lv_dict in values.items()
+    }
