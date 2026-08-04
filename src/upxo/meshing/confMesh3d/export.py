@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import math
 import time
+import warnings
 from typing import Dict, Optional
 
 import numpy as np
@@ -157,8 +158,12 @@ def export_conformal_mesh(
         ('04_nsets_bc.inp',        lambda f: _write_nsets_bc(f, node_tags, node_coords, tag_to_idx)),
         ('05_materials.inp',       lambda f: _write_materials(f, grain_elements, all_quats, twin_role, _role_key, cfg)),
         ('06_sections.inp',        lambda f: _write_sections(f, grain_elements, twin_role, _role_key)),
-        ('07_interactions.inp',    lambda f: f.write('** stub\n')),
-        ('08_steps_output.inp',    lambda f: f.write('** stub\n')),
+        ('07_interactions.inp',    lambda f: _write_stub_with_warning(
+            f, '07_interactions.inp', 'interaction/constraint (periodic BCs, '
+            'tie constraints, contact) definitions')),
+        ('08_steps_output.inp',    lambda f: _write_stub_with_warning(
+            f, '08_steps_output.inp', '*Step/boundary-condition/*Output '
+            'definitions')),
     ]
 
     for fname, writer in steps:
@@ -184,6 +189,16 @@ def export_conformal_mesh(
 # ---------------------------------------------------------------------------
 # Abaqus writers
 # ---------------------------------------------------------------------------
+
+def _write_stub_with_warning(f, fname, missing_description):
+    """Write a placeholder .inp section and warn that it is not simulation-ready."""
+    warnings.warn(
+        f"{fname} contains no {missing_description} -- this .inp is not "
+        f"simulation-ready as exported and must be edited before submission.",
+        stacklevel=3,
+    )
+    f.write('** stub\n')
+
 
 def _write_nodes(f, node_tags, coords_um, tag_to_idx):
     f.write('** Node coordinates (microns)\n*Node\n')
