@@ -26,7 +26,8 @@ class RepresentativenessValidator3D:
     __slots__ = (
         'n_slices_x', 'n_slices_y', 'n_slices_z',
         'test_along_x', 'test_along_y', 'test_along_z',
-        'p_percentage', 'wasserstein_threshold',
+        'p_percentage', 'p_percentage_x', 'p_percentage_y', 'p_percentage_z',
+        'wasserstein_threshold',
         'slice_results', 'axis_acceptance', 'overall_accepted',
     )
 
@@ -39,6 +40,9 @@ class RepresentativenessValidator3D:
             test_along_y: bool = True,
             test_along_z: bool = True,
             p_percentage: float = 60.0,
+            p_percentage_x: Optional[float] = None,
+            p_percentage_y: Optional[float] = None,
+            p_percentage_z: Optional[float] = None,
             wasserstein_threshold: float = 0.5,
     ):
         self.n_slices_x = n_slices_x
@@ -48,6 +52,13 @@ class RepresentativenessValidator3D:
         self.test_along_y = test_along_y
         self.test_along_z = test_along_z
         self.p_percentage = p_percentage
+        # p_percentage_x/y/z: per-axis pass thresholds. Any left unset (the
+        # common case for the post-twin crystallographic caller, which only
+        # ever passes p_percentage) falls back to the single p_percentage
+        # value, applied uniformly to that axis exactly as before.
+        self.p_percentage_x = p_percentage_x if p_percentage_x is not None else p_percentage
+        self.p_percentage_y = p_percentage_y if p_percentage_y is not None else p_percentage
+        self.p_percentage_z = p_percentage_z if p_percentage_z is not None else p_percentage
         self.wasserstein_threshold = wasserstein_threshold
         self.slice_results: Dict = {}
         self.axis_acceptance: Dict = {}
@@ -165,6 +176,9 @@ class RepresentativenessValidator3D:
 
     def aggregate(self):
         """Aggregate slice results into per-axis acceptance."""
+        per_axis_threshold = {
+            'X': self.p_percentage_x, 'Y': self.p_percentage_y, 'Z': self.p_percentage_z,
+        }
         for axis_name, results in self.slice_results.items():
             n_pass = sum(1 for r in results if r['passes'])
             n_total = len(results)
@@ -173,7 +187,7 @@ class RepresentativenessValidator3D:
                 'n_pass': n_pass,
                 'n_total': n_total,
                 'pct_pass': pct,
-                'accepted': pct >= self.p_percentage,
+                'accepted': pct >= per_axis_threshold[axis_name],
             }
         self.overall_accepted = all(
             info['accepted'] for info in self.axis_acceptance.values()
@@ -181,13 +195,21 @@ class RepresentativenessValidator3D:
 
     def report(self) -> str:
         """Return a formatted text summary of the validation results."""
+        per_axis_threshold = {
+            'X': self.p_percentage_x, 'Y': self.p_percentage_y, 'Z': self.p_percentage_z,
+        }
         lines = ['3D Representativeness Validation', '=' * 50]
         for axis_name, info in self.axis_acceptance.items():
             status = 'ACCEPTED' if info['accepted'] else 'REJECTED'
             lines.append(
                 f'{axis_name}-axis: {info["n_pass"]}/{info["n_total"]} '
-                f'({info["pct_pass"]:.1f}%) [{status}]')
+                f'({info["pct_pass"]:.1f}%) [{status}, threshold '
+                f'{per_axis_threshold[axis_name]:.0f}%]')
         overall = 'YES' if self.overall_accepted else 'NO'
         lines.append(f'\nOverall 3D acceptance: {overall}')
-        lines.append(f'Threshold: {self.p_percentage}% per axis')
+        if self.p_percentage_x == self.p_percentage_y == self.p_percentage_z:
+            lines.append(f'Threshold: {self.p_percentage_x}% per axis')
+        else:
+            lines.append(f'Threshold: X={self.p_percentage_x}%  '
+                          f'Y={self.p_percentage_y}%  Z={self.p_percentage_z}%')
         return '\n'.join(lines)
