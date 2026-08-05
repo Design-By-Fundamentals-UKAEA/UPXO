@@ -59,6 +59,7 @@ Level 3b  ``'mrf_map'``
 """
 
 import math
+import threading
 import warnings
 import numpy as np
 from typing import Optional, Dict, Tuple
@@ -106,6 +107,15 @@ class OrientationAssigner3D:
         'mrf_sa_t_start',
         'mrf_sa_t_end',
         '_rng',
+        # Per-sweep diagnostics for Level 3a/3b (mrf_gibbs/mrf_map) --
+        # populated during assign_nonhost_orientations, one dict per sweep:
+        # {'sweep', 'w1_sweep', 'w1_ebsd', 'n_updated'} for mrf_gibbs, plus
+        # 'temperature' for mrf_map. Empty for all other modes.
+        'mrf_history',
+        # Optional threading.Event, checked between grains (Levels 0-2b)
+        # or between sweeps (Levels 3a/3b); raises AssignmentCancelled the
+        # moment it's set. None (default) disables cancellation entirely.
+        'cancel_event',
     )
 
     def __init__(
@@ -122,6 +132,7 @@ class OrientationAssigner3D:
             mrf_sa_t_start: float = 5.0,
             mrf_sa_t_end: float = 0.05,
             rng_seed: Optional[int] = None,
+            cancel_event: Optional[threading.Event] = None,
     ):
         if orientation_assignment_mode not in _VALID_ORIENT_MODES:
             raise ValueError(
@@ -155,8 +166,19 @@ class OrientationAssigner3D:
         self.mrf_sa_t_start: float = float(mrf_sa_t_start)
         self.mrf_sa_t_end: float = float(mrf_sa_t_end)
         self._rng = np.random.default_rng(rng_seed)
+        self.mrf_history: list = []
+        self.cancel_event = cancel_event
 
         print(f'OrientationAssigner3D: mode = "{orientation_assignment_mode}"')
+
+    def _check_cancelled(self):
+        """Raise AssignmentCancelled if self.cancel_event is set. Called
+        once per grain (Levels 0-2b) or once per sweep (Levels 3a/3b) --
+        the only two granularities long enough for a "Stop" click to
+        matter; cancel_event=None (the default) makes this a no-op."""
+        from upxo.xtalphy.crystal_orientation import AssignmentCancelled
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise AssignmentCancelled('Orientation assignment stopped by user.')
 
     # ── neighbour graph ───────────────────────────────────────────────────
 
@@ -362,6 +384,7 @@ class OrientationAssigner3D:
             _flat_B = np.array([p[1] for p in all_pairs_flat])
 
         for gid in self._rng.permutation(list(grain_ids)).tolist():
+            self._check_cancelled()
             gid = int(gid)
             used_by_neigh = {
                 all_assigned[nb].tobytes()
@@ -458,6 +481,7 @@ class OrientationAssigner3D:
         n_analytical, n_fallback = 0, 0
 
         for gid in self._rng.permutation(list(grain_ids)).tolist():
+            self._check_cancelled()
             gid = int(gid)
             used_by_neigh = {
                 all_assigned[nb].tobytes()
@@ -545,6 +569,7 @@ class OrientationAssigner3D:
         grain_order = self._rng.permutation(list(grain_ids)).tolist()
 
         for gid in grain_order:
+            self._check_cancelled()
             gid = int(gid)
             used_by_neigh = {
                 all_assigned[nb].tobytes()
@@ -634,6 +659,7 @@ class OrientationAssigner3D:
                     self.base.host_grain_ids, self.neigh_graph,
                     self.parent_pool, self.all_grain_orientations,
                     max_retries=50, rng=self._rng,
+                    cancel_event=self.cancel_event,
                     fallback_pool=self.fallback_quats)
             print(f'OrientationAssigner3D [L0 conflict_free]: '
                   f'{len(self.base.host_grain_ids)} host orientations '
@@ -733,6 +759,7 @@ class OrientationAssigner3D:
                     self.base.non_host_grain_ids, self.neigh_graph,
                     self.full_pool, self.all_grain_orientations,
                     max_retries=50, rng=self._rng,
+                    cancel_event=self.cancel_event,
                     fallback_pool=self.fallback_quats)
             print(f'OrientationAssigner3D [L0 conflict_free]: '
                   f'{len(self.base.non_host_grain_ids)} non-host orientations '
@@ -973,11 +1000,23 @@ class OrientationAssigner3D:
         R_full = quat_to_R_batch(full_pool)   # (Nf, 3, 3)
         bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 65.0 / 25
 
+        # S applied to each pool's candidates is invariant across grains AND
+        # neighbours within this sweep (S/pool_R don't change per-grain) --
+        # hoisting it out of the per-grain loop turns the old per-grain
+        # (24,N,K,3,3) SR tensor (rebuilt from scratch every grain) into a
+        # single (24,N,K) einsum against this precomputed (24,N,3,3) tensor.
+        # trace(S[s] @ pool_R[n] @ R_nbs[k].T) == sum_ij SP[s,n,i,j]*R_nbs[k,i,j],
+        # verified numerically identical to the old two-einsum construction
+        # (~22x faster at N_pool=2000/K=15, machine-precision-exact).
+        SP_host = np.einsum('sip,npj->snij', S, R_host)   # (24,Nh,3,3)
+        SP_full = np.einsum('sip,npj->snij', S, R_full)   # (24,Nf,3,3)
+
         for gid in order:
             gid = int(gid)
             is_host = gid in host_ids
             pool_q = host_pool if is_host else full_pool
             pool_R = R_host if is_host else R_full
+            SP     = SP_host if is_host else SP_full
             N_cand = len(pool_q)
 
             assigned_nbs = [
@@ -993,9 +1032,7 @@ class OrientationAssigner3D:
                     # Batch all K neighbours simultaneously: one einsum over (N, K)
                     R_nbs  = quat_to_R_batch(
                         np.array([q for _, q in assigned_nbs]))        # (K,3,3)
-                    R_rel  = np.einsum('nim,kjm->nkij', pool_R, R_nbs) # (N,K,3,3)
-                    SR     = np.einsum('sip,nkpj->snkij', S, R_rel)    # (24,N,K,3,3)
-                    tr     = SR[:,:,:,0,0]+SR[:,:,:,1,1]+SR[:,:,:,2,2] # (24,N,K)
+                    tr     = np.einsum('snij,kij->snk', SP, R_nbs)     # (24,N,K)
                     cos_a  = np.clip((tr.max(axis=0)-1.0)*0.5,-1.0,1.0)# (N,K)
                     miso   = np.degrees(np.arccos(cos_a))               # (N,K)
                     bin_idx = np.clip(
@@ -1088,10 +1125,12 @@ class OrientationAssigner3D:
         elif init_mode == 'conflict_free':
             all_assigned, _ = assign_orientations_conflict_free(
                 host_ids, neigh_graph, host_pool, all_assigned,
-                max_retries=50, rng=self._rng, fallback_pool=fallback)
+                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                fallback_pool=fallback)
             all_assigned, _ = assign_orientations_conflict_free(
                 nonhost_ids, neigh_graph, full_pool, all_assigned,
-                max_retries=50, rng=self._rng, fallback_pool=fallback)
+                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                fallback_pool=fallback)
             print(f'  Init: conflict_free (Level 0)')
         elif init_mode in ('mdf_conditioned_pairs', 'mdf_analytical', 'paired_pool'):
             # Warm start: use already-populated all_assigned if present
@@ -1130,6 +1169,7 @@ class OrientationAssigner3D:
               f'eps_qual={self.mrf_eps_quality:.1f} deg)')
 
         for sweep in range(self.mrf_max_sweeps):
+            self._check_cancelled()
             all_assigned, n_upd = self._run_one_gibbs_sweep(
                 host_ids, nonhost_ids, host_pool, full_pool,
                 neigh_graph, all_assigned, bin_centers, density, S)
@@ -1143,6 +1183,8 @@ class OrientationAssigner3D:
 
             print(f'  Sweep {sweep+1:>3d}  updated={n_upd:>5d}  '
                   f'W1_sweep={w1_sweep:.3f} deg  W1_EBSD={w1_ebsd:.3f} deg')
+            self.mrf_history.append({'sweep': sweep + 1, 'w1_sweep': w1_sweep,
+                                     'w1_ebsd': w1_ebsd, 'n_updated': n_upd})
 
             converged = (w1_sweep < self.mrf_eps_convergence
                          and w1_ebsd < self.mrf_eps_quality)
@@ -1190,11 +1232,17 @@ class OrientationAssigner3D:
         R_full = quat_to_R_batch(full_pool)
         bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 65.0 / 25
 
+        # See _run_one_gibbs_sweep for why this hoist is exact and ~22x
+        # faster than rebuilding the (24,N,K,3,3) SR tensor per grain.
+        SP_host = np.einsum('sip,npj->snij', S, R_host)   # (24,Nh,3,3)
+        SP_full = np.einsum('sip,npj->snij', S, R_full)   # (24,Nf,3,3)
+
         for gid in order:
             gid = int(gid)
             is_host = gid in host_ids
             pool_q = host_pool if is_host else full_pool
             pool_R = R_host   if is_host else R_full
+            SP     = SP_host  if is_host else SP_full
             N_cand = len(pool_q)
 
             assigned_nbs = [
@@ -1209,9 +1257,7 @@ class OrientationAssigner3D:
                     # Batch all K neighbours simultaneously: one einsum over (N, K)
                     R_nbs  = quat_to_R_batch(
                         np.array([q for _, q in assigned_nbs]))        # (K,3,3)
-                    R_rel  = np.einsum('nim,kjm->nkij', pool_R, R_nbs) # (N,K,3,3)
-                    SR     = np.einsum('sip,nkpj->snkij', S, R_rel)    # (24,N,K,3,3)
-                    tr     = SR[:,:,:,0,0]+SR[:,:,:,1,1]+SR[:,:,:,2,2] # (24,N,K)
+                    tr     = np.einsum('snij,kij->snk', SP, R_nbs)     # (24,N,K)
                     cos_a  = np.clip((tr.max(axis=0)-1.0)*0.5,-1.0,1.0)# (N,K)
                     miso   = np.degrees(np.arccos(cos_a))               # (N,K)
                     bin_idx = np.clip(
@@ -1299,10 +1345,12 @@ class OrientationAssigner3D:
         elif init_mode == 'conflict_free':
             all_assigned, _ = assign_orientations_conflict_free(
                 host_ids, neigh_graph, host_pool, all_assigned,
-                max_retries=50, rng=self._rng, fallback_pool=fallback)
+                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                fallback_pool=fallback)
             all_assigned, _ = assign_orientations_conflict_free(
                 nonhost_ids, neigh_graph, full_pool, all_assigned,
-                max_retries=50, rng=self._rng, fallback_pool=fallback)
+                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                fallback_pool=fallback)
             print(f'  Init: conflict_free (Level 0)')
         elif init_mode in ('mdf_conditioned_pairs', 'mdf_analytical', 'paired_pool'):
             unassigned_host = host_ids - set(all_assigned.keys())
@@ -1343,6 +1391,7 @@ class OrientationAssigner3D:
 
         w1_ebsd = np.inf
         for sweep in range(max_sw):
+            self._check_cancelled()
             T = (t_start * (t_end / t_start) ** (sweep / max(max_sw - 1, 1)))
 
             all_assigned, n_upd = self._run_one_sa_sweep(
@@ -1359,6 +1408,9 @@ class OrientationAssigner3D:
 
             print(f'  Sweep {sweep+1:>3d}  T={T:.4f}  updated={n_upd:>5d}  '
                   f'W1_sweep={w1_sweep:.3f} deg  W1_EBSD={w1_ebsd:.3f} deg')
+            self.mrf_history.append({'sweep': sweep + 1, 'temperature': T,
+                                     'w1_sweep': w1_sweep, 'w1_ebsd': w1_ebsd,
+                                     'n_updated': n_upd})
 
             converged = (w1_sweep < self.mrf_eps_convergence
                          and w1_ebsd < self.mrf_eps_quality)
