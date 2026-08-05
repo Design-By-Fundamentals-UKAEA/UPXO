@@ -1,5 +1,6 @@
 import os
 import warnings
+from typing import Optional, Union
 import numpy as np
 from copy import deepcopy
 from upxo._sup import dataTypeHandlers as dth
@@ -2322,13 +2323,24 @@ class repgen2d:
             self,
             parent_info: dict,
             abrupt_threshold: float = 0.8,
+            linear_intercept_axes: Optional[list] = None,
+            linear_intercept_n_lines: Union[int, dict] = 20,
     ) -> dict:
         """
         Compute EBSD twin lamella thickness and intercept-length statistics.
 
         Calls :func:`~upxo.gsdataops.grid_ops.compute_twin_thickness_stats`
         (with abrupt-twin detection) and pools per-grain intercept lengths
-        across all EBSD twin grains to derive Q1/Q2/Q3 quantiles.
+        across all EBSD twin grains to derive Q1/Q2/Q3 quantiles (via
+        :func:`~upxo.gsdataops.grid_ops.compute_grain_intercept_lengths`,
+        measured perpendicular to each grain's OWN major axis).
+
+        Additionally (additive, not a replacement) computes the classical
+        (ASTM E112-style) linear-intercept method via
+        :func:`~upxo.gsdataops.grid_ops.compute_linear_intercepts_2d`: fixed
+        lab-frame test lines (independent of each grain's own shape), along
+        whichever of X (horizontal lines)/Y (vertical lines)/Z (diagonal
+        lines) axes are requested.
 
         Parameters
         ----------
@@ -2337,20 +2349,32 @@ class repgen2d:
         abrupt_threshold : float
             Twin extent / parent extent ratio below which a twin is counted
             as abruptly-ending.  Default 0.8.
+        linear_intercept_axes : list of str or None
+            Subset of ``['x', 'y', 'z']`` -- which lab-frame directions to
+            cast linear-intercept test lines along. Defaults to all three.
+        linear_intercept_n_lines : int or dict
+            Number of test lines per axis. Either one int applied
+            uniformly to every axis in ``linear_intercept_axes``, or a
+            ``{'x': int, 'y': int, 'z': int}`` dict for a different count
+            per axis.
 
         Returns
         -------
         dict
             Combined thickness + intercept stats dict.  Keys include
             ``'thick_px'``, ``'intercept_px'``, ``'intercept_q1'``,
-            ``'intercept_q2'``, ``'intercept_q3'``, ``'n_abrupt_ebsd'``,
-            ``'abrupt_frac_ebsd'``, and all keys from
+            ``'intercept_q2'``, ``'intercept_q3'`` (per-grain major-axis
+            method), ``'linear_intercept_by_axis'`` (dict {axis: ndarray}),
+            ``'linear_intercept_px'`` (pooled across enabled axes),
+            ``'linear_intercept_q1/q2/q3'`` (from the pooled array),
+            ``'n_abrupt_ebsd'``, ``'abrupt_frac_ebsd'``, and all keys from
             :func:`compute_twin_thickness_stats`.
         """
         import numpy as np
         from upxo.gsdataops.grid_ops import (
             compute_twin_thickness_stats,
             compute_grain_intercept_lengths,
+            compute_linear_intercepts_2d,
         )
         from skimage.measure import regionprops as _skrp
 
@@ -2379,6 +2403,29 @@ class repgen2d:
             stats['intercept_q3'] = float(np.percentile(intercept_px, 75))
         else:
             stats['intercept_q1'] = stats['intercept_q2'] = stats['intercept_q3'] = float('nan')
+
+        # Classical (ASTM E112-style) linear-intercept method, additive
+        # alongside the per-grain major-axis method above -- fixed
+        # lab-frame test lines instead of each grain's own direction.
+        axes = linear_intercept_axes if linear_intercept_axes is not None else ['x', 'y', 'z']
+        gid_set = set(int(g) for g in stats['gids'])
+        linear_intercept_by_axis = {}
+        for ax in axes:
+            n_lines = (linear_intercept_n_lines[ax] if isinstance(linear_intercept_n_lines, dict)
+                       else linear_intercept_n_lines)
+            linear_intercept_by_axis[ax] = compute_linear_intercepts_2d(
+                self.lfi_ebsd, gid_set, axis=ax, n_lines=n_lines)
+        stats['linear_intercept_by_axis'] = linear_intercept_by_axis
+
+        pooled = [arr for arr in linear_intercept_by_axis.values() if arr.size > 0]
+        linear_intercept_px = np.concatenate(pooled) if pooled else np.array([], dtype=np.float64)
+        stats['linear_intercept_px'] = linear_intercept_px
+        if linear_intercept_px.size > 0:
+            stats['linear_intercept_q1'] = float(np.percentile(linear_intercept_px, 25))
+            stats['linear_intercept_q2'] = float(np.percentile(linear_intercept_px, 50))
+            stats['linear_intercept_q3'] = float(np.percentile(linear_intercept_px, 75))
+        else:
+            stats['linear_intercept_q1'] = stats['linear_intercept_q2'] = stats['linear_intercept_q3'] = float('nan')
 
         # Thickness Q1/Q3 -- previously computed only for the console print
         # (tq1/tq3 local vars) and never stored back, unlike the intercept
@@ -2418,6 +2465,10 @@ class repgen2d:
         if intercept_px.size > 0:
             iq1, iq2, iq3 = stats['intercept_q1'], stats['intercept_q2'], stats['intercept_q3']
             print(f'  {"Intercept length (px)":<28}  {iq1:>8.2f}  {iq2:>10.2f}  {iq3:>8.2f}  {(iq3-iq1):>8.2f}')
+        if linear_intercept_px.size > 0:
+            lq1, lq2, lq3 = stats['linear_intercept_q1'], stats['linear_intercept_q2'], stats['linear_intercept_q3']
+            print(f'  {"Linear intercept (px), " + ",".join(a.upper() for a in axes):<28}  '
+                  f'{lq1:>8.2f}  {lq2:>10.2f}  {lq3:>8.2f}  {(lq3-lq1):>8.2f}')
         print(f'  Abrupt twins: {stats["n_abrupt_ebsd"]} / '
               f'{len(stats["gids"])}  '
               f'(fraction = {stats["abrupt_frac_ebsd"]:.3f})')
