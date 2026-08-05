@@ -2680,6 +2680,16 @@ def apply_orientation_jitter(q, min_misori_deg, rng, max_retries=100):
 # Conflict-free orientation assignment (3D-generalisable)
 # ---------------------------------------------------------------------------
 
+class AssignmentCancelled(Exception):
+    """Raised (and expected to propagate all the way out of whichever
+    assignment function is running) when a caller-supplied cancel_event
+    gets set mid-run -- e.g. an interactive caller's "Stop" action on a background-
+    threaded orientation assignment. Not an error: callers should catch
+    this distinctly from other exceptions and treat it as a clean,
+    intentional abort rather than a failure."""
+    pass
+
+
 def assign_orientations_conflict_free(
         grain_ids,
         neigh_graph,
@@ -2687,6 +2697,7 @@ def assign_orientations_conflict_free(
         all_assigned,
         max_retries=50,
         rng=None,
+        cancel_event=None,
         fallback_pool=None,
 ):
     """
@@ -2713,6 +2724,11 @@ def assign_orientations_conflict_free(
         Redraws before switching to *fallback_pool*.
     rng : numpy.random.Generator or None
         RNG; created fresh if None.
+    cancel_event : threading.Event or None
+        Checked once per grain; raises AssignmentCancelled the moment it's
+        set, leaving *all_assigned* with whatever was assigned so far
+        (mutated in place, so the caller can still inspect a partial
+        result even though the function itself doesn't return normally).
     fallback_pool : ndarray (M, 4) or None
         FCC-synthetic fallback quaternions (e.g. from
         ``tops.synth_fcc_quats``).
@@ -2732,6 +2748,8 @@ def assign_orientations_conflict_free(
     fb_idx = 0
 
     for gid in rng.permutation(grain_ids).tolist():
+        if cancel_event is not None and cancel_event.is_set():
+            raise AssignmentCancelled('Orientation assignment stopped by user.')
         used_by_neigh = {
             all_assigned[nb_].tobytes()
             for nb_ in neigh_graph.get(int(gid), set())
