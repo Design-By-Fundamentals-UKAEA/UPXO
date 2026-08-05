@@ -745,6 +745,19 @@ class PoleFigure:
         
         return fig, ax
 
+    @staticmethod
+    def auto_grid_points(half_width_deg: float = 7.5) -> int:
+        """The grid resolution grid_points='auto' resolves to inside
+        _compute_mud_grid, exposed standalone so callers that need to know
+        the number ahead of time (e.g. to build resolution presets as
+        fractions of it) don't have to duplicate the formula or construct
+        a real PoleFigure just to ask. Depends only on half_width_deg (the
+        vMF kernel width), not on sample size -- a fixed number for a
+        given half-width, clipped to [80, 250]."""
+        omega = np.deg2rad(half_width_deg)
+        kappa = 1000.0 if omega < 1e-6 else min(np.log(2.0) / (1.0 - np.cos(omega)), 1000.0)
+        return int(np.clip(50 + 6 * np.sqrt(kappa), 80, 250))
+
     def _compute_mud_grid(
         self,
         poles: np.ndarray,
@@ -788,7 +801,7 @@ class PoleFigure:
 
         # ── 2. Determine Grid Resolution (Adaptive or User-Specified) ──
         if grid_points == 'auto':
-            grid_points_val = int(np.clip(50 + 6 * np.sqrt(kappa), 80, 250))
+            grid_points_val = self.auto_grid_points(half_width_deg)
         else:
             grid_points_val = int(grid_points)
 
