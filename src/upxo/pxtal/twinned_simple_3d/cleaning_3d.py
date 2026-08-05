@@ -110,6 +110,17 @@ class StructureCleaner3D:
         fully vectorised; the repair loop only iterates over detected
         spikes, which are typically very few.
 
+        A grain's very last remaining voxel is never reassigned away, even
+        if it's spike-classified -- without this, a thin sliver or
+        single-voxel grain composed entirely of spike voxels could be
+        erased completely in one pass, leaving its grain ID referenced by
+        nothing in `lgi` while every other per-grain array (orientations,
+        twin role, twin parent) still carries an entry for it.
+        `grain_counts` is seeded from `lgi` as it stood before this pass
+        and decremented as this same pass's own reassignments happen, so
+        two spike voxels belonging to a 2-voxel grain still correctly
+        protect only the second one, not both.
+
         Parameters
         ----------
         lgi : ndarray (modified in place)
@@ -126,10 +137,13 @@ class StructureCleaner3D:
         spike_coords = np.argwhere(
             (lgi > 0) & (same_count <= self._SPIKE_SAME_COUNT_THRESHOLD))
         spike_count = 0
+        grain_counts = np.bincount(lgi.ravel())
 
         for ix, iy, iz in spike_coords.tolist():
-            nb_counts: Dict[int, int] = {}
             gid = int(lgi[ix, iy, iz])
+            if grain_counts[gid] <= 1:
+                continue  # last voxel of this grain -- never reassign it away
+            nb_counts: Dict[int, int] = {}
             for dx, dy, dz in face_offsets:
                 nx_, ny_, nz_ = ix+dx, iy+dy, iz+dz
                 if 0 <= nx_ < sx and 0 <= ny_ < sy and 0 <= nz_ < sz:
@@ -139,6 +153,7 @@ class StructureCleaner3D:
             if nb_counts:
                 lgi[ix, iy, iz] = max(nb_counts, key=nb_counts.get)
                 spike_count += 1
+                grain_counts[gid] -= 1
 
         return lgi, spike_count
 
