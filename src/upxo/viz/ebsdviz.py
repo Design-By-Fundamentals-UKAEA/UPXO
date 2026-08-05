@@ -1471,30 +1471,89 @@ def plot_twin_introduction_map(
     return fig, axes
 
 
+def default_bin_width(data) -> float:
+    """Freedman-Diaconis default histogram bin width for *data*, with the
+    same fallback chain the EBSD Twin Thickness Statistics page's inline
+    plot uses: Freedman-Diaconis (2*IQR*n^-1/3) when the IQR is usable,
+    Scott's rule (3.49*std*n^-1/3) when the IQR is degenerate (e.g. very
+    few points), and range/10 as a last resort when even std is 0
+    (constant data). Never returns 0 -- callers divide by this."""
+    import numpy as np
+    data = np.asarray(data, dtype=np.float64)
+    data = data[np.isfinite(data)]
+    n = data.size
+    if n < 2:
+        return 1.0
+    q1, q3 = np.percentile(data, [25, 75])
+    iqr = q3 - q1
+    if iqr > 0:
+        width = 2.0 * iqr * n ** (-1.0 / 3.0)
+    else:
+        std = float(np.std(data))
+        if std > 0:
+            width = 3.49 * std * n ** (-1.0 / 3.0)
+        else:
+            data_range = float(np.max(data) - np.min(data))
+            width = data_range / 10.0 if data_range > 0 else 1.0
+    return width if width > 0 else 1.0
+
+
 def plot_twin_thickness_stats(
     stats: dict,
-    bins: int = 30,
+    bins: int | None = None,
+    bin_width: float | None = None,
     figsize: tuple = (7, 4),
     dpi: int = 120,
     color: str = 'steelblue',
     title: str | None = None,
+    show_kde: bool = False,
+    kde_width: float | None = None,
+    show_iqr: bool = False,
+    extra_curves: dict | None = None,
+    ax=None,
 ) -> tuple:
     """
     Plot a histogram of twin lamella thickness from the dict returned by
-    ``compute_twin_thickness_stats``.
+    ``compute_twin_thickness_stats`` (i.e. ``compute_mc_twin_thickness``'s
+    result).
 
     Parameters
     ----------
     stats : dict
         Output of ``compute_twin_thickness_stats``.
-    bins : int
-        Number of histogram bins.
+    bins : int or None
+        Explicit histogram bin count. Mutually exclusive with
+        ``bin_width`` -- if both are None, ``default_bin_width`` picks a
+        Freedman-Diaconis-based width automatically.
+    bin_width : float or None
+        Histogram bin width in the same units as ``thick_um`` (µm).
+        Converted to a bin count via the data's own range.
     figsize : (width, height)
     dpi : int
     color : str
-        Bar fill colour.
+        Bar fill colour for the primary (thickness) histogram.
     title : str or None
         Custom figure title; auto-generated when *None*.
+    show_kde : bool
+        Overlay a Gaussian KDE curve on top of the histogram, for the
+        primary curve and every curve in ``extra_curves``.
+    kde_width : float or None
+        KDE bandwidth in µm (shared by every plotted curve). None: each
+        curve uses scipy's own default (Scott's rule) bandwidth.
+    show_iqr : bool
+        Draw vertical dashed lines at the primary thickness
+        distribution's Q1/Q3 (``stats['thick_q1']``/``['thick_q3']``).
+    extra_curves : dict {label: ndarray} or None
+        Additional distributions (already in µm) to overlay as their own
+        histogram + optional KDE curve, alongside the primary thickness
+        curve -- e.g. per-axis linear-intercept lengths. Each gets its
+        own colour from a fixed cycle and its own legend entry.
+    ax : matplotlib.axes.Axes or None
+        Draw into this existing Axes instead of creating a new
+        Figure/Axes pair (for embedding into a GUI's own canvas). When
+        given, the caller owns the Figure and must NOT call
+        ``fig.tight_layout()``/redraw itself -- this function does not
+        call ``plt.show()`` either way.
 
     Returns
     -------
@@ -1507,21 +1566,70 @@ def plot_twin_thickness_stats(
     col       = stats['col']
     step_um   = stats['step_um']
 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    ax.hist(thick_um, bins=bins, color=color, edgecolor='white', density=True)
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    else:
+        fig = ax.get_figure()
+
+    def _resolve_bins(data):
+        if bin_width is not None and bin_width > 0:
+            data_range = float(np.max(data) - np.min(data)) if data.size > 0 else 0.0
+            return max(1, round(data_range / bin_width)) if data_range > 0 else 1
+        if bins is not None:
+            return bins
+        return max(1, round((float(np.max(data) - np.min(data)) if data.size > 0 else 0.0)
+                             / default_bin_width(data)))
+
+    _EXTRA_COLORS = ['darkorange', 'seagreen', 'purple', 'crimson', 'slategray']
+
+    def _plot_one(data, label, hist_color, kde_color):
+        if data.size == 0:
+            return
+        n_bins = _resolve_bins(data)
+        ax.hist(data, bins=n_bins, color=hist_color, edgecolor='white',
+                density=True, alpha=0.6 if label else 1.0,
+                label=label if not show_kde else None)
+        if show_kde and data.size > 1:
+            from scipy.stats import gaussian_kde
+            std = float(np.std(data))
+            bw_method = (kde_width / std) if (kde_width is not None and std > 0) else None
+            try:
+                kde = gaussian_kde(data, bw_method=bw_method)
+                x_grid = np.linspace(float(np.min(data)), float(np.max(data)), 200)
+                ax.plot(x_grid, kde(x_grid), color=kde_color, lw=2.0,
+                        label=(f"{label} (KDE)" if label else "KDE"))
+            except Exception:
+                pass  # e.g. singular data (zero variance) -- histogram alone still shown
+
+    _plot_one(thick_um, None, color, 'navy')
+    if extra_curves:
+        for i, (label, data) in enumerate(extra_curves.items()):
+            data = np.asarray(data, dtype=np.float64)
+            c = _EXTRA_COLORS[i % len(_EXTRA_COLORS)]
+            _plot_one(data, label, c, c)
+
     ax.axvline(stats['mean'],   color='red',    lw=1.8, ls='--',
                label=f"Mean {stats['mean']:.2f} µm")
-    ax.axvline(stats['median'], color='orange', lw=1.8, ls=':',
+    ax.axvline(stats['median'], color='black', lw=1.8, ls=':',
                label=f"Median {stats['median']:.2f} µm")
-    ax.set_xlabel('Twin thickness (µm)', fontsize=12)
+    if show_iqr:
+        thick_q1, thick_q3 = stats.get('thick_q1'), stats.get('thick_q3')
+        if thick_q1 is not None and thick_q1 == thick_q1:  # not NaN
+            ax.axvline(thick_q1, color='gray', lw=1.4, ls='-.', label=f"Q1 {thick_q1:.2f} µm")
+        if thick_q3 is not None and thick_q3 == thick_q3:
+            ax.axvline(thick_q3, color='gray', lw=1.4, ls='-.', label=f"Q3 {thick_q3:.2f} µm")
+
+    ax.set_xlabel('Thickness (µm)', fontsize=12)
     ax.set_ylabel('Probability density', fontsize=12)
     _title = title or (
         f'EBSD – twin grain thickness distribution\n'
         f'(proxy: {col},  step = {step_um} µm/px,  N = {len(thick_um)})'
     )
     ax.set_title(_title, fontsize=11)
-    ax.legend(fontsize=10)
-    fig.tight_layout()
+    ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    if standalone:
+        fig.tight_layout()
     return fig, ax
 
 
