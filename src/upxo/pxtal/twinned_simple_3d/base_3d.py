@@ -5,7 +5,7 @@ Foundation class for the twinned simple 3D grain structure pipeline.
 """
 
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 
 
 class TwinnedSimple3DBase:
@@ -538,7 +538,7 @@ class TwinnedSimple3DBase:
 
     def assess_hosting_representativeness_2d(
             self,
-            n_comparison_slices: int = 5,
+            n_comparison_slices: Union[int, dict] = 5,
             comparison_axes: Optional[list] = None,
             connectivity_2d: int = 4,
     ) -> dict:
@@ -591,8 +591,13 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        n_comparison_slices : int
-            Evenly-spaced 2D cross-sections sampled per axis.
+        n_comparison_slices : int or dict
+            Evenly-spaced 2D cross-sections sampled per axis. Either one
+            int applied uniformly to every axis in ``comparison_axes``
+            (unchanged from before), or a ``{'x': int, 'y': int, 'z': int}``
+            dict for a different count per axis -- axes missing from the
+            dict are not sampled, same as omitting them from
+            ``comparison_axes``.
         comparison_axes : list of str or None
             Subset of ``['x', 'y', 'z']`` (array axes 0/1/2
             respectively -- same convention as
@@ -634,9 +639,12 @@ class TwinnedSimple3DBase:
 
         per_slice = []
         for ax in axes_int:
+            axis_name = next(k for k, v in axis_map.items() if v == ax)
+            n_this_axis = (n_comparison_slices[axis_name]
+                           if isinstance(n_comparison_slices, dict) else n_comparison_slices)
             domain_size = self.lgi.shape[ax]
             slice_positions = np.linspace(
-                0, domain_size - 1, n_comparison_slices, dtype=int)
+                0, domain_size - 1, n_this_axis, dtype=int)
             for slice_pos in slice_positions:
                 lgi_2d = section_from_3d(self.lgi, axis=ax, location=int(slice_pos))
                 relabelled = cc3d.connected_components(
@@ -670,7 +678,6 @@ class TwinnedSimple3DBase:
 
                 count_ratio = n_host_2d / n_eligible_2d if n_eligible_2d > 0 else None
                 area_ratio = area_host_2d / area_eligible_2d if area_eligible_2d > 0 else None
-                axis_name = next(k for k, v in axis_map.items() if v == ax)
                 per_slice.append({
                     'axis': axis_name,
                     'location': int(slice_pos),
@@ -1480,6 +1487,8 @@ class TwinnedSimple3DBase:
             pxt,
             min_grain_size: int = 4,
             tslice_keys: Optional[list] = None,
+            do_merge_small: bool = True,
+            do_spike_removal: bool = True,
             verbose: bool = True,
     ) -> dict:
         """
@@ -1538,6 +1547,12 @@ class TwinnedSimple3DBase:
             merge into).
         tslice_keys : list of int or None
             Which ``pxt.m`` entries to clean. Defaults to all of them.
+        do_merge_small : bool
+            Run Stage 1 (small-grain merging). Disabling it leaves grains
+            below ``min_grain_size`` untouched.
+        do_spike_removal : bool
+            Run Stage 2 (spike-voxel removal). Disabling it leaves spike
+            voxels untouched.
         verbose : bool
             Print a per-slice summary.
 
@@ -1597,43 +1612,44 @@ class TwinnedSimple3DBase:
             # every other cost in this method. A single LUT application is
             # O(N) regardless of how many grains merge in that pass.
             n_small_merged = 0
-            for _ in range(50):  # merging only grows grains -> guaranteed to converge
-                small_gids = find_small_fids(lgi, min_grain_size)
-                if small_gids.size == 0:
-                    break
-                areas = np.bincount(lgi.ravel())
-                neigh = adjacency_from_labels(lgi, connectivity=6)
-                merges: dict = {}  # small gid -> its chosen dominant neighbour
-                for gid in small_gids.tolist():
-                    gid = int(gid)
-                    nbrs = neigh.get(gid)
-                    if not nbrs:
-                        continue  # isolated small grain with no neighbour to absorb into
-                    dominant = max(nbrs, key=lambda g: areas[g] if g < len(areas) else 0)
-                    if dominant == gid:
-                        continue
-                    merges[gid] = dominant
-                if not merges:
-                    break
+            if do_merge_small:
+                for _ in range(50):  # merging only grows grains -> guaranteed to converge
+                    small_gids = find_small_fids(lgi, min_grain_size)
+                    if small_gids.size == 0:
+                        break
+                    areas = np.bincount(lgi.ravel())
+                    neigh = adjacency_from_labels(lgi, connectivity=6)
+                    merges: dict = {}  # small gid -> its chosen dominant neighbour
+                    for gid in small_gids.tolist():
+                        gid = int(gid)
+                        nbrs = neigh.get(gid)
+                        if not nbrs:
+                            continue  # isolated small grain with no neighbour to absorb into
+                        dominant = max(nbrs, key=lambda g: areas[g] if g < len(areas) else 0)
+                        if dominant == gid:
+                            continue
+                        merges[gid] = dominant
+                    if not merges:
+                        break
 
-                # Resolve merge chains decided within this SAME pass (small
-                # grain A's dominant is B, which was ALSO decided to merge
-                # into C this pass) so every absorbed grain maps straight
-                # to its final surviving label -- a `seen` guard makes this
-                # robust even against a mutual A<->B pick (both grains'
-                # only neighbour is each other), which terminates instead
-                # of looping forever and just resolves to one arbitrary
-                # (but well-defined) survivor.
-                max_label = int(lgi.max())
-                lut = np.arange(max_label + 1, dtype=lgi.dtype)
-                for gid, dominant in merges.items():
-                    root, seen = dominant, {gid}
-                    while root in merges and root not in seen:
-                        seen.add(root)
-                        root = merges[root]
-                    lut[gid] = root
-                lgi = lut[lgi]
-                n_small_merged += len(merges)
+                    # Resolve merge chains decided within this SAME pass (small
+                    # grain A's dominant is B, which was ALSO decided to merge
+                    # into C this pass) so every absorbed grain maps straight
+                    # to its final surviving label -- a `seen` guard makes this
+                    # robust even against a mutual A<->B pick (both grains'
+                    # only neighbour is each other), which terminates instead
+                    # of looping forever and just resolves to one arbitrary
+                    # (but well-defined) survivor.
+                    max_label = int(lgi.max())
+                    lut = np.arange(max_label + 1, dtype=lgi.dtype)
+                    for gid, dominant in merges.items():
+                        root, seen = dominant, {gid}
+                        while root in merges and root not in seen:
+                            seen.add(root)
+                            root = merges[root]
+                        lut[gid] = root
+                    lgi = lut[lgi]
+                    n_small_merged += len(merges)
 
             # Stage 2 -- spike removal (label-level, matching
             # StructureCleaner3D's own design intent: "same value" must
@@ -1641,7 +1657,10 @@ class TwinnedSimple3DBase:
             # raw state values instead would under-detect spikes whenever
             # a spike's neighbour happens to share its state by chance
             # without being part of the same grain).
-            lgi, spike_count = spike_cleaner._fast_clean_spikes(lgi)
+            if do_spike_removal:
+                lgi, spike_count = spike_cleaner._fast_clean_spikes(lgi)
+            else:
+                spike_count = 0
 
             # Persist the cleaned LFI -- the new source of truth.
             gstslice.lgi = lgi
