@@ -2123,6 +2123,87 @@ def compute_grain_intercept_lengths(rp, lfi, n_sample_pts=None) -> 'np.ndarray':
     return intercepts
 
 
+def compute_linear_intercepts_2d(lfi, gids, axis: str, n_lines: int) -> 'np.ndarray':
+    """
+    Classical (ASTM E112-style) linear-intercept method: casts ``n_lines``
+    evenly-spaced parallel test lines across ``lfi`` along a FIXED
+    lab-frame direction, independent of each grain's own shape or
+    orientation -- unlike :func:`compute_grain_intercept_lengths`, which
+    measures perpendicular to each grain's own major axis (a direction
+    that differs grain to grain). Every contiguous run of pixels a test
+    line crosses that belongs to one of ``gids`` is recorded as one
+    intercept.
+
+    Parameters
+    ----------
+    lfi : ndarray (ny, nx)
+        Label field image.
+    gids : set or array-like of int
+        Grain IDs to measure intercepts through (e.g. the twin grains).
+    axis : str
+        'x' -- horizontal test lines (each line is one fixed row,
+        scanning across columns).
+        'y' -- vertical test lines (each line is one fixed column,
+        scanning down rows).
+        'z' -- diagonal test lines (top-left to bottom-right, each line
+        at a fixed row-minus-column offset).
+    n_lines : int
+        Number of evenly-spaced test lines to cast.
+
+    Returns
+    -------
+    ndarray(n,)
+        Intercept lengths in pixels, one value per contiguous run
+        crossed (n varies -- zero if no test line crosses any of
+        ``gids``, several per line if a line crosses a grain more than
+        once).
+    """
+    import numpy as np
+
+    gid_set = set(int(g) for g in gids)
+    ny, nx = lfi.shape
+
+    def _runs_from_1d(values):
+        run_lengths = []
+        current = 0
+        for v in values:
+            if int(v) in gid_set:
+                current += 1
+            elif current > 0:
+                run_lengths.append(current)
+                current = 0
+        if current > 0:
+            run_lengths.append(current)
+        return run_lengths
+
+    intercepts = []
+    if axis == 'x':
+        rows = np.linspace(0, ny - 1, n_lines, dtype=int)
+        for r in rows:
+            intercepts.extend(_runs_from_1d(lfi[r, :]))
+    elif axis == 'y':
+        cols = np.linspace(0, nx - 1, n_lines, dtype=int)
+        for c in cols:
+            intercepts.extend(_runs_from_1d(lfi[:, c]))
+    elif axis == 'z':
+        # Diagonals parallel to the main diagonal (top-left to
+        # bottom-right), each identified by its row-minus-column offset,
+        # evenly spaced across the full range that actually intersects
+        # the array ([-(nx-1), ny-1]).
+        offsets = np.linspace(-(nx - 1), ny - 1, n_lines, dtype=int)
+        for off in offsets:
+            r0, c0 = max(off, 0), max(-off, 0)
+            length = min(ny - r0, nx - c0)
+            if length <= 0:
+                continue
+            diag_vals = [lfi[r0 + k, c0 + k] for k in range(length)]
+            intercepts.extend(_runs_from_1d(diag_vals))
+    else:
+        raise ValueError(f"axis must be 'x', 'y', or 'z', got {axis!r}")
+
+    return np.array(intercepts, dtype=np.float64)
+
+
 # #################################################################################
 # #################################################################################
 # This module is expected to grow quite a lot. In the interest of locating
