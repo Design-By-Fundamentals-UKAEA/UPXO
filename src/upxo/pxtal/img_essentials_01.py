@@ -1,10 +1,12 @@
+"""Dataclass helpers for 3D IMAGE / RVE feature bookkeeping."""
+
 import numpy as np
 from dataclasses import dataclass, field
 from scipy.ndimage import generate_binary_structure
 
 @dataclass(frozen=False)
 class part_cntr_CLS:
-    """A class to store partitioning controls"""
+    """Partitioning controls: connectivity and binary structuring element."""
     connectivity: int
     bstruct: any = field(init=False)
     def __post_init__(self):
@@ -58,7 +60,12 @@ class ids_counts_CLS:
     
 @dataclass(frozen=False)
 class ids_CLS:
-    """A class store IDs of all features."""
+    """
+    Feature ID stores for voxels, cells, and GB hierarchy (global numbering).
+
+    Holds global CBS / edge / junction-point ID arrays used with
+    :class:`ids_counts_CLS` hierarchical counts.
+    """
     v: np.array = field(init=False)  # Voxel IDs
       # Cell IDs
       # Cell boundary (CB) IDs
@@ -73,10 +80,10 @@ class ids_CLS:
         return f"UPXO.IMG.3D - IDs object. {id(self)}"
 @dataclass(frozen=False)
 class vox_CLS:
-    """ A class to represent basic voxel details in the RVE.
-    Attributes ====>
-    l: float
-        Voxel edge length. Physical nuits: micro-meters
+    """
+    Single-voxel geometry for an RVE (edge length ``l`` in micrometres).
+
+    ``vol`` is ``l³`` in cubic micrometres.
     """
     l: float
     @property
@@ -85,10 +92,10 @@ class vox_CLS:
         return self.l**3
 @dataclass(frozen=False)
 class rve_CLS:
-    """ A class to represent base domain details.
-    Attributes ====>
-    nx, ny, nz: int
-        Number of voxzels along x, y, z.
+    """
+    Rectangular voxel RVE: ``nx``×``ny``×``nz`` and attached :class:`vox_CLS`.
+
+    After init, ``n`` is total voxels and ``vol`` is physical domain volume.
     """
     nx: int
     ny: int
