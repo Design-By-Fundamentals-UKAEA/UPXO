@@ -26,6 +26,40 @@ warnings.simplefilter('ignore', DeprecationWarning)
 
 
 class repgen2d:
+    """
+    2D representative MC grain-structure ranking against a reference.
+
+    Filters and ranks MCGS2D temporal slices (sample ``sgs``) against an
+    EBSD or other target (``tgs`` / distributions / statistics) using grain
+    count, morphological properties, and distribution-distance metrics.
+    Also holds host-orientation and twin-geometry fields used in FCC
+    twinning workflows.
+
+    Valid ``iroute`` values (``VALiroutes``)
+    ---------------------------------------
+    * ``'tdist.sgs'`` — target distributions vs sample GS
+    * ``'tstat.sgs'`` — target statistics vs sample GS
+    * ``'tgs.sgs'`` — target and sample grain structures directly
+
+    Attributes
+    ----------
+    tdist, tstat
+        Target distribution / statistics collections when used.
+    tgs, sgs
+        Target and sample grain-structure objects.
+    iroute : str
+        Generation / comparison route (see ``VALiroutes``).
+    mpflags : dict
+        Morphological-property control flags for target and/or sample.
+    rm0tests, rm0
+        r0-test selection and results.
+    ebsd_file, ebsd_step, lfi_ebsd, euler_ebsd, quat_ebsd, prop_ebsd, …
+        EBSD reference import and derived fields when loaded.
+    repr_rank_ng, grain_count_rank_ng
+        Ranking outputs over temporal slices / candidates.
+    mc_host_orientations, mc_twin_geom, mc_smooth_geom, …
+        Host / twin / smooth geometry workspaces for twinning pipelines.
+    """
 
     __slots__ = ('tdist', 'tstat', 'tgs', 'sgs',
                  'iroute', 'mpflags', 'rm0tests', 'rm0',
@@ -42,58 +76,19 @@ class repgen2d:
                  'mc_smooth_geom_r2',
                  'mc_smooth_quats',
                  'mc_smooth_mesh')
-    '''
-    Explanation of slot variables:
-    ------------------------------
-    tdist: upxo distribution collection object
-        Distribution data of the target grain structure.
-    tstat: upxo statistics collection object
-        Statistics data of the target grain structure.
-    tgs: grain structure data object
-        The target grain structure.
-    sgs: grain structure data object
-        The sample grain structure.
-    iroute: str
-        Route to use for the generation of the representative grain structure.
-    mpflags: dict
-        Control parameters for the generation and use of morphological
-        properties of the target and/or sample grain structure.
-    rm0tests: dict
-        Specifies which r0 tests to perform.
-    '''
 
     VALiroutes = ('tdist.sgs', 'tstat.sgs', 'tgs.sgs')
-    '''
-    Explanation of VALiroutes:
-    -------------------------
-    The valid routes for the generation of the representative grain structure.
-        1. 'tdist.sgs': Use the distribution data of the target grain structure
-                        and the sample grain structure.
-        2. 'tstat.sgs': Use the statistics data of the target grain structure
-                        and the sample grain structure.
-        3. 'tgs.sgs': Use the actual target and sample grain structures.
-    '''
 
-    # Valid Grain structure types
+    # Valid grain structure type codes (sample / target):
+    #   'upxo.mc2d' / 'upxo.mc3d' — Monte-Carlo
+    #   'upxo.pv2d' / 'upxo.vv3d' / 'upxo.v2d' / 'upxo.v3d' — tessellation family
+    #   'image2d' / 'image3d' — generic label images
+    #   'ebsd2d' — 2D EBSD-derived
     VALgs = ('upxo.mc2d', 'upxo.mc3d',
              'upxo.pv2d', 'upxo.vv3d',
              'upxo.v2d', 'upxo.v3d',
              'image2d', 'image3d',
              'ebsd2d')
-    '''
-    Explanation of VALgs:
-    --------------------------------
-    The valid grain structure types for the sample grain structure.
-        1. 'upxo.mc2d': 2D Monte-Carlo type.
-        2. 'upxo.mc3d': 3D Monte-Carlo type.
-        3. 'upxo.pv2d': 2D pixelated Voronoi type.
-        4. 'upxo.vv3d': 3D voxellated Voronoi type.
-        5. 'upxo.v2d': 2D Voronoi type.
-        6. 'upxo.v3d': 3D Voronoi type.
-        7. 'image2d': 2D image type.
-        8. 'image3d': 3D image type.
-        9. 'ebsd2d': 2D EBSD-derived grain structure.
-    '''
 
     def __init__(self, tdist=None, tstat=None, tgs=None,
                  sgs=None, tdim=2, iroute='tgs.sgs',
