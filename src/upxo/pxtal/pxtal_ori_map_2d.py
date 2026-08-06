@@ -17,6 +17,32 @@ from upxo._sup.data_ops import find_intersection, find_union_with_counts
 
 
 class polyxtal2d():
+    """
+    2D orientation-map polycrystal (EBSD / label + crystallography).
+
+    Holds a labelled grain image (``lgi``), per-grain objects, neighbour
+    maps, morphological properties, and orientation data (quaternions /
+    Euler angles). Used for EBSD-derived maps (e.g. via DefDAP) and
+    synthetic orientation maps — distinct from pure MCGS temporal slices
+    though many property names overlap.
+
+    Attributes
+    ----------
+    map
+        Source orientation / EBSD map when loaded.
+    lgi : array
+        Labelled grain image (prefer LFI terminology in new APIs).
+    gid, n, g
+        Grain IDs, count, and per-grain data.
+    neigh_gid, bjp, gbjp, gbseg1, gb_discrete
+        Topology and grain-boundary geometry.
+    mprop, quat, ea
+        Morphology table and orientations.
+    centroids, bbox*
+        Spatial bookkeeping.
+    flags : dict
+        Runtime options (e.g. GID shuffle behaviour).
+    """
     __slots__ = ('map', 'lgi', 'gid', 'n', 'g', 'bjp', 'neigh_gid',
                  'mprop', 'quat', 'ea', 'closs', 'gbjp', 'gbseg1',
                  'centroids', 'gb_discrete', 'flags', 'gidshuffled',
