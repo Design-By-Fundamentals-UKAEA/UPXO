@@ -6,21 +6,30 @@ from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure
 from dataclasses import dataclass
 
 class OFHC_Cu_vox():
+    """
+    Voxel OFHC-Cu polycrystal extending 3D MCGS grain structure with twin data.
+
+    Combines :class:`~upxo.pxtal.mcgs3_temporal_slice.mcgs3_grain_structure`
+    slots with twin setup / morphology specs and a feature database (FDB)
+    for single-phase copper-style twinning studies on voxel grids.
+    """
     _slots = ("twin_setup", "twspec", "fdb")
     __slots__ = _slots + mcgs3_grain_structure.__slots__
     _propdtype_ = np.float32
     _iddtype_ = np.int32
     _common_mprops_ = True
-    
-    
+
+
     @dataclass
     class TwinSetup:
+        """Twin-property setup (counts, property names, twin axis)."""
         nprops: int
         mprops: list
         twin_axis: tuple
-        
+
     @dataclass
     class TwinMorphSpec_v1:
+        """Twin morphology specification (v1 fields; legacy shape)."""
         n: list
         tv: np.array
         dlk: np.array
@@ -30,8 +39,9 @@ class OFHC_Cu_vox():
         dlk: dict
         dlk: list
         dlk: bool
-        
+
     class FDB:
+        """Feature database container for twin / phase features."""
         def __init__(self):
             """Initialise an empty feature data base container."""
             pass
