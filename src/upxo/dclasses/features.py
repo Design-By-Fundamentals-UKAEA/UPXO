@@ -14,15 +14,33 @@ from dataclasses import dataclass
            frozen=False)
 class twingen:
     """
-    Usage
-    -----
-    from upxo.dclasses.features import twingen
+    Twin-generation specification (volume fraction and thickness stats).
+
+    Dataclass of target twin volume fraction and thickness distribution
+    controls used by 2D/3D twinning workflows. Thickness may follow a
+    named distribution (``tdis``) or an explicit user list (``tvalues``).
 
     Example
     -------
-    tg = twingen(vf=0.2, tmin=0.2, tmean=0.5, tmax=1.0,
-                 tdis='user', tvalues=[0.2, 0.5, 1.0, 0.75],
-                 allow_partial=True, partial_prob=0.2)
+    >>> from upxo.dclasses.features import twingen
+    >>> tg = twingen(vf=0.2, tmin=0.2, tmean=0.5, tmax=1.0,
+    ...              tdis='user', tvalues=[0.2, 0.5, 1.0, 0.75],
+    ...              allow_partial=True, partial_prob=0.2)
+
+    Attributes
+    ----------
+    vf : float
+        Target twin volume fraction.
+    tmin, tmean, tmax : float
+        Thickness bounds / mean for the twin lamella distribution.
+    tdis : str
+        Distribution name, or ``'user'`` to use ``tvalues``.
+    tvalues : list
+        Explicit thickness samples when ``tdis='user'``.
+    allow_partial : bool
+        Whether partial twins (truncated at grain bounds) are allowed.
+    partial_prob : float
+        Probability of partial-twin placement when allowed.
     """
     vf: float
     tmin: float
