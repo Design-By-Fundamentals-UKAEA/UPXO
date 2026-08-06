@@ -9,10 +9,16 @@ from typing import Optional, Dict, List, Tuple
 
 
 class DataViz3D:
-    """Statistical data visualizations."""
-    
+    """
+    Statistical plots for FM-steel 3D pipeline property distributions.
+
+    Histograms of scalar arrays and optional seaborn correlation matrices
+    over morphological property dicts. Lightweight worker used by interactive /
+    notebook visualisation steps — not a grain-structure container.
+    """
+
     __slots__ = ('_default_figure_size',)
-    
+
     def __init__(self, default_figure_size: tuple = (8, 5)):
         self._default_figure_size = default_figure_size
     
