@@ -355,6 +355,13 @@ def data_exporter(func):
 
 
 class FileManager:
+    """
+    Small filesystem helpers (create/delete/list folders, read/write files).
+
+    Methods are wrapped with :func:`error_handler` for console-friendly
+    error reporting. Not a full path abstraction — convenience for scripts
+    and export utilities.
+    """
     @error_handler
     def create_folder(self, path):
         """Create a new folder at the specified path."""
