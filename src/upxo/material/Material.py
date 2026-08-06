@@ -111,35 +111,47 @@ def build():
 
 @dataclass(frozen = True, repr = True)
 class IrradiationCondition:
+    """Irradiation environment (type, temperature K, dose in dpa)."""
     irr     : str = field(default = 'neutron') # Type of irradiation
     irr_temp: float = field(default = 400) # Temperature of irradiation in Kelvin
     irr_dpa : float = field(default = 1E-5) # displacements per atom
 
 @dataclass(frozen = True, repr = True)
 class CrystalFamily:
+    """Crystal family / system label for texture and phase work.
+
+    Soft-validated against ``KNOWN_CRYSTAL_FAMILIES`` (``FCC``/``BCC``/``HCP``)
+    when registered via :func:`build`. Default ``'mmm'`` is a legacy
+    placeholder and intentionally triggers a soft warning.
+    """
     xtal_family: str = field(default = 'mmm') # Crystal family: mmm, etc
 
 @dataclass(frozen = True, repr = True)
 class Phases:
+    """Phase count, names, and volume/area fractions."""
     nphases: int = field(default = 2) # Number of phases
     namesPhases: np.ndarray = field(default_factory=lambda: np.ndarray([], dtype=str))
     phaseFractions: np.ndarray = field(default_factory=lambda: np.ndarray([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
 class PhysicalProperty:
+    """Bulk physical properties (density in kg/m^3 by default)."""
     density: float = field(default = 2700.0) # in kg m^-3
 
 @dataclass(frozen = True, repr = True)
 class ElasticProperty:
+    """Elastic constants (Young's modulus ``E`` in MPa by default)."""
     E: float = field(default = 70E3) # Young's modulus in MPa
 
 @dataclass(frozen = True, repr = True)
 class TensileStressStrain:
+    """Experimental tensile stress–strain curve arrays."""
     strain: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
     stress: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))
 
 @dataclass(frozen = True, repr = True)
 class PlasticProperty:
+    """Proof strengths, hardness numbers, and fracture toughness."""
     Sy001: float = field(default = 135) # 0.1% proof strength, MPa
     Sy002: float = field(default = 150) # 0.2% proof strength, MPa
     Sy003: float = field(default = 155) # 0.3% proof strength, MPa
@@ -150,6 +162,7 @@ class PlasticProperty:
 
 @dataclass(frozen = True, repr = True)
 class ExpDataAvailability:
+    """Flags for which experimental datasets exist for this material."""
     tt          : bool = field(default = True) # tensile test. True if available else False
     fatigue_low : bool = field(default = True)
     fatigue_high: bool = field(default = True)
@@ -158,6 +171,7 @@ class ExpDataAvailability:
 
 @dataclass(frozen = True, repr = True)
 class GrainEqDiaEbsd:
+    """EBSD-derived equivalent-diameter distribution summary and histograms."""
     modality: int   = field(default = 2)
     skewness: float = field(default = -1.02)
     kurtosis: float = field(default = 1.24)
@@ -167,12 +181,14 @@ class GrainEqDiaEbsd:
 
 @dataclass(frozen = True, repr = True)
 class EBSDParameters:
+    """EBSD map quality metrics (zero fractions, phase fractions)."""
     zero_fraction_uncorrected : float = field(default = 0.0)# 0 to 1
     zero_fraction_corrected : float = field(default = 0.0)# 0 to 1
     phase_fraction: np.ndarray = field(default_factory=lambda: np.array([], dtype=float))# data for every phase
 
 @dataclass(frozen = True, repr = True)
 class TensileTestParameters:
+    """Tensile-test setup (sample geometry, rate, temperature)."""
     sample_type     : str   = field(default = 'value')# 'dogbonegrip','dogboneshoulder'
     strain_rate     : float = field(default = 0.0)
     test_temperature: float = field(default = 0.0)
