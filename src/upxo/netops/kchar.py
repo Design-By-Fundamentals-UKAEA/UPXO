@@ -1,10 +1,11 @@
 """
-Contains a list of definitions to enable charactyerizaion of networkx data.
+Characterise NetworkX grain-neighbour graphs (degree distributions, etc.).
 
-Created on Fri Jun  7 11:38:09 2024
-
-@author: Dr. Sunil Anandatheertha
+Companion to :mod:`upxo.netops.kmake` (graph build) and
+:mod:`upxo.netops.kcmp` (graph comparison) for KREPR / network
+representativeness studies.
 """
+
 import numpy as np
 from upxo._sup.dataTypeHandlers import IS_ITER
 
