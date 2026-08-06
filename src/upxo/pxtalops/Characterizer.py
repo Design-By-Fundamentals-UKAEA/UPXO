@@ -8,16 +8,18 @@ NUMBERS, ITERABLES = dth.dt.NUMBERS, dth.dt.ITERABLES
 
 class mcgs_mchar_2d():
     """
-    Root1: ..\\src\\upxo\\scripts\\MCGS2d_characterization
+    2D morphological characterisation helpers for MCGS fields / subsets.
 
-    Example-1
-    ---------
-    This example:
-        a. builds a synthetic 2D grain structure
-        b. extracts subsets from a temporal slice
-        c. characterizes the grain structure subsets
+    Operates on state or label fields (``fmat`` / ``lgi``) with optional
+    sliding-window subsets, grain detection, and property extraction.
+    Used by representativeness tooling (e.g. KREPR) and characterisation
+    scripts under ``scripts/MCGS2d_characterization``.
 
-    Refer to Root1\\subset_characterization_1.py
+    Example workflow (see ``scripts/MCGS2d_characterization``)
+    ----------------------------------------------------------
+    1. Build or load a synthetic 2D grain structure
+    2. Extract spatial subsets from a temporal slice
+    3. Characterise each subset (grain count / morphology)
     """
 
     __slots__ = ('xgr', 'ygr',
