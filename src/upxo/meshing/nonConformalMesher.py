@@ -1,4 +1,13 @@
-﻿import numpy as np
+"""
+Structured (non-conformal) FE meshing from a labelled grain image (LFI).
+
+``nonConformalMesher`` builds a regular grid and assigns grain IDs as
+element sets. Classmethods for quad/tri/hex/tet exist; the quad paths are
+the most complete end-to-end. Export targets include Abaqus-style meshes
+via ``mesh(analysis_package=...)``.
+"""
+
+import numpy as np
 import time
 
 class nonConformalMesher():
