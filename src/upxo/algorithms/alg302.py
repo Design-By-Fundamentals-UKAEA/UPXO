@@ -1,3 +1,13 @@
+"""
+3D Monte-Carlo Potts kernel **ALG-302** (dashboard ``mcalg`` = ``302.0``).
+
+3D MC path that accepts **``rsfso``** (second-order neighbour scale) from
+``mcgs.simulate(rsfso=...)`` / ``start_algo3d_without_hops``. Invoked as
+``mc_iterations_3d_alg302``.
+
+Writes temporal ``mcgs3_grain_structure`` slices for 3D MCGS runs.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy.random as rand
