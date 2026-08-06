@@ -151,6 +151,103 @@ class labeled_feature_image_2d():
         self.props_df = props_df
 
 class mcgs2_grain_structure():
+    """
+    2D Monte-Carlo grain structure at one temporal slice (``pxt.gs[tslice]``).
+
+    Holds the labelled feature image (LFI), grain topology, morphological
+    properties, orientations, and hooks used by characterisation, twinning,
+    representativeness, and export. Created by ``mcgs.detect_grains()`` for
+    2D runs (dashboard ``dim == 2``).
+
+    Prefer the ``lfi`` attribute (labelled feature image / cell feature index
+    field) in new code. The historical name ``lgi`` (labelled grain image)
+    remains on this class for compatibility and is the same array slot.
+
+    Attributes
+    ----------
+    dim : int
+        Dimensionality of the grain structure (2).
+    uigrid : object
+        User-input grid parameters from the Excel dashboard.
+    uimesh : object
+        User-input mesh / geometric-representation parameters.
+    xgr, ygr : np.ndarray
+        Grid coordinate vectors in x and y.
+    m : int
+        Monte-Carlo step (temporal slice index).
+    s : np.ndarray
+        State map from the MC simulation.
+    S : int
+        Total number of Q-states used in the simulation.
+    binaryStructure2D : np.ndarray
+        2D binary structure for ndimage / CC labelling.
+    binaryStructure3D : np.ndarray
+        3D binary structure slot (unused for pure 2D paths).
+    n : int
+        Total number of grains (labelled features).
+    lgi : np.ndarray
+        Labelled grain / feature image (prefer ``lfi`` naming in docs/APIs).
+    species : dict
+        Species data structure.
+    spart_flag : dict
+        State-partitioning flags.
+    gid : list
+        Grain IDs.
+    s_gid : dict
+        Map from state to grain IDs.
+    gid_s : list
+        State for each grain ID.
+    s_n : list
+        Number of grains per state.
+    g : dict
+        Per-grain data.
+    gb : dict
+        Grain-boundary data.
+    positions : dict
+        Grain position bookkeeping.
+    mp : object
+        Multipoint geometry helpers.
+    vtgs : object
+        Voronoi / tessellation representation when built.
+    mesh : object
+        Mesh data when built.
+    px_size : float
+        Pixel size (length scale).
+    prop_flag : dict
+        Property-calculation flags.
+    prop : dict
+        Computed morphological / other properties.
+    are_properties_available : bool
+        Whether properties have been computed.
+    prop_stat : dict
+        Property statistics.
+    uinputs : object
+        User inputs snapshot.
+    display_messages : bool
+        Console verbosity flag.
+    info : dict
+        Free-form info / metadata.
+    EAPGLB, EASGLB : dict
+        Global orientation stores (primary / secondary).
+    scaled, scaled_gs : object
+        Resolution-scaled views of the structure.
+    gbjp : dict
+        Grain-boundary junction points.
+    xomap : np.ndarray
+        Orientation map when assigned.
+    val : object
+        Validation bookkeeping.
+    neigh_gid : dict
+        Neighbour grain IDs per grain.
+    valid_mprops : dict
+        Valid material / morphological property flags.
+    features : object
+        Feature container (e.g. LFI-related).
+    twingen : object
+        Twin-generation workspace when used.
+    pxtal : object
+        Parent crystal / higher-level pxtal link when set.
+    """
     __slots__ = ('dim', 'uigrid', 'uimesh', 'xgr', 'ygr', 'zgr', 'm', 's', 'S',
                  'fcores', 'fbz', 'pixConn',
                  'binaryStructure2D', 'binaryStructure3D', 'n', 'lgi', 'species',
@@ -165,60 +262,6 @@ class mcgs2_grain_structure():
                  'twingen', 'pxtal', '_gid_bf_merger_', '_char_fx_version_',
                  '_global_iteration_counter_'
                  )
-    """
-    Slot variables description
-    --------------------------
-    dim: Dimension of the grain structure. int
-    uigrid: User input grid. np.ndarray
-    uimesh: User input mesh. dataclass
-    xgr, ygr: Grid vectors in x and y directions. np.ndarray
-    m: Material properties. dict
-    s: State map. np.ndarray
-    S: Total number of states. int
-    binaryStructure2D: 2D binary structure for ndimage labelling. np.ndarray
-    binaryStructure3D: 3D binary structure for ndimage labelling. np.ndarray
-    n: Total number of grains. int
-    lgi: Labelled grain image. np.ndarray
-    species: Species data structure. dict
-    spart_flag: State partitioning flag. dict
-    gid: List of grain IDs. list
-    s_gid: Dict of state to grain IDs. dict
-    gid_s: List of state for each grain ID. list
-    s_n: List of number of grains in each state. list
-    g: Grain data structure. dict
-    gb: Grain boundary data structure. dict
-    positions: Positions of grains. dict
-    mp: Multipoint data structure. dict
-    vtgs: Voronoi tessellation grain structure. dataclass
-    mesh: Mesh data structure. dataclass
-    px_size: Size of pixel. float
-    dim: Dimension of the grain structure. int
-    prop_flag: Property calculation flag. dict
-    prop: Property data structure. dict
-    are_properties_available: Flag indicating if properties are available. bool
-    prop_stat: Property statistics data structure. dict
-    __gi__: Grain iterator index. int
-    uinputs: User inputs data structure. dataclass
-    display_messages: Flag for displaying messages. bool
-    info: Information data structure. dict
-    print_interval_bool: Flag for print interval. bool
-    EAPGLB: Global equivalent axis-angle orientation data structure. dict
-    EASGLB: Global equivalent axis-angle orientation data structure. dict
-    __ori_assign_status_stack__: Orientation assignment status for stack. dict
-    __ori_assign_status_slice__: Orientation assignment status for slice. dict
-    scaled: Scaled data structure. dict
-    scaled_gs: Scaled grain structure. dataclass
-    __resolution_state__: Resolution state data structure. dict
-    gbjp: Grain boundary junction points data structure. dict
-    xomap: Orientation map. np.ndarray
-    val: Validation data structure. dataclass
-    neigh_gid: Neighbour grain IDs data structure. dict
-    valid_mprops: Valid material properties flags. dict
-    features: Features data structure. dataclass
-    twingen: Twin generation data structure. dataclass
-    pxtal: Parent crystal data structure. dataclass
-    _gid_bf_merger_: Grain ID before merger data structure. dict=
-    """
     EPS = 1e-12
     grain_coords_dtype = np.float16
     __maxGridSizeToIgnoreStoringGrids = 1000**2
