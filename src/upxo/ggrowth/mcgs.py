@@ -1,3 +1,28 @@
+"""
+Monte-Carlo grain structure (MCGS) generation for UPXO.
+
+Primary entry point for Q-state Potts grain-growth simulations in 2D and 3D.
+Dimensionality comes from the Excel dashboard field ``dim`` (not a separate
+3D class). Public class: ``mcgs`` (subclass of ``grid``).
+
+Typical workflow
+----------------
+1. ``pxt = mcgs(input_dashboard='...xls')`` — load UI blocks via ``load_uidata``
+2. ``pxt.simulate()`` — run the selected algorithm (``uisim.mcalg``)
+3. ``pxt.detect_grains()`` — build labelled feature images (LFI) per time slice
+4. ``pxt.gs[tslice]`` — ``mcgs2_grain_structure`` or ``mcgs3_grain_structure``
+
+Active algorithms (dashboard ``mcalg``)
+--------------------------------------
+* 2D: ``200`` / ``201`` / ``202`` → ``upxo.algorithms.alg20x``
+* 3D: ``300a`` / ``300b`` / ``301.0`` / ``302.0`` → ``upxo.algorithms.alg30x``
+
+Multi-algorithm "hops" are not a supported 2D path
+(``start_algo2d_with_hops`` raises ``NotImplementedError``).
+
+See also: package README/wiki (2D/3D generation, Excel Input Dashboard,
+Monte Carlo Algorithms).
+"""
 
 import numpy as np
 from upxo._sup import gops
