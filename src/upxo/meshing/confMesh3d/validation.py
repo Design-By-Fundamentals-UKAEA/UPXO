@@ -28,6 +28,7 @@ from upxo.meshing.confMesh3d.complex_builder import ConformalSurfaceComplex
 # ---------------------------------------------------------------------------
 @dataclass
 class ValidationIssue:
+    """Single pre-tet surface validation finding for one grain/check."""
     severity   : str   # 'error' | 'warning'
     check_name : str
     grain_id   : int
