@@ -471,28 +471,23 @@ class confMesh2d():
 
 class confMesh2dGMSH():
     """
-    Conformal 2D mesher using the raw gmsh API (no pygmsh dependency).
+    Conformal 2D FE mesher via the raw gmsh API (no pygmsh).
 
-    Designed to work directly with a dict of Shapely polygons (flat_cells)
-    and an optional grain-id mapping (gid_map).  This class duplicates
-    analytical / post-processing methods from confMesh2d so that pygmsh can
-    be phased out without breaking existing workflows.
-
-    Usage
-    -----
-    from upxo.meshing.conformal_mesher2d import confMesh2dGMSH as cm2dg
+    Accepts Shapely grain polygons (``flat_cells``) and optional
+    ``gid_map``, then meshes with GB-refined / bulk size controls.
+    Mirrors post-processing from :class:`confMesh2d` (ELSETs, boundary /
+    grain / GB NSETs) so pygmsh can be phased out without breaking
+    workflows.
 
     Typical workflow
     ----------------
-    m = confMesh2dGMSH()
-    m.femesh_gmsh(flat_cells, gid_map,
-                  mesh_size_gb=0.75, mesh_size_bulk=4.5,
-                  mesh_algo=8, mesh_order=1,
-                  recombine_to_quads=True)
-    m.form_elsets_gmsh()
-    m.build_boundary_nsets()
-    m.build_grain_nsets()
-    m.build_gb_nset()
+    >>> from upxo.meshing.conformal_mesher2d import confMesh2dGMSH as cm2dg
+    >>> m = confMesh2dGMSH()
+    >>> m.femesh_gmsh(flat_cells, gid_map,
+    ...               mesh_size_gb=0.75, mesh_size_bulk=4.5,
+    ...               mesh_algo=8, mesh_order=1, recombine_to_quads=True)
+    >>> m.form_elsets_gmsh()
+    >>> m.build_boundary_nsets(); m.build_grain_nsets(); m.build_gb_nset()
     """
 
     ValidElTypesOptions = ('triangle', 'quad')
