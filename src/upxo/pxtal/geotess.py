@@ -53,27 +53,36 @@ from upxo.pxtal.polyxtal import vtpolyxtal2d as polyxtal
 
 class geotess2d():
     """
-    Voronoi Tessellation grain structure in 2D.
+    Base 2D geometric / Voronoi-style tessellation grain structure.
+
+    Parent type for VTGS-style pipelines: holds seeds, junction/vertex
+    points, grain-boundary edges, grain polygons (``xtals``), neighbour
+    maps, and a property table. Prefer specialised constructors on
+    related VT / polyxtal classes when available; many seed and
+    neighbour helpers on this base remain stubs.
 
     Attributes
     ----------
-    bounds: x-axis and y-axis bounds
-    seeds: seed points: Numpy array
-    grid: x and y grid underlay: 2D Numpy arrays
-
-    jp: Unction points:  UPXO point2d
-    vp: Vertex points: UPXO point2d
-
-    gbedges: List of all grain boundary edges: list(UPXO edge2d)
-    gbseg: List of all grain bounmdary segments: list(UPXO muledge2d)
-
-    xtals: List of grains: shapely polygons
-
-    gid: Grain indices values: list[int]
-    neigh_gid: Neighbour gid values: dict(gid: list(int))
-
-    prop: Property holder: Pandas dataframe
-    info: Meta data storage: dict
+    bounds
+        Domain bounds on x and y.
+    seeds
+        Seed multipoint / array for the tessellation.
+    grid
+        Optional underlay x/y grids.
+    jp, vp
+        Junction and vertex points (UPXO point entities).
+    gbedges, gbseg
+        Grain-boundary edges and multi-edge segments.
+    xtals
+        Grain polygons (typically Shapely).
+    gid : list
+        Grain IDs.
+    neigh_gid : dict
+        Neighbour grain IDs per grain.
+    prop
+        Morphological / other property table (e.g. DataFrame).
+    info : dict
+        Metadata (including whether built ``from_mcgs``).
     """
 
     __slots__ = ('bounds', 'seeds', 'grid',
@@ -198,6 +207,12 @@ class geotess2d():
 
 
 class geoxtal2d():
+    """
+    Single 2D geometric grain (crystal) within a tessellation.
+
+    Planned companion to :class:`geotess2d` for per-grain geometry.
+    Not implemented yet — constructing raises ``NotImplementedError``.
+    """
     def __init__(self):
         """Initialise the instance."""
         raise NotImplementedError("__init__ is not yet implemented.")
@@ -208,6 +223,18 @@ class geoxtal2d():
 
 
 class vtgs3d():
+    """
+    3D Voronoi / geometric tessellation grain structure (API stub).
+
+    Intended 3D counterpart of :class:`geotess2d` with bounds, seeds,
+    grains, junction topology, and property storage. Methods are not
+    implemented yet — constructing raises ``NotImplementedError``.
+
+    Attributes (planned)
+    --------------------
+    bounds, seeds, grid, xtals, gid, jp, gbedges, neigh_gid, prop, info
+        Same roles as the 2D tessellation base, extended to 3D.
+    """
     __slots__ = ('bounds', 'xtals', 'seeds', 'grid', 'gid', 'jp', 'gbedges',
                  'neigh_gid', 'prop', 'info',
                  )
