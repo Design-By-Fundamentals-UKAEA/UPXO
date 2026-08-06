@@ -1,4 +1,18 @@
-﻿import pyvista as pv
+"""
+Grain-structure visualisation helpers for UPXO (2D maps and 3D PyVista).
+
+Public entry points (import as ``from upxo.viz import gsviz``):
+
+* ``see_map`` — 2D labelled map / property field (matplotlib)
+* ``make_pvgrid`` / ``make_pvgrid_2d`` / ``plot_pvgrid`` — LFI → PyVista ImageData
+* ``grain_viewer``, clip/slice helpers — interactive 3D exploration
+* geometric multipolygon / manifold plot helpers
+
+Style presets: ``PLOT_PRESETS`` (``publication``, ``presentation``, ``quick``,
+``minimal``). Prefer this module over ad-hoc imshow for standard GS plots.
+"""
+
+import pyvista as pv
 import functools
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,13 +20,6 @@ import matplotlib.cm as cm
 import vtk
 from upxo._sup import dataTypeHandlers as dth
 from shapely.geometry import MultiPolygon
-"""
-Visualization utilities for grain structure data.
-
-Usage
------
-from upxo.viz import gsviz
-"""
 
 # Visualization presets for different use cases
 PLOT_PRESETS = {
