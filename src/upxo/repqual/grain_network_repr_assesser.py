@@ -62,104 +62,40 @@ DCOPY = deepcopy
 
 class KREPR():
     """
-    Docstring.
+    Grain-network representativeness assessor (2D K-topology / morphometrics).
 
-    Usage
-    -----
-    from upxo.repqual.grain_network_repr_assesser import KREPR
+    Compares **target** and **sample** grain structures via neighbour
+    networks (NetworkX / UPXO netops), morphological property tables, and
+    distribution distances (Wasserstein, KS, energy distance, optional
+    NetLSD). Used by ``repgen2d`` ranking and standalone R-field studies.
 
-    Parameters
-    ----------
-    upxogs_tgt, upxogs_smp: UPXO grain structure data
+    Import::
 
-    tgset: dict
-        Set of target grain structures.
-        keys: int. grain strucyure IDs.
-        values: must be any of the UPXO grain structure type.
-        note: keys are usually tslice values, but can be user defined.
-        Example:
-        {0: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb54f0>,
-         1: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb5680>,
-         2: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb5810>,
-         ...}
-    sgset: dict
-        Set of sample grain structures.
-        keys: int. grain strucyure IDs.
-        values: must be any of the UPXO grain structure type.
-        note: keys are usually tslice values, but can be user defined.
-        Example:
-        {0: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb54f0>,
-         1: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb5680>,
-         2: <upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure at 0x2d37fcb5810>,
-         ...}
+        from upxo.repqual.grain_network_repr_assesser import KREPR
 
-    tkset: dict
-        Set of networkx graphs of target grain structure neighbour networks.
-        keys: int/float. Neighbour order, ordern value.
-        values: dict
-            keys: int. grain (node) IDs.
-            values: list. contains neighbouring grain ids (gids), ie. node ids.
-            note: keys are usually tslice values, but can be user defined.
-    skset: dict
-        Set of networkx graphs of sample grain structure neighbour networks.
-        keys: int/float. Neighbour order, ordern value.
-        values: dict
-            keys: int. grain (node) IDs.
-            values: list. contains neighbouring grain ids (gids), ie. node ids.
-            note: keys are usually tslice values, but can be user defined.
-
-    tnset: dict
-        Set of UPXO returned target grain structure neighbour mapping.
-        keys: int/float. Neighbour order, ordern value.
-        values: dict
-            keys: int. grain IDs.
-            values: list. contains neighbouring grain ids (gids).
-            note: keys are usually tslice values, but can be user defined.
-    snset: dict
-        Set of UPXO returned sample grain structure neighbour mapping.
-        keys: int/float. Neighbour order, ordern value.
-        values: dict
-            keys: int. grain IDs.
-            values: list. contains neighbouring grain ids (gids).
-            note: keys are usually tslice values, but can be user defined.
-
-    tmpset: dict
-        Target morphological property set.
-        keys: names of morphological properties.
-        values: dict
-            keys: O(n)
-            values: dict
-                keys: int. gid: grain id values
-                values: list: neighbour gids.
-    smpset: dict
-        Sample morphological property set.
-        keys: names of morphological properties.
-        values: dict
-            keys: O(n)
-            values: dict
-                keys: int. gid: grain id values
-                values: list: neighbour gids.
-
-    tid: list
-        Contains usable values of target grain ids. MUST belong to tgset.keys()
-        and/or tkset.keys() depending on study path.
-        Note: if not set by the user, all tkset.keys() will be assigned !!
-    sid: list
-        Contains usable values of target grain ids. MUST belong to tgset.keys()
-        and/or tkset.keys() depending on study path.
-        Note: if not set by the user, all skset.keys() will be assigned !!
-
-    ordern: list
-        Contains values of the ordern. If not set by the user, ordern=1
-        will be assigned.
-
-    mprop2d_flags, mprop3d_flags, sprop2d_flags, sprop3d_flags: all dict types
-
-    mprop2d, mprop3d, sprop2d, sprop3d: all dict types
-
-    rkf: dict
-        Contains network (k) based R-Field (i.e. rkf) data.
-        Thi smust be set before representativeness assessment is done.
+    Parameters / attributes
+    -----------------------
+    upxogs_tgt, upxogs_smp
+        Single UPXO grain-structure objects when used in one-vs-one mode.
+    tgset, sgset : dict
+        Sets of target / sample grain structures (keys often tslices).
+    tkset, skset : dict
+        Neighbour-network graphs (or adjacency dicts) for target / sample,
+        keyed by neighbour order ``ordern``.
+    tnset, snset : dict
+        UPXO neighbour maps (gid → neighbour gids) by order.
+    tmpset, smpset : dict
+        Morphological property sets for target / sample.
+    tid, sid : list
+        Usable target / sample IDs (subset of set keys); default all keys.
+    ordern : list
+        Neighbour orders to analyse (default ``[1]`` if unset).
+    mprop2d_flags, mprop3d_flags, sprop2d_flags, sprop3d_flags : dict
+        Flags controlling which morphological properties are computed.
+    mprop2d, mprop3d, sprop2d, sprop3d : dict
+        Computed morphological property stores.
+    rkf : dict
+        Network-based R-field data; set before full representativeness runs.
 
     _cim_: str
         Class initiation method, not intended for user use.
