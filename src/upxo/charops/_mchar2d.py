@@ -1,4 +1,11 @@
-﻿import numpy as np
+﻿"""
+Private 2D morphological characterisation helpers for labelled images.
+
+Internal implementation used by :mod:`upxo.charops.mchar` public wrappers.
+Prefer importing ``mchar`` rather than this module directly.
+"""
+
+import numpy as np
 # import pandas as pd
 
 def detect_features(mcStateArray, connectivity=18, delta=0):
