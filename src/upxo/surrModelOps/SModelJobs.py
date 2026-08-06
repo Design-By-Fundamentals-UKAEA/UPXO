@@ -13,9 +13,32 @@ import os
 
 class mcgs2d_Surrogate():
     """
-    Usage
-    -----
-    from upxo.surrModelOps.SModelJobs import mcgs2d_Surrogate as smod2d
+    Batch 2D MCGS runs that export LFI arrays for surrogate / ML training.
+
+    Repeatedly runs ``mcgs`` → ``simulate`` → ``detect_grains`` and writes
+    each temporal-slice label field via :class:`~upxo.interfaces.io.expop.ArrExp2d`.
+    Folder layouts: one directory per simulation or per temporal slice.
+    Does **not** fit or persist a surrogate model — data export only.
+
+    Workflow
+    --------
+    1. ``job = mcgs2d_Surrogate(input_dashboard='...xls')``
+    2. ``job.set_NumberOfSimulations(N)``
+    3. ``job.set_export_parameters(basePath, baseFilename, fileType, ...)``
+    4. ``job.makeImages(TemporalOrSimFolders='temporal'|'sim')``
+
+    Attributes
+    ----------
+    input_dashboard : str
+        Path to the Excel MCGS dashboard.
+    dim : int
+        Fixed to 2 for this job class.
+    Nsim : int
+        Number of independent MC runs.
+    basePath, baseFilename, fileType, fileNamePadLength
+        Export location and naming.
+    currentExportDirs : dict
+        Directories created during the last export pass.
     """
 
     __slots__ = ('input_dashboard', 'dim', 'Nsim', 'basePath',
