@@ -1,3 +1,16 @@
+"""
+3D representative MC grain-structure generation and temporal-slice ranking.
+
+Class ``repgen3d`` ranks MCGS3D time slices and related candidates against a
+reference structure (morphology / grain-count style filters and property
+metrics). Used with 3D twin and OFHC-style pipelines for selecting host
+slices before twin introduction.
+
+Import::
+
+    from upxo.repgen.repgen3dmcgs import repgen3d
+"""
+
 import os
 import random
 import matplotlib as mpl
