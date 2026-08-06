@@ -1,18 +1,19 @@
-﻿import numpy as np
+"""
+Morphological property operations on labelled feature images (LFI).
+
+Volumes, boundary/internal volume ratios, ellipsoid DNA helpers, and related
+utilities for 2D/3D integer label fields. Complements
+``upxo.propOps.morphops`` and ``upxo.gsdataops.gid_ops``.
+
+Import::
+
+    import upxo.propOps.mpropOps as mpropOps
+"""
+
+import numpy as np
 from scipy import ndimage
 from skimage import morphology, measure
 import upxo.gsdataops.gid_ops as gidOps
-
-"""
-Property Operations
--------------------
-This module contains functions for calculating morphological properties of
-features in a labeled feature ID (LFI) array.
-
-Usage
------
-import upxo.propOps.mpropOps as mpropOps
-"""
 
 def get_feature_volumes(lfi):
     """Return the feature volumes."""
