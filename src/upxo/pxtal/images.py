@@ -11,22 +11,32 @@ from upxo.pxtal import img_essentials_01
 
 class IMAGE_3D:
     """
-    Description of slot variables
-    -----------------------------
-    img: 3D Numpy array. np.int32
-    fid: 0D Numpy array of list of feature IDs. np.int32
-    n: Number of individual features. int
-    neigh_fid: immediate neighbour feature ID database. dict
-    
-    vox: Information on voxels in the image. dataclass
-    
-    vol: Total volume
-    bvox: 
+    3D labelled image / RVE container with feature topology and properties.
+
+    Wraps a 3D integer volume (features / grains), feature IDs, neighbour
+    graphs, voxel bookkeeping, and optional morphological / topological
+    property stores. Used for voxel-based characterisation and ops that
+    sit outside the MCGS temporal-slice classes.
+
+    Attributes
+    ----------
+    base, img
+        Source / working 3D label arrays.
+    fid, n, neigh_fid, neigh_pairs
+        Feature IDs, count, and neighbour relations.
+    vox, rve, bvox
+        Voxel and RVE geometry bookkeeping.
+    mprop, tprop, srep
+        Morphological / topological / representation property stores.
+    mops, tops, sops, rops
+        Operation helpers (morphological, topological, spatial, …).
+    ctrl : dict
+        Runtime control flags.
     """
     __slots__ = ('base', 'img', 'vox', 'rve', 'ctrl',
                  'mops', 'tops', 'sops', 'rops',
                  'coords', 'H',
-                 'fid', 'n', 'neigh_fid',                 
+                 'fid', 'n', 'neigh_fid',
                  'bvox',
                  'neigh_pairs',
                  'mprop',
