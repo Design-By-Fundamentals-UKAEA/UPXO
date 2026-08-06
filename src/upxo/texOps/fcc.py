@@ -228,9 +228,16 @@ def matrix_to_quat(R: np.ndarray) -> np.ndarray:
 
 class FCCTexture:
     """
-    Model crystallographic texture generator for Face-Centered Cubic (FCC) materials.
+    Synthetic FCC crystallographic texture from named ideal components.
+
+    Samples orientations around ideal Bunge Euler positions (copper,
+    brass, Goss, cube, …) with per-component volume fractions and
+    angular spreads. Remainder of the volume fraction is random
+    background. Optional sample symmetries (RD/TD/ND 180° rotations)
+    for rolling-style ODFs. Complements :class:`~upxo.xtalphy.texops.tops`
+    and registry :class:`~upxo.material.texture.TextureComponentProfile`.
     """
-    
+
     def __init__(
         self,
         tc_fractions: Dict[str, float],
