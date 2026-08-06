@@ -26,7 +26,27 @@ from scipy.ndimage import generic_filter
 
 
 class polygonised_grain_structure():
-    """Polygonised grain structure for geometrification of raster-format grain structures."""
+    """
+    Raster-to-polygon geometrification of a 2D labelled grain image.
+
+    Converts an LFI / ``lgi`` field into Shapely polygons, grain-boundary
+    segments, junction points, and neighbour topology for geometric
+    analysis and conformal meshing. Intermediate stores include raw and
+    smoothed GB multipolylines, centroids, and quality metrics.
+
+    Attributes
+    ----------
+    lgi, gid, n
+        Source label image, grain IDs, and grain count.
+    polygons, GRAINS, POLYXTAL
+        Grain polygons and assembled geometric polycrystal views.
+    neigh_gid, gid_pair_ids*
+        Neighbour topology and unique neighbour pairs.
+    GBSEG*, GBP*, JNP*, gbsegments*
+        Grain-boundary segments, points, and junction points (raw/sorted).
+    centroids, quality, smoothed
+        Centroids, polygonisation quality flags, smoothing state.
+    """
 
     __slots__ = ('lgi', 'gid', 'n', 'polygons', 'pxtal', 'neigh_gid',
                  'gsmp', 'gbsegments_raw', 'gbsegments_mls', 'gbseg_smoothed',
@@ -2033,7 +2053,15 @@ class polygonised_grain_structure():
 # =====================================================================================
 
 class VoronoiMasking(ABC):
-    """Abstract base class for Voronoi-based masking of a label field image (LFI)."""
+    """
+    Abstract base: Voronoi cells masked by sampling a label field (LFI).
+
+    Seeds define a tessellation; each seed samples ``lfi`` to obtain a
+    grain/feature ID, then dimension-specific subclasses merge cells
+    sharing an ID into manifolds (Shapely 2D / PyVista 3D).
+
+    Factory methods (abstract): ``by_tessellation``, ``load_tessellation``.
+    """
 
     def __init__(self, lfi):
         """Initialise the instance."""
@@ -2096,7 +2124,13 @@ from shapely.ops import unary_union
 from collections import defaultdict
 
 class GrainManifold2D(VoronoiMasking):
-    """2D grain manifold constructed by Voronoi tessellation and label field sampling."""
+    """
+    2D grain manifolds from Voronoi tessellation + LFI sampling.
+
+    Each seed maps to a label in the LFI; Voronoi polygons with the same
+    label are unioned (Shapely) into one manifold per grain/feature ID.
+    Construct via ``by_tessellation(lfi, seeds)``.
+    """
 
     @classmethod
     def by_tessellation(cls, lfi, seeds, channel=0):
@@ -2815,6 +2849,13 @@ class GrainManifold2D(VoronoiMasking):
 # =====================================================================================
 
 class GrainManifold3D(VoronoiMasking):
+    """
+    3D grain manifolds from Voronoi tessellation + LFI sampling.
+
+    3D counterpart of :class:`GrainManifold2D`: seeds sample a 3D label
+    volume; clipped Voronoi solids (PyVista) are grouped by feature ID.
+    ``assemble_cells`` is currently a stub for full boolean union merge.
+    """
     @classmethod
     def by_tessellation(cls, lfi, seeds, channel=0):
         """By tessellation."""
