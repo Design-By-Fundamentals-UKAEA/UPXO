@@ -3,7 +3,11 @@ from termcolor import colored
 
 class artwork():
     """
-    TO BE DEPRECATED
+    Legacy Monte-Carlo visualisation helpers (deprecated).
+
+    Older plots for state-transition probabilities and Q-state colour
+    maps. Prefer :mod:`upxo.viz.gsviz` and related visualisation modules.
+    **Scheduled for removal** — do not use in new code.
     """
     __slots__ = ('GrColArr',
                  )
