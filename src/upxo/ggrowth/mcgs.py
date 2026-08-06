@@ -31,60 +31,37 @@ import upxo._sup.decorators as decorators
 
 class grid():
     """
-    Description
-    -----------
-    This is a core UPXO > mcgs class.
+    Shared grid, dashboard UI blocks, and state fields for MCGS simulations.
 
-    Dependencies
-    ------------
-    Parent class for:
-        mcgs class
+    Parent of :class:`mcgs`. Holds Excel-dashboard parameter objects
+    (``uigrid``, ``uisim``, ``uigsc``, …), coordinate grids, the Q-state
+    field, non-locality matrices, and the ``gs`` map of temporal slices
+    after ``detect_grains()``. Prefer constructing :class:`mcgs` rather
+    than using ``grid`` directly.
 
-    Slots
-    -----
-        __ui: DICT: User input (ui) dict
-        uigrid:  CLASS: ui: gridding parameters
-        uisim:  CLASS: ui: simulation par
-        uigsc:  CLASS: ui: grain strucure characterisation par
-        uiint:  CLASS: ui: intervals
-        uigsprop:  CLASS: ui: grain str property calculation par
-        uigeorep:  CLASS: ui: geometric representations cacl par
-        _mcsteps_:  LIST: stores history of mcsteps
-        __g__:  DICT: base dict template for grains
-        __gprop__:  DICT: base dict template for grain properties
-        __gb__:  DICT: base dict template for grain boundaries
-        __gbprop__:  DICT: base dict template for grain boundary properties
-        g:  DICT: Grains @latest mcstep
-        m: LIST: available temporal slices
-        xgr: np.ndarray:
-        ygr: np.ndarray:
-        zgr: np.ndarray:
-        NL_dict: dict: Specifies Non-Locality detasils
-        px_length: Iterable: Side lengths of the pixel
-        px_size:, Area or volume of the pixel
-        S:  np.ndarray: State matrix
-        sa: State martix modified enable fast consideration of
-            Wrapped Boundary Condition
-        vis: Stores instant of awrtwork class
-        AIA: np.ndarray: Appended Index Array (@dev)
-        AIA0: np.ndarray: Appended Index Array (@dev)
-        AIA1: np.ndarray: Appended Index Array (@dev)
-        xind: np.ndarray: xindices (3D only)
-        yind: np.ndarray: yindices (3D only)
-        zind: np.ndarray: zindices (3D only)
-        xinda: np.ndarray: appended xindices (3D only)
-        yinda: np.ndarray: appended yindices (3D only)
-        zinda: np.ndarray: appended zindices (3D only)
-        NLM_nd: np.ndarray: Non-Locality matrix
-        NLM: np.ndarray: Non-locality matrix
-        EAPGLB: PRIMARY GLOBAL Euler angle Definition -- state wise.
-        EASGLB: SSECONDARY GLOBAL Euler angle definition -- state wise.
-                Different from EAPGLB in that adjustments that happen to
-                EAPGLB are carried out here and not in the proimary list.
-                This is NOT available at the grid level but at the grain
-                structure level.
-        #####################################################################
-        #####################################################################
+    Attributes
+    ----------
+    uigrid, uisim, uigsc, uiint, uigsprop, uigeomrepr, uimesh
+        Dashboard UI blocks (grid, simulation, characterisation, intervals,
+        grain properties, geometric representation, mesh).
+    gs : dict
+        Temporal-slice grain structures keyed by MC step (after detect).
+    xgr, ygr, zgr : np.ndarray
+        Coordinate grid vectors (z used in 3D).
+    S, s : np.ndarray
+        State field(s) from the Monte-Carlo run.
+    sa : np.ndarray
+        State field padded for periodic / wrapped boundary handling.
+    px_length, px_size
+        Pixel side lengths and area/volume.
+    NL_dict, NLM, NLM_nd
+        Non-locality configuration and matrices.
+    EAPGLB
+        Primary global Euler-angle store (state-wise) at grid level.
+    vis
+        Optional visualisation workspace.
+    display_messages : bool
+        Console verbosity.
     """
     characterization_ID = 0
     characterization_settings = None
@@ -1724,7 +1701,24 @@ class grid():
 
 class mcgs(grid):
     """
-    Monte-Carlo Grain Structure class
+    Public Monte-Carlo grain-structure generator (2D and 3D).
+
+    Primary UPXO entry for Q-state Potts grain growth. Dimensionality is
+    taken from the Excel dashboard field ``dim`` (not a separate 3D class).
+    Subclasses :class:`grid` for UI blocks, grids, and state storage.
+
+    Typical workflow
+    ----------------
+    1. ``pxt = mcgs(input_dashboard='...xls')`` — load UI via ``load_uidata``
+    2. ``pxt.simulate()`` — run algorithm selected by ``uisim.mcalg``
+    3. ``pxt.detect_grains()`` — build LFI / temporal slices in ``pxt.gs``
+    4. ``pxt.gs[tslice]`` — :class:`~upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure`
+       or the 3D counterpart
+
+    Active algorithms (dashboard ``mcalg``)
+    --------------------------------------
+    * 2D: ``200`` / ``201`` / ``202`` → ``upxo.algorithms.alg20x``
+    * 3D: ``300a`` / ``300b`` / ``301.0`` / ``302.0`` → ``upxo.algorithms.alg30x``
     """
     def __init__(self, study='independent', input_dashboard='input_dashboard.xls',
                  info_message_display_level='detailed',
