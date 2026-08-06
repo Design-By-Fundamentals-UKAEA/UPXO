@@ -1,3 +1,11 @@
+"""
+Low-level Abaqus keyword writers for UPXO meshes.
+
+Helpers to write ``*Elset`` and related grain/element-set blocks used by
+2D/3D meshing export paths. Higher-level partitioned INP export lives in
+``confMesh3d.export``, ``fm_steel_3d.mesh_exporter_3d``, and
+``twinned_simple_3d.abaqus_exporter_3d``.
+"""
 
 import numpy as np
 
