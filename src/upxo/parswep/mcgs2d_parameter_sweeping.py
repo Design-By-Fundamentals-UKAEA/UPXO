@@ -1,3 +1,16 @@
+"""
+Multi-instance Monte-Carlo parameter-sweep container (2D-focused).
+
+Class ``parameter_sweep`` stores many MCGS runs under instance keys, keeps UI
+parameter blocks, optional mesh instances, and stage locks for generation /
+characterisation / export. Default algorithm id is ``200``. Aimed at
+research and UPXO development, not the day-one single-run dashboard path.
+
+Import::
+
+    from upxo.parswep.mcgs2d_parameter_sweeping import parameter_sweep
+"""
+
 import numpy as np
 
 class parameter_sweep():
