@@ -30,7 +30,12 @@ from upxo.meshing.confMesh3d.config import SurfaceNetsConfig
 # ---------------------------------------------------------------------------
 @dataclass
 class SurfaceNetsResult:
-    """Output of the SurfaceNets3D extraction stage."""
+    """
+    Output of the vtkSurfaceNets3D multi-label surface extraction stage.
+
+    Separates grain–grain **interior** faces from grain–wall **cap** faces
+    (RVE boundary patches). Produced by :func:`run_surface_nets`.
+    """
     full_mesh      : pv.PolyData          # full multi-label mesh
     interior_cells : np.ndarray           # bool (N_cells,) — True for grain-grain faces
     cap_cells      : np.ndarray           # bool (N_cells,) — True for grain-wall faces
