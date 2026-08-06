@@ -1,3 +1,13 @@
+"""
+3D Monte-Carlo Potts kernel **ALG-300a** (dashboard ``mcalg`` = ``300a``).
+
+Numba voxel loop over the 3D spin field using index arrays ``xinda``,
+``yinda``, ``zinda``. Invoked from ``mcgs.start_algo3d_without_hops`` as
+``mc_iterations_3d_alg300a``.
+
+Writes temporal ``mcgs3_grain_structure`` slices for 3D MCGS runs.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy.random as rand
