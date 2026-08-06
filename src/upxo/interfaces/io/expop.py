@@ -20,11 +20,18 @@ import os
 
 class ArrExp2d:
     """
-    Orchastrator class for exporting numpy arrays.
-    
-    Usage
-    -----
-    from upxo.interfaces.io.expop import ArrExp2d as arex2
+    Multi-format exporter for NumPy arrays (static helpers).
+
+    ``ArrExp2d.save(data, filename, compression=False, **kwargs)`` chooses
+    a handler from the file extension (``.npy``, ``.npz``, ``.csv``,
+    ``.xlsx``, ``.mat``, ``.h5``/``.hdf5``, ``.vtk``/``.vti``, common image
+    formats). Used by surrogate batch jobs and ad-hoc array I/O — not a
+    full grain-structure serializer.
+
+    Example
+    -------
+    >>> from upxo.interfaces.io.expop import ArrExp2d as arex2
+    >>> arex2.save(label_field, 'slice_0001.npy')
     """
 
     @staticmethod
