@@ -7,6 +7,19 @@ from itertools import permutations, product, combinations
 import matplotlib.pyplot as plt
 
 class tops:
+    """
+    Texture operations: synthetic FCC component stacks and pole figures.
+
+    Builds multi-instance texture samples from named ideal orientations
+    (copper, brass, Goss, cube, …) with volume fractions, optional cubic
+    symmetry, and orientation sampling. Primary constructor:
+    :meth:`synth_fcc`. Includes standard Euler tables (``fcc_tc_std``) and
+    pole-family helpers for ``{100}`` / ``{110}`` / ``{111}`` plots.
+
+    Related: :class:`~upxo.texOps.fcc.FCCTexture` for model generation with
+    sample symmetries; material registry
+    :class:`~upxo.material.texture.TextureComponentProfile`.
+    """
 
     __slots__ = ('tc_info', 'ori_count', 'N', 'n_texture_instances',
                  'n_sampling_instances', 'tex', 'sym_ops', 'apply_symmetry')
