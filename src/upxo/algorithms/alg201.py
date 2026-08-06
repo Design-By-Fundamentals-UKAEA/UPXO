@@ -1,3 +1,13 @@
+"""
+2D Monte-Carlo Potts kernel **ALG-201** (dashboard ``mcalg`` = ``201`` / ``201.0``).
+
+Variant of the 2D MC loop that accepts **``rsfso``** (second-order neighbour
+radius scale) from ``mcgs.simulate(rsfso=...)``. Invoked from
+``mcgs.start_algo2d_without_hops``.
+
+Public driver: ``run(...)`` — writes temporal ``mcgs2_grain_structure`` slices.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy as np
