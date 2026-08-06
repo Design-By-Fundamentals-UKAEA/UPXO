@@ -1,4 +1,12 @@
-﻿import numpy as np
+﻿"""
+Private 3D morphological characterisation helpers for labelled volumes.
+
+Internal implementation used by :mod:`upxo.charops.mchar` public wrappers
+(cc3d / connectivity-based detection and property extraction). Prefer
+importing ``mchar`` rather than this module directly.
+"""
+
+import numpy as np
 import pandas as pd
 
 def detect_features(mcStateArray, connectivity=18, delta=0):
