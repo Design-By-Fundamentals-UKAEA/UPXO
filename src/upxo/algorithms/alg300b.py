@@ -1,3 +1,12 @@
+"""
+3D Monte-Carlo Potts kernel **ALG-300b** (dashboard ``mcalg`` = ``300b``).
+
+Alternate 3D MC iteration path relative to ``alg300a``. Invoked from
+``mcgs.start_algo3d_without_hops`` as ``mc_iterations_3d_alg300b``.
+
+Writes temporal ``mcgs3_grain_structure`` slices for 3D MCGS runs.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy.random as rand
