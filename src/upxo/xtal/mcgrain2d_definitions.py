@@ -10,73 +10,41 @@ from upxo._sup.validation_values import _validation as val
 
 class grain2d():
     """
-    pxt.gs[2].g[1]['grain']
-    ------------------------------
-    ATTRIBUTES AND THEIR ACCESS
-    ------------------------------
-    loc:
-        Grain pixel loca5tions.
-        pxt.gs[t].g[gid]['grain'].loc, pxt.gs[t].g[gid]['grain'].coords
+    Per-grain data object for 2D Monte-Carlo / LFI polycrystals.
 
-    npixels:
-        Number of pixels in the grain
-        pxt.gs[t].g[gid]['grain'].npixels
+    Attached under ``pxt.gs[tslice].g[gid]['grain']`` on an
+    :class:`~upxo.pxtal.mcgs2_temporal_slice.mcgs2_grain_structure`.
+    Holds pixel locations, bounding-box masks, GB indices, and
+    scikit-image property hooks used during characterisation.
 
-    position:
-        Grain relative poistioning in the poly-crystal.
-        pxt.gs[t].g[gid]['grain'].position
-        initial 2 values provide x and y coord of the centroid
-        last string value provides the relative positioning of the grain
+    Access pattern
+    --------------
+    ``pxt.gs[t].g[gid]['grain'].<attr>``
 
-    coords:
-        Explanation here
-
-    gbloc:
-        grain boundary pixel locations
-
-    bbox_bounds:
-        Bounds of the bounding box
-        pxt.gs[t].g[gid]['grain'].bbox_bounds
-
-    bbox_ex_bounds:
-        Bounds of the extended bounding box. Extended by unit pixels on all
-        sides. If grain is a boundary grain, only possible directions  will
-        be extended by unit pixel.
-        pxt.gs[t].g[gid]['grain'].bbox_ex_bounds
-    bbox:
-        Mask on bounding box.
-        pxt.gs[t].g[gid]['grain'].bbox
-    bbox_ex:
-        Mask on extended bouning box.
-        pxt.gs[t].g[gid]['grain'].bbox_ex
-
-    skprop:
-        Scikit image property generator
-        pxt.gs[t].g[gid]['grain'].skprop
-
-    _px_area:
-        Area of a single pixel
-        pxt.gs[t].g[gid]['grain']._px_area
-
-    gid:
-        This grain ID. Same as the lgi number of this grain.
-        pxt.gs[t].g[gid]['grain'].gid
-
-    gind:
-        Indices of grain pixel in the parent state matrix
-        pxt.gs[t].g[gid]['grain'].gind
-
-    gbid:
-        Grain boundary ID
-        pxt.gs[t].g[gid]['grain'].gbid
-
-    gbind:
-        Indices of grain boundary pixel in the parent state matrix
-        pxt.gs[t].g[gid]['grain'].gbind
-
-    gbvert:
-        Grain boundary vertices
-        pxt.gs[t].g[gid]['grain'].gbvert
+    Attributes
+    ----------
+    loc, coords
+        Grain pixel locations / coordinates.
+    npixels
+        Number of pixels in the grain.
+    position
+        Relative placement in the polycrystal (centroid + boundary tag).
+    gbloc
+        Grain-boundary pixel locations.
+    bbox_bounds, bbox_ex_bounds, bbox, bbox_ex
+        Bounding-box bounds and masks (extended by one pixel where possible).
+    skprop
+        scikit-image regionprops handle when computed.
+    _px_area
+        Area of a single pixel.
+    gid
+        Grain ID (matches LFI / ``lgi`` label).
+    gind
+        Indices of grain pixels in the parent state matrix.
+    gbid, gbind
+        Grain-boundary ID and boundary-pixel indices in the parent matrix.
+    gbvert
+        Grain-boundary vertices.
 
     gbsegs:
         grain boundary segments
