@@ -9,21 +9,31 @@ from upxo._sup.console_formats import console_seperator
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 class distribution():
-    '''
-    RULES:
-        An instance should not store than more one data
-        If data is updated, then update operations must be perfoemed
-    VARIABLES:
-        data_name: Data Name
-        data: Data
-        nbins: Number of bins
-        hist: histograms
-        bin_edges: edges of the bins
-    CONVENTIONS:
-        nbins: contained in a list
-        H: contained in a list
-        bin_edges: contained in a list
-    '''
+    """
+    Univariate sample distribution: summary stats, histogram, and KDE hooks.
+
+    One instance holds a single data vector. On construction (or after
+    updating data), call histogram and summary methods so ``S`` / ``H``
+    stay consistent. Used by VTGS seed sizing and morphology stats.
+
+    Attributes
+    ----------
+    data_name
+        Optional label for plots/axes.
+    data
+        1D sample array.
+    S : SUMMARY
+        Summary statistics (min, mean, percentiles, …).
+    H : HISTOGRAM
+        Histogram values and bin edges.
+    K : KDE
+        Kernel-density estimate placeholders (``bw``, ``kd``).
+
+    Rules
+    -----
+    * One data vector per instance.
+    * After changing ``data``, re-run histogram / summary updates.
+    """
     def __init__(self,
                  data_name = None,
                  data = None,
@@ -177,6 +187,7 @@ class distribution():
 ###############################################################################
 @dataclass(repr = False, frozen = True)
 class SUMMARY():
+    """Scalar summary statistics for a :class:`distribution` sample."""
     minimum = None
     percentiles = None
     maximum = None
@@ -189,11 +200,13 @@ class SUMMARY():
 # .. .. .. .. .. .. .. .. .. ..
 @dataclass(repr = False)
 class KDE():
+    """Kernel-density estimate store (bandwidth ``bw``, estimate ``kd``)."""
     bw = None
     kd = None
 # .. .. .. .. .. .. .. .. .. ..
 @dataclass(repr = False)
 class HISTOGRAM():
+    """Histogram store: values ``hv``, bin edges ``be``, optional ``data``."""
     hv = None # histogram values
     be = None # Bin edges
     data = None
