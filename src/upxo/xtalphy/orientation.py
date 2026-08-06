@@ -83,7 +83,24 @@ def ipf(vector, symm):
 
 class grainoris():
     """
-    Grain orientation container: Euler angles, quaternions, and statistics.
+    Grain orientation container: Euler angles, quaternions, and averages.
+
+    Holds Bunge-style Euler angles (radians by default; set ``deg=True``
+    to convert), optional per-angle perturbations, and computed unit
+    quaternions / mean orientation. Used by grain objects and texture
+    assignment paths.
+
+    Attributes
+    ----------
+    ea : ndarray
+        Euler angles, shape ``(n, 3)`` or ``(3,)``.
+    q, qavg
+        Quaternions and average quaternion after ``compute_quats`` /
+        ``compute_avg``.
+    gid, s
+        Optional grain ID and state labels.
+    pea1, pea2, pea3
+        Optional Euler-angle perturbation ranges.
 
     Examples
     --------
