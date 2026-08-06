@@ -152,6 +152,34 @@ class AbaqusExporter3D:
         Write 03c_elsets_families.inp (Option 3 grouping).
     write_variant_elsets : bool
         Write 03d_elsets_variants.inp (Option 5 grouping).
+    role_enabled : dict {role_key: bool} or None
+        Per-role toggle for whether that role's bucket ELSET is written in
+        03b (role_key is one of 'non_host'/'host'/'primary_twin'/
+        'stwin_a'/'stwin_b'). Defaults to all-enabled. Has no effect on
+        03a (per-grain elsets are always written for every grain,
+        regardless of role, since every element must belong to exactly
+        one 03a ELSET for material/section assignment) -- this only
+        controls the optional 03b convenience groupings.
+    role_prefix : dict {role_key: str} or None
+        Per-role ELSET name override for 03b (same keys as
+        ``role_enabled``). Falls back to ``_DEFAULT_ROLE_PREFIX`` for any
+        role not given.
+    family_prefix : str
+        ELSET name prefix for 03c (``<family_prefix><host_gid>`` -- include
+        your own trailing separator, e.g. ``'es_family_'``).
+    variant_prefix : str
+        ELSET name prefix for 03d (``<variant_prefix><v>`` -- include your
+        own trailing separator, e.g. ``'es_variant_ptwin_'``).
+    nset_config : dict {face: {'enabled': bool, 'prefix': str}} or None
+        Per-face (``'XMIN'``/``'XMAX'``/``'YMIN'``/``'YMAX'``/``'ZMIN'``/
+        ``'ZMAX'``) toggle and name override for 04. Falls back to
+        ``_DEFAULT_NSET_CONFIG`` (all enabled) for any face not given.
+    material_level : str
+        One of ``'feature'`` (default -- one *Material per grain, today's
+        only implemented behaviour) or a role key. Non-``'feature'``
+        values are accepted but NOT implemented: materials/sections are
+        still written per-grain, and a warning is raised at ``write()``
+        time rather than silently honouring the request.
     index : GrainElementIndex or None
         A pre-built index from :meth:`build_index`. When given, the
         expensive grain-to-element indexing pass is skipped entirely
@@ -169,6 +197,27 @@ class AbaqusExporter3D:
         'primary_twin':  ('es_cell_ptwin',     'MAT_CELL_PTWIN'),
         'stwin_a':       ('es_cell_stwin_a',   'MAT_CELL_STWIN_A'),
         'stwin_b':       ('es_cell_stwin_b',   'MAT_CELL_STWIN_B'),
+    }
+
+    # Default 03b role-grouping ELSET names -- used whenever role_prefix
+    # (constructor arg) doesn't override a given role.
+    _DEFAULT_ROLE_PREFIX = {
+        'non_host':      'es_role_nonpart',
+        'host':          'es_role_host',
+        'primary_twin':  'es_role_ptwin',
+        'stwin_a':       'es_role_stwin_a',
+        'stwin_b':       'es_role_stwin_b',
+    }
+
+    # Default 04 boundary-face node-set names/enablement -- used whenever
+    # nset_config (constructor arg) doesn't override a given face.
+    _DEFAULT_NSET_CONFIG = {
+        'XMIN': {'enabled': True, 'prefix': 'ns_face_XMIN'},
+        'XMAX': {'enabled': True, 'prefix': 'ns_face_XMAX'},
+        'YMIN': {'enabled': True, 'prefix': 'ns_face_YMIN'},
+        'YMAX': {'enabled': True, 'prefix': 'ns_face_YMAX'},
+        'ZMIN': {'enabled': True, 'prefix': 'ns_face_ZMIN'},
+        'ZMAX': {'enabled': True, 'prefix': 'ns_face_ZMAX'},
     }
 
     @staticmethod
@@ -242,6 +291,12 @@ class AbaqusExporter3D:
             write_role_elsets:    bool  = True,
             write_family_elsets:  bool  = True,
             write_variant_elsets: bool  = True,
+            role_enabled:         Optional[Dict[str, bool]] = None,
+            role_prefix:          Optional[Dict[str, str]] = None,
+            family_prefix:        str   = 'es_family_',
+            variant_prefix:       str   = 'es_variant_ptwin_',
+            nset_config:          Optional[Dict[str, Dict[str, object]]] = None,
+            material_level:       str   = 'feature',
             index:                Optional['GrainElementIndex'] = None,
     ):
         if twin_role is None or twin_parent_of is None or all_quats is None:
@@ -268,6 +323,17 @@ class AbaqusExporter3D:
         self.write_roles      = write_role_elsets
         self.write_families   = write_family_elsets
         self.write_variants   = write_variant_elsets
+        self.role_enabled     = {**{k: True for k in self._DEFAULT_ROLE_PREFIX}, **(role_enabled or {})}
+        self.role_prefix      = {**self._DEFAULT_ROLE_PREFIX, **(role_prefix or {})}
+        self.family_prefix    = family_prefix
+        self.variant_prefix   = variant_prefix
+        self.nset_config      = {**self._DEFAULT_NSET_CONFIG, **(nset_config or {})}
+        self.material_level   = material_level
+
+        # Populated by write() -- lets callers report how many ELSETs/NSETs
+        # were actually written without re-deriving it from shared_state.
+        self.n_role_elsets_written = 0
+        self.n_nsets_written = 0
 
         self.nx, self.ny, self.nz = index.nx, index.ny, index.nz
         self._role_map    = index.role_map
@@ -291,6 +357,16 @@ class AbaqusExporter3D:
         """
         os.makedirs(out_dir, exist_ok=True)
         t0 = time.perf_counter()
+
+        if self.material_level != 'feature':
+            warnings.warn(
+                f"material_level={self.material_level!r} is not implemented -- "
+                "materials and *Solid Section (05/06) are still written "
+                "Feature Specific (one *Material per grain), matching "
+                "material_level='feature'. Aggregated per-level material "
+                "association is not currently supported.",
+                stacklevel=2,
+            )
 
         steps = [
             ('01_nodes.inp',            self._write_nodes),
@@ -391,27 +467,28 @@ class AbaqusExporter3D:
     def _write_elsets_roles(self, f):
         f.write('** Role grouping ELSETs (Option 2).\n')
         f.write('** Elements may appear in multiple ELSETs here.\n**\n')
-        role_buckets = {
-            'es_role_nonpart': [],
-            'es_role_host':    [],
-            'es_role_ptwin':   [],
-            'es_role_stwin_a': [],
-            'es_role_stwin_b': [],
+        role_buckets: Dict[str, list] = {
+            key: [] for key in self._DEFAULT_ROLE_PREFIX if self.role_enabled.get(key, True)
         }
-        _map = {'non_host': 'es_role_nonpart', 'host': 'es_role_host',
-                'primary_twin': 'es_role_ptwin',
-                'stwin_a': 'es_role_stwin_a', 'stwin_b': 'es_role_stwin_b'}
         for gid, eids in self._grain_elems.items():
-            key = _map[self._role_map.get(gid, 'non_host')]
-            role_buckets[key].extend(eids.tolist())
-        # Super-groupings
-        role_buckets['es_role_stwin'] = (
-            role_buckets['es_role_stwin_a'] + role_buckets['es_role_stwin_b'])
-        role_buckets['es_role_twin'] = (
-            role_buckets['es_role_ptwin'] + role_buckets['es_role_stwin'])
-        for name, eids in role_buckets.items():
+            key = self._role_map.get(gid, 'non_host')
+            if key in role_buckets:
+                role_buckets[key].extend(eids.tolist())
+        # Super-groupings -- built only from whichever constituent roles
+        # are enabled, so disabling e.g. 'stwin_b' also shrinks es_role_stwin.
+        stwin_eids = role_buckets.get('stwin_a', []) + role_buckets.get('stwin_b', [])
+        twin_eids = role_buckets.get('primary_twin', []) + stwin_eids
+        for key, eids in role_buckets.items():
             if eids:
+                name = self.role_prefix.get(key, self._DEFAULT_ROLE_PREFIX[key])
                 self._write_elset_block(f, name, np.array(eids, dtype=np.int32))
+                self.n_role_elsets_written += 1
+        if stwin_eids:
+            self._write_elset_block(f, 'es_role_stwin', np.array(stwin_eids, dtype=np.int32))
+            self.n_role_elsets_written += 1
+        if twin_eids:
+            self._write_elset_block(f, 'es_role_twin', np.array(twin_eids, dtype=np.int32))
+            self.n_role_elsets_written += 1
 
     # -----------------------------------------------------------------------
     # 03c  parent-twin family ELSETs (Option 3)
@@ -441,7 +518,7 @@ class AbaqusExporter3D:
         for host_gid, eids in family_elems.items():
             if eids:
                 self._write_elset_block(
-                    f, f'es_family_{host_gid}', np.array(eids, dtype=np.int32))
+                    f, f'{self.family_prefix}{host_gid}', np.array(eids, dtype=np.int32))
 
     # -----------------------------------------------------------------------
     # 03d  Sigma3 variant ELSETs (Option 5)
@@ -473,7 +550,7 @@ class AbaqusExporter3D:
         for v, eids in variant_elems.items():
             if eids:
                 self._write_elset_block(
-                    f, f'es_variant_ptwin_{v}', np.array(eids, dtype=np.int32))
+                    f, f'{self.variant_prefix}{v}', np.array(eids, dtype=np.int32))
 
     # -----------------------------------------------------------------------
     # 04  boundary-condition node sets
@@ -492,9 +569,14 @@ class AbaqusExporter3D:
             'ZMAX': [(ix, iy, nz)  for ix in range(nx+1) for iy in range(ny+1)],
         }
         for name, coords in faces.items():
+            cfg = self.nset_config.get(name, self._DEFAULT_NSET_CONFIG[name])
+            if not cfg.get('enabled', True):
+                continue
+            nset_name = cfg.get('prefix') or self._DEFAULT_NSET_CONFIG[name]['prefix']
             nodes = np.array([nid(*c) for c in coords], dtype=np.int32)
-            f.write(f'*Nset, nset=ns_face_{name}\n')
+            f.write(f'*Nset, nset={nset_name}\n')
             self._write_id_list(f, nodes)
+            self.n_nsets_written += 1
 
     # -----------------------------------------------------------------------
     # 05  materials
