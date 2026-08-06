@@ -24,87 +24,35 @@ import numpy as np
 import pyvista as pv
 # //////////////////////////////////////////////////////////////////////////////
 class geo_pxtal_mesh():
-    '''
-    ##########################################################
-    GENERAL NOTES AND REFERENCES: PYGMSH RELATED
-    ##########################################################
-    *
-    ##########################################################
-    GENERAL NOTES AND REFERENCES: GMSH RELATED
-    ##########################################################
-    TO KNOW MORE ON THESE AND IMPLEMENT THEM IN UPXO:
-        # TODO: ~~ Commands to be ported form GMSH API ~~
+    """
+    Geometric polycrystal FE mesher (pygmsh / gmsh-oriented).
 
-        1. How do I set the Mesh.RecombinationAlgirithm value [a]
-           [a] See the gmsh pdf manual @ page 197
+    Builds 2D conformal-style meshes on a geometric polycrystal
+    (``pxtal`` with level-0 grains), typically from
+    ``vtpolyxtal2d``. Supports triangle/quad elements, per-grain
+    element sizes, and optional VTK/INP export.
 
-        2. Mesh.RefineSteps
-            Number of refinment steps in MeshAdapt-based 2D algirithms [a]
-            Default: 10 [a]
-            [a]: See the gmsh pdf manual @ page 198
+    Prefer higher-level orchestrators (``confMesh2d``,
+    ``confMesh2dGMSH``) for current workflows; this class holds
+    lower-level mesh bookkeeping and historical pygmsh/gmsh notes.
 
-        3. Mesh.SubdivisionAlgorithm
-            [a]: See the gmsh pdf manual @ page 200
-
-
-    algorithm = 1: MeshAdapt
-
-    algorithm = 2: Automatic [DEFAULT]
-
-    algorithm = 3: -----
-
-    algorithm = 4: -----
-
-    algorithm = 5: Delaunay
-                   Can handle complex mesh size fields better - in particular size fields
-                   with large element size gradients [a]
-                   [a] https://gitlab.onelab.info/gmsh/gmsh/-/blob/master/tutorials/python/t10.py
-
-    algorithm = 6: Frontal-Delaunay: 2D
-                   Usually leads to highest quality meshes [a]
-                   Sometimes just called as Frontal algorithm [b]
-                   [a] https://gitlab.onelab.info/gmsh/gmsh/-/blob/master/tutorials/python/t10.py
-                   [b] See the gmsh pdf manual @ page 145
-
-    algorithm = 7: There is a mention here [a], but no explanation.
-                   Referred to as BAMG [b]
-                   [a] https://gitlab.onelab.info/gmsh/gmsh/-/blob/master/tutorials/python/t17.py
-                   [b] See the gmsh pdf manual @ page 187
-
-    algorithm = 8: basically, an experimental Frontal-Delaunay for quads: 2D. [a]
-                   For tri, however, right triangles are created almost everywhere
-                   It uses the DelQuad algorithm [b]
-
-                   NOTE: IMPORTANT:
-                       To get all quads, recombination algorithm has to be changed. [a]
-                       gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 2) # or 3
-
-                   [a] https://gitlab.onelab.info/gmsh/gmsh/-/blob/master/tutorials/python/t11.py
-                   [b] See the gmsh pdf manual @ page 143
-
-    NOTE - 1: @ GMSH
-        REF https://www.manpagez.com/info/gmsh/gmsh-2.4.0/gmsh_76.php
-        Mesh.RefineSteps
-        Number of refinement steps in the MeshAdapt-based 2D algorithms
-        Default value: 10
-        Saved in: General.OptionsFileName
-
-    NOTE - 2: @ GMSH
-        REF https://www.manpagez.com/info/gmsh/gmsh-2.4.0/gmsh_76.php
-        Mesh.RandomFactor
-        Random factor used in the 2D meshing algorithm (should be increased if RandomFactor * size(triangle)/size(model) approaches machine accuracy)
-        Default value: 1e-09
-        Saved in: General.OptionsFileName
-
-    REFERENCES:
-        https://www.manpagez.com/info/gmsh/gmsh-2.4.0/gmsh_76.php
-        https://docs.salome-platform.org/latest/gui/GMSHPLUGIN/gmsh_2d_3d_hypo_page.html
-        http://diposit.ub.edu/dspace/bitstream/2445/49313/1/GMSH-Guide_for_mesh_generation.pdf
-    ##########################################################
-    GENERAL NOTES AND REFERENCES: DATA STRUCTURE
-    ##########################################################
-    *
-    '''
+    Attributes
+    ----------
+    pxtal
+        Source geometric polycrystal.
+    mesher : str
+        Backend name (default ``'pygmsh'``).
+    mesh, modelo
+        Mesh / model objects from the meshing backend.
+    elsize_global, elsize_xtals
+        Global and per-grain characteristic lengths.
+    quadv, quadid, triv, triid
+        Quad/tri connectivity bookkeeping.
+    pointidxy
+        Point IDs with coordinates.
+    nfeatures : dict
+        Counts of vertices, lines, triangles, quads.
+    """
     __slots__ = ('pxtal', # Poly-xtal object
                  'mesher', # Meshing tool used
                  'elsize_global', # Global element size
