@@ -12,23 +12,26 @@ import time
 
 class nonConformalMesher():
     """
-    A class to generate non-conformal meshes for 2D and 3D geometries.
-    Supports element types: Quad4, Quad8, Tri3, Tri6, Hex8, Hex20, Tet5.
-    2D Element Types: Quad4, Quad8, Tri3, Tri6
-    3D Element Types: Hex8, Hex20, Tet5
+    Structured (non-conformal) FE mesh from a labelled grain image (LFI).
 
-    Usage
-    -----
-    from upxo.meshing.nonConformalMesher import nonConformalMesher as ncm
+    Builds a regular grid of elements and assigns grain IDs as element
+    sets — grain boundaries are *not* geometrically conformal (edges do
+    not follow GB curves). Prefer :class:`~upxo.meshing.conformal_mesher2d.confMesh2d`
+    / confMesh3d when conformal GB meshes are required.
+
+    Element types
+    -------------
+    * 2D: Quad4, Quad8, Tri3, Tri6
+    * 3D: Hex8, Hex20, Tet5 (classmethods; quad paths are most complete)
+
+    Export targets (``mesh(analysis_package=...)``): Abaqus, MOOSE, DAMASK.
 
     Example
     -------
-    lfi = np.array([[1, 3, 3, 3], [4, 1, 3, 2]], dtype=np.int32)
-    gids = np.unique(lfi)
-    m = ncm.quad4(lfi=lfi, gids=gids, nelx=4, nely=2, 
-                  xstart=0.0, ystart=0.0, ellx=0.2, elly=0.1)
-    m.mesh(analysis_package='abaqus', elsetNamePrefix='gid_')
-    m.see_mesh()
+    >>> from upxo.meshing.nonConformalMesher import nonConformalMesher as ncm
+    >>> m = ncm.quad4(lfi=lfi, gids=gids, nelx=4, nely=2,
+    ...               xstart=0.0, ystart=0.0, ellx=0.2, elly=0.1)
+    >>> m.mesh(analysis_package='abaqus', elsetNamePrefix='gid_')
     """
 
     _valid_analysis_packages = ('abaqus', 'moose', 'damask')
