@@ -16,26 +16,39 @@ import seaborn as sns
 import upxo.viz.gsviz as viz
 
 class voxel_from_pixel:
+    """
+    Assemble a 3D voxel volume from stacked 2D MC / GS slices.
 
+    Not a full 3D Potts simulation (use ``mcgs`` with dashboard ``dim=3``).
+    Stacks temporal or spatial 2D state / grain-structure maps into 3D
+    ``s`` / ``lfi`` arrays and a PyVista grid for visualisation and analysis.
+
+    Constructors
+    ------------
+    * ``from_sstack(sstack)`` — stack of state arrays
+    * ``from_gsstack(gsstack)`` — stack of UPXO GS objects (uses ``gs.s``)
+    * ``from_gsgen(...)`` — generate slices via MCGS then stack
+
+    Attributes
+    ----------
+    gsstack : dict or None
+        UPXO grain-structure stack when created from GS objects.
+    sstack : dict or None
+        State-array stack.
+    s : np.ndarray
+        Reconstructed 3D state volume.
+    lfi : np.ndarray
+        3D labelled feature / grain ID volume (LFI; analogous to MCGS ``lgi``).
+    pvgrid
+        PyVista uniform grid for 3D visualisation.
+    meta_dict : dict
+        Creation path and related metadata (``creation`` key).
+    """
     __slots__ = ('gsstack', 'sstack', 's', 'q',
                  'lfi', 'pvgrid',
-                 'meta_dict', 'fid', 's_fid', 'fid_s', 
+                 'meta_dict', 'fid', 's_fid', 'fid_s',
                  'coords', 'rep_coords'
                  )
-    """
-    Slot variables
-    --------------
-    gsstack: dict
-        A dictionary containing the UPXO grain structure stack.
-    sstack: dict
-        A dictionary containing the State array stack.
-    s: np.ndarray
-        A 3D numpy array reconstructed from the (gs/s)stack.
-    lfi: np.ndarray
-        A 3D numpy array of Local Feature IDs, analgous to `lgi` in MCGS.
-    pvgrid: pyvista.UniformGrid
-        A PyVista UniformGrid object for 3D visualization.
-    """
     def __init__(self, STACK, meta_dict={'creation': 'from_sstack'}):
         """Initialise the instance."""
         self.meta_dict = meta_dict
