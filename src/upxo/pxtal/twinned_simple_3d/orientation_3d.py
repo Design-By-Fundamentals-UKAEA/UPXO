@@ -72,10 +72,19 @@ _VALID_ORIENT_MODES = ('conflict_free', 'paired_pool',
 
 class OrientationAssigner3D:
     """
-    Assigns crystallographic orientations to all SGC grains.
+    Conflict-aware crystallographic orientation assignment for 3D SGC grains.
 
-    The assignment mode is controlled by ``orientation_assignment_mode``
-    (see module docstring for a description of each level).
+    Assigns per-grain unit quaternions from EBSD-derived pools, controlled
+    by ``orientation_assignment_mode`` (increasing physical fidelity):
+
+    * ``'conflict_free'`` — independent sampling, no adjacent duplicate
+    * ``'paired_pool'`` — EBSD-observed neighbour orientation pairs
+    * ``'mdf_conditioned_pairs'`` — pairs conditioned on parent MDF bins
+    * ``'mdf_analytical'`` — MDF-sampled misorientation + pool snap
+    * ``'mrf_gibbs'`` / ``'mrf_map'`` — full MRF (Gibbs / SA MAP)
+
+    See the module docstring for full level descriptions. Outputs
+    ``all_grain_orientations`` and fallback / conflict counters.
     """
 
     __slots__ = (
