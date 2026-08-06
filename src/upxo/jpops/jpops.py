@@ -1,11 +1,33 @@
-﻿import numpy as np
+﻿"""
+Junction-point detection on grain-boundary segment maps.
+
+``findJP`` collects coordinates shared by two or more boundary segments
+per grain; ``separate_junctions_by_order`` bins them by junction order
+(T-junction, quadruple point, …). Used with 2D MC GB pipelines
+(:mod:`upxo.gbops.mcgb2dops`).
+
+Import::
+
+    import upxo.jpops.jpops as jpOps
+"""
+
+import numpy as np
 
 def findJP(segments):
     """
-    Usage
-    -----
-    import upxo.jpops as jpOps
-    Use as: jpOps.findJP
+    Find multi-segment junction points for each central grain.
+
+    Parameters
+    ----------
+    segments : dict
+        ``cg → {neighbour_gid: Nx2 coordinate array}`` of shared boundary
+        points between central grain ``cg`` and each neighbour.
+
+    Returns
+    -------
+    dict
+        ``cg → array of [x, y, order]`` where order is how many segments
+        meet at that point (plus bookkeeping offset used historically).
     """
     junctions = {}
     for cg, neighbors in segments.items():
@@ -22,10 +44,19 @@ def findJP(segments):
 
 def separate_junctions_by_order(junctions, include_empty=True):
     """
-    Usage
-    -----
-    import upxo.jpops as jpOps
-    Use as: jpOps.separate_junctions_by_order
+    Partition junction points by order (2, 3, 4, …).
+
+    Parameters
+    ----------
+    junctions : dict
+        Output of :func:`findJP` (or same shape).
+    include_empty : bool, optional
+        If True, include empty order keys between min and max order.
+
+    Returns
+    -------
+    dict
+        ``order → {gid: Mx2 coordinates for junctions of that order}``.
     """
 
     if not junctions:
