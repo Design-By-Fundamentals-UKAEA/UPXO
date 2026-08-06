@@ -1,5 +1,5 @@
 ﻿"""
-2D Point geometric entity module for UPXO (Universal PolyXtal Operations).
+2D Point geometric entity module for UPXO (UKAEA Poly-XTAL Operations).
 
 This module provides two-dimensional point representations with support for
 lightweight (leanest) and feature-rich implementations. It includes geometric
