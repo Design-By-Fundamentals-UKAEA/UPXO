@@ -1,3 +1,14 @@
+"""
+Helpers to build 3D voxel volumes from stacks of 2D MC / grain-structure slices.
+
+Not a substitute for full 3D Potts simulation (``mcgs`` with ``dim=3``). Used to
+reconstruct a 3D state or LFI array and a PyVista grid from temporal or spatial
+2D stacks for visualisation and analysis.
+
+Main type: ``voxel_from_pixel`` — assemble ``sstack`` / ``gsstack`` into 3D
+``s`` / ``lfi`` and ``pvgrid``.
+"""
+
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
