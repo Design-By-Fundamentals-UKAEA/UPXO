@@ -1,4 +1,14 @@
-﻿import numpy as np
+"""
+2D grain-boundary-conformal meshing for UPXO tessellations.
+
+Provides ``confMesh2d`` (legacy pygmsh-oriented path) and related helpers for
+building planar meshes aligned with grain polygons. Prefer
+``confMesh2dGMSH`` / ``mesh_gs`` entry points where available in this package
+for new work (raw gmsh API). Used with Voronoi / geometric grain polygons
+prior to FE export.
+"""
+
+import numpy as np
 import matplotlib.pyplot as plt
 from upxo.meshing import elemOps
 from upxo.viz import meshviz
