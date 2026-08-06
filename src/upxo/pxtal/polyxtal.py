@@ -50,7 +50,28 @@ class INSTANCES():
 
 #//////////////////////////////////////////////////////////////////////////////
 class vtpolyxtal2d():
-    """2D Voronoi tessellation polycrystal built from Shapely or SciPy."""
+    """
+    2D Voronoi tessellation polycrystal (Shapely or SciPy seeds).
+
+    Builds a level-0 geometric polycrystal from seed multipoints or
+    coordinate lists within ``xbound`` / ``ybound``. Used as the geometry
+    source for conformal 2D meshing (``confMesh2d.from_geometric_pxtal``)
+    and VTGS-style workflows. Related higher-level multi-instance API:
+    :class:`~upxo.pxtal.vortess2d.gtess2d`.
+
+    Parameters
+    ----------
+    gsgen_method : str
+        Generation method (typically Voronoi / ``'vt'``).
+    vt_base_tool : str
+        ``'shapely'`` or ``'scipy'`` (and short aliases).
+    mulpoint_object / locx_list, locy_list
+        Seed points as UPXO multipoint or coordinate lists.
+    xbound, ybound
+        Domain extents.
+    lean : str
+        Data-retention mode (``'no'`` keeps more intermediates).
+    """
     # TODO: change the following names to:
         # 1. areas_polygonal_exterior: L0_x_ape
     def __init__(self,
