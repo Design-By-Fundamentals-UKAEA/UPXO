@@ -16,16 +16,32 @@ import pyvista as pv
 
 class confMesh2d():
     """
-    An orchastrator class capable of multiple 2D conformal mehsing pipelines.
+    Orchestrator for 2D conformal grain-structure meshing pipelines.
+
+    Builds conformal FE meshes on geometric polycrystals (typically
+    :class:`~upxo.pxtal.polyxtal.vtpolyxtal2d` / VTGS), with triangle or
+    quad elements via pygmsh-oriented paths. Prefer
+    :class:`confMesh2dGMSH` for raw gmsh API workflows without pygmsh.
 
     Usage
     -----
-    from upxo.meshing.conformal_mesher2d import confMesh2d as cm2d
+    >>> from upxo.meshing.conformal_mesher2d import confMesh2d as cm2d
+    >>> m = confMesh2d.from_geometric_pxtal(pxtal=..., xbound=..., ybound=...)
+    >>> m.femesh_pygmsh(elementShape='tri', elementOrder=1, ...)
+
+    Attributes
+    ----------
+    gtess
+        Geometric tessellation / polycrystal source.
+    nodes, elConn, elsets, elsets_eltype
+        Mesh connectivity and element-set bookkeeping after meshing.
+    elementShape, elementOrder, meshingAlgorithmID
+        Element and algorithm settings.
     """
     ValidElTypesOptions =('triangle', 'quad')
-    __slots__ = ('gtess', 'fids', 'pxtal_mesh', 'grid', 'mesherTool', 'elementShape', 
-                 'elementOrder',  'meshingAlgorithmID', '_intermediate_mesh_filename_', 
-                 'filtered_cells', 'filtered_mesh', 'nodes', 'elConn', 
+    __slots__ = ('gtess', 'fids', 'pxtal_mesh', 'grid', 'mesherTool', 'elementShape',
+                 'elementOrder',  'meshingAlgorithmID', '_intermediate_mesh_filename_',
+                 'filtered_cells', 'filtered_mesh', 'nodes', 'elConn',
                  'meshCellFeatTypes', 'lineFeatLocation', 'GBlines',
                  'availableFeatures', 'availableElTypes', 'availableElTypeID',
                  'elsets_eltype', 'elsets', 'elID_ranges')
