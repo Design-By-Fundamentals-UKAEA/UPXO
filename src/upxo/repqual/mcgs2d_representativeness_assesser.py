@@ -26,71 +26,38 @@ from scipy.spatial.distance import jensenshannon
 
 class mc2repr():
     """
-    Representativeness qualificartion
-    ----------------------------------
-    target_type: str
-        Source of targer data. Options:
-            1. ebsd0 - un-processed 2D EBSD map: DefDAP object.
-            2. ebsd1 - processed DefDAP data. Remapped with avg. ori.
-            3. umc2 - UPXO Monte-Carlo Grain structure 2D.
-            4. umc3 - UPXO Monte-Carlo Grain structure 3D.
-            5. uvt2 - UPXO Voronoi-Tessellation Grain Structure 2D.
-            6. stats - Data samples across grain morphology par. Needs xori.
-                       Could be in the form of dictionary or panadas dataframe.
-                       If dict or pandas dataframe, key or column name
-                       respectively, must be name of the parameter.
-                       Examples of parameter names include:
-                           1. area, perimeter
-                           2. aspecrt ratio, morphologhical orientation
-    ----------------------------------
-    target: object
-        Target grain structure data. Details:
-            1. `MCGS.gs[tslice]` for umc2 and umc3
-            2. `VTGS` for uvt2
-            3. ddap_ebsd - for un-processed or processed DefDAP data
-    ----------------------------------
-    samples: dict
-        Samples to match against the target.
-        Keys should be sample_names
-        Values should contain either:
-            grain structure objects, or
-            flag-string, 'make'
-        If a value is a grain strucutre object, then it will be used as
-        samples. It can be of types (a) umc2, (b) umc3 and (c) uvt2
-        If a value is 'make', then the following will be performanceormed:
-            1. read the excel file for grain structure generation parameters
-            2. simulate the grain structure evolution
-            3. Pull out specified slices at specified temporal slice intervals
-            4. Characterize the temporal slices
-    ----------------------------------
-    par_bounds: dict
-        DESCRIPTION:
-            For each parameter in the key, value must be a list of:
-                [match bounds for peak locations in percentage,
-                 match bounds for peak location density in percentage,
-                 J-S test bounds
-                 ]
-        KEYS:
-            area, perimeter, aspect ratio
-        VALUES:
-            bounds: [ [5, 5], [5, 5], [0.1, 0.1]]
-    ----------------------------------
-    metrics: list
-        DESCRIPTION:
-            List of metrics to use to enable representativeness qualification
-            Examples include:
-                1. modes_n
-                2. modes_loc
-                3. modes_width
-                4. distr_type
-                5. skewness
-                6. kurtosis
-    ----------------------------------
-    kde_options: dict
-        DESCRIPTION:
-            key: bw_method
-            value: choose from 'scott', 'silverman' or a scalar value
-    ----------------------------------
+    Statistical representativeness of 2D sample GS vs a target.
+
+    Runs distribution tests (KS, Mann–Whitney, Kruskal–Wallis, correlation,
+    KL/JS divergence, etc.) on morphological properties of a **target**
+    structure against one or more **samples**. Targets may be EBSD-derived
+    or UPXO MC/Voronoi GS. Results are stored for inspection — there is no
+    single automatic accept/reject score in this class.
+
+    Attributes
+    ----------
+    target_type : str
+        Target source code:
+
+        * ``ebsd0`` — unprocessed 2D EBSD (DefDAP)
+        * ``ebsd1`` — processed DefDAP (e.g. remapped avg. orientation)
+        * ``umc2`` / ``umc3`` — UPXO Monte-Carlo 2D / 3D
+        * ``uvt2`` — UPXO Voronoi tessellation 2D
+        * ``stats`` — morphology samples as dict or DataFrame columns
+    target
+        Target data: ``MCGS.gs[tslice]``, VTGS, DefDAP EBSD, or stats table.
+    samples : dict
+        Sample name → grain-structure object, or ``'make'`` to generate from
+        an Excel dashboard (simulate → temporal slices → characterise).
+    par_bounds : dict
+        Per-property bounds, e.g. area/perimeter/aspect ratio →
+        ``[[peak_loc_%], [peak_density_%], [JS_bounds]]``.
+    metrics : list
+        Qualification metrics (e.g. ``modes_n``, ``modes_loc``, ``skewness``).
+    kde_options : dict
+        KDE options (``bw_method``: ``'scott'``, ``'silverman'``, or scalar).
+    stest, test_metrics, performance
+        Configured statistical tests and computed outcomes.
     """
     __slots__ = ('target_type',
                  'target',
