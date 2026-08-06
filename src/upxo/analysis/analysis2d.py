@@ -14,6 +14,8 @@ from typing import Dict, Optional, Tuple, List
 
 @dataclass
 class metaa:
+    """Imaging and sample metadata for standardised 2D GS analysis."""
+
     # Imaging and sample metadata to standardize downstream analysis
     pixel_size: float = 1.0 # length per pixel (e.g., microns)
     unit: str = "px" # 'px' or physical unit
@@ -23,12 +25,22 @@ class metaa:
     source: str = "" # file or instrument
     notes: str = ""
     seed: int = 42 # We will use this for reproducibility
+    creation: str = "distr_single"  # how the parent gsan2d stack was built
 
 @dataclass
 class principle_component_analysis:
+    """Placeholder for PCA results on grain morphological property tables."""
     pass
 
 class kmodel():
+    """
+    Neighbour-network (graph) model of a 2D grain structure.
+
+    Wraps a NetworkX graph ``G`` of grain adjacency and stores graph-level
+    metrics (``gprop``), optional per-node morphological attributes
+    (``mprop``), and path-length caches. Used by :class:`gsan2d` for
+    network-based characterisation and plotting.
+    """
     __slots__ = ('G', 'gprop', 'mprop', 'pathlengths')
 
     def __init__(self, G):
@@ -879,6 +891,37 @@ class kmodel():
             nx.draw_networkx_edges(self.G, pos, width=1)
 
 class gsan2d():
+    """
+    2D grain-structure analysis stack (morphology, stats, networks).
+
+    Characterises one or more ``mcgs2_grain_structure`` temporal slices,
+    builds property DataFrames / summary statistics, correlation and PCA
+    hooks, and neighbour-network models (``K`` / :class:`kmodel`). Prefer
+    class constructors such as ``from_mcgs2d_single`` over calling
+    ``__init__`` with raw stacks.
+
+    Creation modes (``metaa.creation``)
+    -----------------------------------
+    * ``pxtal_single`` — one characterised polycrystal slice
+    * ``pxtal_tmp`` — multiple temporal slices in ``gsstack``
+    * ``distr_single`` / ``distr_tmp`` / ``distr_varied`` — distribution-centric paths
+    * ``pxtal_varied`` — multi-structure varied ensemble (partial)
+
+    Attributes
+    ----------
+    gsstack : dict
+        Grain-structure objects keyed by analysis ID / tslice.
+    pnames : list
+        Morphological property names included in characterisation.
+    gsid : list
+        Keys present in ``gsstack`` / ``dfs`` / ``stts``.
+    dfs, stts : dict
+        Per-structure property tables and summary statistics.
+    corr, pca
+        Correlation and PCA result holders when computed.
+    K
+        Neighbour-network model(s) when built.
+    """
     __slots__ = ('gsstack', 'pnames', 'gsid', 'dfs', 'stts', 'corr', 'pca', 'K')
 
     defmp={'npixels': False, 'npixels_gb': False,
