@@ -1,3 +1,12 @@
+"""
+3D topological repair of non-manifold pinches in labelled volumes (LFI).
+
+Tiered pipeline (fast stencils → local connectivity audit → signature
+library match → atomisation fail-safe) used when voxel topology is invalid
+for conformal meshing. Depends on :mod:`upxo.propOps.mpropOps`,
+:mod:`upxo.gsdataops.gid_ops`, and grain-boundary helpers.
+"""
+
 import os
 import numpy as np
 from scipy import ndimage
@@ -12,7 +21,7 @@ import upxo.flags_and_controls.flags as FLAGS
 def repair_nonManifold_voxels(lfi, articulation_mask, bboxes, library_path):
     """
     Orchestrates Tiers 0-4 to resolve non-manifold pinches in the LFI.
-    
+
     1. Tier 0: DNA & Connectivity Setup
     2. Tier 1: Fast Pass Stencils (Global)
     3. Tier 2: Connectivity Audit (Local)
