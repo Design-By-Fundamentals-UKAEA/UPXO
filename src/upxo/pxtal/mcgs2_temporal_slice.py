@@ -142,6 +142,13 @@ def get_neighbor_mask(arr, gid):
     return arr
 
 class labeled_feature_image_2d():
+    """
+    Lightweight 2D labelled-feature image (LFI) container.
+
+    Holds the integer label field, optional feature-type tags, feature
+    count, and a property table. Prefer this naming over the historical
+    ``lgi`` (labelled grain image) terminology in new APIs.
+    """
     __slots__ = ('lfi', 'ftypes', 'nfeatures', 'props_df',)
     def __init__(self, lfi=None, ftypes=None, nfeatures=None, props_df=None):
         """Initialise a labelled-feature image container."""
