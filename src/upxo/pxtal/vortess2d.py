@@ -33,121 +33,31 @@ from scipy import stats
 
 class gtess2d():
     """
-    ===========================================================================
-    @ dev notes by (Dr. Sunil Anandatheertha, )
-    ===========================================================================
-    ---------------> Instantiation <--------------------
-    from upxo.pxtal.vortess2d import gtess2d
-    repr_prop={'area': {'mean': {'val': 50, 'dev': 7.5, },
-                        'consider_boundary_grains': True } }
-    gset = gtess2d.from_seed_points(sp_input='gen', xbound=[0, 50],
-             ybound = [0, 50], sp_distr='random', gr_tech='pds',
-             smp_tech='bridson1', lean='veryhigh', char_length=[4.5],
-             niter=10, ntrials=100, n_instances=2, repr_prop=repr_prop,
-             k_char_length_inc=0.05, k_char_length_dec=0.05,)
-    .   .   .   .   .   .   .   .   .   .   .   .   .   .   .   .   .   .   .
-    --------------------> Important variables <--------------------
-    * ninst: Number of instances
-    * instn: range of the ninst
+    2D Voronoi-tessellation polycrystal set (multi-instance VTGS).
 
-    * floc: Feature location. Needs update with every change in instance.
-    Does not store instance wise. As calculation is quick, it must be
-    re-calculated afresh for geometry.
+    Builds and manages geometric grain structures from seed points
+    (Poisson-disk / Bridson-style sampling, random distributions, or
+    user seeds), with hierarchical feature databases (base, twins, PAP
+    levels, boundary zones, etc.), morphology/topology properties, and
+    geometry linking for conformal meshing.
 
-    * fdb_base: feature data base link.
-    * geolink: geometry link.
+    Typical construction
+    --------------------
+    >>> from upxo.pxtal.vortess2d import gtess2d
+    >>> gset = gtess2d.from_seed_points(
+    ...     sp_input='gen', xbound=[0, 50], ybound=[0, 50],
+    ...     sp_distr='random', gr_tech='pds', smp_tech='bridson1',
+    ...     lean='veryhigh', char_length=[4.5], n_instances=2, ...)
 
-    * mprop: Morphological property
-    * tprop: Topological property
+    Key concepts
+    ------------
+    * **Instances** (`ninst`) — independent VT realizations in one object
+    * **gslevel** — hierarchical level (`base`, twins, PAP blocks, …)
+    * **fdb_*** — feature databases linked via `add_fdb` / `link_geom`
+    * **mprop / tprop** — morphological and topological property stores
 
-    --------------------> Data access <--------------------
-
-    [gset._idmap_fc_[gslevel][instance_ID][fname][c] for c in cell_IDs]
-
-    -------------------> IMP DEFs: Feature data operations <-------------------
-
-    gset.add_fdb(gslevels=['link'],
-                 fdbs=[gset.link_geom(instance=1, saa=True, throw=True)])
-
-    --------------------> IMP DEFs: Geometry linking <--------------------
-
-    gset.link_geom(gslevel='base', instance=1, make_upxo_mp=True,
-                   make_upxo_mp_subfeatures=False, saa=True, throw=False)
-
-    --------------------> IMP DEFs: Data access <--------------------
-
-    gslevel, instance_ID, fname, fid, cids = 'base', 1, 'ph', 1, [1, 5]
-    gset.get_idmap_cf(gslevel, instance_ID, fname, fid, cids=cids)
-    gset.get_idmap_fc(gslevel, instance_ID, fname, cids=[])
-    gset.get_idmap_fc(gslevel, instance_ID, fname, cids=cids)
-    gset.extract_shapely_coords_all_grains(instance=1, gslevel='base',
-                                           mfname='c_rp', make_upxo_mp=True,
-                                           make_upxo_mp_subfeatures=False)
-
-    --------------------> IMP DEFs: Assign tags and IDs <--------------------
-
-    gset.assign_loc_tags(instance=1,gslevel='base',tol=1E-6,saa=True,throw=True)
-
-
-    gset.plot(instance=1)
-    gset.plot_cells(instance=1, cids=[1])
-
-    gset.sf_gbz_cell(gset.pxtals[1].geoms[0], 0.8)
-    gset.sf_gbz(instance=1,  gslevel='base', cids=[], k_shr=0.1,
-                assemble_cells=True, assemble_sf=True, saa=True, throw=False)
-    # gset.assemble_cells(features)
-
-
-    \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
-
-
-
-    Incomplete definitions
-    ----------------------
-
-    add_supcells(self, On=.5, merge=False)
-    merge_supcells(self, scids=None, conn=True)
-    add_subcells(self, pfname='base', parents='by_ids', cids=None,
-                         sc_type='subgrains',
-                         recursive=False, recursion=1,
-                         genpar={})
-    partition_cells(self, instance=1, gslevel='base', cids=[],
-                            partition_type='Sub-cell-0',
-                            partition_kwargs={}
-                            )
-    voronoi_subdivision(self, xtal_object,
-                                n_seed_points, seed_lattice_type,
-                                combine_small_subs)
-    setup_fid(self, pxnames=['twid', 'prid', 'tcid'])
-    setup_fdb
-
-    --------------------------------------------------
-    find_On_neigh(self, instance=1, gslevel='base', On=1,
-                          cid_exc_rules_calc=[],
-                          cid_exc_rules_results=[],
-                          include_central_grain=True,
-                          saa=True, throw=True,
-                          n_instances=1, __recall__=False
-                          )
-    non = gset.find_On_neigh(instance=2, gslevel='base', On=2.9,
-                                     n_instances=3)
-    get_stat(self, data, nan_policy='omit')
-    perturb_feat(self, instance=1, gslevel='base', cid=[], )
-    fe_mesh(self, instance=1, gslevel='base', tool='gmsh')
-    ---------------------------------------------------
-    Definitions to update
-    ----------------------
-    setup_mprop
-    setup_tprop
-    find_areas
-    find_mprop_all
-    find_ar
-    make_upxo_gs
-    reconstruct_pxtal_from_geom_link
-    gset.plot(instance=1)
-
-    plot_cells(self, instance=1, cids=[1])
+    Common ops: `link_geom`, `get_idmap_fc` / `get_idmap_cf`,
+    `assign_loc_tags`, `sf_gbz`, `plot` / `plot_cells`.
     """
     _valid_gslevels_ = ('base', 'supset', 'tw', 'pap',
                         'pap.bl', 'pap.bl.sbl', 'pap.bl.lath',
