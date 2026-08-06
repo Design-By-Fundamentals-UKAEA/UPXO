@@ -25,16 +25,18 @@ jobs:
           # pyvista[jupyter] (which requires VTK/OpenGL) is excluded here
           # because the test suite does not exercise any visualisation code.
           pip install -e . --no-deps
+          # Mirror pyproject core deps (except pyvista/VTK — no OpenGL on runner).
+          # Do not install optional extras as if they were core (defdap, pyvoro, plotly).
           pip install \
             numpy scipy matplotlib pandas \
             numba \
             networkx \
             scikit-image scikit-learn \
             shapely \
-            rasterio \
             tqdm seaborn colorama termcolor \
             connected-components-3d \
             xlrd openpyxl ipywidgets \
+            Pillow \
             pytest
 
       - name: Run tests
