@@ -1,3 +1,11 @@
+"""
+Import EBSD maps via DefDAP into UPXO-friendly containers.
+
+Primary class :class:`ebsd_data` loads Oxford CTF (and related) maps
+through DefDAP and ports grain IDs, average orientations, and properties
+for representativeness and twinning workflows.
+"""
+
 from copy import deepcopy
 import numpy as np
 import pandas as pd
@@ -8,6 +16,24 @@ from upxo._sup.validation_values import _validation
 
 class ebsd_data():
     """
+    DefDAP EBSD map wrapper with UPXO-side grain/orientation fields.
+
+    Construct with a raw DefDAP map or via :meth:`load_ctf`. After
+    porting, exposes labelled grains, average Euler/quaternion
+    orientations, properties, and optional GB junction points.
+
+    Attributes
+    ----------
+    map_raw
+        Original DefDAP map object.
+    map, gid, n
+        UPXO-side map / grain IDs / grain count when ported.
+    ea_avg, quat_avg
+        Per-grain average orientations.
+    prop
+        Morphological or EBSD property table when computed.
+    fileName : str
+        Source path when loaded from file.
     """
     __slots__ = ('map_raw',
                  'map', 'gbjp',
