@@ -40,6 +40,8 @@ Or select specific extras:
 
 Requires **Python >= 3.13**. See the [Getting Started wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Getting-started) for environment setup guides.
 
+Canonical package metadata is in **`pyproject.toml`** (`pip install .` / `python -m build`). Optional `requirements.txt` mirrors **core** deps only; use extras (`upxo[all]`) for DefDAP, meshing backends, etc.
+
 ---
 
 ## Quick Start
@@ -58,6 +60,33 @@ print(f"Number of grains: {gs.n}")
 ```
 
 More end-to-end examples (2D/3D generation, hierarchical and twinned microstructures, meshing, visualisation) are in the [Workflows documentation](https://design-by-fundamentals-ukaea.github.io/UPXO/workflows.html).
+
+---
+
+## GUI applications (Windows)
+
+After cloning this repository and installing UPXO into a Python ≥ 3.13 environment, you can start the material wizards by **double-clicking** in **`guiLaunchers/`**:
+
+| File | Application |
+|---|---|
+| `guiLaunchers/Launch_FM_Steel_GUI.bat` | Ferritic–Martensitic steel 3D GUI |
+| `guiLaunchers/Launch_Twinned_FCC_GUI.bat` | Twinned FCC 3D GUI (Cu / CuCrZr / OFHC-Cu) |
+
+The scripts auto-detect a Python that can `import upxo` (or set `PYTHON_EXE` at the top of the `.bat`).
+
+Alternatively, from Python:
+
+```python
+from upxo.pxtal.fm_steel_3d.gui_launcher import launch_gui
+launch_gui()
+
+from upxo.pxtal.twinned_simple_3d.gui_launcher import launch_gui
+launch_gui()
+```
+
+Details: [GUI Applications wiki](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/GUI-Applications).
+
+Demo notebooks are **not** in the pip wheel. Clone this repo and see `src/upxo/demos/` (a curated set is tracked in git; see the [Demo Notebooks wiki](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Demo-Notebooks)).
 
 ---
 
@@ -124,7 +153,7 @@ If you use UPXO in your research, please cite:
 > Sunil Anandatheertha, Vikram Phalke, Eralp Demir, Chris Hardie, UKAEA Poly-XTAL operations (UPXO V1.0): An open-source Python package for generating, assessment and meshing of poly-crystalline grain structures, *SoftwareX*, Volume 34, 2026, 102736, ISSN 2352-7110, https://doi.org/10.1016/j.softx.2026.102736
 
 ```bibtex
-@article{anandatheertha2026upxo,
+@article{anandatheertha2026upxo1pnt1,
   title   = {UKAEA Poly-XTAL operations (UPXO V1.0): An open-source Python package for
              generating, assessment and meshing of poly-crystalline grain structures},
   author  = {Anandatheertha, Sunil and Phalke, Vikram and Demir, Eralp and Hardie, Chris},

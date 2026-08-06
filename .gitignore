@@ -53,7 +53,6 @@ temp/
 *.msh
 *.h5
 *.xdmf
-*.inp
 *.odb
 *.npy
 *.npz
@@ -96,26 +95,24 @@ src/upxo/Important links.md
 !/data/**/
 !/data/**/.gitkeep
 
-# Ignore all files under demos
+# Demos: default-ignore content so local/generated notebooks stay out of git.
+# Already-tracked curated demos remain tracked; force-add new official demos
+# (git add -f) when promoting them. See wiki: Demo Notebooks.
 /src/upxo/demos/**
-# But keep the folder structure
 !/src/upxo/demos/
 !/src/upxo/demos/**/
-# Keep placeholder files if needed
 !/src/upxo/demos/**/.gitkeep
 
-# Ignore all files under scripts
+# Scripts: same policy as demos
 /src/upxo/scripts/**
-# Keep the folder structure
 !/src/upxo/scripts/
 !/src/upxo/scripts/**/
-# Keep placeholder files
 !/src/upxo/scripts/**/.gitkeep
 
 # Generated output files
 /src/upxo/outputs/
 
-# Ignore the tutorials forlder completely
+# Ignore the tutorials folder completely
 /src/upxo/tutorials/
 /src/upxo/profiling/
 /src/upxo/tests_and_benchMarks/
