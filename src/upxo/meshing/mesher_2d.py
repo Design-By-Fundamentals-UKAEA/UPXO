@@ -5,49 +5,41 @@ from upxo._sup.gops import att
 
 class mesh_mcgs2d():
     """
-    This is a core mcgs.meshing class
-    Intended only for Monte-Carlo simulation grain structures
-    Works only on square lattice.
-    For non-square lattices, interpolate to a square lattice and use
+    2D FE meshing of Monte-Carlo (MCGS) grain structures on a square lattice.
 
-    meshing_package:
-        # UPXO, GMSH, PYGMSH
-    gb_conformity:
-        # Conformal or Non-conformal
-    element_type:
-        # Type of finite element
-    target_fe_software:
-        # Abaqus or Moose
-    reduced_integration:
-        # BOOL: Flag for reduced integration
-    m:
-        # Temporal slice
-    coords_element_nodes:
-        # Coordinates of FE nodes
-    nodal_connectivity:
-        DEscription
-    meshInfo: dict
-        General mesh information
-    ABQ_NODES:
-        # Nodes contained in ABAQUS friendly format
-    ABQ_ELEMENTS:
-        # Elements contained in ABAQUS friendly format
-    __uimesh:
-        # Private copy of pxtal.uimesh
-    __uigrid:
-        # Private copy of pxtal.uigrid
-    xgrid:
-        DEscription
-    ygrid:
-        DEscription
-    lfi:
-        DEscription
-    dim:
-        DEscription
-    elsets:
-        Element sets of features
-    ndsets:
-        Nodal sets
+    Core ``mcgs`` meshing helper for temporal-slice label fields. Non-square
+    lattices should be interpolated to a square grid before use. Supports
+    conformal / non-conformal paths and export-oriented bookkeeping for
+    Abaqus or MOOSE (and related packages).
+
+    Attributes
+    ----------
+    meshing_package
+        Backend hint (UPXO / GMSH / PYGMSH).
+    gb_conformity
+        Conformal vs non-conformal grain-boundary meshing.
+    element_type
+        Finite-element type.
+    target_fe_software
+        Destination FE package (e.g. Abaqus, MOOSE).
+    reduced_integration : bool
+        Reduced-integration element flag.
+    m
+        Temporal slice identifier.
+    coords_element_nodes, nodal_connectivity
+        Node coordinates and element connectivity after meshing.
+    meshInfo : dict
+        General mesh metadata.
+    ABQ_NODES, ABQ_ELEMENTS
+        Abaqus-friendly node/element tables when exported.
+    xgrid, ygrid
+        Square-lattice coordinate vectors.
+    lfi
+        Labelled feature / grain image used as meshing input.
+    dim
+        Spatial dimensionality (2 for this class).
+    elsets, ndsets
+        Element and nodal set maps for features / boundaries.
     """
     __slots__ = ('meshing_package',
                  'element_type',
