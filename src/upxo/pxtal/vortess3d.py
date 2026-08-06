@@ -13,31 +13,29 @@ from upxo.geoEntities.mulpoint3d import MPoint3d as mp3d
 
 class gtess3d():
     """
-    3D Voronoi tessellation-based polycrystal grain structure.
+    3D Voronoi tessellation polycrystal with hierarchical feature levels.
 
-    Usage
-    -----
-    from upxo.pxtal.vortess3d import gtess3d
+    Geometric 3D grain structure supporting multi-level feature databases
+    (base grains, twins, prior-austenitic packets / blocks / laths, boundary
+    zones, precipitates) for visualisation (PyVista) and downstream meshing.
+
+    Valid ``gslevel`` codes (``_valid_gslevels_``)
+    ---------------------------------------------
+    * ``base`` — primary grain structure
+    * ``tw`` — twinned structures
+    * ``pap`` / ``pap.bl`` / ``pap.bl.sbl`` / ``pap.bl.lath`` / ``pap.bl.sbl.lath``
+      — prior-austenitic packet hierarchy
+    * ``base.bz`` — boundary zones on base grains
+    * ``base.ppt`` — base with precipitates
+    * ``supset`` — superset features
+
+    Name maps (``_valid_gsnamemaps_``) alias user strings (e.g. ``'base'``)
+    to internal FDB attributes (``fdb_base``, …). Feature names
+    (``_valid_fnames_``) include phase, texture, twins, PAP blocks, voids, etc.
     """
     _valid_gslevels_ = ('base', 'supset', 'tw', 'pap',
                         'pap.bl', 'pap.bl.sbl', 'pap.bl.lath',
                         'pap.bl.sbl.lath', 'base.bz', 'base.ppt')
-    """
-    Explanation of _valid_gslevels_:
-    --------------------------------
-        * 'base'. The basic grain structure for all other hierarchically higher
-        grain structures.
-        * 'tw': Twinned grain structures.
-        * 'pap': Prior-austenitic packets.
-        * 'pap.bl': Prior-austenitic packet blocks.
-        * 'pap.bl.sbl': Prior-austenitic packets, block and sub-blocks.
-        * 'pap.bl.lath': Prior-austenitic packets, blocks and laths.
-        * 'pap.bl.sbl.lath': Prior-austenitic packets, block, sub-blocks and
-        laths.
-        * 'base.bz': boundary zones grain structures built upon the base grain
-        structures. Any number of boundary zones can be contained in any grain.
-        * 'base.ppt': base grain structure with precipitates.
-    """
     # -------------------------------------------------------------------------
     _valid_gsnamemaps_ = {'base': 'fdb_base',
                           'supset': 'fdb_supset',
@@ -46,46 +44,14 @@ class gtess3d():
                           'subgrains': 'fdb_subgrains',
                           'paps': 'fdb_paps'
                           }
-    """
-    Explanation of _valid_gsnamemaps_. These are just simplified user input
-    strings which will correspond to different feature related variables in
-    this class. These are used in definitions self.add_fdb, etc, under the
-    name 'gslevel'.
-        * User enters: 'base'. In this casem UPXO considers self.fdb_base
-        * User enters: 'supset'.  In this casem UPXO considers self.fdb_supset
-        * User enters: 'pix'. Similar explanations.
-        * User enters: 'pert'. Similar explanations.
-        * User enters: 'subgrains'. Similar explanations.
-        * User enters: 'paps'. Similar explanations.
-    """
     # -------------------------------------------------------------------------
     _valid_fnames_ = ('ph', 'tc', 'bz', 'bfzones',
                       'gc', 'sg', 'tw', 'paps', 'block', 'sub-blocks', 'laths',
                       'ppt', 'void', 'fbr', 'fbr-int')
-    """
-    Explanation of _valid_fnames_. These are permitted names of features.
-    Values are strings and are below. Note that these are not necessarily
-    morphological features. For example, 'ph' i.e. 'phase' has also been
-    included for the purpose of simplicity of data structure.
-        * 'ph': Phase.
-        * 'tc': texture components.
-        * 'bz': bounded zones. Includes both boundary zones and core zones of
-        cells such as grains, twins, precipitates, etc.
-        * 'bfzones': buffer zones needed to reduce meshing complexity.
-
-        * 'gc': grain cluster.
-        * 'sg': sub-grains.
-        * 'tw': twins.
-        * 'paps': prior austenitic packets.
-        * block: blocks of hierarchical steel grain structure (GS).
-        * sub-blocks: sub-blocks in blocks of hierarchical steel GS.
-        * laths: laths in blocks / sub-blocks of hierarchical steel GS.
-
-        * 'ppt': precipitates.
-        * 'void': void locations.
-        * 'fbr': fibre.
-        * 'fbr-int': Fibre-matrix interface.
-    """
+    # Feature name codes: ph=phase, tc=texture, bz=boundary/core zones,
+    # bfzones=mesh buffer zones, gc=grain cluster, sg=sub-grains, tw=twins,
+    # paps/block/sub-blocks/laths=steel hierarchy, ppt=precipitates, void,
+    # fbr / fbr-int = fibre features.
     # -------------------------------------------------------------------------
     __slots__ = ('ninst', 'instn', 'sp', 'pxtals', 'fdb_base', 'info',
                  'gen_method',
@@ -98,30 +64,6 @@ class gtess3d():
                  'gbjp', 'bounds', 'mprop', 'tprop',
                  'grain_locs',
                  'gpos')
-
-    """
-    Slot variables
-    --------------
-    ninst: int
-        Number of instances
-    sps: dict
-        Seed points of each pxtal instance. keys are instance numbers and
-        values are UPXo multi-point objects.
-    pxtals: dict
-        Shapely multi-polygon objects. Keys are instance numbers and values are
-        multi-polygons.
-    fdb_base: dict
-        Feature database link.
-    nbc: int
-        Number of base cells i.e. grains.
-    fid: dict
-        Feature ID. Keys are instance numbers (q) and values are dictionaries.
-    fid[q]['bcid']: dict
-        Base cid. list of cell IDs in the base grain structure. Each value
-        corresponds to the grain gset.pxtals[q][]
-    fid[q]['phid']: dict
-        Phase ID. Keys are phase IDs.
-    """
     # -------------------------------------------------------------------------
     """
                 #### NOTES ON GRAIN STRUCTURE HIERARCHY ####
