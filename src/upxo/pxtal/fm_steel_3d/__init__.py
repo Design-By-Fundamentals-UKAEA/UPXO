@@ -19,7 +19,7 @@ Worker Classes (Stateless Utilities)
 - BlockGenerator3D: Block slicing logic
 - SubBlockGenerator3D: Sub-block slicing logic
 - OrientationAssigner3D: KS variant assignment + sub-block orientation spread
-- MeshExporter3D: Abaqus mesh generation (deferred)
+- MeshExporter3D: Abaqus mesh generation (C3D8/C3D4/C3D20/C3D10; see mesh_exporter_3d.py)
 
 Visualization Classes (Viz Workers)
 ===================================
