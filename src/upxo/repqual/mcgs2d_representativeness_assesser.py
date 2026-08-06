@@ -1,3 +1,16 @@
+"""
+Statistical representativeness assessment for 2D MCGS vs a target structure.
+
+Class ``mc2repr`` runs distribution tests (e.g. KS, Mann–Whitney, Kruskal–Wallis,
+Pearson) on morphological properties of target vs sample grain structures.
+Targets may be EBSD-derived or UPXO MC/Voronoi GS. Results are stored for
+inspection; there is no single automatic accept/reject score in this module.
+
+Import::
+
+    from upxo.repqual.mcgs2d_representativeness_assesser import mc2repr
+"""
+
 from .._sup import dataTypeHandlers as dth
 import pandas as pd
 import numpy as np
