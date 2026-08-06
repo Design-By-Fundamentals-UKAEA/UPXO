@@ -1,3 +1,16 @@
+"""
+2D representative MC grain-structure generation and temporal-slice ranking.
+
+Class ``repgen2d`` filters and ranks MCGS2D time slices against an EBSD or
+other reference (grain count, morphological properties, Wasserstein /
+energy-distance style metrics). Supports host-orientation and twin-geometry
+hooks used in FCC twinning workflows.
+
+Import::
+
+    from upxo.repgen.repgen2dmcgs import repgen2d
+"""
+
 import os
 import warnings
 from typing import Optional, Union
