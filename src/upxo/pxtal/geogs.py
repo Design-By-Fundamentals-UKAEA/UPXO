@@ -19,6 +19,26 @@ from shapely.geometry.collection import GeometryCollection
 
 
 class geogs2d():
+    """
+    2D geometric grain structure from multi-line grain boundaries.
+
+    Lightweight container for grains defined by multi-segment lines
+    (``mslines2d``) within a bounding box. Supports closure checks and
+    related geometry ops; tessellation / orientation fields may be filled
+    by callers. Distinct from pixelated MCGS slices and from full VTGS
+    classes (``gtess2d`` / ``geotess2d``).
+
+    Attributes
+    ----------
+    bounds
+        Domain bounding box.
+    mslines2d : dict
+        Grain ID → multi-line boundary geometry.
+    gid : list
+        Grain IDs (keys of ``mslines2d``).
+    grains, neigh_gid, jnp, ea, tess
+        Optional grain objects, neighbours, junctions, orientations, tess link.
+    """
     __slots__ = ('mslines2d', 'jnp', 'grains', 'neigh_gid', 'gid',
                  'ea', 'tess', 'bounds', 'gid')
 
