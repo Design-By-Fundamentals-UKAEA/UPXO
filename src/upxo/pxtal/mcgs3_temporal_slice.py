@@ -305,6 +305,15 @@ _npaw = np.argwhere
 
 class mcgs3_grain_structure():
     """
+    3D Monte-Carlo grain structure at one temporal slice (``pxt.gs[tslice]``).
+
+    Holds the labelled grain / feature volume (``lgi`` / LFI), topology,
+    morphological properties (``mprop``), grain-boundary surface data, and
+    hooks for twinning, clustering (e.g. PAG), visualisation (PyVista), and
+    export. Created by ``mcgs.detect_grains()`` for 3D runs (dashboard
+    ``dim == 3``). Prefer LFI naming in new APIs; ``lgi`` remains the
+    historical slot name for the label field.
+
     Nomenclature
     ------------
     id: ID number
@@ -326,7 +335,7 @@ class mcgs3_grain_structure():
     s: State matrix, output of Monte-Carlo (MC) simulation. Type. np.ndarray
     S: Total number of states considered in MC simulation.
     n: Number of grains in the grain structure. Type: int
-    lgi: Local Grain ID of every voxel in the grain strycture. Type: np.ndarray
+    lgi: Local Grain ID of every voxel in the grain structure. Type: np.ndarray
     gid: grain ID. Type: np.ndarray
     g: individual grain objects. Type: UPXO obj
     gb: individual grain boundary objects. Type: UPXO obj
@@ -361,45 +370,16 @@ class mcgs3_grain_structure():
 
     sssr: surface-sub-surface relationships
 
-    mprop: morphhological properties. Type: dict. mprops could have the
-    fo9llowing keys:
-        volnv: Volume by number of voxels
-        volsr: Volume after grain boundary surface reconstruction
-        volch: Volume of convex hull
-
-        sanv: surface area by number of voxels
-        savi: surface area by voxel interfaces
-        sasr: surface area after grain boundary surface reconstruction
-        psa: projected surface area
-
-        pernv: perimeter by number of voxels
-        pervl: perimeter by voxel edge lines
-        pergl: perimeter by geometric grain boundary line segments
-
-        eqdia: eqvivalent diameter
-        feqdia: Feret eqvivalent diameter
-
-        kx: grain boundary voxel local curvature in yz plane
-        ky: grain boundary voxel local curvature in xz plane
-        kz: grain boundary voxel local curvature in xy plane
-        kxyz: mean(kx, ky, kz)
-        ksr: k computed from surface reconstruction.
-
-        arbbox: aspect ratio by bounding box
-        arellfit: aspect ratio by ellipsoidal fit
-
-        sol: solidity
-        ecc: eccentricity - how much the shape of the grain differs from
-            a sphere.
-        com: compactness
-        sph: sphericity
-        fn: flatness
-        rnd: roundness
-        mi: moment of inertia tensor
-
-        fdim: fractal dimension
-
-        rat_sanv_volnv: Ratio of sanv to volnv
+    mprop: morphological properties. Type: dict. Keys may include:
+        volnv, volsr, volch — volumes (voxels / reconstructed / convex hull)
+        sanv, savi, sasr, psa — surface areas
+        pernv, pervl, pergl — perimeter measures
+        eqdia, feqdia — equivalent / Feret diameters
+        kx, ky, kz, kxyz, ksr — local / reconstructed curvature
+        arbbox, arellfit — aspect ratios
+        sol, ecc, com, sph, fn, rnd, mi — shape descriptors
+        fdim — fractal dimension
+        rat_sanv_volnv — surface/volume ratio
     """
 
     __slots__ = ('dim', 'uigrid', 'uimesh', 'm', 's', 'S', 'ndimg_label_pck',
