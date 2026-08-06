@@ -1,3 +1,14 @@
+"""
+2D Monte-Carlo Potts kernel **ALG-200** (dashboard ``mcalg`` = ``200`` / ``200.0``).
+
+Numba-jitted neighbour loop over the spin field ``S`` with a **non-locality
+matrix (NLM)** weighting the 3×3 neighbourhood. Invoked from
+``mcgs.start_algo2d_without_hops``. Default algorithm id used by
+``parswep`` parameter sweeps.
+
+Public driver: ``run(...)`` — writes temporal ``mcgs2_grain_structure`` slices.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy as np
