@@ -1,3 +1,5 @@
+"""Morphological mode modification of MCGS grain structures via seed grains."""
+
 from upxo.ggrowth.mcgs import mcgs
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,9 +11,35 @@ from copy import deepcopy
 import pandas as pd
 
 class _modeModifier_():
+    """
+    Shared base for seed-grain mode modification of UPXO grain structures.
+
+    Loads a target temporal-slice GS (``gsTRG``), neighbour maps, and scalar
+    fields (must include LFI), then selects non-touching seed grains and
+    their neighbourhoods for morphological “mode” edits across realizations.
+
+    Attributes
+    ----------
+    targetTSlice
+        Key of the active temporal slice in ``gsTRG``.
+    NSeedGrains, meanNeighCount, size_threshold
+        Seed selection controls (count, neighbour order, min area).
+    gsTRG : dict
+        Target grain structures (tslice → GS object).
+    sf : dict
+        Scalar fields; must contain ``'lfi'``.
+    neigh_gid : dict
+        Neighbour grain IDs per grain.
+    seedGids, seedGid_neighs, seedGid_coords
+        Selected seeds, expanded neighbourhoods, and coordinates.
+    nrealizations, realizations
+        Number of modification realizations and result store.
+    prop : pandas.DataFrame
+        Size / property table used during seed filtering.
+    """
     __slots__ = ('targetTSlice', 'NSeedGrains', 'meanNeighCount', 'size_threshold',
                  'neighCounts', 'neigh_gid', 'gsTRG', 'sf', 'mods', 'G',
-                 'prop', 'nrealizations', 'realizations', 
+                 'prop', 'nrealizations', 'realizations',
                  '_misAreas_',
                  'seedGids', 'seedGid_neighs', 'seedGid_coords'
                  )
@@ -65,6 +93,14 @@ class _modeModifier_():
                           for gid, neighs in self.seedGid_neighs.items()}
 
 class modeModifier_mcgs2d(_modeModifier_):
+    """
+    2D MCGS mode modifier: seed grains from maximal independent sets.
+
+    Specialises :class:`_modeModifier_` for 2D labelled fields — grain
+    areas from LFI, seed selection via NetworkX maximal independent set
+    on the neighbour graph, and optional plotting of seed grains on the
+    target temporal slice.
+    """
 
     def find_areas(self, lfi):
         """Find areas."""
@@ -109,5 +145,11 @@ class modeModifier_mcgs2d(_modeModifier_):
 
 
 class modeModifier_mcgs3d(_modeModifier_):
+    """
+    3D MCGS mode modifier (API stub).
+
+    Planned 3D counterpart of :class:`modeModifier_mcgs2d`. Not implemented
+    — constructing raises ``NotImplementedError``.
+    """
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("modeModifier_mcgs3d is not yet implemented.")
