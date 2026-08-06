@@ -1,6 +1,14 @@
 ﻿"""Ferritic-martensitic steel grain structures for UPXO."""
 
 class fmsgs():
+    """
+    Ferritic–martensitic steel grain-structure container (API stub).
+
+    Planned holder for hierarchical FM steel data (base GS, texture,
+    cluster sets, PAG indices). Prefer the active
+    :mod:`upxo.pxtal.fm_steel_3d` pipeline for production work.
+    Methods raise ``NotImplementedError`` until implemented.
+    """
     __slots__ = ('gs', 'tx', 'clset', 'lpaci', 'lpagi', '')
 
     @classmethod
