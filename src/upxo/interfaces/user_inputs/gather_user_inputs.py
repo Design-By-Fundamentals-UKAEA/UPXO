@@ -1,3 +1,22 @@
+"""
+Load UPXO Monte-Carlo Excel dashboards and build typed UI parameter blocks.
+
+Reads a classic ``.xls`` key/value sheet (column A = name, B = value) via
+``xlrd``, then constructs:
+
+* ``uigrid`` — domain / ``dim`` (gridding)
+* ``uisim`` — Q, MCS, ``mcalg``, Boltzmann, BC
+* ``uigsc`` — grain characterisation prefs
+* ``uiint`` — save / plot intervals
+* ``uigsprop`` — property-calculation flags
+* ``uigeorep`` — geometric representation flags
+* ``uimesh`` — mesh prefs
+
+Public API: ``load_uidata(input_dashboard)`` (used by ``mcgs``). Relative
+dashboard names resolve under this package directory; absolute paths work
+when the second path component is absolute (see ``os.path.join`` rules).
+"""
+
 import xlrd
 import os
 # Extract gridding parameters
