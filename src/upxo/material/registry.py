@@ -47,7 +47,17 @@ from upxo.material.provenance import Provenance
 
 
 class MaterialRegistry:
-    """Typed, extensible container for material data categories."""
+    """
+    Typed, extensible container for material data categories.
+
+    Register dataclass types with :meth:`register_category`, store instances
+    with :meth:`ingest` (soft-validates known field values), and retrieve
+    data / provenance via :meth:`get` / :meth:`get_provenance`. Built by
+    :func:`upxo.material.Material.build` with default category set.
+
+    Validation is soft: unknown values warn but never block, so exploratory
+    materials and processing routes remain usable.
+    """
 
     def __init__(self) -> None:
         self._types: Dict[str, Type] = {}
