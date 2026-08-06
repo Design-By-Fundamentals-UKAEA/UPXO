@@ -10,6 +10,27 @@ from upxo._sup.validation_values import _validation as val
 from upxo.xtalphy.orientation import grainoris as go
 
 class Grain3d():
+    """
+    Per-grain data object for 3D Monte-Carlo / voxel polycrystals.
+
+    Stores voxel locations, bounding boxes, grain-boundary indices,
+    neighbour links, hierarchical features (subgrains, PAP/blocks/laths,
+    precipitates), meshing control points, and crystallographic
+    orientation (Euler / quaternion / texture component). Typically
+    referenced as ``pxt.gs[tslice].g[gid]['grain']`` on a
+    :class:`~upxo.pxtal.mcgs3_temporal_slice.mcgs3_grain_structure`.
+
+    Attributes
+    ----------
+    gid, loc, coords, npixels
+        Grain ID, voxel indices/coords, and size.
+    bbox*, gbloc, gbsegs*, neigh
+        Bounds, GB voxels/segments, and neighbours.
+    ea, q, texcomp, xstruc
+        Orientation and phase/structure labels.
+    precipitates, subgrains, paps, blocks, laths
+        Optional hierarchical feature containers.
+    """
     __slots__ = ('loc', 'npixels', 'position', 'coords', 'gbloc', 'brec',
                  'bbox_bounds', 'bbox_ex_bounds', 'bbox', 'bbox_ex', 'skprop',
                  '_px_area', 'gid', 'gind', 'gbid', 'gbind', 'gbvert',
