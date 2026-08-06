@@ -1,3 +1,13 @@
+"""
+2D Monte-Carlo Potts kernel **ALG-202** (dashboard ``mcalg`` = ``202`` / ``202.0``).
+
+Weighted neighbour-energy 2D loop (console may label it ``ALG-202``). Invoked
+from ``mcgs.start_algo2d_without_hops``. Common in small test dashboards
+(e.g. 50×50 alg202 sheets).
+
+Public driver: ``run(...)`` — writes temporal ``mcgs2_grain_structure`` slices.
+"""
+
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy as np
