@@ -1,4 +1,13 @@
-﻿from upxo.ggrowth.mcgs import mcgs
+"""
+Batch 2D MCGS runs with LFI export for surrogate / ML training data.
+
+Class ``mcgs2d_Surrogate`` repeatedly calls ``mcgs`` → ``simulate`` →
+``detect_grains`` and saves each time-slice label field via ``ArrExp2d``.
+Folder layouts: per-simulation or per-temporal-slice. Does **not** fit or
+persist a surrogate model — export only.
+"""
+
+from upxo.ggrowth.mcgs import mcgs
 from upxo.interfaces.io.expop import ArrExp2d as arex2
 import os
 
