@@ -1,4 +1,21 @@
-﻿import numpy as np
+"""
+Multi-format export of NumPy arrays for UPXO (``ArrExp2d``).
+
+``ArrExp2d.save(data, filename, ...)`` dispatches on file extension:
+
+* ``.npy`` / ``.npz`` — NumPy (optional compression)
+* ``.csv`` / ``.txt`` — text
+* ``.xlsx`` — Excel via pandas
+* ``.mat`` — SciPy (optional)
+* ``.h5`` / ``.hdf5`` — h5py if installed
+* ``.vtk`` / ``.vti`` — PyVista ImageData
+* image formats — matplotlib visual or Pillow raw
+
+Used by surrogate batch jobs and ad-hoc array I/O. Not a grain-structure
+object serializer (use CTF/VTK GS methods and FE exporters for those).
+"""
+
+import numpy as np
 import os
 
 class ArrExp2d:
