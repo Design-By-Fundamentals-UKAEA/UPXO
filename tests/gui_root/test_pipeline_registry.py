@@ -4,6 +4,8 @@ dependency on any real pipeline package. Uses synthetic fake page classes.
 """
 import pytest
 
+pytest.importorskip("upxo.gui", reason="upxo.gui is a local-only package, not tracked/shipped")
+
 from upxo.gui.root.pipeline_registry import (
     PipelineEntry,
     PipelineRegistry,

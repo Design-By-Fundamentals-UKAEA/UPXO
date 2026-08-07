@@ -8,6 +8,8 @@ import warnings
 
 import pytest
 
+pytest.importorskip("upxo.gui", reason="upxo.gui is a local-only package, not tracked/shipped")
+
 from upxo.gui.root.pages_base import _REPO_ROOT
 from upxo.gui.root.pipelines import build_registry
 
