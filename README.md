@@ -113,15 +113,6 @@ Large ensembles of statistically representative microstructures can be generated
 
 ---
 
-## Contributors
-
-- **Dr. Sunil Anandatheertha** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
-- **Dr. Vikram Phalke** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
-- **Dr. Chris Hardie** - UK Atomic Energy Authority (UKAEA), Culham, Oxfordshire, OX14 3DB, UK
-- **Dr. Eralp Demir** - University of Oxford, Parks Road, Oxford, OX1 3PJ, UK
-
----
-
 ## Cite As
 
 If you use UPXO in your research, please cite:
