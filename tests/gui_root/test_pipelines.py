@@ -1,8 +1,12 @@
 """
-Tests for upxo.gui.root.pipelines -- the concrete 17-pipeline catalog.
+Tests for upxo.gui.root.pipelines -- the concrete pipeline catalog.
 Confirms every subprocess entry's script_path resolves to a real file,
 every in_process entry's pages are real BasePage subclasses, and nothing
 silently failed to register.
+
+fm_steel_3d / ofhc_cu / cucrzr (the "Generation -- Monte Carlo 3D"
+category) were removed: their gui_launcher.py subprocess targets no
+longer exist under src/upxo/pxtal/ in this checkout.
 """
 import warnings
 
@@ -14,7 +18,6 @@ from upxo.gui.root.pages_base import _REPO_ROOT
 from upxo.gui.root.pipelines import build_registry
 
 _EXPECTED_CATEGORIES = [
-    "Generation — Monte Carlo 3D",
     "Generation — Monte Carlo 2D",
     "Generation — Geometric Tessellation",
     "Generation — Cellular Automata",
@@ -36,9 +39,9 @@ def test_build_registry_raises_no_warnings():
         f"{[str(w.message) for w in registration_warnings]}")
 
 
-def test_entry_count_is_17():
+def test_entry_count_is_14():
     registry = build_registry()
-    assert len(registry.all()) == 17
+    assert len(registry.all()) == 14
 
 
 def test_categories_match_expected_order():
@@ -55,15 +58,10 @@ def test_all_keys_unique():
 def test_subprocess_entries_script_paths_exist_on_disk():
     registry = build_registry()
     subprocess_entries = [e for e in registry.all() if e.kind == "subprocess"]
-    assert len(subprocess_entries) == 3
+    assert len(subprocess_entries) == 0
     for entry in subprocess_entries:
         resolved = _REPO_ROOT / entry.script_path
         assert resolved.is_file(), f"{entry.key}: script_path does not exist: {resolved}"
-
-
-def test_ofhc_and_cucrzr_share_the_same_script_path():
-    registry = build_registry()
-    assert registry.get("ofhc_cu").script_path == registry.get("cucrzr").script_path
 
 
 def test_planned_entries_have_no_script_path_or_sections():
