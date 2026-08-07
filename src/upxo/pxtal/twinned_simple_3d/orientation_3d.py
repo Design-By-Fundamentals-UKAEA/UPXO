@@ -1103,7 +1103,6 @@ class OrientationAssigner3D:
         from scipy.stats import wasserstein_distance
         from upxo.xtalphy.crystal_orientation import (
             get_cubic_ops_np, _positive_w, assign_orientations_conflict_free)
-        from upxo.xtalphy.texops import tops
 
         if self._mdf_ref_angles is None or len(self._mdf_ref_angles) == 0:
             raise RuntimeError(
@@ -1120,8 +1119,15 @@ class OrientationAssigner3D:
               f'{"KDE" if density.std() > 0 else "local_avg"}')
 
         # ── Initialise orientation field ────────────────────────────────────
+        # Reuses the sweep's own fallback pool (self.fallback_quats, built once
+        # in build_ebsd_pools from the actually-configured texture) instead of
+        # a fresh, unseeded tops.synth_fcc_quats() call -- that call ran
+        # unconditionally on every invocation (even when unused, for the
+        # warm-start init modes below), wasting a full texture-generation pass
+        # and, when actually used, drawing from a different default texture
+        # set than the rest of the sweep.
         init_mode = self.mrf_init_mode
-        fallback = tops.synth_fcc_quats(N=max(200, len(host_ids) + len(nonhost_ids)))
+        fallback = self.fallback_quats
 
         if init_mode == 'random':
             for gid in host_ids:
@@ -1324,7 +1330,6 @@ class OrientationAssigner3D:
         from scipy.stats import wasserstein_distance
         from upxo.xtalphy.crystal_orientation import (
             get_cubic_ops_np, _positive_w, assign_orientations_conflict_free)
-        from upxo.xtalphy.texops import tops
 
         if self._mdf_ref_angles is None or len(self._mdf_ref_angles) == 0:
             raise RuntimeError(
@@ -1340,8 +1345,15 @@ class OrientationAssigner3D:
               f'{"KDE" if density.std() > 0 else "local_avg"}')
 
         # ── Initialise orientation field ────────────────────────────────────
+        # Reuses the sweep's own fallback pool (self.fallback_quats, built once
+        # in build_ebsd_pools from the actually-configured texture) instead of
+        # a fresh, unseeded tops.synth_fcc_quats() call -- that call ran
+        # unconditionally on every invocation (even when unused, for the
+        # warm-start init modes below), wasting a full texture-generation pass
+        # and, when actually used, drawing from a different default texture
+        # set than the rest of the sweep.
         init_mode = self.mrf_init_mode
-        fallback = tops.synth_fcc_quats(N=max(200, len(host_ids) + len(nonhost_ids)))
+        fallback = self.fallback_quats
 
         if init_mode == 'random':
             for gid in host_ids:
