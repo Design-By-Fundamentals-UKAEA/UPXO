@@ -293,6 +293,7 @@ class TwinnedSimple3DBase:
             mis_fraction: float = 0.80,
             pool_b_size_measure: str = 'vol_vox',
             pool_b_n_std: float = 1.0,
+            neighbour_frac: float = 100.0,
             mis_runs: int = 20,
             seed: int = 0,
     ):
@@ -341,6 +342,16 @@ class TwinnedSimple3DBase:
             chosen size measure.  A grain qualifies for Pool B if
             |size - mean(size)| ≤ pool_b_n_std × std(size).
             Default 1.0 (±1 std dev, covers ~68 % of a normal distribution).
+        neighbour_frac : float
+            Percentage (0-100) of Pool B drawn from near-mean-size grains
+            that DO have a near-mean-size neighbour, vs. from near-mean-size
+            grains that do NOT. 100 (default) reproduces the original,
+            neighbour-only behaviour exactly. 0 draws entirely from
+            non-neighbouring near-mean grains. Any other value mixes the two
+            proportionally. Whichever sub-pool is short of its share falls
+            back to drawing the remainder from the other sub-pool (so the
+            total Pool B count is unaffected by this split, only its
+            do/do-not composition is).
         mis_runs : int
             Number of random MIS calls; the largest result is kept.
         seed : int
@@ -382,6 +393,11 @@ class TwinnedSimple3DBase:
                 'pool_b_band_lo': None,
                 'pool_b_band_hi': None,
                 'n_pool_b_candidates': 0,
+                'pool_b_neighbour_frac': neighbour_frac,
+                'n_pool_b_do_candidates': 0,
+                'n_pool_b_donot_candidates': 0,
+                'n_pool_b_from_do': 0,
+                'n_pool_b_from_donot': 0,
                 'n_pool_a': 0,
                 'n_pool_b': 0,
                 'n_host': 0,
@@ -470,14 +486,33 @@ class TwinnedSimple3DBase:
         hi        = mean_size + band
         near_mean = {g for g in eligible_set
                      if lo <= size_map[g] <= hi}
-        # Must have at least one near-mean neighbour AND not already in pool A
-        pool_b_candidates = {
-            g for g in near_mean - pool_a
-            if any(nb in near_mean for nb in neigh[g])
-        }
-        n_pool_b = max(0, n_target - len(pool_a))
-        pool_b   = set(sorted(pool_b_candidates,
-                               key=lambda g: score[g])[:n_pool_b])
+        # Split near-mean, not-already-in-pool-A grains into those that DO
+        # have a near-mean-size neighbour and those that do NOT; neighbour_frac
+        # controls how much of Pool B is drawn from each, with each side
+        # falling back to the other if its own share can't be satisfied.
+        eligible_b   = near_mean - pool_a
+        pool_b_do    = {g for g in eligible_b if any(nb in near_mean for nb in neigh[g])}
+        pool_b_donot = eligible_b - pool_b_do
+        pool_b_candidates = pool_b_do  # kept for the existing summary/print field below
+
+        n_pool_b    = max(0, n_target - len(pool_a))
+        n_from_do   = int(round(n_pool_b * neighbour_frac / 100.0))
+        n_from_do   = min(max(n_from_do, 0), n_pool_b)
+        n_from_donot = n_pool_b - n_from_do
+
+        do_sorted    = sorted(pool_b_do, key=lambda g: score[g])
+        donot_sorted = sorted(pool_b_donot, key=lambda g: score[g])
+
+        picked_do = do_sorted[:n_from_do]
+        shortfall_do = n_from_do - len(picked_do)
+        # donot's own share absorbs do's shortfall
+        picked_donot = donot_sorted[:n_from_donot + shortfall_do]
+        shortfall_donot = (n_from_donot + shortfall_do) - len(picked_donot)
+        if shortfall_donot > 0:
+            # top up from do's remainder (grains not already picked)
+            picked_do = picked_do + do_sorted[len(picked_do):len(picked_do) + shortfall_donot]
+
+        pool_b = set(picked_do) | set(picked_donot)
 
         host_ids    = pool_a | pool_b
         host_volume = sum(vol_map[g] for g in host_ids)
@@ -510,6 +545,11 @@ class TwinnedSimple3DBase:
             'pool_b_band_lo': lo,
             'pool_b_band_hi': hi,
             'n_pool_b_candidates': len(pool_b_candidates),
+            'pool_b_neighbour_frac': neighbour_frac,
+            'n_pool_b_do_candidates': len(pool_b_do),
+            'n_pool_b_donot_candidates': len(pool_b_donot),
+            'n_pool_b_from_do': len(picked_do),
+            'n_pool_b_from_donot': len(picked_donot),
             'n_pool_a': len(pool_a),
             'n_pool_b': len(pool_b),
             'n_host': len(host_ids),
@@ -528,7 +568,10 @@ class TwinnedSimple3DBase:
         print(f'  Pool B tolerance           : ±{pool_b_n_std} std  '
               f'(mean={mean_size:.3g}  std={std_size:.3g}  '
               f'band [{lo:.3g}, {hi:.3g}])')
-        print(f'  Pool B candidates          : {len(pool_b_candidates)} eligible')
+        print(f'  Pool B candidates          : {len(pool_b_do)} do-neighbour, '
+              f'{len(pool_b_donot)} do-not-neighbour')
+        print(f'  Pool B neighbour fraction  : {neighbour_frac:.0f}%  '
+              f'({len(picked_do)} from do-neighbour, {len(picked_donot)} from do-not)')
         print(f'  Pool B (near-mean pairs)   : {len(pool_b)} grains selected')
         print(f'  Total hosts                : {len(host_ids)}')
         print(f'  Non-host grains            : {len(self.non_host_grain_ids)}')
