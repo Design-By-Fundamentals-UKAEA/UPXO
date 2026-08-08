@@ -95,6 +95,7 @@ class OrientationAssigner3D:
         # Adjacency model (Level 1+)
         'orientation_assignment_mode',
         'pair_similarity_deg',
+        'max_retries',
         '_paired_pool_host',
         '_paired_pool_full',
         # Level 2a: angle-binned pair pools
@@ -102,6 +103,7 @@ class OrientationAssigner3D:
         '_paired_pool_full_by_angle_bin',
         # Level 2b: MDF reference for analytical generation
         '_mdf_ref_angles',
+        '_mdf_angle_max',
         '_mdf_bin_width',
         '_n_paired_used_host',
         '_n_paired_used_nonhost',
@@ -132,6 +134,7 @@ class OrientationAssigner3D:
             base,
             orientation_assignment_mode: str = 'conflict_free',
             pair_similarity_deg: float = 10.0,
+            max_retries: int = 50,
             mrf_max_sweeps: int = 20,
             mrf_eps_convergence: float = 0.3,
             mrf_eps_quality: float = 1.5,
@@ -150,6 +153,7 @@ class OrientationAssigner3D:
         self.base = base
         self.orientation_assignment_mode = orientation_assignment_mode
         self.pair_similarity_deg = float(pair_similarity_deg)
+        self.max_retries = int(max_retries)
         self.neigh_graph: Optional[Dict] = None
         self.parent_pool: Optional[np.ndarray] = None
         self.full_pool: Optional[np.ndarray] = None
@@ -163,6 +167,7 @@ class OrientationAssigner3D:
         self._paired_pool_host_by_angle_bin: Optional[dict] = None
         self._paired_pool_full_by_angle_bin: Optional[dict] = None
         self._mdf_ref_angles: Optional[object] = None
+        self._mdf_angle_max: float = 65.0
         self._mdf_bin_width: float = 65.0 / 25
         self._n_paired_used_host: int = 0
         self._n_paired_used_nonhost: int = 0
@@ -312,10 +317,21 @@ class OrientationAssigner3D:
         if mdf_ref is not None:
             _miso_ref = (mdf_ref.get('miso_deg', np.array([]))
                          if isinstance(mdf_ref, dict) else np.asarray(mdf_ref))
-            _n_bins = (len(mdf_ref.get('hist_bin_centers', []))
-                       if isinstance(mdf_ref, dict) and 'hist_bin_centers' in mdf_ref
-                       else 25)
-            _bin_w = 65.0 / _n_bins
+            _edges = (mdf_ref.get('hist_bin_edges')
+                      if isinstance(mdf_ref, dict) else None)
+            if _edges is not None and len(_edges) > 1:
+                # Exact -- reflects whatever n_bins/angle_max actually built
+                # mdf_ref (_build_ebsd_merged_mdf's mdf_n_bins/mdf_angle_max),
+                # instead of assuming a fixed 65 deg range.
+                _bin_w = float(_edges[1] - _edges[0])
+                _angle_max = float(_edges[-1])
+            else:
+                _n_bins = (len(mdf_ref.get('hist_bin_centers', []))
+                           if isinstance(mdf_ref, dict) and 'hist_bin_centers' in mdf_ref
+                           else 25)
+                _angle_max = 65.0
+                _bin_w = _angle_max / _n_bins
+            self._mdf_angle_max = _angle_max
             self._mdf_ref_angles = _miso_ref
             self._mdf_bin_width  = _bin_w
 
@@ -667,7 +683,7 @@ class OrientationAssigner3D:
                 assign_orientations_conflict_free(
                     self.base.host_grain_ids, self.neigh_graph,
                     self.parent_pool, self.all_grain_orientations,
-                    max_retries=50, rng=self._rng,
+                    max_retries=self.max_retries, rng=self._rng,
                     cancel_event=self.cancel_event,
                     fallback_pool=self.fallback_quats)
             print(f'OrientationAssigner3D [L0 conflict_free]: '
@@ -681,7 +697,7 @@ class OrientationAssigner3D:
              self.n_fallback_host) = self._assign_paired_pool(
                 self.base.host_grain_ids, self.neigh_graph,
                 self._paired_pool_host, self.parent_pool,
-                self.all_grain_orientations, max_retries=50)
+                self.all_grain_orientations, max_retries=self.max_retries)
             print(f'OrientationAssigner3D [L1 paired_pool]: '
                   f'{len(self.base.host_grain_ids)} host orientations  '
                   f'pair-matched: {self._n_paired_used_host}  '
@@ -694,7 +710,7 @@ class OrientationAssigner3D:
                 self._assign_mdf_conditioned_pairs(
                     self.base.host_grain_ids, self.neigh_graph,
                     self._paired_pool_host_by_angle_bin,
-                    self.parent_pool, self.all_grain_orientations, max_retries=50)
+                    self.parent_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self._n_paired_used_host = n_cond
             self.n_fallback_host = n_fb2
             print(f'OrientationAssigner3D [L2a mdf_conditioned_pairs]: '
@@ -708,7 +724,7 @@ class OrientationAssigner3D:
                 raise RuntimeError('Call build_adjacency_model(mdf_ref=mdf_merged) first.')
             all_assigned_tmp, n_ana, _ = self._assign_mdf_analytical(
                 self.base.host_grain_ids, self.neigh_graph,
-                self.parent_pool, self.all_grain_orientations, max_retries=50)
+                self.parent_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self.all_grain_orientations = all_assigned_tmp
             self._n_paired_used_host = n_ana
             print(f'OrientationAssigner3D [L3 mrf_gibbs init]: '
@@ -720,7 +736,7 @@ class OrientationAssigner3D:
                 raise RuntimeError('Call build_adjacency_model(mdf_ref=mdf_merged) first.')
             all_assigned_tmp, n_ana, _ = self._assign_mdf_analytical(
                 self.base.host_grain_ids, self.neigh_graph,
-                self.parent_pool, self.all_grain_orientations, max_retries=50)
+                self.parent_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self.all_grain_orientations = all_assigned_tmp
             self._n_paired_used_host = n_ana
             print(f'OrientationAssigner3D [L3b mrf_map init]: '
@@ -740,7 +756,7 @@ class OrientationAssigner3D:
             (self.all_grain_orientations, n_ana, n_fb2) = \
                 self._assign_mdf_analytical(
                     self.base.host_grain_ids, self.neigh_graph,
-                    self.parent_pool, self.all_grain_orientations, max_retries=50)
+                    self.parent_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self._n_paired_used_host = n_ana
             self.n_fallback_host = n_fb2
             print(f'OrientationAssigner3D [L2b mdf_analytical]: '
@@ -767,7 +783,7 @@ class OrientationAssigner3D:
                 assign_orientations_conflict_free(
                     self.base.non_host_grain_ids, self.neigh_graph,
                     self.full_pool, self.all_grain_orientations,
-                    max_retries=50, rng=self._rng,
+                    max_retries=self.max_retries, rng=self._rng,
                     cancel_event=self.cancel_event,
                     fallback_pool=self.fallback_quats)
             print(f'OrientationAssigner3D [L0 conflict_free]: '
@@ -781,7 +797,7 @@ class OrientationAssigner3D:
              self.n_fallback_nonhost) = self._assign_paired_pool(
                 self.base.non_host_grain_ids, self.neigh_graph,
                 self._paired_pool_full, self.full_pool,
-                self.all_grain_orientations, max_retries=50)
+                self.all_grain_orientations, max_retries=self.max_retries)
             print(f'OrientationAssigner3D [L1 paired_pool]: '
                   f'{len(self.base.non_host_grain_ids)} non-host orientations  '
                   f'pair-matched: {self._n_paired_used_nonhost}  '
@@ -794,7 +810,7 @@ class OrientationAssigner3D:
                 self._assign_mdf_conditioned_pairs(
                     self.base.non_host_grain_ids, self.neigh_graph,
                     self._paired_pool_full_by_angle_bin,
-                    self.full_pool, self.all_grain_orientations, max_retries=50)
+                    self.full_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self._n_paired_used_nonhost = n_cond
             self.n_fallback_nonhost = n_fb2
             print(f'OrientationAssigner3D [L2a mdf_conditioned_pairs]: '
@@ -808,7 +824,7 @@ class OrientationAssigner3D:
             # Warm-start non-host grains (host grains done in assign_host_orientations)
             all_assigned_tmp, n_ana, _ = self._assign_mdf_analytical(
                 self.base.non_host_grain_ids, self.neigh_graph,
-                self.full_pool, self.all_grain_orientations, max_retries=50)
+                self.full_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self.all_grain_orientations = all_assigned_tmp
             self._n_paired_used_nonhost = n_ana
             print(f'  {len(self.base.non_host_grain_ids)} non-host grains warm-started')
@@ -824,7 +840,7 @@ class OrientationAssigner3D:
             # Warm-start non-host grains (host grains done in assign_host_orientations)
             all_assigned_tmp, n_ana, _ = self._assign_mdf_analytical(
                 self.base.non_host_grain_ids, self.neigh_graph,
-                self.full_pool, self.all_grain_orientations, max_retries=50)
+                self.full_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self.all_grain_orientations = all_assigned_tmp
             self._n_paired_used_nonhost = n_ana
             print(f'  {len(self.base.non_host_grain_ids)} non-host grains warm-started')
@@ -847,7 +863,7 @@ class OrientationAssigner3D:
             (self.all_grain_orientations, n_ana, n_fb2) = \
                 self._assign_mdf_analytical(
                     self.base.non_host_grain_ids, self.neigh_graph,
-                    self.full_pool, self.all_grain_orientations, max_retries=50)
+                    self.full_pool, self.all_grain_orientations, max_retries=self.max_retries)
             self._n_paired_used_nonhost = n_ana
             self.n_fallback_nonhost = n_fb2
             print(f'OrientationAssigner3D [L2b mdf_analytical]: '
@@ -872,7 +888,7 @@ class OrientationAssigner3D:
         """
         from scipy.stats import gaussian_kde
 
-        bins = np.linspace(0.0, 65.0, n_bins + 1)
+        bins = np.linspace(0.0, self._mdf_angle_max, n_bins + 1)
         counts, _ = np.histogram(miso_deg, bins=bins)
         centers = 0.5 * (bins[:-1] + bins[1:])
 
@@ -890,7 +906,7 @@ class OrientationAssigner3D:
             density = np.convolve(raw, [0.25, 0.5, 0.25], mode='same')
             density = np.clip(density, 1e-12, None)
 
-        density = density / (density.sum() * (65.0 / n_bins))  # normalise to density
+        density = density / (density.sum() * (self._mdf_angle_max / n_bins))  # normalise to density
         return centers, density
 
     def _compute_batch_miso(
@@ -1007,7 +1023,7 @@ class OrientationAssigner3D:
         # Pre-build R matrices for both pools
         R_host = quat_to_R_batch(host_pool)   # (Nh, 3, 3)
         R_full = quat_to_R_batch(full_pool)   # (Nf, 3, 3)
-        bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 65.0 / 25
+        bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else self._mdf_angle_max / 25
 
         # S applied to each pool's candidates is invariant across grains AND
         # neighbours within this sweep (S/pool_R don't change per-grain) --
@@ -1109,7 +1125,7 @@ class OrientationAssigner3D:
                 'call build_adjacency_model(mdf_ref=mdf_merged) before mrf_gibbs.')
 
         S = get_cubic_ops_np()  # (24, 3, 3)
-        n_bins = max(10, int(65.0 / self._mdf_bin_width))
+        n_bins = max(10, int(self._mdf_angle_max / self._mdf_bin_width))
 
         # Build P_EBSD density
         bin_centers, density = self._compute_pebsd_density(
@@ -1140,11 +1156,11 @@ class OrientationAssigner3D:
         elif init_mode == 'conflict_free':
             all_assigned, _ = assign_orientations_conflict_free(
                 host_ids, neigh_graph, host_pool, all_assigned,
-                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                max_retries=self.max_retries, rng=self._rng, cancel_event=self.cancel_event,
                 fallback_pool=fallback)
             all_assigned, _ = assign_orientations_conflict_free(
                 nonhost_ids, neigh_graph, full_pool, all_assigned,
-                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                max_retries=self.max_retries, rng=self._rng, cancel_event=self.cancel_event,
                 fallback_pool=fallback)
             print(f'  Init: conflict_free (Level 0)')
         elif init_mode in ('mdf_conditioned_pairs', 'mdf_analytical', 'paired_pool'):
@@ -1245,7 +1261,7 @@ class OrientationAssigner3D:
 
         R_host = quat_to_R_batch(host_pool)
         R_full = quat_to_R_batch(full_pool)
-        bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 65.0 / 25
+        bin_w = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else self._mdf_angle_max / 25
 
         # See _run_one_gibbs_sweep for why this hoist is exact and ~22x
         # faster than rebuilding the (24,N,K,3,3) SR tensor per grain.
@@ -1336,7 +1352,7 @@ class OrientationAssigner3D:
                 'call build_adjacency_model(mdf_ref=mdf_merged) before mrf_map.')
 
         S = get_cubic_ops_np()
-        n_bins = max(10, int(65.0 / self._mdf_bin_width))
+        n_bins = max(10, int(self._mdf_angle_max / self._mdf_bin_width))
 
         bin_centers, density = self._compute_pebsd_density(
             self._mdf_ref_angles, n_bins=n_bins)
@@ -1366,11 +1382,11 @@ class OrientationAssigner3D:
         elif init_mode == 'conflict_free':
             all_assigned, _ = assign_orientations_conflict_free(
                 host_ids, neigh_graph, host_pool, all_assigned,
-                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                max_retries=self.max_retries, rng=self._rng, cancel_event=self.cancel_event,
                 fallback_pool=fallback)
             all_assigned, _ = assign_orientations_conflict_free(
                 nonhost_ids, neigh_graph, full_pool, all_assigned,
-                max_retries=50, rng=self._rng, cancel_event=self.cancel_event,
+                max_retries=self.max_retries, rng=self._rng, cancel_event=self.cancel_event,
                 fallback_pool=fallback)
             print(f'  Init: conflict_free (Level 0)')
         elif init_mode in ('mdf_conditioned_pairs', 'mdf_analytical', 'paired_pool'):
