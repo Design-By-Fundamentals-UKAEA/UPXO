@@ -89,6 +89,10 @@ src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
 /guiLaunchers/
 
 /admin/
+
+# Design/theory notes -- local-only, not tracked/pushed to origin.
+/theory/
+
 docs/_build/
 docs/docs/srcAPIdocs/
 src/upxo/Important links.md
