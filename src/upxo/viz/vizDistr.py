@@ -639,6 +639,127 @@ def plot_grouped_distributions(
     return fig, axes
 
 
+# ── Pooled distribution with a per-slice KDE spread band ────────────────────
+
+def plot_hist_with_slice_band(
+        pooled_data,
+        slice_arrays,
+        label='value',
+        units='',
+        bins=40,
+        show_stats=True,
+        color='steelblue',
+        band_color='steelblue',
+        band_alpha=0.20,
+        figsize=(7, 4),
+        ax=None,
+):
+    """
+    Histogram + KDE of a pooled distribution (same presentation as
+    ``DistrViz.plot_hist``), with a shaded min/max envelope band overlaid
+    around the KDE curve -- at each x, the band spans the [min, max]
+    across each individual slice's own KDE (evaluated on the same grid,
+    scaled to match the pooled KDE curve's histogram-count scale), making
+    slice-to-slice spread visible alongside the combined/pooled curve.
+
+    Typical use: ``pooled_data`` is the union of a property's values from
+    several 2D cross-sections of a 3D structure (e.g.
+    ``TwinnedSimple3DBase.compute_2d_slice_properties``'s pooled output),
+    and ``slice_arrays`` is the same property's per-slice breakdown
+    (``compute_2d_slice_properties_by_axis``'s per-axis lists) -- the
+    main curve shows the combined distribution, the band shows how much
+    an individual slice can vary from it.
+
+    Parameters
+    ----------
+    pooled_data : array-like
+        The combined (all slices) distribution -- drives the histogram
+        bars and the main KDE curve, exactly as ``DistrViz.plot_hist``
+        does with its own ``self.data``.
+    slice_arrays : list of array-like
+        One array per individual slice; each contributes one KDE curve
+        to the shaded envelope. A slice with fewer than 2 finite,
+        non-degenerate values is skipped (``gaussian_kde`` needs a
+        non-singular sample).
+    label, units : str
+        Property name / unit string for axis labels and title.
+    bins : int
+        Histogram bin count.
+    show_stats : bool
+        Draw vertical mean/median lines (pooled data).
+    color : str
+        Histogram bar color.
+    band_color, band_alpha : str, float
+        Fill color/opacity for the shaded envelope.
+    figsize : tuple
+        Only used when ``ax`` is None.
+    ax : Axes or None
+        Plots into an existing axes if given; otherwise creates its own
+        standalone figure.
+
+    Returns
+    -------
+    fig, ax
+    """
+    pooled = np.asarray(pooled_data, dtype=float)
+    pooled = pooled[np.isfinite(pooled)]
+
+    own_fig = ax is None
+    if own_fig:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    if pooled.size == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+        ax.set_xlabel(label)
+        return fig, ax
+
+    counts, edges, _ = ax.hist(pooled, bins=bins, color=color, edgecolor='k',
+                                alpha=0.75, label='histogram')
+    bw = edges[1] - edges[0]
+    x = np.linspace(pooled.min(), pooled.max(), 400)
+
+    if pooled.size > 1 and pooled.min() != pooled.max():
+        try:
+            main_kde = sp_stats.gaussian_kde(pooled)
+            ax.plot(x, main_kde(x) * len(pooled) * bw, color='crimson', lw=1.8, label='KDE (pooled)')
+        except np.linalg.LinAlgError:
+            pass
+
+    curves = []
+    for arr in slice_arrays:
+        a = np.asarray(arr, dtype=float)
+        a = a[np.isfinite(a)]
+        if a.size < 2 or a.min() == a.max():
+            continue
+        try:
+            kde = sp_stats.gaussian_kde(a)
+            curves.append(kde(x) * len(pooled) * bw)
+        except np.linalg.LinAlgError:
+            continue
+    if curves:
+        stacked = np.vstack(curves)
+        y_min = stacked.min(axis=0)
+        y_max = stacked.max(axis=0)
+        ax.fill_between(x, y_min, y_max, color=band_color, alpha=band_alpha,
+                         label=f'slice-to-slice spread (n={len(curves)})')
+
+    if show_stats:
+        mean, median = float(np.mean(pooled)), float(np.median(pooled))
+        ax.axvline(mean, color='k', ls='--', lw=1.2, label=f'mean = {mean:.2f}')
+        ax.axvline(median, color='darkorange', ls=':', lw=1.2, label=f'median = {median:.2f}')
+
+    xlabel = label + (f'  ({units})' if units else '')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('Count')
+    ax.set_title(f'{label} distribution  (n={len(pooled)}, slices={len(slice_arrays)})')
+    ax.legend(fontsize=8, framealpha=0.7)
+    if own_fig:
+        plt.tight_layout()
+    return fig, ax
+
+
 def plot_repr_rank(
         repr_rank_ng: dict,
         figsize=None,
