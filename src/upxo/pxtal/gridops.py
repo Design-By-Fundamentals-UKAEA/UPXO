@@ -383,7 +383,11 @@ def axis_intercept_grain_size(lgi, voxel_size, axis, n_lines_target=300,
     dict
         {'mean', 'median', 'std', 'min', 'max'} (all in physical units),
         plus 'n_segments' (grain crossings pooled) and 'n_lines' (lines
-        sampled) as plain counts.
+        sampled) as plain counts, plus 'raw_segments' -- the full pooled
+        per-crossing length array (physical units, shape (n_segments,)) the
+        summary statistics above were computed from, for callers that need
+        e.g. IQR/percentiles rather than just mean/median/min/max (matches
+        directional_intercept_grain_size's own 'raw_segments' key/purpose).
     """
     axis = axis.lower()
     if axis not in _AXIS_TO_PLANE:
@@ -413,13 +417,15 @@ def axis_intercept_grain_size(lgi, voxel_size, axis, n_lines_target=300,
 
     if not pooled_counts:
         return {'mean': 0.0, 'median': 0.0, 'std': 0.0, 'min': 0.0, 'max': 0.0,
-               'n_segments': 0, 'n_lines': int(len(starts))}
+               'n_segments': 0, 'n_lines': int(len(starts)),
+               'raw_segments': np.empty(0, dtype=np.float64)}
 
     seg = np.asarray(pooled_counts, dtype=np.float64) * float(voxel_size)
     return {
         'mean': float(seg.mean()), 'median': float(np.median(seg)),
         'std': float(seg.std()), 'min': float(seg.min()), 'max': float(seg.max()),
         'n_segments': int(seg.size), 'n_lines': int(len(starts)),
+        'raw_segments': seg,
     }
 
 
