@@ -81,12 +81,132 @@ def plot_ipf_slice(
     return fig, ax
 
 
+def _ipf_triangle_rgb_grid(n: int = 200):
+    """Fine RGB grid covering the standard cubic fundamental triangle
+    [001]-[011]-[111], coloured with the exact same formula
+    ``ebsdviz.build_ipf_rgb`` applies per-pixel (``v = |d| / max(|d|)``,
+    here with ``d`` a direction swept across the triangle in place of
+    that function's ``R(q)^T @ sample_direction``) -- so a key built from
+    this grid always matches what :func:`plot_ipf_slice` actually
+    rendered, rather than some other software's IPF colour convention.
+    Corner directions barycentrically blended then renormalised to unit
+    length (a standard, simple way to interpolate across the triangle;
+    not geodesically exact, but adequate for a colour-key legend).
+
+    Returns U, V (grid coordinates, both in [0, 1]), rgb (n, n, 3), and
+    mask (n, n bool -- True inside the triangle U + V <= 1).
+    """
+    c001 = np.array([0., 0., 1.])
+    c011 = np.array([0., 1., 1.]) / np.sqrt(2)
+    c111 = np.array([1., 1., 1.]) / np.sqrt(3)
+
+    u = np.linspace(0., 1., n)
+    v = np.linspace(0., 1., n)
+    U, V = np.meshgrid(u, v)
+    mask = (U + V) <= 1.0
+    a, b, c = 1.0 - U - V, U, V   # barycentric weights on c001/c011/c111
+
+    d = (a[..., None] * c001 + b[..., None] * c011 + c[..., None] * c111)
+    norm = np.linalg.norm(d, axis=-1, keepdims=True)
+    d = d / np.where(norm == 0, 1.0, norm)
+
+    vabs = np.abs(d)
+    vmax = vabs.max(axis=-1, keepdims=True)
+    rgb = np.clip(vabs / np.where(vmax == 0, 1.0, vmax), 0.0, 1.0)
+    return U, V, rgb, mask
+
+
+def plot_ipf_triangle_key(
+        ax=None,
+        n: int = 200,
+        corner_labels: Tuple[str, str, str] = ('[001]', '[011]', '[111]'),
+        figsize: Tuple[float, float] = (4., 4.),
+):
+    """
+    Plot the IPF colour-key triangle matching :func:`plot_ipf_slice`'s
+    colour formula.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes or None
+        Plots into an existing axes (e.g. for GUI embedding) if given;
+        otherwise creates its own standalone figure.
+    n : int
+        Grid resolution (n x n before triangular masking).
+    corner_labels : (str, str, str)
+        Labels for the [001]/[011]/[111] corners.
+    figsize : (float, float)
+        Only used when ``ax`` is None.
+    """
+    import matplotlib.pyplot as plt
+
+    U, V, rgb, mask = _ipf_triangle_rgb_grid(n)
+    rgba = np.dstack([rgb, mask.astype(np.float32)])
+
+    standalone = ax is None
+    if standalone:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    # Right-triangle layout in (x, y) plot space: (0,0)=[001], (1,0)=[011],
+    # (0,1)=[111] -- matches U/V's meshgrid orientation exactly (U along
+    # columns/x, V along rows/y), so the boundary outline lines up with
+    # the coloured region with no extra transform.
+    ax.imshow(rgba, origin='lower', extent=(0, 1, 0, 1), interpolation='bilinear')
+    ax.plot([0, 1, 0, 0], [0, 0, 1, 0], color='black', linewidth=1.0)
+    ax.text(-0.04, -0.04, corner_labels[0], ha='right', va='top', fontsize=9, fontweight='bold')
+    ax.text(1.02, -0.04, corner_labels[1], ha='left', va='top', fontsize=9, fontweight='bold')
+    ax.text(-0.04, 1.02, corner_labels[2], ha='right', va='bottom', fontsize=9, fontweight='bold')
+    ax.set_xlim(-0.2, 1.25)
+    ax.set_ylim(-0.2, 1.2)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    if standalone:
+        plt.tight_layout()
+    return fig, ax
+
+
+def _prep_lgi_pv_mesh(lgi: np.ndarray, voxel_size=1.0, rng_seed: int = 0):
+    """
+    Shared grid-preparation for :func:`render_lgi_3d` and
+    :func:`render_lgi_3d_compare`: builds the per-grain-shuffled-colour
+    ``pv.ImageData`` mesh, thresholded down to only the labelled
+    (``grain_id_norm > 0``) region.
+
+    Returns
+    -------
+    (grid_thresh, n_grains)
+    """
+    import pyvista as pv
+
+    unique_gids = np.unique(lgi[lgi > 0])
+    n_grains = int(unique_gids.size)
+    vs = tuple(voxel_size) if hasattr(voxel_size, '__len__') else (voxel_size,) * 3
+
+    max_gid = int(unique_gids.max()) if n_grains > 0 else 0
+    lut = np.zeros(max_gid + 1, dtype=np.float32)
+    rng = np.random.default_rng(rng_seed)
+    shuffled = rng.permutation(n_grains)
+    denom = max(n_grains - 1, 1)
+    lut[unique_gids] = 0.05 + 0.9 * shuffled / denom
+
+    grid = pv.ImageData()
+    grid.dimensions = np.array(lgi.shape) + 1
+    grid.origin = (0, 0, 0)
+    grid.spacing = vs
+    grid.cell_data['grain_id_norm'] = lut[lgi].flatten(order='F')
+    grid_thresh = grid.threshold(1e-6, scalars='grain_id_norm')
+    return grid_thresh, n_grains
+
+
 def render_lgi_3d(
         lgi: np.ndarray,
         voxel_size=1.0,
         title: Optional[str] = None,
         cmap: str = 'tab20',
         rng_seed: int = 0,
+        show_edges: bool = False,
 ):
     """
     Render a 3D grain-label field in a separate PyVista window, each grain
@@ -116,31 +236,73 @@ def render_lgi_3d(
         vary, so neighbouring grains land on near-identical colours and
         visually merge. Scattering IDs across the colour range keeps real
         grain boundaries distinct.
+    show_edges : bool
+        Draw voxel-cell edges as a wireframe overlay on the mesh.
     """
     import pyvista as pv
 
-    unique_gids = np.unique(lgi[lgi > 0])
-    n_grains = int(unique_gids.size)
-    vs = tuple(voxel_size) if hasattr(voxel_size, '__len__') else (voxel_size,) * 3
-
-    max_gid = int(unique_gids.max()) if n_grains > 0 else 0
-    lut = np.zeros(max_gid + 1, dtype=np.float32)
-    rng = np.random.default_rng(rng_seed)
-    shuffled = rng.permutation(n_grains)
-    denom = max(n_grains - 1, 1)
-    lut[unique_gids] = 0.05 + 0.9 * shuffled / denom
-
-    grid = pv.ImageData()
-    grid.dimensions = np.array(lgi.shape) + 1
-    grid.origin = (0, 0, 0)
-    grid.spacing = vs
-    grid.cell_data['grain_id_norm'] = lut[lgi].flatten(order='F')
-    grid_thresh = grid.threshold(1e-6, scalars='grain_id_norm')
+    grid_thresh, n_grains = _prep_lgi_pv_mesh(lgi, voxel_size, rng_seed)
 
     pvp = pv.Plotter()
     pvp.add_mesh(grid_thresh, scalars='grain_id_norm', cmap=cmap,
-                 show_edges=False, show_scalar_bar=False, clim=[0.0, 1.0])
+                 show_edges=show_edges, show_scalar_bar=False, clim=[0.0, 1.0])
     pvp.add_text(title or f"{n_grains} grains", font_size=10)
+    pvp.show()
+
+
+def render_lgi_3d_compare(
+        lgi_old: np.ndarray,
+        lgi_new: np.ndarray,
+        voxel_size_old=1.0,
+        voxel_size_new=1.0,
+        title_old: Optional[str] = None,
+        title_new: Optional[str] = None,
+        cmap: str = 'tab20',
+        rng_seed: int = 0,
+        show_edges: bool = True,
+):
+    """
+    Render two grain-label fields side by side in a single PyVista window
+    (two linked-camera subplots) -- e.g. an original vs. a stretched/
+    rescaled grain structure on Transformations' "Introduce
+    non-equiaxiality to SGS" page, so the two are visually comparable at
+    a glance instead of two separate, independently-sized windows.
+
+    Parameters
+    ----------
+    lgi_old, lgi_new : ndarray (nx, ny, nz), int
+        Grain label fields, already in PyVista's (nx, ny, nz) axis
+        convention -- see :func:`render_lgi_3d`.
+    voxel_size_old, voxel_size_new : float or (float, float, float)
+        Physical voxel edge length(s) for each structure.
+    title_old, title_new : str or None
+        Per-panel title text; default to a grain-count summary.
+    cmap : str
+        Qualitative PyVista/matplotlib colormap name.
+    rng_seed : int
+        Seed for the ID -> colour-position shuffle (see
+        :func:`render_lgi_3d`); the same seed is used for both panels.
+    show_edges : bool
+        Draw voxel-cell edges as a wireframe overlay on both meshes.
+    """
+    import pyvista as pv
+
+    grid_old, n_old = _prep_lgi_pv_mesh(lgi_old, voxel_size_old, rng_seed)
+    grid_new, n_new = _prep_lgi_pv_mesh(lgi_new, voxel_size_new, rng_seed)
+
+    pvp = pv.Plotter(shape=(1, 2))
+
+    pvp.subplot(0, 0)
+    pvp.add_mesh(grid_old, scalars='grain_id_norm', cmap=cmap,
+                 show_edges=show_edges, show_scalar_bar=False, clim=[0.0, 1.0])
+    pvp.add_text(title_old or f"Original ({n_old} grains)", font_size=10)
+
+    pvp.subplot(0, 1)
+    pvp.add_mesh(grid_new, scalars='grain_id_norm', cmap=cmap,
+                 show_edges=show_edges, show_scalar_bar=False, clim=[0.0, 1.0])
+    pvp.add_text(title_new or f"Transformed ({n_new} grains)", font_size=10)
+
+    pvp.link_views()
     pvp.show()
 
 
