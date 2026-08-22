@@ -1492,14 +1492,291 @@ class OrientationAssigner3D:
             angle_range: Tuple[float, float] = (0.0, 65.0),
     ) -> Dict:
         """Compute MDF for the current grain structure."""
-        from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
+        from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats, expand_grain_quats_to_voxels
         if lgi is None:
             lgi = self.base.lgi
         if self.neigh_graph is None:
             raise RuntimeError('Call build_neighbour_graph() first.')
-        quat_3d = np.zeros(lgi.shape + (4,), dtype=np.float64)
-        for gid, q in self.all_grain_orientations.items():
-            quat_3d[lgi == gid] = q
+        quat_3d = expand_grain_quats_to_voxels(lgi, self.all_grain_orientations)
         neigh_list = {gid: list(ns) for gid, ns in self.neigh_graph.items()}
         return compute_mdf_from_quats(lgi, quat_3d, neigh_list,
                                       n_bins=n_bins, angle_range=angle_range)
+
+
+# ── Orchestration helpers ────────────────────────────────────────────────
+# Chain the methods above into reusable, higher-level sequences. Pure
+# computation -- no UI dependency -- safe to call from a background thread.
+
+def compute_ebsd_pure_parents_for_csl(rg, parent_info, csl_label):
+    """EBSD orientations of "pure parent" grains for the given CSL label
+    -- parent_info[csl_label]['pure_parents']: grains that appear as the
+    LARGER member in every CSL pair they're part of (identify_parent_
+    grains), i.e. grains that, in the real EBSD data, actually host a
+    twin of this type and never are one themselves.
+
+    Returns (ebsd_quats, pure_parent_ids), or (None, None) if csl_label
+    isn't in parent_info or no pure-parent grain has a computed quaternion.
+    """
+    if csl_label not in parent_info:
+        return None, None
+    from upxo.xtalphy.crystal_orientation import grain_avg_quats, defdap_passive_to_active
+    ebsd_gids_all, ebsd_q_all = grain_avg_quats(rg.lfi_ebsd, rg.quat_ebsd)
+    gid2q = {int(g): ebsd_q_all[i] for i, g in enumerate(ebsd_gids_all)}
+    pure_parent_ids = [g for g in sorted(int(x) for x in parent_info[csl_label]['pure_parents'])
+                       if g in gid2q]
+    if not pure_parent_ids:
+        return None, None
+    ebsd_quats = np.array([gid2q[g] for g in pure_parent_ids], dtype=np.float64)
+    ebsd_quats = defdap_passive_to_active(ebsd_quats)
+    return ebsd_quats, pure_parent_ids
+
+
+def build_ebsd_merged_mdf(rg, parent_info, n_bins, angle_max):
+    """Build (or reuse) the EBSD twin-merged parent-state MDF reference
+    -- used both as build_adjacency_model's mdf_ref (Levels 2a/2b/3a/3b)
+    and as a pre-twin MDF comparison target, since the pre-twin structure
+    has no twins yet and comparing against the still-twinned full EBSD
+    MDF would be an apples-to-oranges comparison."""
+    from upxo.gsdataops.gid_ops import find_neighs2d
+    from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
+
+    if getattr(rg, 'lfi_ebsd_merged', None) is None:
+        print("EBSD twin-merged reference not yet built -- building it now...")
+        rg.build_merged_ebsd_lfi(parent_info, plot=False)
+
+    neigh_merged = find_neighs2d(rg.lfi_ebsd_merged.astype(np.int32), conn=4)
+    return compute_mdf_from_quats(
+        rg.lfi_ebsd_merged, rg.quat_ebsd, neigh_merged,
+        n_bins=n_bins, angle_range=(0.0, angle_max))
+
+
+def run_orientation_assignment(
+        *, base, rg, parent_info, csl_label, ori_mode, rng_seed,
+        connectivity, n_fallback, fallback_tc_info, fallback_apply_symmetry,
+        mdf_n_bins, mdf_angle_max, pair_similarity_deg, max_retries,
+        mrf_max_sweeps, mrf_eps_convergence, mrf_eps_quality, mrf_init_mode,
+        mrf_kde_threshold, mrf_bilateral_symmetry, mrf_sa_t_start, mrf_sa_t_end,
+        cancel_event=None, prebuilt_pools=None):
+    """Builds and runs one full OrientationAssigner3D for the given mode
+    and seed -- the standard build_neighbour_graph -> build_ebsd_pools ->
+    build_adjacency_model -> assign_host_orientations ->
+    assign_nonhost_orientations -> check_conflicts sequence.
+
+    prebuilt_pools : optional (parent_pool, full_pool, fallback_quats)
+        tuple. build_ebsd_pools() re-derives the EBSD parent/full pools
+        from scratch (pure waste if identical across many calls, e.g.
+        within one Optimize Mapping sweep) AND resamples a fresh,
+        unseeded random fallback pool every time. When given, this skips
+        build_ebsd_pools entirely and assigns the three pools directly,
+        so a whole sweep (and any rerun of one of its candidates) shares
+        one single, already-built set of pools. Omit for a standalone
+        interactive run, where the fallback pool should stay freshly
+        randomized on every call.
+    """
+    assigner = OrientationAssigner3D(
+        base, orientation_assignment_mode=ori_mode,
+        pair_similarity_deg=pair_similarity_deg,
+        max_retries=max_retries,
+        mrf_max_sweeps=mrf_max_sweeps,
+        mrf_eps_convergence=mrf_eps_convergence,
+        mrf_eps_quality=mrf_eps_quality,
+        mrf_init_mode=mrf_init_mode,
+        mrf_kde_threshold=mrf_kde_threshold,
+        mrf_bilateral_symmetry=mrf_bilateral_symmetry,
+        mrf_sa_t_start=mrf_sa_t_start,
+        mrf_sa_t_end=mrf_sa_t_end,
+        rng_seed=rng_seed,
+        cancel_event=cancel_event)
+    assigner.build_neighbour_graph(connectivity=connectivity)
+    if prebuilt_pools is not None:
+        assigner.parent_pool, assigner.full_pool, assigner.fallback_quats = prebuilt_pools
+    else:
+        assigner.build_ebsd_pools(
+            ebsd_lfi=rg.lfi_ebsd, ebsd_quat=rg.quat_ebsd,
+            parent_info=parent_info, csl_label=csl_label,
+            n_fallback=n_fallback,
+            fallback_tc_info=fallback_tc_info,
+            fallback_apply_symmetry=fallback_apply_symmetry)
+    if ori_mode != 'conflict_free':
+        # Levels 2a/2b/3a/3b additionally condition on the real EBSD
+        # misorientation distribution; Level 1 (paired_pool) only needs
+        # the raw adjacency pair pools, not the MDF.
+        mdf_ref = None
+        if ori_mode in ('mdf_conditioned_pairs', 'mdf_analytical',
+                        'mrf_gibbs', 'mrf_map'):
+            mdf_ref = build_ebsd_merged_mdf(rg, parent_info, mdf_n_bins, mdf_angle_max)
+        assigner.build_adjacency_model(rg, parent_info, csl_label, mdf_ref=mdf_ref)
+    assigner.assign_host_orientations()
+    assigner.assign_nonhost_orientations()
+    assigner.check_conflicts()
+    return assigner
+
+
+def score_assigner_pole_figure(assigner, base, zi_ebsd, mask, pole_family, grid_points, unit_normalize):
+    """Scores one freshly-built assigner's host-grain pole figure against
+    the (already unit-normalized, if requested) EBSD reference grid."""
+    from upxo.viz.xphy.pole_figure import PoleFigure
+    from upxo.xtalphy.crystal_orientation import defdap_passive_to_active
+    host_gids = sorted(g for g in base.host_grain_ids if g in assigner.all_grain_orientations)
+    if not host_gids:
+        return None
+    quats = np.array([assigner.all_grain_orientations[g] for g in host_gids], dtype=np.float64)
+    quats = defdap_passive_to_active(quats)
+    pf = PoleFigure(quats, convention='quaternion')
+    poles = pf._get_symmetric_poles(pole_family)
+    _, _, zi, _ = pf._compute_mud_grid(poles, grid_points=grid_points)
+    if unit_normalize:
+        peak = float(np.nanmax(zi))
+        if peak > 0 and np.isfinite(peak):
+            zi = zi / peak
+    delta = (zi - zi_ebsd)[mask]
+    delta = delta[np.isfinite(delta)]
+    if delta.size == 0:
+        return None
+    q25, q75 = np.percentile(delta, [25, 75])
+    return {
+        'min': float(np.min(delta)), 'max': float(np.max(delta)),
+        'q25': float(q25), 'q75': float(q75), 'iqr': float(q75 - q25),
+        'n_host': len(host_gids),
+    }
+
+
+def run_optimize_sweep(
+        *, base, rg, parent_info, csl_label, selected,
+        connectivity, n_fallback, fallback_tc_info, fallback_apply_symmetry,
+        mdf_n_bins, mdf_angle_max, pair_similarity_deg, max_retries,
+        mrf_max_sweeps, mrf_eps_convergence, mrf_eps_quality, mrf_init_mode,
+        mrf_kde_threshold, mrf_bilateral_symmetry, mrf_sa_t_start, mrf_sa_t_end,
+        pole_family, grid_points, unit_normalize, base_seed, cancel_event=None):
+    """Sweeps orientation-assignment mode/seed combinations, scoring each
+    against a real-EBSD reference pole figure, and returns every run's
+    score plus the assigner objects for the 10 lowest-IQR (best-matching)
+    runs.
+
+    Builds the EBSD reference pole figure once, then for every (mode,
+    iteration) pair in ``selected`` (an iterable of (mode, n) pairs) runs
+    a full orientation assignment with a fresh seed via
+    run_orientation_assignment, scores it against the reference via
+    score_assigner_pole_figure, ranks all runs by IQR, and re-runs the
+    top 10 to regenerate their full assigner objects for later
+    inspection -- cheap relative to the full sweep, and avoids holding
+    every single run's assigner in memory at once.
+
+    Returns (records, top10): records is a list of per-run score dicts
+    (all runs), top10 is a list of {**meta, 'assigner': assigner} for the
+    10 lowest-IQR runs.
+    """
+    from upxo.xtalphy.crystal_orientation import AssignmentCancelled
+    from upxo.viz.xphy.pole_figure import PoleFigure
+
+    ebsd_quats, pure_parent_ids = compute_ebsd_pure_parents_for_csl(
+        rg, parent_info, csl_label)
+    if not pure_parent_ids:
+        raise RuntimeError(
+            "No EBSD Pure-Parents-of-Hosts orientations available for "
+            f'CSL label "{csl_label}" -- identify parent grains first.')
+
+    pf_ebsd = PoleFigure(ebsd_quats, convention='quaternion')
+    poles_ebsd = pf_ebsd._get_symmetric_poles(pole_family)
+    _, _, zi_ebsd, mask = pf_ebsd._compute_mud_grid(poles_ebsd, grid_points=grid_points)
+    if unit_normalize:
+        # np.nanmax over the FULL grid, not zi_ebsd[mask] -- matches
+        # PoleFigure.plot_density_difference's own unit_normalize
+        # convention exactly (cells outside the projection circle are
+        # already NaN, so nanmax ignores them either way).
+        peak = float(np.nanmax(zi_ebsd))
+        if peak > 0 and np.isfinite(peak):
+            zi_ebsd = zi_ebsd / peak
+    print(f"Optimize Mapping: EBSD reference built "
+          f"({len(pure_parent_ids)} features, {len(ebsd_quats)} orientations, "
+          f"{{{pole_family}}}, grid={grid_points}, unit_normalize={unit_normalize})")
+
+    # Build the EBSD parent/full pools and the synthetic fallback pool
+    # ONCE, up front -- neither depends on mode or seed, so every sweep
+    # iteration and the top-10 rerun below all share this same
+    # OrientationAssigner3D.build_ebsd_pools() call instead of each
+    # silently re-deriving the EBSD pools from scratch (pure waste) and
+    # drawing a fresh, unseeded random fallback pool each time (see
+    # run_orientation_assignment's prebuilt_pools docstring).
+    pool_builder = OrientationAssigner3D(base, orientation_assignment_mode='conflict_free')
+    pool_builder.build_ebsd_pools(
+        ebsd_lfi=rg.lfi_ebsd, ebsd_quat=rg.quat_ebsd,
+        parent_info=parent_info, csl_label=csl_label,
+        n_fallback=n_fallback,
+        fallback_tc_info=fallback_tc_info,
+        fallback_apply_symmetry=fallback_apply_symmetry)
+    prebuilt_pools = (pool_builder.parent_pool, pool_builder.full_pool, pool_builder.fallback_quats)
+
+    records = []
+    seed_counter = 0
+    for mode, n in selected:
+        print(f"--- {mode}: {n} iteration(s) ---")
+        for it in range(n):
+            if cancel_event is not None and cancel_event.is_set():
+                raise AssignmentCancelled('Optimize Mapping stopped by user.')
+            seed = base_seed + 100000 * (_VALID_ORIENT_MODES.index(mode) + 1) + seed_counter
+            seed_counter += 1
+            try:
+                assigner = run_orientation_assignment(
+                    base=base, rg=rg, parent_info=parent_info, csl_label=csl_label,
+                    ori_mode=mode, rng_seed=seed, connectivity=connectivity,
+                    n_fallback=n_fallback, fallback_tc_info=fallback_tc_info,
+                    fallback_apply_symmetry=fallback_apply_symmetry,
+                    mdf_n_bins=mdf_n_bins, mdf_angle_max=mdf_angle_max,
+                    pair_similarity_deg=pair_similarity_deg, max_retries=max_retries,
+                    mrf_max_sweeps=mrf_max_sweeps, mrf_eps_convergence=mrf_eps_convergence,
+                    mrf_eps_quality=mrf_eps_quality, mrf_init_mode=mrf_init_mode,
+                    mrf_kde_threshold=mrf_kde_threshold,
+                    mrf_bilateral_symmetry=mrf_bilateral_symmetry,
+                    mrf_sa_t_start=mrf_sa_t_start, mrf_sa_t_end=mrf_sa_t_end,
+                    cancel_event=cancel_event, prebuilt_pools=prebuilt_pools)
+            except AssignmentCancelled:
+                raise
+            except Exception as e:
+                print(f"  iteration {it + 1} (seed={seed}): FAILED -- {e}")
+                continue
+            stats = score_assigner_pole_figure(
+                assigner, base, zi_ebsd, mask, pole_family, grid_points, unit_normalize)
+            if stats is None:
+                print(f"  iteration {it + 1} (seed={seed}): no host orientations to score")
+                continue
+            records.append({
+                'mode': mode, 'iteration': it + 1, 'seed': seed,
+                # Pinned so a later replay reproduces this candidate
+                # exactly as it was scored here, even if the live
+                # csl_label/pole_family/grid_points/unit_normalize
+                # settings have since changed.
+                'csl_label': csl_label, 'pole_family': pole_family,
+                'grid_points': grid_points, 'unit_normalize': unit_normalize,
+                **stats,
+            })
+            print(f"  iteration {it + 1} (seed={seed}): "
+                  f"IQR={stats['iqr']:.4f}  min={stats['min']:.4f}  max={stats['max']:.4f}")
+
+    if not records:
+        raise RuntimeError("No successful runs -- see the log above for per-iteration errors.")
+
+    ranked = sorted(records, key=lambda r: r['iqr'])
+    top10_meta = ranked[:10]
+
+    print(f"--- Re-running top {len(top10_meta)} for inspection ---")
+    top10 = []
+    for meta in top10_meta:
+        if cancel_event is not None and cancel_event.is_set():
+            raise AssignmentCancelled('Optimize Mapping stopped by user.')
+        assigner = run_orientation_assignment(
+            base=base, rg=rg, parent_info=parent_info, csl_label=csl_label,
+            ori_mode=meta['mode'], rng_seed=meta['seed'], connectivity=connectivity,
+            n_fallback=n_fallback, fallback_tc_info=fallback_tc_info,
+            fallback_apply_symmetry=fallback_apply_symmetry,
+            mdf_n_bins=mdf_n_bins, mdf_angle_max=mdf_angle_max,
+            pair_similarity_deg=pair_similarity_deg, max_retries=max_retries,
+            mrf_max_sweeps=mrf_max_sweeps, mrf_eps_convergence=mrf_eps_convergence,
+            mrf_eps_quality=mrf_eps_quality, mrf_init_mode=mrf_init_mode,
+            mrf_kde_threshold=mrf_kde_threshold,
+            mrf_bilateral_symmetry=mrf_bilateral_symmetry,
+            mrf_sa_t_start=mrf_sa_t_start, mrf_sa_t_end=mrf_sa_t_end,
+            cancel_event=cancel_event, prebuilt_pools=prebuilt_pools)
+        top10.append({**meta, 'assigner': assigner})
+    print("Optimize Mapping: done.")
+    return records, top10

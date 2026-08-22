@@ -79,6 +79,7 @@ class TwinGenerator3D:
     DIAG_ABRUPT_FRAC_THRESHOLD = 0.5
     DIAG_CLAMPED_FRAC_THRESHOLD = 0.3
     DIAG_HOST_SATURATION_THRESHOLD = 0.95
+    DIAG_ANISOTROPY_RATIO_THRESHOLD = 1.5
 
     __slots__ = (
         'base',
@@ -978,6 +979,48 @@ class TwinGenerator3D:
         s = self.summary()
         notes: List[Dict] = []
 
+        # Anisotropic domain (e.g. via Transformations' "Introduce
+        # non-equiaxiality to SGS") -- flagged from self.base.lgi.shape
+        # alone (voxels are always cubic in this pipeline, so an unequal
+        # per-axis voxel count directly means an unequal physical extent),
+        # regardless of how the anisotropy arose. Lamella thickness is a
+        # fixed physical value independent of grain shape: a lamella whose
+        # crystallographic habit-plane normal points mostly along the
+        # elongated axis carves a slab whose in-plane cross-section lies in
+        # the UN-elongated axes, so its volume doesn't grow with that
+        # axis's elongation even though host grain volume does -- this
+        # systematically lowers achieved twin volume fraction relative to
+        # an EBSD target measured on presumably near-equiaxed material.
+        # This is a real, expected geometric consequence, not something
+        # this class attempts to correct for -- see project memory on the
+        # Transformations page for the deliberate decision to leave twin
+        # generation as-is and only document the effect here.
+        shp = self.base.lgi.shape
+        if min(shp) > 0:
+            axis_ratio = max(shp) / min(shp)
+            if (axis_ratio >= self.DIAG_ANISOTROPY_RATIO_THRESHOLD
+                    and s['tvf_target_3d'] > 0):
+                notes.append({
+                    'anchor_fields': [
+                        'tvf_achieved_3d', 'tvf_achieved_pct_of_target', 'vf_stop_status'],
+                    'message': (
+                        f"The host structure's domain is anisotropic (voxel-"
+                        f"count shape (z,y,x)={shp}, longest/shortest axis "
+                        f"ratio {axis_ratio:.1f}x). Twin lamella thickness is "
+                        "a fixed physical value independent of grain shape, "
+                        "so lamellae whose crystallographic habit-plane "
+                        "normal aligns with the elongated axis carve a slab "
+                        "volume that doesn't grow with that axis's "
+                        "elongation, while host grain volume does -- this "
+                        "systematically reduces achieved twin volume "
+                        "fraction relative to an EBSD target measured on "
+                        "presumably near-equiaxed material. This is an "
+                        "expected geometric consequence of anisotropic "
+                        "grain shape combined with fixed-thickness twins, "
+                        "not a computation error."
+                    ),
+                })
+
         host_frac = getattr(self.base, 'actual_hosting_fraction', None)
         if host_frac is not None and host_frac > 0 and s['tvf_target_3d'] > 0:
             # A single lamella's half-width is capped at
@@ -1164,3 +1207,85 @@ class TwinGenerator3D:
               f'   (primary {n_p}  +  secondary {s["n_secondary_twins"]})')
         print(f'  Achieved twin VF                 : {s["tvf_achieved_3d"]:.4f}')
         print(sep)
+
+
+def compute_twin_thickness_comparison(tg, cleaner, twin_thickness, validator):
+    """
+    Three-way twin-thickness population comparison: EBSD target, actual
+    3D thickness as introduced, and apparent 2D thickness measured on
+    representative slices of the cleaned structure.
+
+    Parameters
+    ----------
+    tg : TwinGenerator3D
+        Provides ``base.voxel_size`` and ``twin_halfwidths_vox`` (the
+        actual per-twin half-width, in voxels, used during introduction).
+    cleaner
+        Post-cleaning structure (``lgi_clean``/``twin_role_clean`` --
+        duck-typed, matching StructureCleaner3D and its subset variants).
+    twin_thickness : dict
+        EBSD twin thickness statistics, as produced by the EBSD Twin
+        Thickness Statistics computation -- must contain ``'thick_um'``
+        (array-like) and ``'mean'``.
+    validator
+        A representativeness validator exposing ``slice_results``: dict
+        of axis name ('X'/'Y'/'Z') -> list of dicts each containing
+        ``'slice_idx'``, the representative slice positions to sample.
+
+    Returns
+    -------
+    dict with:
+        'ebsd_um', 'actual_3d_um' : ndarray
+            Per-lamella thickness populations (microns).
+        'ebsd_mean_um', 'actual_3d_mean_um' : float
+        'per_axis_um' : dict {axis_name: ndarray}
+            Apparent 2D thickness (minor-axis length of each twin's
+            cross-section) measured on the validator's own representative
+            slices, per axis.
+        'per_axis_means_um' : dict {axis_name: float}
+    """
+    from skimage.measure import regionprops
+    from upxo.gsdataops.grid_ops import section_from_3d
+
+    vs = tg.base.voxel_size
+    ebsd_um = np.asarray(twin_thickness['thick_um'], dtype=float)
+    ebsd_mean_um = float(twin_thickness['mean'])
+
+    # Actual 3D thickness used during introduction: 2x the recorded
+    # half-width (voxels) per twin, scaled to microns.
+    actual_3d_um = np.array(
+        [2.0 * hw * vs for hw in tg.twin_halfwidths_vox.values()], dtype=float)
+    actual_3d_mean_um = float(np.mean(actual_3d_um)) if actual_3d_um.size else 0.0
+
+    twin_gids = {g for g, role in cleaner.twin_role_clean.items()
+                 if role in ('primary_twin', 'secondary_twin')}
+
+    # lgi_clean carries the pipeline's native (nz, ny, nx) axis order --
+    # same corrected label mapping RepresentativenessValidator3D uses
+    # internally, and the same slice positions it already sampled
+    # (reused here rather than re-sampled independently).
+    axis_index = {'X': 2, 'Y': 1, 'Z': 0}
+    per_axis_um: Dict = {}
+    per_axis_means_um: Dict = {}
+    for axis_name, results in validator.slice_results.items():
+        if not results:
+            continue
+        lengths = []
+        for r in results:
+            lgi_2d = section_from_3d(
+                cleaner.lgi_clean, axis=axis_index[axis_name], location=r['slice_idx'])
+            for rp in regionprops(lgi_2d.astype(np.int32)):
+                if rp.label in twin_gids:
+                    lengths.append(rp.minor_axis_length * vs)
+        if lengths:
+            per_axis_um[axis_name] = np.array(lengths, dtype=float)
+            per_axis_means_um[axis_name] = float(np.mean(lengths))
+
+    return {
+        'ebsd_um': ebsd_um,
+        'actual_3d_um': actual_3d_um,
+        'ebsd_mean_um': ebsd_mean_um,
+        'actual_3d_mean_um': actual_3d_mean_um,
+        'per_axis_um': per_axis_um,
+        'per_axis_means_um': per_axis_means_um,
+    }
