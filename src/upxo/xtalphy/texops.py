@@ -433,12 +433,21 @@ class tops:
             phi1 = np.arctan2(R[1,0], R[0,0])
             phi2 = 0.0
         elif abs(Phi - np.pi) < 1e-12:
-            # singular: Phi = pi -> phi2 - phi1 = atan2(R[1,2], -R[0,2])
-            phi1 = np.arctan2(R[1,2], R[0,2])
+            # singular: Phi = pi -> phi1 - phi2 = atan2(R[1,0], R[0,0])
+            # (R[0,2]/R[1,2] are both ~0 here, degenerate; reuse the
+            # Phi~0 branch's [1,0]/[0,0] pair instead.)
+            phi1 = np.arctan2(R[1,0], R[0,0])
             phi2 = 0.0
         else:
-            phi1 = np.arctan2(R[2,0], -R[2,1])  # consistent with ZXZ Bunge
-            phi2 = np.arctan2(R[0,2], R[1,2])
+            # R = Rz(phi1) @ Rx(Phi) @ Rz(phi2) gives
+            # R[0,2]=sin(phi1)sin(Phi), R[1,2]=-cos(phi1)sin(Phi),
+            # R[2,0]=sin(Phi)sin(phi2), R[2,1]=sin(Phi)cos(phi2) -- the
+            # previous formula here had phi1/phi2 swapped and offset,
+            # verified failing the euler->matrix->euler round-trip
+            # (see crystal_orientation.matrix_to_euler_bunge, same bug,
+            # fixed the same way).
+            phi1 = np.arctan2(R[0,2], -R[1,2])
+            phi2 = np.arctan2(R[2,0], R[2,1])
         if degrees:
             return (np.degrees(phi1) % 360.0, np.degrees(Phi), np.degrees(phi2) % 360.0)
         return (phi1 % (2*np.pi), Phi, phi2 % (2*np.pi))
