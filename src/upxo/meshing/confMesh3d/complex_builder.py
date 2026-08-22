@@ -62,6 +62,25 @@ class GmshVolumeResult:
     tet_meshing_attempted     : bool = False
 
 
+@dataclass
+class TetGenVolumeResult:
+    """
+    Result of TetGen tet-mesh generation.
+
+    Unlike GmshVolumeResult, this is fully self-contained (plain arrays,
+    no dependency on a live external-engine model) since TetGen returns
+    its output as arrays rather than a queryable in-memory model.
+
+    node_coords   : (N, 3) float64 -- global node coordinates
+    tets_by_grain : {gid: (T, 4) int64} -- 0-based node indices into
+                    node_coords, per grain
+    """
+    node_coords   : np.ndarray
+    tets_by_grain : Dict[int, np.ndarray]
+    n_nodes       : int = 0
+    n_tetrahedra  : int = 0
+
+
 # ---------------------------------------------------------------------------
 # Vertex welding helper
 # ---------------------------------------------------------------------------

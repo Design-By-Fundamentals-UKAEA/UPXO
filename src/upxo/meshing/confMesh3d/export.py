@@ -31,7 +31,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from upxo.meshing.confMesh3d.config import ExportConfig
-from upxo.meshing.confMesh3d.complex_builder import GmshVolumeResult
+from upxo.meshing.confMesh3d.complex_builder import GmshVolumeResult, TetGenVolumeResult
 
 try:
     import gmsh
@@ -77,53 +77,31 @@ def _write_id_list(f, ids: np.ndarray, per_line: int = 16):
 
 
 # ---------------------------------------------------------------------------
+# Engine-specific raw-array extraction
+#
+# Everything below this point (the _write_* writers and the shared driver
+# _write_all_sections) is engine-agnostic: it only consumes the tuple
+# (node_tags, node_coords, tag_to_idx, grain_elements). These two functions
+# are the only place that knows how to pull that tuple out of a live gmsh
+# model vs. TetGen's plain-array result.
+# ---------------------------------------------------------------------------
 
-def export_conformal_mesh(
-        gmsh_result : GmshVolumeResult,
-        all_quats   : Dict[int, np.ndarray],
-        twin_role   : Optional[Dict[int, str]]   = None,
-        twin_parent_of: Optional[Dict[int,int]]  = None,
-        voxel_size  : float = 1.0,
-        config      : Optional[ExportConfig]     = None,
-        verbose     : bool = True,
-) -> None:
+def _extract_from_gmsh(gmsh_result: GmshVolumeResult):
     """
-    Export the conformal tet mesh from the active gmsh model.
-
-    Must be called BEFORE gmsh.finalize().
-
-    Parameters
-    ----------
-    gmsh_result    : GmshVolumeResult from generate_conformal_tet_mesh()
-    all_quats      : {gid: quaternion(4,)} for material orientations
-    twin_role      : {gid: role_str} optional — for role-based ELSETs
-    twin_parent_of : {child: parent} optional — for 2a/2b distinction
-    voxel_size     : float — physical voxel edge (microns)
-    config         : ExportConfig
+    Pull nodes/elements from the active gmsh model (built by
+    volume_mesh.generate_conformal_tet_mesh()). Must be called BEFORE
+    gmsh.finalize(). Coordinates are returned in their raw (unscaled,
+    voxel-index) units -- callers scale by voxel_size as needed.
     """
     if gmsh is None:
         raise RuntimeError('gmsh required for export.')
-    cfg = config or ExportConfig()
-    if not cfg.out_dir:
-        raise ValueError('ExportConfig.out_dir must be set.')
-    os.makedirs(cfg.out_dir, exist_ok=True)
 
-    t0 = time.perf_counter()
-    if verbose:
-        print(f'[Export] Writing Abaqus INP to {cfg.out_dir}')
-
-    # ── Extract nodes from gmsh ────────────────────────────────────────────
     node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
     node_coords = np.array(node_coords, dtype=np.float64).reshape(-1, 3)
-    node_coords_um = node_coords * voxel_size  # convert voxel → microns
     tag_to_idx = {int(t): i + 1 for i, t in enumerate(node_tags)}  # 1-based
-    n_nodes = len(node_tags)
 
-    # ── Extract elements per grain ─────────────────────────────────────────
-    # grain_id → list of (element_tag, [node_ids 1-based])
     grain_elements: Dict[int, list] = {}
     eid_counter = [1]
-
     for gid, vtag in gmsh_result.volume_tags_by_grain_id.items():
         gid = int(gid)
         etypes, etags, enodes = gmsh.model.mesh.getElements(dim=3, tag=int(vtag))
@@ -137,7 +115,45 @@ def export_conformal_mesh(
                 eid_counter[0] += 1
         grain_elements[gid] = elems
 
-    n_elems = eid_counter[0] - 1
+    return node_tags, node_coords, tag_to_idx, grain_elements
+
+
+def _extract_from_tetgen(tetgen_result: TetGenVolumeResult):
+    """
+    Build the same (node_tags, node_coords, tag_to_idx, grain_elements)
+    tuple from a TetGenVolumeResult (tetgen_mesh.generate_conformal_tet_mesh_tetgen()).
+    TetGen's own node/element arrays are already plain 0-based arrays, so
+    this is a direct 1-based relabelling -- no live external model needed.
+    """
+    node_coords = np.asarray(tetgen_result.node_coords, dtype=np.float64)
+    n_nodes = len(node_coords)
+    node_tags = np.arange(1, n_nodes + 1, dtype=np.int64)
+    tag_to_idx = {int(t): int(t) for t in node_tags}  # already 1-based == tag
+
+    grain_elements: Dict[int, list] = {}
+    eid_counter = [1]
+    for gid, tets in sorted(tetgen_result.tets_by_grain.items()):
+        elems = []
+        for row in np.asarray(tets, dtype=np.int64):
+            mapped = [int(n) + 1 for n in row.tolist()]  # 0-based → 1-based
+            elems.append((eid_counter[0], mapped))
+            eid_counter[0] += 1
+        grain_elements[int(gid)] = elems
+
+    return node_tags, node_coords, tag_to_idx, grain_elements
+
+
+# ---------------------------------------------------------------------------
+# Shared, engine-agnostic writer driver
+# ---------------------------------------------------------------------------
+
+def _write_all_sections(
+        node_tags, node_coords, tag_to_idx, grain_elements,
+        all_quats, twin_role, twin_parent_of, voxel_size, cfg, verbose,
+) -> None:
+    node_coords_um = node_coords * voxel_size  # convert voxel → microns
+    n_nodes = len(node_tags)
+    n_elems = sum(len(elems) for elems in grain_elements.values())
     elem_type_abq = 'C3D4' if cfg.material_format != 'C3D10' else 'C3D10'
 
     # Determine role for each grain
@@ -182,8 +198,91 @@ def export_conformal_mesh(
         _export_extra(cfg, grain_elements, node_coords_um, tag_to_idx, twin_role, verbose)
 
     if verbose:
-        print(f'[Export] Done ({time.perf_counter()-t0:.1f}s)  '
-              f'nodes={n_nodes}  elements={n_elems}')
+        print(f'  nodes={n_nodes}  elements={n_elems}')
+
+
+# ---------------------------------------------------------------------------
+# Public entry points
+# ---------------------------------------------------------------------------
+
+def export_conformal_mesh(
+        gmsh_result : GmshVolumeResult,
+        all_quats   : Dict[int, np.ndarray],
+        twin_role   : Optional[Dict[int, str]]   = None,
+        twin_parent_of: Optional[Dict[int,int]]  = None,
+        voxel_size  : float = 1.0,
+        config      : Optional[ExportConfig]     = None,
+        verbose     : bool = True,
+) -> None:
+    """
+    Export the conformal tet mesh from the active gmsh model.
+
+    Must be called BEFORE gmsh.finalize().
+
+    Parameters
+    ----------
+    gmsh_result    : GmshVolumeResult from generate_conformal_tet_mesh()
+    all_quats      : {gid: quaternion(4,)} for material orientations
+    twin_role      : {gid: role_str} optional — for role-based ELSETs
+    twin_parent_of : {child: parent} optional — for 2a/2b distinction
+    voxel_size     : float — physical voxel edge (microns)
+    config         : ExportConfig
+    """
+    cfg = config or ExportConfig()
+    if not cfg.out_dir:
+        raise ValueError('ExportConfig.out_dir must be set.')
+    os.makedirs(cfg.out_dir, exist_ok=True)
+
+    t0 = time.perf_counter()
+    if verbose:
+        print(f'[Export] Writing Abaqus INP to {cfg.out_dir}')
+
+    node_tags, node_coords, tag_to_idx, grain_elements = _extract_from_gmsh(gmsh_result)
+    _write_all_sections(node_tags, node_coords, tag_to_idx, grain_elements,
+                         all_quats, twin_role, twin_parent_of, voxel_size, cfg, verbose)
+
+    if verbose:
+        print(f'[Export] Done ({time.perf_counter()-t0:.1f}s)')
+
+
+def export_conformal_mesh_tetgen(
+        tetgen_result : TetGenVolumeResult,
+        all_quats     : Dict[int, np.ndarray],
+        twin_role     : Optional[Dict[int, str]]   = None,
+        twin_parent_of: Optional[Dict[int,int]]    = None,
+        voxel_size    : float = 1.0,
+        config        : Optional[ExportConfig]     = None,
+        verbose       : bool = True,
+) -> None:
+    """
+    Export the conformal tet mesh produced by
+    tetgen_mesh.generate_conformal_tet_mesh_tetgen(). Same output layout
+    and parameters as export_conformal_mesh(), for the TetGen backend.
+
+    Parameters
+    ----------
+    tetgen_result  : TetGenVolumeResult from generate_conformal_tet_mesh_tetgen()
+    all_quats      : {gid: quaternion(4,)} for material orientations
+    twin_role      : {gid: role_str} optional — for role-based ELSETs
+    twin_parent_of : {child: parent} optional — for 2a/2b distinction
+    voxel_size     : float — physical voxel edge (microns)
+    config         : ExportConfig
+    """
+    cfg = config or ExportConfig()
+    if not cfg.out_dir:
+        raise ValueError('ExportConfig.out_dir must be set.')
+    os.makedirs(cfg.out_dir, exist_ok=True)
+
+    t0 = time.perf_counter()
+    if verbose:
+        print(f'[Export] Writing Abaqus INP to {cfg.out_dir}')
+
+    node_tags, node_coords, tag_to_idx, grain_elements = _extract_from_tetgen(tetgen_result)
+    _write_all_sections(node_tags, node_coords, tag_to_idx, grain_elements,
+                         all_quats, twin_role, twin_parent_of, voxel_size, cfg, verbose)
+
+    if verbose:
+        print(f'[Export] Done ({time.perf_counter()-t0:.1f}s)')
 
 
 # ---------------------------------------------------------------------------
