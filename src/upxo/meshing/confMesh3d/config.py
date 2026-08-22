@@ -48,6 +48,39 @@ class ValidationConfig:
 
 
 @dataclass
+class SurfaceRemeshConfig:
+    """
+    Controls for the optional Gmsh surface quality-optimization stage.
+
+    v1 scope: relax/optimize the existing SurfaceNets3D triangulation
+    in place (Laplacian-style vertex relaxation of interior points only).
+    Boundary vertices (shared by >=2 patches -- triple lines / RVE edges)
+    are never moved, so conformality across patches is preserved by
+    construction. Does not re-parametrize or regenerate patches from
+    scratch (that is a harder, deferred v2).
+    """
+    enabled: bool             = False
+    # Gmsh 2D algorithm id, used only if/when full regeneration (v2) lands.
+    algorithm: int            = 6
+    # Target edge length as a multiple of voxel_size for optional
+    # long-edge subdivision of interior edges.
+    mesh_size_factor: float   = 1.0
+    optimize_iterations: int  = 5
+    verbose_gmsh: bool        = False
+
+
+@dataclass
+class TetGenMeshConfig:
+    """Controls for the TetGen tet-mesh generation stage."""
+    quality: bool          = True
+    # Maximum allowable radius-edge ratio (lower = higher quality).
+    minratio: float         = 1.4
+    # Minimum allowable dihedral angle (degrees).
+    mindihedral: float      = 10.0
+    verbose: int            = 0
+
+
+@dataclass
 class GmshMeshConfig:
     """Controls for the gmsh tet-mesh generation stage."""
     # Element type: 'C3D4' (linear) or 'C3D10' (quadratic)
@@ -78,8 +111,10 @@ class ExportConfig:
 @dataclass
 class ConfMesh3DConfig:
     """Top-level config bundling all stage configs."""
-    surface_nets : SurfaceNetsConfig = field(default_factory=SurfaceNetsConfig)
-    complex_cfg  : ComplexConfig     = field(default_factory=ComplexConfig)
-    validation   : ValidationConfig  = field(default_factory=ValidationConfig)
-    gmsh         : GmshMeshConfig    = field(default_factory=GmshMeshConfig)
-    export       : ExportConfig      = field(default_factory=ExportConfig)
+    surface_nets   : SurfaceNetsConfig   = field(default_factory=SurfaceNetsConfig)
+    complex_cfg    : ComplexConfig       = field(default_factory=ComplexConfig)
+    surface_remesh : SurfaceRemeshConfig = field(default_factory=SurfaceRemeshConfig)
+    validation     : ValidationConfig    = field(default_factory=ValidationConfig)
+    gmsh           : GmshMeshConfig      = field(default_factory=GmshMeshConfig)
+    tetgen         : TetGenMeshConfig    = field(default_factory=TetGenMeshConfig)
+    export         : ExportConfig        = field(default_factory=ExportConfig)
