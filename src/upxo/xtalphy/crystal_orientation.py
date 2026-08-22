@@ -40,6 +40,12 @@ Misorientation
     cubic_misorientation(EA1, EA2, ...) – fast vectorized cubic misorientation
     cubic_misorientation_scalar(EA1, EA2, ...) – scalar (loop) reference version
 
+Peak detection
+    detect_mdf_peaks(mdf, ...)                    – 1D peaks in a misorientation-angle MDF
+    detect_texture_component_peaks(quat, ...)      – texture components from an
+        orientation-space KDE (disorientation-weighted), with non-maximum
+        suppression and matching against FCC_TEXTURE_COMPONENTS
+
 High-level utilities
     grain_boundary_misorientation_distribution(euler_array, pairs, ...)
         Compute the GBMD (misorientation angle distribution) for a list of
@@ -200,14 +206,25 @@ def matrix_to_euler_bunge(R: np.ndarray,
     c = np.clip(R[2, 2], -1.0, 1.0)
     Phi_rad = np.arccos(c)
     if abs(Phi_rad) < 1e-12:
+        # R = Rz(phi1 + phi2); only the sum is determined -- phi2 := 0.
         phi1_rad = np.arctan2(R[1, 0], R[0, 0])
         phi2_rad = 0.0
     elif abs(Phi_rad - np.pi) < 1e-12:
-        phi1_rad = np.arctan2(R[1, 2], R[0, 2])
+        # R = Rz(phi1 - phi2); only the difference is determined --
+        # phi2 := 0 (R[0,2]/R[1,2] are both ~0 here, degenerate; use the
+        # same [1,0]/[0,0] pair as the Phi~0 branch instead).
+        phi1_rad = np.arctan2(R[1, 0], R[0, 0])
         phi2_rad = 0.0
     else:
-        phi1_rad = np.arctan2(R[2, 0], -R[2, 1])
-        phi2_rad = np.arctan2(R[0, 2],  R[1, 2])
+        # R = Rz(phi1) @ Rx(Phi) @ Rz(phi2) gives
+        # R[0,2]=sin(phi1)sin(Phi), R[1,2]=-cos(phi1)sin(Phi),
+        # R[2,0]=sin(Phi)sin(phi2), R[2,1]=sin(Phi)cos(phi2) -- verified
+        # by round-tripping euler_bunge_to_matrix -> matrix_to_euler_bunge
+        # -> euler_bunge_to_matrix over random samples (previous formula
+        # here returned phi1/phi2 swapped and offset, failing that
+        # round-trip).
+        phi1_rad = np.arctan2(R[0, 2], -R[1, 2])
+        phi2_rad = np.arctan2(R[2, 0],  R[2, 1])
     if degrees:
         return (float(np.degrees(phi1_rad) % 360.0),
                 float(np.degrees(Phi_rad)),
@@ -840,6 +857,40 @@ def quat_to_R_batch(q: np.ndarray) -> np.ndarray:
     return R
 
 
+def defdap_passive_to_active(quats: np.ndarray) -> np.ndarray:
+    """
+    Convert a stack of quaternions from DefDAP's passive (crystal-to-
+    sample) convention to the active (sample-to-crystal) convention used
+    for pole-figure plotting and comparison elsewhere in this codebase.
+
+    DefDAP stores orientations as passive rotations; negating the vector
+    part (x, y, z) while keeping the scalar part (w) flips a passive
+    quaternion to its active counterpart -- the standard quaternion-
+    conjugate relationship between the two conventions for the same
+    physical rotation.
+
+    Parameters
+    ----------
+    quats : ndarray, shape (N, 4)
+        Quaternions in [w, x, y, z] convention, DefDAP passive frame.
+
+    Returns
+    -------
+    ndarray, shape (N, 4)
+        A new array (input is not modified) in the active convention.
+
+    Examples
+    --------
+    from upxo.xtalphy.crystal_orientation import defdap_passive_to_active
+    import numpy as np
+    q = np.array([[0.9, 0.1, 0.2, 0.3]])
+    defdap_passive_to_active(q)   # → [[0.9, -0.1, -0.2, -0.3]]
+    """
+    quats = np.array(quats, dtype=np.float64, copy=True)
+    quats[:, 1:] *= -1
+    return quats
+
+
 def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute per-grain average quaternion from a pixel-wise quaternion map.
@@ -890,6 +941,35 @@ def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.n
     norms  = np.linalg.norm(q_mean, axis=1, keepdims=True)
     q_mean = q_mean / np.where(norms > 0, norms, 1.0)
     return gids, q_mean
+
+
+def expand_grain_quats_to_voxels(lgi: np.ndarray, quats_by_grain: dict) -> np.ndarray:
+    """
+    Expand a per-grain quaternion dict into a per-voxel quaternion field --
+    the inverse of grain_avg_quats: one quaternion per grain broadcast
+    back out to every voxel/pixel carrying that grain's label.
+
+    Parameters
+    ----------
+    lgi : ndarray, shape (...,), dtype int
+        Integer grain label field (2D or 3D). Voxels whose label has no
+        entry in *quats_by_grain* are left as [0, 0, 0, 0].
+    quats_by_grain : dict {grain_id: quaternion}
+        Quaternion per grain, [w, x, y, z] convention.
+
+    Returns
+    -------
+    ndarray, shape lgi.shape + (4,), dtype float64
+
+    Examples
+    --------
+    from upxo.xtalphy.crystal_orientation import expand_grain_quats_to_voxels
+    quat_field = expand_grain_quats_to_voxels(cleaner.lgi_clean, cleaner.all_quats_clean)
+    """
+    quat_field = np.zeros(lgi.shape + (4,), dtype=np.float64)
+    for gid, q in quats_by_grain.items():
+        quat_field[lgi == gid] = q
+    return quat_field
 
 
 def compute_mdf_from_quats(
@@ -1091,6 +1171,203 @@ def detect_mdf_peaks(
         'csl':          csl,
         'csl_tol':      csl_tol,
     }
+
+
+def _match_std_component(
+        euler_deg: tuple[float, float, float],
+        std_components: dict[str, tuple[float, float, float]],
+        tolerance_deg: float,
+) -> tuple[str | None, float]:
+    """
+    Match a Bunge Euler triplet against a table of standard components.
+
+    Returns
+    -------
+    name : str or None
+        The closest standard component's name, or None if the closest
+        match's disorientation exceeds *tolerance_deg*.
+    angle_deg : float
+        Disorientation (degrees) to the closest standard component.
+    """
+    best_name = None
+    best_angle = float('inf')
+    for name, std_euler in std_components.items():
+        angle, _axis, _top3 = cubic_misorientation(euler_deg, std_euler)
+        if angle < best_angle:
+            best_angle = angle
+            best_name = name
+    if best_angle > tolerance_deg:
+        return None, best_angle
+    return best_name, best_angle
+
+
+def detect_texture_component_peaks(
+        quat: np.ndarray,
+        weights: np.ndarray | None = None,
+        n_peaks: int = 4,
+        bandwidth_deg: float = 10.0,
+        min_weight_frac: float = 0.01,
+        match_tolerance_deg: float = 15.0,
+        std_components: dict[str, tuple[float, float, float]] | None = None,
+        block_size: int = 200,
+) -> dict:
+    """
+    Detect FCC texture components from a population of grain orientations.
+
+    Builds a Gaussian kernel density estimate directly in orientation
+    space -- kernel distance is cubic *disorientation* (the minimum angle
+    over all 24x24 crystal-symmetry-equivalent pairs), not a raw
+    quaternion difference -- evaluated at each input orientation. Peaks
+    are then extracted greedily (highest density first) with
+    non-maximum suppression: once a peak is taken, every orientation
+    within *bandwidth_deg* of it is removed before finding the next
+    peak. This generalises the same peak-then-suppress pattern
+    :func:`detect_mdf_peaks` already uses on a 1D misorientation-angle
+    histogram, to full orientation space. See
+    ``theory/texture_component_detection_theory.md`` for the derivation.
+
+    A peak's representative orientation is the actual highest-density
+    *measured* input orientation (not a computed symmetry-aware cluster
+    mean), which sidesteps quaternion-averaging-under-symmetry entirely.
+
+    Parameters
+    ----------
+    quat : ndarray, shape (N, 4)
+        Unit quaternions [w, x, y, z] -- one representative orientation
+        per grain, e.g. from :func:`grain_avg_quats`.
+    weights : ndarray, shape (N,), optional
+        Per-grain weight (e.g. pixel/area count, for volume-fraction-
+        correct results). None => uniform weighting (1 per grain).
+    n_peaks : int
+        Maximum number of components to detect. Default 4.
+    bandwidth_deg : float
+        Gaussian KDE bandwidth (degrees). Also used, unchanged, as the
+        non-maximum-suppression radius and the reported halfwidth of
+        every detected component. Must be > 0. Default 10.0.
+    min_weight_frac : float
+        Stop extracting peaks once a candidate's neighbourhood accounts
+        for less than this fraction of total weight. Default 0.01 (1%).
+    match_tolerance_deg : float
+        Maximum disorientation (degrees) to a standard component in
+        *std_components* for auto-naming; beyond this, a peak is
+        labelled generically (``"Component N"``). Default 15.0.
+    std_components : dict or None
+        ``{name: (phi1, Phi, phi2)}`` in degrees, used for auto-naming.
+        None => module-level :data:`FCC_TEXTURE_COMPONENTS`.
+    block_size : int
+        Requested row-block size for the pairwise disorientation matrix
+        (bounds peak memory for large *N*); automatically reduced for
+        large *N* to keep any single transient array under roughly
+        50M elements. Default 200.
+
+    Returns
+    -------
+    result : dict with keys
+        ``'components'`` -- list of dict, ranked by density (largest
+        first), each with keys ``'name'`` (str), ``'phi1'``, ``'Phi'``,
+        ``'phi2'`` (Bunge Euler, degrees), ``'vf_pct'`` (float, percent
+        of total weight), ``'halfwidth_deg'`` (float, == *bandwidth_deg*),
+        ``'n_grains'`` (int, size of the suppressed neighbourhood),
+        ``'quat'`` (ndarray shape (4,), the representative quaternion).
+        ``'bandwidth_deg'`` -- the bandwidth actually used.
+
+    Raises
+    ------
+    ValueError
+        If *bandwidth_deg* <= 0, or all *weights* are zero.
+
+    Examples
+    --------
+    from upxo.xtalphy.crystal_orientation import (
+        grain_avg_quats, detect_texture_component_peaks)
+    gids, q_mean = grain_avg_quats(rg.lfi_ebsd, rg.quat_ebsd)
+    weights = np.bincount(rg.lfi_ebsd.ravel())[gids]
+    result = detect_texture_component_peaks(q_mean, weights=weights, n_peaks=4)
+    for comp in result['components']:
+        print(comp['name'], comp['vf_pct'], comp['halfwidth_deg'])
+    """
+    if bandwidth_deg <= 0:
+        raise ValueError(f"bandwidth_deg must be > 0, got {bandwidth_deg}")
+
+    quat = np.asarray(quat, dtype=np.float64)
+    N = len(quat)
+    if std_components is None:
+        std_components = FCC_TEXTURE_COMPONENTS
+    if N == 0 or n_peaks <= 0:
+        return {'components': [], 'bandwidth_deg': float(bandwidth_deg)}
+
+    if weights is None:
+        weights = np.ones(N, dtype=np.float64)
+    else:
+        weights = np.asarray(weights, dtype=np.float64)
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        raise ValueError("weights sum to <= 0 -- nothing to detect")
+
+    R_all = quat_to_R_batch(quat)                     # (N, 3, 3)
+    S = get_cubic_ops_np()                             # (24, 3, 3)
+    # All 24 symmetric equivalents of every input orientation, computed
+    # once and reused for both the density pass and the per-peak
+    # suppression pass below.
+    S_R = np.einsum('sij,njk->snik', S, R_all)          # (24, N, 3, 3)
+    S_R_flat = S_R.reshape(24 * N, 9)                   # (24N, 9)
+
+    # trace(A @ B.T) == <A, B>_F == dot(flatten(A), flatten(B)) for any
+    # real square matrices -- lets the 24x24 exhaustive symmetry search
+    # (the same one compute_mdf_from_quats/cubic_misorientation use) run
+    # as plain matrix multiplication instead of a (.., 24, 24, 3, 3)
+    # tensor, which is what keeps this tractable for all-pairs instead
+    # of just grain-boundary-neighbour pairs.
+    max_elems = 50_000_000
+    eff_block = max(1, min(block_size, max_elems // (576 * max(N, 1))))
+
+    density = np.zeros(N, dtype=np.float64)
+    for start in range(0, N, eff_block):
+        stop = min(start + eff_block, N)
+        q_block_flat = S_R[:, start:stop, :, :].reshape(24, stop - start, 9)
+        dots = np.einsum('mbk,lk->mbl', q_block_flat, S_R_flat)   # (24, blk, 24N)
+        cos_ang = np.clip((dots - 1.0) * 0.5, -1.0, 1.0)
+        ang = np.arccos(cos_ang).reshape(24, stop - start, 24, N)
+        D_block = np.degrees(ang.min(axis=(0, 2)))                # (blk, N)
+        density[start:stop] = np.exp(-0.5 * (D_block / bandwidth_deg) ** 2) @ weights
+
+    remaining = np.ones(N, dtype=bool)
+    min_weight = min_weight_frac * total_weight
+    components: list[dict] = []
+    for _ in range(n_peaks):
+        if not remaining.any():
+            break
+        cand_density = np.where(remaining, density, -np.inf)
+        i_star = int(np.argmax(cand_density))
+
+        i_flat = S_R[:, i_star, :, :].reshape(24, 9)
+        dots = i_flat @ S_R_flat.T                                # (24, 24N)
+        cos_ang = np.clip((dots - 1.0) * 0.5, -1.0, 1.0)
+        ang = np.arccos(cos_ang).reshape(24, 24, N)
+        D_i = np.degrees(ang.min(axis=(0, 1)))                    # (N,)
+
+        neighborhood = remaining & (D_i <= bandwidth_deg)
+        nb_weight = float(weights[neighborhood].sum())
+        if nb_weight < min_weight:
+            break
+
+        phi1, Phi, phi2 = matrix_to_euler_bunge(R_all[i_star])
+        name, _angle = _match_std_component(
+            (phi1, Phi, phi2), std_components, match_tolerance_deg)
+        if name is None:
+            name = f"Component {len(components) + 1}"
+
+        components.append({
+            'name': name,
+            'phi1': phi1, 'Phi': Phi, 'phi2': phi2,
+            'vf_pct': 100.0 * nb_weight / total_weight,
+            'halfwidth_deg': float(bandwidth_deg),
+            'n_grains': int(neighborhood.sum()),
+            'quat': quat[i_star].copy(),
+        })
+        remaining &= ~neighborhood
+
+    return {'components': components, 'bandwidth_deg': float(bandwidth_deg)}
 
 
 def segregate_csl_pairs(
