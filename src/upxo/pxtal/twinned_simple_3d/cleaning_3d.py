@@ -10,7 +10,7 @@ poorly on large domains.
 """
 
 import numpy as np
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 
 
 class StructureCleaner3D:
@@ -448,4 +448,98 @@ class StructureCleaner3D:
             j = info['jitter_applied_deg']
             note = f'{j:.2f} deg' if j > 0 else 'none (same orientation as parent)'
             lines.append(f'  {new_gid} <- parent {info["parent_gid"]}: {note}')
+        return '\n'.join(lines)
+
+    @classmethod
+    def clean_recursive(
+            cls,
+            lgi: np.ndarray,
+            all_quats: Dict,
+            twin_role: Dict,
+            twin_parent_of: Dict,
+            n_passes: int = 1,
+            upscale_fallback: bool = False,
+            split_jitter_deg: float = 0.0,
+            rng_seed: Optional[int] = None,
+            min_clean_voxels: int = 0,
+            do_spike_removal: bool = True,
+            do_lobe_split: bool = True,
+            verbose: bool = True,
+    ) -> Tuple['StructureCleaner3D', int]:
+        """
+        Repeats :meth:`clean` up to ``n_passes`` times, feeding each
+        pass's cleaned output (lgi_clean/all_quats_clean/twin_role_clean/
+        twin_parent_of_clean) into the next pass's input, stopping early
+        the moment a pass finds nothing left to fix (no spikes removed,
+        no lobes split) -- a single pass can occasionally leave a spike
+        that only appears after that pass's own lobe-splitting step,
+        which a subsequent pass then catches.
+
+        Constructs a fresh ``StructureCleaner3D`` for every pass (same
+        constructor arguments each time). The returned cleaner's
+        ``spike_count``/``n_splits``/``split_events`` are overwritten
+        with the cumulative totals/merged history across every pass
+        actually run, so callers see the full picture regardless of how
+        many passes it took. Merging ``split_events`` dicts across
+        passes is safe -- each pass's lobe-splitting numbering starts
+        from that pass's own already-higher array max (it inherits the
+        previous pass's new grain IDs baked into the array), so passes
+        never reuse the same new grain ID for a different lobe.
+
+        Parameters
+        ----------
+        n_passes : int
+            Maximum number of cleaning passes. 1 reproduces a single
+            ``clean()`` call exactly.
+        Other parameters : forwarded to the constructor on every pass.
+
+        Returns
+        -------
+        (cleaner, n_passes_run) : (StructureCleaner3D, int)
+            cleaner : the final pass's cleaner, with cumulative
+            spike_count/n_splits/split_events across every pass run.
+            n_passes_run : how many passes actually ran (<= n_passes;
+            less if convergence was reached early).
+        """
+        lgi_in, quats_in = lgi, all_quats
+        role_in, parent_in = twin_role, twin_parent_of
+        total_spike_count = 0
+        merged_split_events = {}
+        cleaner = None
+        n_passes_run = 0
+        for it in range(1, n_passes + 1):
+            if n_passes > 1 and verbose:
+                print(f"-- Clean pass {it}/{n_passes} --")
+            cleaner = cls(
+                upscale_fallback=upscale_fallback,
+                split_jitter_deg=split_jitter_deg,
+                rng_seed=rng_seed,
+                min_clean_voxels=min_clean_voxels,
+                do_spike_removal=do_spike_removal,
+                do_lobe_split=do_lobe_split,
+            )
+            cleaner.clean(lgi_in, quats_in, role_in, parent_in)
+            n_passes_run = it
+            total_spike_count += cleaner.spike_count
+            merged_split_events.update(cleaner.split_events)
+
+            if n_passes > 1 and cleaner.spike_count == 0 and cleaner.n_splits == 0:
+                if verbose:
+                    print(f"Converged after {it} pass(es) -- no further "
+                          "spikes or lobe splits found.")
+                break
+
+            lgi_in, quats_in = cleaner.lgi_clean, cleaner.all_quats_clean
+            role_in, parent_in = cleaner.twin_role_clean, cleaner.twin_parent_of_clean
+        else:
+            if n_passes > 1 and verbose:
+                print(f"Reached the requested {n_passes} pass(es) "
+                      "without fully converging.")
+
+        # Overwrite with cumulative totals across every pass actually run
+        # -- see this method's docstring for why merging is safe.
+        cleaner.spike_count = total_spike_count
+        cleaner.n_splits = len(merged_split_events)
+        cleaner.split_events = merged_split_events
+        return cleaner, n_passes_run
         return '\n'.join(lines)

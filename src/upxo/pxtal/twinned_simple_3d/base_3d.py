@@ -5,7 +5,7 @@ Foundation class for the twinned simple 3D grain structure pipeline.
 """
 
 import numpy as np
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Tuple
 
 
 class TwinnedSimple3DBase:
@@ -164,6 +164,184 @@ class TwinnedSimple3DBase:
                 sanv_d[gid] = exposed
             self.mprop['sanv'] = sanv_d
 
+    def compute_aspect_ratio_bbox(self, force_compute: bool = True):
+        """
+        Per-grain 3D aspect ratio from each grain's axis-aligned bounding
+        box: ``max(extent) / min(extent)`` across the three voxel-count
+        axes.  Populates ``self.mprop['aspect_ratio']``
+        (``{grain_id: float}``).
+
+        Bounding-box extents scale identically on every axis for an
+        isotropic (cubic-voxel) structure, so the ratio itself is
+        dimensionless and doesn't need ``voxel_size``.
+
+        This class has no other 3D shape-descriptor beyond volnv/eqdia/
+        sanv -- the only other working 3D aspect-ratio logic anywhere in
+        the codebase lives on the unrelated ``mcgs3_grain_structure``
+        class (``set_mprop_arbbox``); this reimplements the same
+        bounding-box idea directly against ``self.lgi``, using
+        ``scipy.ndimage.find_objects`` for a single vectorised pass over
+        every grain ID at once rather than one ``np.where`` per grain.
+
+        Parameters
+        ----------
+        force_compute : bool
+            Recompute even if already populated.
+        """
+        if not force_compute and 'aspect_ratio' in self.mprop:
+            return
+
+        from scipy import ndimage
+        objects = ndimage.find_objects(self.lgi)
+        ar = {}
+        for gid in self.grain_ids:
+            sl = objects[gid - 1] if 0 <= gid - 1 < len(objects) else None
+            if sl is None:
+                continue
+            extents = [s.stop - s.start for s in sl]
+            ar[gid] = float(max(extents) / min(extents))
+        self.mprop['aspect_ratio'] = ar
+
+    def compute_2d_slice_properties_by_axis(
+            self,
+            selected_props,
+            comparison_axes: Optional[list] = None,
+            n_slices_per_axis: Union[int, dict, None] = None,
+            connectivity_2d: int = 4,
+    ) -> dict:
+        """
+        Same evenly-spaced-cross-section sampling as
+        :meth:`compute_2d_slice_properties`, but returns per-axis,
+        per-individual-slice breakdowns instead of one pooled array per
+        property -- needed by callers that need the individual slice
+        populations, not just their union (e.g. a min/max KDE envelope
+        band showing slice-to-slice spread, alongside the combined/
+        pooled distribution).
+
+        :meth:`compute_2d_slice_properties` is a thin wrapper around this
+        method that concatenates everything back into flat pooled
+        arrays, so both share exactly the same underlying sampling/
+        measurement code -- see that method's docstring for the shared
+        parameter semantics.
+
+        Returns
+        -------
+        dict {axis: {prop_name: [ndarray, ndarray, ...]}}
+            One ndarray per sampled slice position along that axis (in
+            slice-position order), each holding that slice's per-region
+            values for that property (may be an empty array if no
+            regions were found in that slice). Axes not present in
+            comparison_axes are absent from the returned dict.
+        """
+        import cc3d
+        from skimage.measure import regionprops
+        from upxo.gsdataops.grid_ops import section_from_3d
+
+        selected_props = list(selected_props)
+        if comparison_axes is None:
+            comparison_axes = ['x', 'y', 'z']
+        if n_slices_per_axis is None:
+            n_slices_per_axis = 5
+
+        axis_map = {'x': 2, 'y': 1, 'z': 0}
+        vs = self.voxel_size
+        by_axis: dict = {}
+
+        for axis in comparison_axes:
+            axis = axis.lower()
+            if axis not in axis_map:
+                continue
+            ax = axis_map[axis]
+            n_this_axis = (n_slices_per_axis[axis]
+                           if isinstance(n_slices_per_axis, dict) else n_slices_per_axis)
+            domain_size = self.lgi.shape[ax]
+            slice_positions = np.linspace(0, domain_size - 1, n_this_axis, dtype=int)
+
+            per_prop_slices = {p: [] for p in selected_props}
+            for slice_pos in slice_positions:
+                lgi_2d = section_from_3d(self.lgi, axis=ax, location=int(slice_pos))
+                relabelled = cc3d.connected_components(lgi_2d, connectivity=connectivity_2d)
+                slice_vals = {p: [] for p in selected_props}
+                for region in regionprops(relabelled):
+                    if 'area' in selected_props:
+                        slice_vals['area'].append(region.area * vs ** 2)
+                    if 'eqdia' in selected_props:
+                        slice_vals['eqdia'].append(region.equivalent_diameter_area * vs)
+                    if 'perimeter' in selected_props:
+                        slice_vals['perimeter'].append(region.perimeter * vs)
+                    if 'solidity' in selected_props:
+                        slice_vals['solidity'].append(region.solidity)
+                    if 'aspect_ratio' in selected_props:
+                        maj, mn = region.major_axis_length, region.minor_axis_length
+                        if mn > 0:
+                            slice_vals['aspect_ratio'].append(maj / mn)
+                for p in selected_props:
+                    per_prop_slices[p].append(np.asarray(slice_vals[p], dtype=float))
+            by_axis[axis] = per_prop_slices
+
+        return by_axis
+
+    def compute_2d_slice_properties(
+            self,
+            selected_props,
+            comparison_axes: Optional[list] = None,
+            n_slices_per_axis: Union[int, dict, None] = None,
+            connectivity_2d: int = 4,
+    ) -> dict:
+        """
+        Pool 2D grain-morphology properties from evenly-spaced
+        cross-sections of ``self.lgi``, independent of any twin-host
+        allocation (contrast with
+        :meth:`assess_hosting_representativeness_2d`, which reads
+        ``self.host_grain_ids``/``self.eligible_grain_ids`` and requires
+        ``allocate_twin_hosts``/``allocate_twin_hosts_spatial`` to have
+        already run -- this method needs neither).
+
+        Reuses the same evenly-spaced-cross-section / ``cc3d``
+        relabelling skeleton as
+        :meth:`assess_hosting_representativeness_2d`, but pools
+        ``skimage.measure.regionprops``-derived scalar properties per 2D
+        region directly instead of tallying host/non-host ratios. A thin
+        wrapper around :meth:`compute_2d_slice_properties_by_axis` that
+        flattens its per-axis/per-slice breakdown back into one pooled
+        array per property.
+
+        Parameters
+        ----------
+        selected_props : iterable of str
+            Subset of ``{'area', 'eqdia', 'perimeter', 'aspect_ratio',
+            'solidity'}``.
+        comparison_axes : list of str or None
+            Subset of ``['x', 'y', 'z']`` (array axes 2/1/0
+            respectively -- same convention as
+            ``assess_hosting_representativeness_2d``). Defaults to all
+            three.
+        n_slices_per_axis : int or dict or None
+            Evenly-spaced 2D cross-sections sampled per axis -- same
+            int-or-``{'x': int, 'y': int, 'z': int}`` convention as
+            ``assess_hosting_representativeness_2d``'s
+            ``n_comparison_slices``. Defaults to 5 per axis.
+        connectivity_2d : int
+            ``cc3d`` connectivity for the 2D re-labelling (4 or 8).
+
+        Returns
+        -------
+        dict {prop_name: 1-D ndarray}
+            Every sampled region's value for that property, pooled
+            across every sampled slice on every requested axis.
+        """
+        selected_props = list(selected_props)
+        by_axis = self.compute_2d_slice_properties_by_axis(
+            selected_props, comparison_axes, n_slices_per_axis, connectivity_2d)
+
+        pooled = {p: [] for p in selected_props}
+        for per_prop in by_axis.values():
+            for p in selected_props:
+                pooled[p].extend(per_prop[p])
+
+        return {p: (np.concatenate(v) if v else np.asarray([], dtype=float))
+                for p, v in pooled.items()}
+
     def allocate_twin_hosts(
             self,
             target_hosting_fraction: float,
@@ -292,7 +470,11 @@ class TwinnedSimple3DBase:
             host_ranking_volume_weight: float = 0.5,
             mis_fraction: float = 0.80,
             pool_b_size_measure: str = 'vol_vox',
+            pool_b_band_method: str = 'std',
+            pool_b_band_shape: str = 'between',
             pool_b_n_std: float = 1.0,
+            pool_b_percentile_lo: float = 25.0,
+            pool_b_percentile_hi: float = 75.0,
             neighbour_frac: float = 100.0,
             mis_runs: int = 20,
             seed: int = 0,
@@ -310,13 +492,17 @@ class TwinnedSimple3DBase:
         ``maximal_independent_set`` (networkx) is called ``mis_runs`` times
         with different seeds; the largest result is used.
 
-        **Pool B — 20% (1 - mis_fraction) from near-mean-size pairs:**
-        The remaining fraction is drawn from non-MIS grains whose size is
-        within ``size_tolerance`` of the mean eligible grain size AND that
-        have at least one neighbour also in that size band.  This allows
-        physically realistic, limited host-host adjacency between similarly
-        sized grains while keeping it confined to the middle of the size
-        distribution (avoiding abnormally large or small grain pairs).
+        **Pool B — 20% (1 - mis_fraction) from a size band:**
+        The remaining fraction is drawn from non-MIS grains whose size
+        falls in a selected band of the eligible-grain size distribution
+        AND that have at least one neighbour also in that band.  This
+        allows physically realistic, limited host-host adjacency between
+        similarly-positioned-in-size grains, confined to whichever part of
+        the size distribution ``pool_b_band_shape`` selects (by default,
+        the middle -- avoiding abnormally large or small grain pairs --
+        but ``'below'``/``'above'`` deliberately target the small/large
+        tails instead, e.g. to stop large grains being systematically
+        under-hosted).
 
         Parameters
         ----------
@@ -331,32 +517,70 @@ class TwinnedSimple3DBase:
         mis_fraction : float
             Fraction of n_target drawn from the MIS (default 0.80).
         pool_b_size_measure : str
-            Size metric used to define "near mean" for Pool B grains.
+            Size metric used to define the Pool B band.
             Options:
               ``'vol_vox'``  – grain volume in voxels (integer count).
               ``'vol_um3'``  – grain volume in μm³ (vol_vox × voxel_size³).
               ``'eqdia_um'`` – sphere-equivalent diameter in μm
                                = (6 × vol_um3 / π)^(1/3).
+        pool_b_band_method : str
+            How the band's cutoff(s) are computed from the chosen size
+            measure's distribution over eligible grains:
+              ``'std'``        – cutoffs are ``mean ± pool_b_n_std × std``.
+              ``'percentile'`` – cutoffs are ``pool_b_percentile_lo``/
+                                 ``pool_b_percentile_hi`` percentiles of the
+                                 distribution.
+            Default ``'std'`` (unchanged prior behaviour).
+        pool_b_band_shape : str
+            Which side(s) of the distribution the band covers:
+              ``'below'``   – ``(-inf, hi]`` (near-*smaller* grains only).
+              ``'between'`` – ``[lo, hi]`` (near-mean; default, unchanged
+                              prior behaviour).
+              ``'above'``   – ``[lo, +inf)`` (near-*larger* grains only,
+                              uncapped).
+            ``lo``/``hi`` are whichever of the method's two cutoffs apply
+            to the selected shape -- e.g. ``'below'`` only ever uses the
+            upper cutoff, ``'above'`` only the lower one.
         pool_b_n_std : float
-            Half-band width in units of the standard deviation of the
-            chosen size measure.  A grain qualifies for Pool B if
-            |size - mean(size)| ≤ pool_b_n_std × std(size).
-            Default 1.0 (±1 std dev, covers ~68 % of a normal distribution).
+            Used when ``pool_b_band_method == 'std'``. Half-band width (for
+            ``'between'``) or single-sided offset (for ``'below'``/
+            ``'above'``) in units of the standard deviation of the chosen
+            size measure. Default 1.0.
+        pool_b_percentile_lo, pool_b_percentile_hi : float
+            Used when ``pool_b_band_method == 'percentile'`` (0-100).
+            ``pool_b_percentile_lo`` is the band's lower cutoff (used by
+            ``'between'`` and ``'above'``); ``pool_b_percentile_hi`` is the
+            upper cutoff (used by ``'between'`` and ``'below'``). Defaults
+            25.0 / 75.0.
         neighbour_frac : float
-            Percentage (0-100) of Pool B drawn from near-mean-size grains
-            that DO have a near-mean-size neighbour, vs. from near-mean-size
-            grains that do NOT. 100 (default) reproduces the original,
-            neighbour-only behaviour exactly. 0 draws entirely from
-            non-neighbouring near-mean grains. Any other value mixes the two
-            proportionally. Whichever sub-pool is short of its share falls
-            back to drawing the remainder from the other sub-pool (so the
-            total Pool B count is unaffected by this split, only its
-            do/do-not composition is).
+            Percentage (0-100) of Pool B drawn from in-band grains that DO
+            have an in-band neighbour, vs. in-band grains that do NOT. 100
+            (default) reproduces the original, neighbour-only behaviour
+            exactly. 0 draws entirely from non-neighbouring in-band grains.
+            Any other value mixes the two proportionally. Whichever
+            sub-pool is short of its share falls back to drawing the
+            remainder from the other sub-pool (so the total Pool B count is
+            unaffected by this split, only its do/do-not composition is).
         mis_runs : int
             Number of random MIS calls; the largest result is kept.
         seed : int
             Base seed for the MIS random runs.
         """
+        if pool_b_band_method not in ('std', 'percentile'):
+            raise ValueError(
+                f'pool_b_band_method must be "std" or "percentile"; '
+                f'got "{pool_b_band_method}"')
+        if pool_b_band_shape not in ('below', 'between', 'above'):
+            raise ValueError(
+                f'pool_b_band_shape must be "below", "between", or "above"; '
+                f'got "{pool_b_band_shape}"')
+        if (pool_b_band_method == 'percentile' and pool_b_band_shape == 'between'
+                and pool_b_percentile_lo >= pool_b_percentile_hi):
+            raise ValueError(
+                f'pool_b_percentile_lo ({pool_b_percentile_lo}) must be < '
+                f'pool_b_percentile_hi ({pool_b_percentile_hi}) for '
+                f'pool_b_band_shape="between"')
+
         import cc3d
         from collections import defaultdict
         from networkx.algorithms.mis import maximal_independent_set
@@ -387,7 +611,11 @@ class TwinnedSimple3DBase:
                 'mis_seed_base': seed,
                 'pool_b_size_measure': pool_b_size_measure,
                 'pool_b_size_measure_label': None,
+                'pool_b_band_method': pool_b_band_method,
+                'pool_b_band_shape': pool_b_band_shape,
                 'pool_b_tolerance_std': pool_b_n_std,
+                'pool_b_percentile_lo': pool_b_percentile_lo,
+                'pool_b_percentile_hi': pool_b_percentile_hi,
                 'pool_b_mean_size': None,
                 'pool_b_std_size': None,
                 'pool_b_band_lo': None,
@@ -481,17 +709,33 @@ class TwinnedSimple3DBase:
 
         mean_size = float(np.mean(size_vals))
         std_size  = float(np.std(size_vals, ddof=1)) if len(size_vals) > 1 else 0.0
-        band      = pool_b_n_std * std_size
-        lo        = mean_size - band
-        hi        = mean_size + band
-        near_mean = {g for g in eligible_set
-                     if lo <= size_map[g] <= hi}
-        # Split near-mean, not-already-in-pool-A grains into those that DO
-        # have a near-mean-size neighbour and those that do NOT; neighbour_frac
+
+        # lo/hi bound whichever side(s) of the size distribution
+        # pool_b_band_shape selects; 'below'/'above' only ever use one of
+        # the two cutoffs the chosen method produces (the other is +-inf).
+        if pool_b_band_method == 'percentile':
+            p_lo = float(np.percentile(size_vals, pool_b_percentile_lo))
+            p_hi = float(np.percentile(size_vals, pool_b_percentile_hi))
+        else:  # 'std'
+            band = pool_b_n_std * std_size
+            p_lo = mean_size - band
+            p_hi = mean_size + band
+
+        if pool_b_band_shape == 'below':
+            lo, hi = -np.inf, p_hi
+        elif pool_b_band_shape == 'above':
+            lo, hi = p_lo, np.inf
+        else:  # 'between'
+            lo, hi = p_lo, p_hi
+
+        band_members = {g for g in eligible_set
+                        if lo <= size_map[g] <= hi}
+        # Split in-band, not-already-in-pool-A grains into those that DO
+        # have an in-band neighbour and those that do NOT; neighbour_frac
         # controls how much of Pool B is drawn from each, with each side
         # falling back to the other if its own share can't be satisfied.
-        eligible_b   = near_mean - pool_a
-        pool_b_do    = {g for g in eligible_b if any(nb in near_mean for nb in neigh[g])}
+        eligible_b   = band_members - pool_a
+        pool_b_do    = {g for g in eligible_b if any(nb in band_members for nb in neigh[g])}
         pool_b_donot = eligible_b - pool_b_do
         pool_b_candidates = pool_b_do  # kept for the existing summary/print field below
 
@@ -539,7 +783,11 @@ class TwinnedSimple3DBase:
             'mis_seed_base': seed,
             'pool_b_size_measure': pool_b_size_measure,
             'pool_b_size_measure_label': _measure_label,
+            'pool_b_band_method': pool_b_band_method,
+            'pool_b_band_shape': pool_b_band_shape,
             'pool_b_tolerance_std': pool_b_n_std,
+            'pool_b_percentile_lo': pool_b_percentile_lo,
+            'pool_b_percentile_hi': pool_b_percentile_hi,
             'pool_b_mean_size': mean_size,
             'pool_b_std_size': std_size,
             'pool_b_band_lo': lo,
@@ -565,14 +813,16 @@ class TwinnedSimple3DBase:
               f'(from {mis_runs} runs, seed base {seed})')
         print(f'  Pool A (MIS, {mis_fraction:.0%})         : {len(pool_a)} grains')
         print(f'  Pool B size measure        : {_measure_label}')
-        print(f'  Pool B tolerance           : ±{pool_b_n_std} std  '
+        _band_method_desc = (f'{pool_b_percentile_lo:g}/{pool_b_percentile_hi:g} percentile'
+                              if pool_b_band_method == 'percentile' else f'+/-{pool_b_n_std:g} std')
+        print(f'  Pool B band                : {_band_method_desc}, shape={pool_b_band_shape}  '
               f'(mean={mean_size:.3g}  std={std_size:.3g}  '
               f'band [{lo:.3g}, {hi:.3g}])')
         print(f'  Pool B candidates          : {len(pool_b_do)} do-neighbour, '
               f'{len(pool_b_donot)} do-not-neighbour')
         print(f'  Pool B neighbour fraction  : {neighbour_frac:.0f}%  '
               f'({len(picked_do)} from do-neighbour, {len(picked_donot)} from do-not)')
-        print(f'  Pool B (near-mean pairs)   : {len(pool_b)} grains selected')
+        print(f'  Pool B (in-band)           : {len(pool_b)} grains selected')
         print(f'  Total hosts                : {len(host_ids)}')
         print(f'  Non-host grains            : {len(self.non_host_grain_ids)}')
         print(f'  Achieved hosting fraction  : {self.actual_hosting_fraction:.4f}')
@@ -1727,6 +1977,69 @@ class TwinnedSimple3DBase:
         return summary
 
     @classmethod
+    def clean_temporal_slices_recursive(
+            cls,
+            pxt,
+            min_grain_size: int = 4,
+            tslice_keys: Optional[list] = None,
+            do_merge_small: bool = True,
+            do_spike_removal: bool = True,
+            n_passes: int = 1,
+            verbose: bool = True,
+    ) -> Tuple[dict, int]:
+        """
+        Repeats :meth:`clean_temporal_slices` with the same settings up
+        to ``n_passes`` times, stopping early the moment a pass finds
+        nothing left to merge or reassign -- a single pass can leave a
+        grain that only drops below ``min_grain_size`` after that pass's
+        own spike removal, which a subsequent pass then catches.
+
+        Parameters
+        ----------
+        n_passes : int
+            Maximum number of cleaning passes. 1 reproduces a single
+            :meth:`clean_temporal_slices` call exactly.
+        Other parameters : see :meth:`clean_temporal_slices`.
+
+        Returns
+        -------
+        (cumulative, n_passes_run) : (dict, int)
+            cumulative : ``{tslice_key: {'n_small_merged': int,
+            'n_spikes_removed': int}}`` -- summed across every pass run.
+            n_passes_run : how many passes actually ran (<= n_passes;
+            less if convergence was reached early).
+        """
+        if tslice_keys is None:
+            tslice_keys = list(pxt.m)
+
+        cumulative = {t: {'n_small_merged': 0, 'n_spikes_removed': 0} for t in tslice_keys}
+        n_passes_run = 0
+        for it in range(1, n_passes + 1):
+            if n_passes > 1 and verbose:
+                print(f"-- Clean pass {it}/{n_passes} --")
+            pass_summary = cls.clean_temporal_slices(
+                pxt, min_grain_size=min_grain_size, tslice_keys=tslice_keys,
+                do_merge_small=do_merge_small, do_spike_removal=do_spike_removal, verbose=verbose)
+            n_passes_run = it
+            changed = False
+            for t, v in pass_summary.items():
+                cumulative[t]['n_small_merged'] += v['n_small_merged']
+                cumulative[t]['n_spikes_removed'] += v['n_spikes_removed']
+                if v['n_small_merged'] or v['n_spikes_removed']:
+                    changed = True
+            if n_passes > 1 and not changed:
+                if verbose:
+                    print(f"Converged after {it} pass(es) -- no further "
+                          "merges or spikes found.")
+                break
+        else:
+            if n_passes > 1 and verbose:
+                print(f"Reached the {n_passes}-pass limit without "
+                      "full convergence -- some defects may remain.")
+
+        return cumulative, n_passes_run
+
+    @classmethod
     def select_temporal_slice(
             cls,
             rank_info: list,
@@ -1803,3 +2116,39 @@ class TwinnedSimple3DBase:
             f"hosts={hosted}, "
             f"voxel_size={self.voxel_size} {self.units})"
         )
+
+
+def compute_dropped_features(original: 'TwinnedSimple3DBase', current: 'TwinnedSimple3DBase') -> Dict:
+    """
+    Grain-loss sanity check between an untouched ``original`` structure
+    and a ``current`` one derived from it (e.g. by resampling/rescaling)
+    -- which grains present in ``original`` are absent from ``current``,
+    and what fraction of the original structure's volume they accounted
+    for.
+
+    Parameters
+    ----------
+    original, current : TwinnedSimple3DBase
+        ``current.grain_ids`` is compared against ``original.grain_ids``
+        by set difference; ``original.mprop['volnv']`` is computed (via
+        ``char_morphology``) if not already present, to weight dropped
+        grains by voxel count rather than by plain grain count.
+
+    Returns
+    -------
+    dict
+        ``{'dropped_ids': list of int, 'dropped_vol': int,
+        'total_vol': int, 'pct': float}`` -- ``dropped_ids`` sorted
+        ascending; ``pct`` is the dropped volume as a percentage of
+        ``original``'s total grain volume (0.0 if nothing was dropped).
+    """
+    dropped_ids = sorted(set(original.grain_ids) - set(current.grain_ids))
+    if not dropped_ids:
+        return {'dropped_ids': [], 'dropped_vol': 0, 'total_vol': 0, 'pct': 0.0}
+
+    original.char_morphology(volnv=True, eqdia=False, sanv=False, force_compute=True)
+    vols = original.mprop.get('volnv', {})
+    dropped_vol = sum(vols.get(gid, 0) for gid in dropped_ids)
+    total_vol = sum(vols.values()) or 1
+    pct = 100.0 * dropped_vol / total_vol
+    return {'dropped_ids': dropped_ids, 'dropped_vol': dropped_vol, 'total_vol': total_vol, 'pct': pct}

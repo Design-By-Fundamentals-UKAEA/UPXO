@@ -276,7 +276,7 @@ def assemble_ebsd_sgs_comparison_data(
         See :func:`compute_ebsd_mc_comparison_stats`'s parameter docs.
     """
     from upxo.gsdataops.gid_ops import find_neighs2d, find_neighs3d
-    from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
+    from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats, expand_grain_quats_to_voxels
 
     vs = tg.base.voxel_size
 
@@ -302,9 +302,7 @@ def assemble_ebsd_sgs_comparison_data(
         'tvf_2d':          tg.summary()['tvf_2d_ebsd'],
     }
 
-    quat_3d_clean = np.zeros(cleaner.lgi_clean.shape + (4,), dtype=np.float64)
-    for gid, q in cleaner.all_quats_clean.items():
-        quat_3d_clean[cleaner.lgi_clean == gid] = q
+    quat_3d_clean = expand_grain_quats_to_voxels(cleaner.lgi_clean, cleaner.all_quats_clean)
     neigh_post = find_neighs3d(cleaner.lgi_clean.astype(np.int32), conn=6)
     neigh_post_list = {int(g): list(ns) for g, ns in neigh_post.items()}
     mc_mdf_post = compute_mdf_from_quats(
@@ -451,3 +449,84 @@ def compute_sgs_role_property_distributions(
         p: {lv: np.array(vals, dtype=float) for lv, vals in lv_dict.items()}
         for p, lv_dict in values.items()
     }
+
+
+def format_size(n):
+    """Human-readable file size (B/KB/MB/GB/TB)."""
+    n = float(n)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return f"{n:.0f} {unit}" if unit == 'B' else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
+def build_summary_markdown_lines(role_stats, tvf_final_3d, tvf_ebsd_target, comparison_stats=None):
+    """Formats grain-role volume statistics + twin volume fraction summary
+    (and, if given, the full EBSD-vs-MC comparison) as Markdown lines.
+    Pure formatting, no file I/O -- shared by every report writer that
+    needs this summary, so all embed byte-identical content when the
+    same data is available."""
+    import datetime
+    lines = [
+        "# Twinned FCC 3D Pipeline — Final Summary Report",
+        "",
+        f"Generated: {datetime.datetime.now().isoformat(timespec='seconds')}",
+        "",
+        "## Grain Role Volume Statistics",
+        "",
+        "| Role | Count | Mean vol (um3) | Std vol (um3) | Min vol (um3) | Max vol (um3) |",
+        "|---|---|---|---|---|---|",
+    ]
+    for role, info in role_stats.items():
+        lines.append(
+            f"| {role} | {info['count']} | {info['mean_vol_um3']:.2f} | "
+            f"{info['std_vol_um3']:.2f} | {info['min_vol_um3']:.2f} | {info['max_vol_um3']:.2f} |"
+        )
+
+    ratio = (tvf_final_3d / tvf_ebsd_target) if tvf_ebsd_target > 0 else float('nan')
+    lines += [
+        "",
+        "## Twin Volume Fraction Summary",
+        "",
+        "| Quantity | Value |",
+        "|---|---|",
+        f"| EBSD target twin area fraction | {tvf_ebsd_target:.4f} |",
+        f"| Final 3D twin volume fraction (post-cleaning) | {tvf_final_3d:.4f} |",
+        f"| Ratio (final 3D / EBSD target) | {ratio:.2f}x |",
+        "",
+    ]
+
+    if comparison_stats is not None:
+        def _v(x):
+            return "-" if x is None or (isinstance(x, float) and x != x) else f"{x:.3f}"
+
+        lines += ["## EBSD vs Synthetic MC Comparison", ""]
+        for title, section, cols in [
+            ("Misorientation Distribution (deg)", comparison_stats['mdf'],
+             [("EBSD (full)", "ebsd_full"), ("EBSD (merged)", "ebsd_merged"), ("MC (post-twin)", "mc_posttwin")]),
+            ("Twin Lamella Thickness (um)", comparison_stats['twin_thickness'],
+             [("EBSD", "ebsd"), ("MC apparent 2D", "mc_apparent_2d"), ("MC actual 3D", "mc_actual_3d")]),
+            ("Host / Parent Grain Equivalent Diameter (um)", comparison_stats['host_grain_size'],
+             [("EBSD", "ebsd"), ("MC", "mc")]),
+        ]:
+            lines += [f"### {title}", "",
+                      "| Stat | " + " | ".join(c[0] for c in cols) + " |",
+                      "|---|" + "---|" * len(cols)]
+            for stat_key, stat_label in [('mean', 'Mean'), ('std', 'Std'), ('q2', 'Median'), ('n', 'N')]:
+                row_vals = [str(section.get(key, {}).get(stat_key)) if stat_key == 'n'
+                            else _v(section.get(key, {}).get(stat_key)) for _, key in cols]
+                lines.append(f"| {stat_label} | " + " | ".join(row_vals) + " |")
+            lines.append("")
+
+        tvf_cmp = comparison_stats['twin_volume_fraction']
+        lines += [
+            "### Twin Volume / Area Fraction", "",
+            "| Quantity | Value |", "|---|---|",
+            f"| EBSD 2D area fraction | {_v(tvf_cmp['ebsd_2d'])} |",
+            f"| MC 2D slice mean (+/- std) | {_v(tvf_cmp['mc_2d_mean'])} (+/-{_v(tvf_cmp['mc_2d_std'])}) |",
+            f"| MC 3D volume fraction | {_v(tvf_cmp['mc_3d'])} |",
+            "",
+        ]
+
+    return lines
