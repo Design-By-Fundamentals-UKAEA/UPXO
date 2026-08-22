@@ -904,6 +904,8 @@ class PoleFigure:
         clabel: bool = False,
         overlay_scatter: bool = False,
         scatter_color_by: str = 'ipf',
+        scatter_color_data: Optional[Union[np.ndarray, Dict]] = None,
+        scatter_cmap: str = 'viridis',
         scatter_ipf_direction: np.ndarray = np.array([0, 0, 1]),
         scatter_hemisphere: str = 'both_mapped',
         cmap: str = 'viridis',
@@ -937,6 +939,13 @@ class PoleFigure:
         hemisphere parameter. The density surface itself always folds both
         hemispheres onto the upper one (antipodal crystallographic symmetry),
         so this only affects which points the overlay draws.
+
+        scatter_color_by='size' colors the overlay markers by a continuous
+        per-grain value (scatter_color_data, a dict mapping GID -> value,
+        same convention as plot_scatter's own color_by='size') and adds a
+        SECOND colorbar labelled for that value, alongside the density
+        surface's own MUD colorbar -- so a hybrid plot can show both scales
+        at once instead of only the density's.
 
         x_label / y_label / z_label : optional labels for the sample X/Y/Z
         directions, same semantics as plot_scatter's parameters of the same
@@ -1030,6 +1039,20 @@ class PoleFigure:
                 upper_mask = z_proj >= 0
                 colors = np.where(upper_mask, 'blue', 'red')
                 ax.scatter(X, Y, c=colors, **s_args)
+            elif scatter_color_by == 'size':
+                if not isinstance(scatter_color_data, dict):
+                    raise ValueError(
+                        "scatter_color_data must be a dict mapping GID -> size/voxel count "
+                        "for scatter_color_by='size'")
+                if self.gids is None:
+                    raise ValueError("gids must be provided to PoleFigure on init for scatter_color_by='size'")
+                point_gids = self.gids[ori_indices]
+                sizes = np.array([scatter_color_data.get(int(gid), 0.0) for gid in point_gids])
+                im2 = ax.scatter(X, Y, c=sizes, cmap=scatter_cmap, **s_args)
+                # pad is wider than the MUD colorbar's own 0.04 so the two
+                # colorbars sit side by side instead of overlapping.
+                ax.figure.colorbar(im2, ax=ax, label='Marker Colour (Grain Size, voxel count)',
+                                   fraction=0.046, pad=0.14)
             else:
                 ax.scatter(X, Y, c='black', **s_args)
 
