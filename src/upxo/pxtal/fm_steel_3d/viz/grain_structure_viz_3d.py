@@ -312,6 +312,57 @@ class GrainStructureViz3D:
             # after the main GUI window is closed.
             pl.close()
 
+    def lfi_to_polydata_compare(self, lfi_left, lfi_right, scalar_array_left=None,
+                                scalar_array_right=None, voxel_size_left=1.0,
+                                voxel_size_right=1.0, cmap='tab20', title_left='',
+                                title_right='', scalar_name='value',
+                                threshold_min=0.5, show_edges=True):
+        """Two voxel grids side by side in ONE window, camera-linked so
+        rotating either panel rotates both -- the compare counterpart to
+        lfi_to_polydata (which opens one independent full-window plot)."""
+        if scalar_array_left is None:
+            scalar_array_left = lfi_left
+        if scalar_array_right is None:
+            scalar_array_right = lfi_right
+
+        def _mesh(lfi, scalar_array, voxel_size):
+            nx, ny, nz = lfi.shape
+            grid = pv.ImageData()
+            grid.dimensions = (nx + 1, ny + 1, nz + 1)
+            grid.spacing = (voxel_size, voxel_size, voxel_size)
+            grid.origin = (0.0, 0.0, 0.0)
+            grid.cell_data[scalar_name] = scalar_array.flatten(order='F').astype(float)
+            return grid.threshold(value=threshold_min, scalars=scalar_name).extract_surface()
+
+        mesh_left = _mesh(lfi_left, scalar_array_left, voxel_size_left)
+        mesh_right = _mesh(lfi_right, scalar_array_right, voxel_size_right)
+
+        pl = pv.Plotter(shape=(1, 2), window_size=(1500, 750))
+        mesh_kwargs = dict(scalars=scalar_name, cmap=cmap, show_edges=show_edges,
+                           edge_color='black', line_width=0.5, show_scalar_bar=True,
+                           scalar_bar_args={'title': scalar_name, 'n_labels': 5})
+
+        pl.subplot(0, 0)
+        pl.add_mesh(mesh_left, **mesh_kwargs)
+        pl.add_text(title_left, font_size=10)
+        pl.set_background('white')
+        pl.show_axes()
+
+        pl.subplot(0, 1)
+        pl.add_mesh(mesh_right, **mesh_kwargs)
+        pl.add_text(title_right, font_size=10)
+        pl.set_background('white')
+        pl.show_axes()
+
+        pl.link_views()
+        try:
+            pl.show()
+        finally:
+            # Explicit close (rather than leaving it to GC/interpreter shutdown)
+            # so this native VTK render window can't leave the process hanging
+            # after the main GUI window is closed.
+            pl.close()
+
     def feature_fid_to_polydata(self, lgi_shape, iso_grain_map, block_fid_map,
                                 voxel_size=1.0,
                                 iso_cmap='cool', block_cmap='hot',
