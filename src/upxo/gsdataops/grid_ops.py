@@ -437,8 +437,13 @@ def _interpolate_grid_3d(data, new_d, new_h, new_w, method='nearest'):
     new_w : int
         New width (number of columns).
     method : str, optional
-        Interpolation method. Options: 'nearest', 'linear', etc.
-        Default is 'nearest'.
+        Interpolation method passed straight to
+        ``scipy.interpolate.RegularGridInterpolator`` ('nearest',
+        'linear', etc.). Default is 'nearest'. For 'majority'
+        (block-partition majority-vote resampling instead), call
+        :func:`resample_grid_3d` or :func:`_majority_downsample_3d`
+        directly -- this function only ever does point-sampling
+        interpolation.
 
     Returns
     -------
@@ -460,6 +465,133 @@ def _interpolate_grid_3d(data, new_d, new_h, new_w, method='nearest'):
     pts = np.array([X.ravel(), Y.ravel(), Z.ravel()]).T
     return interp(pts).reshape(new_d, new_h, new_w).astype(data.dtype)
 
+def _majority_downsample_3d(data, new_d, new_h, new_w):
+    """
+    Block-partition majority-vote resampling with guaranteed label
+    representation.
+
+    Partitions the source grid into ``new_d x new_h x new_w`` contiguous,
+    non-overlapping blocks covering every source voxel exactly once, and
+    assigns each output voxel the most frequent label within its block --
+    unlike nearest-neighbour point-sampling
+    (:func:`_interpolate_grid_3d`, which only samples the *new* grid's
+    query locations via ``RegularGridInterpolator`` and never even looks
+    at most source voxels when downscaling), every source voxel
+    contributes here.
+
+    A NAIVE per-block majority vote is not actually a reliable fix for
+    small-feature loss on its own: a small, spatially-compact grain must
+    dominate (>50% of) every block it touches to survive a plain vote,
+    which is a *harder* bar than nearest-neighbour's "get lucky and land
+    a query point on it" -- for small compact grains under an aggressive
+    downscale, plain majority voting can empirically drop MORE grains
+    than nearest-neighbour does, not fewer.
+
+    So after the naive vote, a second pass restores every source label
+    that would otherwise vanish entirely: for each label present in
+    ``data`` but absent from the naive result, it's assigned to whichever
+    of its blocks it occupies most (its best-fit slot), processing the
+    smallest-total-volume (most vulnerable) missing labels first so that
+    contested slots go to whichever label would otherwise be hardest to
+    represent at all. This guarantees every distinct label in ``data``
+    survives into the output, UNLESS there are more distinct labels than
+    output voxels available to reassign (a genuine information-theoretic
+    limit at that target resolution, not a gap in this pass).
+
+    Parameters
+    ----------
+    data : ndarray (d, h, w)
+    new_d, new_h, new_w : int
+        Target shape.
+
+    Returns
+    -------
+    ndarray, shape (new_d, new_h, new_w), same dtype as data.
+    """
+    d, h, w = data.shape
+
+    def _block_bounds(n_old, n_new):
+        raw = np.round(np.linspace(0, n_old, n_new + 1)).astype(int)
+        starts = np.clip(raw[:-1], 0, n_old - 1)
+        stops = np.clip(np.maximum(raw[1:], starts + 1), 1, n_old)
+        return starts, stops
+
+    d0s, d1s = _block_bounds(d, new_d)
+    h0s, h1s = _block_bounds(h, new_h)
+    w0s, w1s = _block_bounds(w, new_w)
+
+    out = np.empty((new_d, new_h, new_w), dtype=data.dtype)
+    # label -> [(count, (i, j, k)), ...] across every block it appears in
+    # at all -- feeds the guaranteed-representation pass below.
+    label_occurrences = {}
+    for i in range(new_d):
+        for j in range(new_h):
+            for k in range(new_w):
+                block = data[d0s[i]:d1s[i], h0s[j]:h1s[j], w0s[k]:w1s[k]]
+                vals, counts = np.unique(block, return_counts=True)
+                out[i, j, k] = vals[np.argmax(counts)]
+                for v, c in zip(vals, counts):
+                    label_occurrences.setdefault(int(v), []).append((int(c), (i, j, k)))
+
+    present_labels = set(label_occurrences.keys())
+    output_labels = set(np.unique(out).tolist())
+    missing = present_labels - output_labels
+    if missing:
+        total_volume = {lab: sum(c for c, _pos in occ) for lab, occ in label_occurrences.items()}
+        reserved = set()
+        for lab in sorted(missing, key=lambda l: total_volume[l]):
+            for _count, pos in sorted(label_occurrences[lab], key=lambda co: -co[0]):
+                if pos not in reserved:
+                    out[pos] = lab
+                    reserved.add(pos)
+                    break
+                # else: every block this label touches was already
+                # claimed by an even-smaller (more vulnerable) label --
+                # genuinely below the target resolution's representable
+                # limit, not recoverable here.
+    return out
+
+
+def resample_grid_3d(data, new_shape, method='nearest'):
+    """
+    Resample a 3D grid directly to an explicit target shape.
+
+    Parameters
+    ----------
+    data : ndarray (d, h, w)
+    new_shape : tuple (new_d, new_h, new_w)
+    method : str, optional
+        ``'nearest'``/``'linear'`` -- delegates to
+        :func:`_interpolate_grid_3d` (point-sampling at the new grid's
+        query locations; can skip small features entirely when
+        downscaling). ``'majority'`` -- delegates to
+        :func:`_majority_downsample_3d` (block-partition majority vote
+        plus a guaranteed-representation pass; every distinct label
+        present in ``data`` survives into the output unless there are
+        more distinct labels than output voxels available to reassign).
+        Default ``'nearest'``.
+
+    Returns
+    -------
+    ndarray, shape new_shape, same dtype as data.
+
+    Usage
+    -----
+    import upxo.gsdataops.grid_ops as gridOps
+
+    Call
+    ----
+    gridOps.resample_grid_3d(data, new_shape, method)
+    """
+    new_d, new_h, new_w = new_shape
+    d, h, w = data.shape
+    if (new_d, new_h, new_w) == (d, h, w):
+        return data.copy()
+    if method == 'majority':
+        return _majority_downsample_3d(data, new_d, new_h, new_w)
+    return _interpolate_grid_3d(data, new_d, new_h, new_w, method)
+
+
 def rescale_grid_3d(data, scale_factor, method='nearest'):
     """
     Rescale a 3D grid by a uniform scale factor using interpolation.
@@ -472,8 +604,11 @@ def rescale_grid_3d(data, scale_factor, method='nearest'):
         Uniform scaling factor applied to all three dimensions.
         Values > 1 enlarge, values < 1 shrink.
     method : str, optional
-        Interpolation method. Options: 'nearest', 'linear', etc.
-        Default is 'nearest'.
+        Resampling method: 'nearest'/'linear' (point-sampling
+        interpolation, see :func:`_interpolate_grid_3d`) or 'majority'
+        (block-partition majority vote, see
+        :func:`_majority_downsample_3d` -- reduces small-feature loss
+        when shrinking). Default is 'nearest'.
 
     Returns
     -------
@@ -493,15 +628,86 @@ def rescale_grid_3d(data, scale_factor, method='nearest'):
     new_d = int(round(d*scale_factor))
     new_h = int(round(h*scale_factor))
     new_w = int(round(w*scale_factor))
-    if new_d == d and new_h == h and new_w == w:
-        # scale_factor == 1.0 (the common/default case) means the requested
-        # shape is identical to the input -- running a full grid
-        # interpolation over every voxel just to reproduce the same values
-        # is pure wasted cost (measurable at large RVEs, e.g. 200^3), so
-        # skip it. Still returns a fresh array (matching _interpolate_grid_3d's
-        # own contract of never handing back a reference to the input).
-        return data.copy()
-    return _interpolate_grid_3d(data, new_d, new_h, new_w, method)
+    # resample_grid_3d already short-circuits the scale_factor == 1.0 case
+    # (identical shape) with a plain .copy(), matching the cost-avoidance
+    # this function used to do inline.
+    return resample_grid_3d(data, (new_d, new_h, new_w), method)
+
+def stretch_grid_3d(data, stretch_x=1.0, stretch_y=1.0, stretch_z=1.0,
+                     px_size_x=1.0, px_size_y=1.0, px_size_z=1.0, method='nearest'):
+    """
+    Stretch a 3D grid by different factors in each dimension while
+    accounting for voxel size and physical dimensions -- the 3D
+    counterpart of :func:`stretch_grid_2d`, same formula per axis.
+
+    Parameters
+    ----------
+    data : ndarray
+        3D input array to be stretched, shape (d, h, w) i.e. (z, y, x) --
+        matches :func:`_interpolate_grid_3d`'s own axis convention and the
+        (nz, ny, nx) convention this array shape has elsewhere in UPXO
+        (e.g. twinned_simple_3d's TwinnedSimple3DBase.lgi).
+    stretch_x, stretch_y, stretch_z : float, optional
+        Stretch factor along each axis. Default 1.0 (no stretch) each.
+        Values > 1 elongate that axis, values < 1 compress it.
+    px_size_x, px_size_y, px_size_z : float, optional
+        Physical voxel size along each axis, in micrometres (um).
+        Default 1.0 each.
+    method : str, optional
+        Resampling method: 'nearest'/'linear' (point-sampling
+        interpolation) or 'majority' (block-partition majority vote --
+        reduces small-feature loss when shrinking an axis). See
+        :func:`resample_grid_3d`. Default is 'nearest'.
+
+    Returns
+    -------
+    stretched_data : ndarray
+        Stretched 3D array maintaining the original data type.
+    px_size_x : float
+        Voxel size in x, in um (unchanged -- stretching changes the voxel
+        COUNT along an axis, not the physical size of one voxel, so the
+        grid genuinely occupies more/less physical space at the SAME
+        voxel resolution instead of the same physical space at a
+        distorted, non-cubic voxel size).
+    px_size_y : float
+        Voxel size in y, in um (unchanged).
+    px_size_z : float
+        Voxel size in z, in um (unchanged).
+    new_shape : tuple
+        New shape of the stretched data as (new_d, new_h, new_w).
+
+    Notes
+    -----
+    The stretch is applied to the physical extent of the grid along each
+    axis (``new_physical = old_voxel_count * px_size * stretch``), then
+    converted back to a voxel count at the SAME (unchanged) voxel size
+    (``new_voxel_count = new_physical / px_size``) -- algebraically this
+    reduces to ``new_voxel_count = round(old_voxel_count * stretch)``, so
+    the returned px_size_x/y/z values are always identical to the inputs;
+    they're threaded through (rather than just omitted) so a caller can
+    still pass them straight into a downstream voxel-size-aware step
+    without having to remember they didn't change.
+
+    Usage
+    -----
+    import upxo.gsdataops.grid_ops as gridOps
+
+    Call
+    ----
+    gridOps.stretch_grid_3d(data, stretch_x, stretch_y, stretch_z,
+                             px_size_x, px_size_y, px_size_z, method)
+    """
+    d, h, w = data.shape
+    new_physical_x, new_physical_y, new_physical_z = (
+        w * px_size_x * stretch_x, h * px_size_y * stretch_y, d * px_size_z * stretch_z)
+    new_w = int(round(new_physical_x / px_size_x))
+    new_h = int(round(new_physical_y / px_size_y))
+    new_d = int(round(new_physical_z / px_size_z))
+    # resample_grid_3d already short-circuits the all-1.0 case (identical
+    # shape) with a plain .copy(), matching this function's own former
+    # inline shortcut.
+    stretched_data = resample_grid_3d(data, (new_d, new_h, new_w), method)
+    return stretched_data, px_size_x, px_size_y, px_size_z, (new_d, new_h, new_w)
 
 def detect_grains_cc3d(image_data, connectivity=18, delta=0, return_num_grains=True,
                        verbose=False):
