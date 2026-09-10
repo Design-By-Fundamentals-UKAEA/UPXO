@@ -1447,6 +1447,293 @@ def test_pole_figure_overlays_are_parent_scoped_not_whole_population(app):
         f"parents of the plotted blocks -- overlay is not properly parent-scoped")
 
 
+def _build_full_hierarchy(seed=1, n=16, n_seeds=18):
+    """Builds a real fm_base -> fm_pag -> fm_blk -> fm_ori -> fm_sub chain
+    (same recipe used by the other tests that need the full hierarchy,
+    e.g. around Visualization Settings' subblock-mode test) -- used here
+    so raw_export.py's per-level collection/export logic is exercised
+    against genuine PAG/Block/Orientation/Sub-block data, not just fm_base."""
+    from upxo.pxtal.fm_steel_3d.base_3d import FMSteel3DBase
+
+    lfi = _voronoi_lfi_for_pag_tests(n=n, n_seeds=n_seeds, seed=seed)
+    fm_base = FMSteel3DBase.from_lfi(lfi, physical_dimensions=(float(n),) * 3, voxel_size=1.0,
+                                     units="microns", connectivity=6, min_grain_nvoxels=4,
+                                     random_seed=42)
+    fm_pag = fm_base.generate_pag_clusters(
+        pag_size_distribution={"sizes": [3, 4], "probs": [0.7, 0.3]},
+        pag_grain_fraction=1.0, random_seed=42)
+    fm_pag.assign_pag_orientations(pag_ori_mode="random", random_seed=42)
+    fm_blk = fm_pag.generate_blocks(block_thickness_range=(2.0, 5.0), random_seed=42)
+    fm_ori = fm_blk.assign_orientations(random_seed=42)
+    fm_sub = fm_ori.generate_subblocks(subblock_thickness_range_um=(0.5, 1.5), random_seed=42)
+    return fm_base, fm_pag, fm_blk, fm_ori, fm_sub
+
+
+def test_raw_export_core_level_availability_and_collection(app):
+    """raw_export.py (core module, not gui/pages_*.py per the project's
+    computation-placement convention): level_availability reports which
+    of PAG/Packet/Block/Sub-block have been reached yet (Packet and
+    Block both key off fm_with_blocks -- a packet IS a grain at the
+    block hierarchy's own scale); collect_level_data returns that
+    level's own orientations dict plus its other, non-orientation
+    hierarchy fields (always including "lgi", a 3D array the base
+    structure's shape with every voxel stamped by that level's own ID,
+    via feature_props_3d's per-level LGI builders), with Packet's
+    orientation genuinely DERIVED (mean of its blocks' orientations)
+    rather than stored anywhere directly."""
+    import numpy as np
+    from upxo.pxtal.fm_steel_3d.raw_export import level_availability, collect_level_data
+
+    class _FakeApp:
+        pass
+    fake_app = _FakeApp()
+    fake_app._fm_base = None
+    fake_app._fm_with_pags = None
+    fake_app._fm_with_blocks = None
+    fake_app._fm_with_orientations = None
+    fake_app._fm_with_subblocks = None
+
+    assert level_availability(fake_app) == {"pag": False, "pck": False, "blk": False, "sblk": False}
+    for key in ("pag", "pck", "blk", "sblk"):
+        ori, fields = collect_level_data(fake_app, key)
+        assert ori is None and fields == {}
+
+    fm_base, fm_pag, fm_blk, fm_ori, fm_sub = _build_full_hierarchy(seed=1)
+    fake_app._fm_base = fm_base
+    fake_app._fm_with_pags = fm_pag
+    fake_app._fm_with_blocks = fm_blk
+    fake_app._fm_with_orientations = fm_ori
+    fake_app._fm_with_subblocks = fm_sub
+
+    assert level_availability(fake_app) == {"pag": True, "pck": True, "blk": True, "sblk": True}
+
+    pag_ori, pag_fields = collect_level_data(fake_app, "pag")
+    assert pag_ori == fm_pag.pag_orientations
+    assert "clusters_dict" in pag_fields and "pag_orientations" not in pag_fields
+    assert isinstance(pag_fields["lgi"], np.ndarray) and pag_fields["lgi"].shape == fm_base.lgi.shape
+
+    pck_ori, pck_fields = collect_level_data(fake_app, "pck")
+    assert pck_fields["grain_to_blocks_map"] == fm_blk.grain_to_blocks_map
+    from upxo.pxtal.fm_steel_3d.orientation_mean_3d import compute_packet_mean_orientations
+    assert pck_ori == compute_packet_mean_orientations(
+        fm_blk.grain_to_blocks_map, fm_ori.block_orientations)
+    # Packets ARE grains at the block hierarchy's own scale -- its "lgi"
+    # is literally the base grain LGI (see _build_packet_lgi's docstring).
+    assert np.array_equal(pck_fields["lgi"], fm_base.lgi)
+
+    blk_ori, blk_fields = collect_level_data(fake_app, "blk")
+    assert blk_ori == fm_ori.block_orientations
+    assert "all_blocks" in blk_fields and "block_orientations" not in blk_fields
+    assert isinstance(blk_fields["lgi"], np.ndarray) and blk_fields["lgi"].shape == fm_base.lgi.shape
+    # Block IDs are strings (all_blocks' keys) -- lgi_id_to_int/int_to_id
+    # are what let the integer-labeled array map back to them.
+    assert set(blk_fields["lgi_id_to_int"].keys()) == set(fm_blk.all_blocks.keys())
+    assert blk_fields["lgi_int_to_id"][blk_fields["lgi_id_to_int"][next(iter(fm_blk.all_blocks))]] \
+        == next(iter(fm_blk.all_blocks))
+
+    sblk_ori, sblk_fields = collect_level_data(fake_app, "sblk")
+    assert sblk_ori == fm_sub.subblock_orientations
+    assert "block_to_subblocks_map" in sblk_fields and "subblock_orientations" not in sblk_fields
+    assert isinstance(sblk_fields["lgi"], np.ndarray) and sblk_fields["lgi"].shape == fm_base.lgi.shape
+    assert set(sblk_fields["lgi_id_to_int"].keys()) == set(fm_sub.all_subblocks.keys())
+
+
+def test_raw_export_core_write_per_level_orientation_files(app, tmp_path):
+    """export_raw_data: fm_base is always included; nothing to export
+    yet raises ValueError; with levels=None every currently-available
+    level is included by default; each selected level with orientation
+    data gets its own dedicated "<prefix>_orientations.pkl" (using a
+    caller-supplied prefix override), separate from the shared
+    raw_export.pkl bundle that holds everything (arrays + non-array
+    hierarchy metadata) under level-prefixed keys; every level also
+    contributes its own "<prefix>_lgi" array, so .npy/.npz end up with
+    base_lgi PLUS one <prefix>_lgi per selected, available level."""
+    import pickle
+    import numpy as np
+    from upxo.pxtal.fm_steel_3d.raw_export import export_raw_data
+
+    class _FakeApp:
+        pass
+    fake_app = _FakeApp()
+    fake_app._fm_base = None
+    fake_app._fm_with_pags = None
+    fake_app._fm_with_blocks = None
+    fake_app._fm_with_orientations = None
+    fake_app._fm_with_subblocks = None
+
+    try:
+        export_raw_data(fake_app, tmp_path / "empty", ["npy"])
+        assert False, "expected ValueError with no pipeline data"
+    except ValueError:
+        pass
+
+    fm_base, fm_pag, fm_blk, fm_ori, fm_sub = _build_full_hierarchy(seed=2)
+    fake_app._fm_base = fm_base
+    fake_app._fm_with_pags = fm_pag
+    fake_app._fm_with_blocks = fm_blk
+    fake_app._fm_with_orientations = fm_ori
+    fake_app._fm_with_subblocks = fm_sub
+
+    # levels=None -> every available level included, default prefixes.
+    out_dir = tmp_path / "raw_out_all"
+    result = export_raw_data(fake_app, out_dir, ["npy", "pkl", "npz"])
+    assert set(result["levels_exported"]) == {"pag", "pck", "blk", "sblk"}
+    assert result["levels_skipped"] == {}
+    for fname in ("base_lgi.npy", "raw_export.npz", "raw_export.pkl",
+                 "pag_lgi.npy", "pck_lgi.npy", "blk_lgi.npy", "sblk_lgi.npy",
+                 "pag_orientations.pkl", "pck_orientations.pkl",
+                 "blk_orientations.pkl", "sblk_orientations.pkl"):
+        assert (out_dir / fname).exists(), fname
+    with open(out_dir / "pag_orientations.pkl", "rb") as f:
+        assert pickle.load(f) == fm_pag.pag_orientations
+    with open(out_dir / "raw_export.pkl", "rb") as f:
+        bundle = pickle.load(f)
+    assert "pag_orientations" not in bundle  # lives only in its own dedicated file
+    assert "pag_clusters_dict" in bundle
+    assert np.array_equal(np.load(out_dir / "blk_lgi.npy"), bundle["blk_lgi"])
+    npz = np.load(out_dir / "raw_export.npz")
+    assert set(npz.files) == {"base_lgi", "pag_lgi", "pck_lgi", "blk_lgi", "sblk_lgi"}
+
+    # Explicit subset + custom prefix -> only that level's dedicated
+    # files, named with the override, appear; unselected levels are
+    # absent entirely (not even reported as "skipped", since they were
+    # never requested in the first place).
+    out_dir2 = tmp_path / "raw_out_subset"
+    result2 = export_raw_data(fake_app, out_dir2, ["pkl", "npy"], levels=["blk"],
+                              prefixes={"blk": "myblock"})
+    assert result2["levels_exported"] == ["blk"]
+    assert (out_dir2 / "myblock_orientations.pkl").exists()
+    assert (out_dir2 / "myblock_lgi.npy").exists()
+    assert not (out_dir2 / "blk_orientations.pkl").exists()
+    assert not (out_dir2 / "blk_lgi.npy").exists()
+    with open(out_dir2 / "raw_export.pkl", "rb") as f:
+        bundle2 = pickle.load(f)
+    assert "myblock_all_blocks" in bundle2 and "myblock_lgi" in bundle2
+    assert not any(k.startswith("pag_") or k.startswith("pck_") or k.startswith("sblk_")
+                  for k in bundle2)
+
+    # Requesting an unavailable level reports it as skipped, not an error.
+    fake_app2 = _FakeApp()
+    fake_app2._fm_base = fm_base
+    fake_app2._fm_with_pags = None
+    fake_app2._fm_with_blocks = None
+    fake_app2._fm_with_orientations = None
+    fake_app2._fm_with_subblocks = None
+    out_dir3 = tmp_path / "raw_out_skip"
+    result3 = export_raw_data(fake_app2, out_dir3, ["pkl"], levels=["pag"])
+    assert result3["levels_exported"] == []
+    assert result3["levels_skipped"] == {"pag": "not generated yet"}
+
+
+def test_raw_data_export_page_ui_levels_and_routing(app, monkeypatch, tmp_path):
+    """New "Raw data exports" page (sidebar section right before "Mesh
+    Export", between Pole Figures and Mesh Settings in next_page()/
+    back_page()): output-directory field defaults to shared_state's
+    raw_dir, all three format checkboxes default checked, [2] Levels to
+    Export shows PAG/Packet/Block/Sub-block each with its own prefix
+    field -- disabled ("not yet generated") when only fm_base exists,
+    enabled and exportable once the full hierarchy exists -- and an
+    empty prefix on a selected level is a caught validation error."""
+    from upxo.pxtal.fm_steel_3d.gui.pages import (
+        PoleFigurePage, RawDataExportPage, MeshPage,
+    )
+
+    fm_base, fm_pag, fm_blk, fm_ori, fm_sub = _build_full_hierarchy(seed=3)
+    app._fm_base = fm_base
+    app._fm_with_pags = None
+    app._fm_with_blocks = None
+    app._fm_with_orientations = None
+    app._fm_with_subblocks = None
+
+    sections = dict(app._section_sequence())
+    assert "Raw data exports" in sections
+    assert [lbl for lbl, _, _ in sections["Raw data exports"]] == ["Raw data exports"]
+    keys = list(sections.keys())
+    assert keys.index("Raw data exports") == keys.index("Mesh Export") - 1
+
+    # Only fm_base exists yet -> every level checkbox disabled.
+    app.show_page_by_class(RawDataExportPage)
+    app.update_idletasks()
+    page = app.current_frame
+    assert set(page._format_vars.keys()) == {"npy", "pkl", "npz"}
+    assert all(v.get() for v in page._format_vars.values())
+    assert set(page._level_enabled_vars.keys()) == {"pag", "pck", "blk", "sblk"}
+    assert not any(v.get() for v in page._level_enabled_vars.values())
+    assert page._level_availability == {"pag": False, "pck": False, "blk": False, "sblk": False}
+
+    # Full hierarchy now exists -> revisiting the page (rebuilt fresh, per
+    # this codebase's navigation convention) shows every level available
+    # and checked by default, default prefixes pag/pck/blk/sblk.
+    app._fm_with_pags = fm_pag
+    app._fm_with_blocks = fm_blk
+    app._fm_with_orientations = fm_ori
+    app._fm_with_subblocks = fm_sub
+    app.show_page_by_class(RawDataExportPage)
+    app.update_idletasks()
+    page = app.current_frame
+    assert page._level_availability == {"pag": True, "pck": True, "blk": True, "sblk": True}
+    assert all(v.get() for v in page._level_enabled_vars.values())
+    assert {k: v.get() for k, v in page._level_prefix_vars.items()} == {
+        "pag": "pag", "pck": "pck", "blk": "blk", "sblk": "sblk"}
+
+    page._level_prefix_vars["pag"].set("myPAG")
+    out_dir = tmp_path / "raw_page_out"
+    page._out_dir_var.set(str(out_dir))
+    page._on_export()
+    assert "Exported" in page._export_status_lbl.cget("text")
+    assert (out_dir / "myPAG_orientations.pkl").exists()
+    assert (out_dir / "pck_orientations.pkl").exists()
+    assert (out_dir / "blk_orientations.pkl").exists()
+    assert (out_dir / "sblk_orientations.pkl").exists()
+
+    # Empty prefix on a still-selected level is a caught validation error.
+    import tkinter.messagebox as tkmb
+    errors = []
+    monkeypatch.setattr(tkmb, "showerror", lambda title, msg: errors.append((title, msg)))
+    page._level_prefix_vars["blk"].set("")
+    page._on_export()
+    assert len(errors) == 1 and "prefix" in errors[0][1].lower()
+    errors.clear()
+
+    # No formats selected is still a caught validation error, not a crash.
+    page._level_prefix_vars["blk"].set("blk")
+    for var in page._format_vars.values():
+        var.set(False)
+    page._on_export()
+    assert len(errors) == 1 and "format" in errors[0][1].lower()
+
+    # Routing: mocked current_frame so no real pages are constructed.
+    from unittest.mock import MagicMock
+
+    routed_to = []
+    def fake_show(cls, **kw):
+        routed_to.append(cls)
+    monkeypatch.setattr(app, "show_page_by_class", fake_show)
+
+    def set_frame(cls):
+        m = MagicMock()
+        m.validate_inputs.return_value = True
+        m.save_state.return_value = None
+        monkeypatch.setattr(app, "current_frame", m)
+        app.current_frame.__class__ = cls
+
+    set_frame(PoleFigurePage)
+    app.next_page()
+    assert routed_to[-1] is RawDataExportPage
+
+    set_frame(RawDataExportPage)
+    app.next_page()
+    assert routed_to[-1] is MeshPage
+
+    set_frame(MeshPage)
+    app.back_page()
+    assert routed_to[-1] is RawDataExportPage
+
+    set_frame(RawDataExportPage)
+    app.back_page()
+    assert routed_to[-1] is PoleFigurePage
+
+
 def test_pole_figure_colorbar_margin_hybrid_dual_colorbar_and_overlay_color(app):
     """Three related pole-figure fixes:
     1. The 4 per-level sections' Axes previously filled the whole figure
