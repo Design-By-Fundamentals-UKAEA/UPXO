@@ -1580,6 +1580,64 @@ def identify_parent_grains(
     return result
 
 
+def compute_grain_csl_participation(parent_info: dict) -> dict:
+    """
+    For every grain that appears in at least one CSL boundary pair
+    (across ALL CSL labels in ``parent_info``, not just one), tally its
+    participation: how many pairs it's the parent in, how many it's
+    the twin in, how many distinct CSL types those pairs span, and
+    which CSL type's nominal misorientation angle to report as its
+    single "dominant" angle.
+
+    An "intermediate" grain (parent in some pairs, twin in others) can
+    accumulate both parent- and twin-pair counts; a grain touching more
+    than one CSL type (e.g. some Sigma3 pairs and some Sigma9 pairs)
+    gets a ``csl_type_count`` > 1.
+
+    Parameters
+    ----------
+    parent_info : dict
+        Output of :func:`identify_parent_grains` -- keyed by CSL label,
+        each value a dict with ``'pairs_labeled'`` (list of
+        ``(parent_gid, twin_gid)`` tuples) and ``'csl_angle'`` (float).
+
+    Returns
+    -------
+    dict
+        grain_id -> {
+            'parent_count': int -- pairs where this grain is the parent,
+            'twin_count': int -- pairs where this grain is the twin,
+            'csl_type_count': int -- distinct CSL labels this grain has
+                a pair in,
+            'dominant_csl_angle': float -- csl_angle of whichever CSL
+                type this grain has the most pairs in (parent + twin
+                combined); ties broken by CSL label, sorted ascending,
+                for a deterministic result,
+        }
+        Only grains that appear in at least one pair are included.
+    """
+    per_grain_per_csl: dict[int, dict[str, dict[str, int]]] = {}
+    for csl_label, info in parent_info.items():
+        for parent_gid, twin_gid in info['pairs_labeled']:
+            per_grain_per_csl.setdefault(int(parent_gid), {}).setdefault(
+                csl_label, {'parent': 0, 'twin': 0})['parent'] += 1
+            per_grain_per_csl.setdefault(int(twin_gid), {}).setdefault(
+                csl_label, {'parent': 0, 'twin': 0})['twin'] += 1
+
+    result = {}
+    for gid, per_csl in per_grain_per_csl.items():
+        dominant_label = max(
+            sorted(per_csl.keys()),
+            key=lambda lbl: per_csl[lbl]['parent'] + per_csl[lbl]['twin'])
+        result[gid] = {
+            'parent_count':       sum(v['parent'] for v in per_csl.values()),
+            'twin_count':         sum(v['twin'] for v in per_csl.values()),
+            'csl_type_count':     len(per_csl),
+            'dominant_csl_angle': float(parent_info[dominant_label]['csl_angle']),
+        }
+    return result
+
+
 def classify_grain_roles_extended(parent_info: dict) -> dict:
     """
     Extend the EBSD parent_info dict with ``'primary_twins'`` and

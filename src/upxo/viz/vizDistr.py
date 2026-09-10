@@ -45,6 +45,12 @@ PROP_UNITS = {
     'eccentricity':       '',
     'solidity':           '',
     'npixels':            'px',
+    # selfrepr_morphology.py's parameter set (Self Repr.-1 page)
+    'circle_eq_dia':      'µm',
+    'gb_segment_length':  'µm',
+    'circularity':        '',
+    'coord_number':       '',
+    'n_tjp':              '',
 }
 
 # CSL reference angles for cubic symmetry (Σ label → disorientation angle °)
@@ -463,6 +469,8 @@ def plot_grouped_distributions(
         show_hist=True,
         show_peaks=True,
         show_legend=True,
+        show_line=True,
+        kde_shaded=False,
         x_margin=0.03,
         do_tight_layout=True,
 ):
@@ -511,6 +519,12 @@ def plot_grouped_distributions(
         Default ``True``.
     show_legend : bool
         Draw a per-group legend on each subplot.  Default ``True``.
+    show_line : bool
+        Draw the KDE density curve. Default ``True``.
+    kde_shaded : bool
+        Fill the area under each group's KDE curve -- ignored whenever
+        `show_hist` is also True (see `plot_property_distribution_on_axes`
+        for why). Default ``False``.
     x_margin : float
         Fractional padding added to both sides of the x-axis so that tick
         labels are never clipped at the axis boundary.  Default ``0.03``.
@@ -523,9 +537,6 @@ def plot_grouped_distributions(
     -------
     fig, axes : Figure and 2-D axes array (shape ``(nrows, ncols_used)``).
     """
-    from scipy.stats import gaussian_kde
-    from scipy.signal import find_peaks
-
     _DEFAULT_PALETTE = [
         '#4878CF', '#D65F5F', '#59A14F', '#888888',
         '#F28E2B', '#76B7B2', '#E15759', '#B07AA1',
@@ -560,73 +571,17 @@ def plot_grouped_distributions(
 
     for idx, pname in enumerate(prop_names):
         ax     = axes[idx // _ncols, idx % _ncols]
-        groups = data[pname]
-
-        arrays = {g: np.asarray(v, dtype=float) for g, v in groups.items()}
-        arrays = {g: a[np.isfinite(a)] for g, a in arrays.items() if len(a) > 1}
-
-        if not arrays:
-            ax.set_visible(False)
-            continue
-
-        combined  = np.concatenate(list(arrays.values()))
-        vmin, vmax = combined.min(), combined.max()
-        if vmin == vmax:
-            ax.set_visible(False)
-            continue
-
-        rng       = vmax - vmin
-        pad       = x_margin * rng
-        bin_edges = np.linspace(vmin, vmax, bins + 1)
-        bin_w     = bin_edges[1] - bin_edges[0]
-        xs        = np.linspace(vmin, vmax, 600)
-
-        for grp, vals in arrays.items():
-            colour = group_colors.get(grp, '#333333')
-
-            if show_hist:
-                counts, _ = np.histogram(vals, bins=bin_edges, density=True)
-                ax.bar(bin_edges[:-1], counts, width=bin_w,
-                       color=colour, alpha=0.28, edgecolor='none', align='edge')
-
-            try:
-                kde = gaussian_kde(vals, bw_method=bw_method)
-                ys  = kde(xs)
-                ax.plot(xs, ys, color=colour, linewidth=1.8)
-            except np.linalg.LinAlgError:
-                # Near-zero-variance group (e.g. a role level with very few
-                # grains sharing nearly identical values) -- gaussian_kde
-                # needs a non-singular covariance, so fall back to marking
-                # the mean directly rather than crashing the whole plot.
-                ys = None
-                ax.axvline(vals.mean(), color=colour, linewidth=1.8)
-
-            if show_peaks and ys is not None:
-                peak_idx, _ = find_peaks(ys, prominence=peak_prominence * ys.max())
-                for pi in peak_idx:
-                    ax.axvline(xs[pi], color=colour, linewidth=0.8,
-                               linestyle='--', alpha=0.7)
-                    ax.text(xs[pi], ys[pi] * 1.03, f'{xs[pi]:.3g}',
-                            fontsize=fontsize - 3, color=colour,
-                            ha='center', va='bottom', rotation=90)
-
-            if show_legend:
-                mn, mx = vals.min(), vals.max()
-                mu, sd = vals.mean(), vals.std()
-                disp = group_labels.get(grp, grp)
-                lbl  = (f'{disp} (n={len(vals)})\n'
-                        f'  µ={mu:.3g}  σ={sd:.3g}  [{mn:.3g}, {mx:.3g}]')
-                ax.plot([], [], color=colour, linewidth=2.5, label=lbl)
-
         xlabel = prop_labels.get(pname, pname)
-        ax.set_xlabel(xlabel, fontsize=fontsize)
-        ax.set_ylabel('Density', fontsize=fontsize)
-        ax.set_title(xlabel, fontsize=fontsize)
-        ax.set_xlim(vmin - pad, vmax + pad)
-        if show_legend:
-            ax.legend(fontsize=fontsize - 2, loc='upper right', framealpha=0.85,
-                      handlelength=1.2)
-        ax.tick_params(labelsize=fontsize - 2)
+        plot_property_distribution_on_axes(
+            ax, data[pname], xlabel,
+            group_colors=group_colors, group_labels=group_labels,
+            bins=bins, bw_method=bw_method, peak_prominence=peak_prominence,
+            title_fontsize=fontsize, axis_fontsize=fontsize,
+            tick_fontsize=fontsize - 2, legend_fontsize=fontsize - 2,
+            show_hist=show_hist, show_peaks=show_peaks, show_legend=show_legend,
+            show_line=show_line, kde_shaded=kde_shaded,
+            x_margin=x_margin,
+        )
 
     # y kept under 1.0 and tight_layout given an explicit rect so the
     # reserved top margin actually accounts for the suptitle -- y>1.0
@@ -637,6 +592,223 @@ def plot_grouped_distributions(
     if do_tight_layout:
         plt.tight_layout(rect=[0, 0, 1, 0.94])
     return fig, axes
+
+
+def plot_property_distribution_on_axes(
+        ax,
+        groups,
+        xlabel,
+        group_colors=None,
+        group_labels=None,
+        group_linestyles=None,
+        group_linewidths=None,
+        bins=40,
+        bw_method='scott',
+        peak_prominence=0.01,
+        title_fontsize=12.0,
+        axis_fontsize=10.0,
+        tick_fontsize=9.0,
+        legend_fontsize=9.0,
+        show_hist=True,
+        show_peaks=True,
+        show_legend=True,
+        show_line=True,
+        show_rug=False,
+        kde_shaded=False,
+        legend_loc='upper right',
+        rug_max_points=200,
+        x_margin=0.03,
+        title=None,
+        ylabel=None,
+        xlim=None,
+        ylim=None,
+):
+    """
+    Overlaid histogram + KDE + peak markers for ONE property, drawn onto
+    a caller-supplied `ax` -- the single-axis unit `plot_grouped_distributions`
+    builds a subplot grid of; extracted so a caller embedding a single
+    persistent, in-place-redrawn Axes (e.g. a live GUI plot) can reuse the
+    exact same drawing logic without going through `plt.subplots()` (which
+    registers a new Figure with pyplot's global state on every call) and
+    without a multi-panel grid it doesn't need.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+        Drawn onto directly (not cleared first -- callers that redraw in
+        place should call `ax.clear()` themselves before calling this).
+    groups : dict
+        ``{group_name: array-like}`` -- one array per overlaid group.
+        Arrays may be empty; empty/size-1 groups are silently skipped.
+    xlabel : str
+        Property display label -- used for both the x-axis label and the
+        axes title (this function draws exactly one title; a caller
+        wanting a figure-level title too, e.g. `plot_grouped_distributions`,
+        adds its own `fig.suptitle` separately).
+    group_colors, group_labels : dict or None
+        Same shape/fallback convention as `plot_grouped_distributions`.
+    group_linestyles : dict or None
+        ``{group_name: matplotlib linestyle}`` (e.g. '-', '--', ':', '-.').
+        Missing keys fall back to '-'.
+    group_linewidths : dict or None
+        ``{group_name: float}``. Missing keys fall back to 1.8.
+    title_fontsize, axis_fontsize, tick_fontsize, legend_fontsize : float
+        Independent font sizes (previously a single `fontsize` with fixed
+        offsets for tick/legend/peak-annotation text).
+    show_line : bool
+        Draw the KDE density curve. Default True (matches this function's
+        historical always-on behaviour before this parameter existed).
+    show_rug : bool
+        Draw a rug plot -- one short tick per raw observation along the
+        x-axis, coloured to match that group's line -- the standard way
+        to show individual data points under a density curve. Ticks are
+        drawn in a blended transform (x in data coordinates, y as a
+        fixed fraction of the axes height) rather than data-scaled y
+        coordinates, so they sit at a consistent, small height near the
+        bottom of the plot regardless of the density curve's own y-scale
+        (a fixed data-unit offset here would either be invisible or
+        dominate the plot, since "density" and the property's own value
+        range are unrelated scales). Default False.
+    legend_loc : str
+        Passed straight to `ax.legend(loc=...)` -- any matplotlib
+        legend location string (e.g. 'best', 'upper right', 'lower
+        left', 'center'). Default 'upper right' (this function's
+        historical fixed placement).
+    rug_max_points : int
+        A group with more than this many observations has its rug
+        thinned to (approximately) this many ticks, evenly sampled
+        across the SORTED values (not just the first N) so the rug
+        still reads as a fair representation of the full distribution's
+        spread -- large grain counts would otherwise render as a single
+        solid smear rather than a legible rug. Default 200.
+    kde_shaded : bool
+        Fill the area under each group's KDE curve. Only takes effect
+        when `show_line` is True AND `show_hist` is False -- a shaded
+        KDE fill drawn on top of histogram bars visually competes with
+        them for the same area, so a caller asking for both gets the
+        histogram (the more literal/less processed view) and the shading
+        is silently dropped rather than erroring. Default False.
+    title, ylabel : str or None
+        Override this axes' title / y-axis label. `None` (default)
+        keeps the historical auto behaviour (title = `xlabel`, ylabel =
+        "Density") -- an override is used verbatim, including an empty
+        string (a caller wanting no title/ylabel at all can pass "").
+    xlim, ylim : (float, float) or None
+        Explicit axis limits, applied AFTER this function's own
+        data-driven autoscaling (so they override it, not compete with
+        it). `None` (default) keeps the auto behaviour.
+
+    Returns
+    -------
+    (vmin, vmax) or None
+        The property's data range if anything was plotted (useful for a
+        caller that wants to also know the x-limits actually used), or
+        None if every group was empty/degenerate and nothing was drawn
+        (ax is hidden via `ax.set_visible(False)` in that case).
+    """
+    from scipy.stats import gaussian_kde
+    from scipy.signal import find_peaks
+
+    group_colors = group_colors or {}
+    group_labels = group_labels or {}
+    group_linestyles = group_linestyles or {}
+    group_linewidths = group_linewidths or {}
+    peak_fontsize = max(1.0, axis_fontsize - 3)
+
+    arrays = {g: np.asarray(v, dtype=float) for g, v in groups.items()}
+    arrays = {g: a[np.isfinite(a)] for g, a in arrays.items() if len(a) > 1}
+
+    if not arrays:
+        ax.set_visible(False)
+        return None
+
+    combined  = np.concatenate(list(arrays.values()))
+    vmin, vmax = combined.min(), combined.max()
+    if vmin == vmax:
+        ax.set_visible(False)
+        return None
+
+    rng       = vmax - vmin
+    pad       = x_margin * rng
+    bin_edges = np.linspace(vmin, vmax, bins + 1)
+    bin_w     = bin_edges[1] - bin_edges[0]
+    xs        = np.linspace(vmin, vmax, 600)
+
+    for grp, vals in arrays.items():
+        colour = group_colors.get(grp, '#333333')
+        linestyle = group_linestyles.get(grp, '-')
+        linewidth = group_linewidths.get(grp, 1.8)
+
+        if show_hist:
+            counts, _ = np.histogram(vals, bins=bin_edges, density=True)
+            ax.bar(bin_edges[:-1], counts, width=bin_w,
+                   color=colour, alpha=0.28, edgecolor='none', align='edge')
+
+        ys = None
+        if show_line:
+            try:
+                kde = gaussian_kde(vals, bw_method=bw_method)
+                ys  = kde(xs)
+                ax.plot(xs, ys, color=colour, linewidth=linewidth, linestyle=linestyle)
+                if kde_shaded and not show_hist:
+                    ax.fill_between(xs, ys, color=colour, alpha=0.25, linewidth=0)
+            except np.linalg.LinAlgError:
+                # Near-zero-variance group (e.g. a role level with very few
+                # grains sharing nearly identical values) -- gaussian_kde
+                # needs a non-singular covariance, so fall back to marking
+                # the mean directly rather than crashing the whole plot.
+                ax.axvline(vals.mean(), color=colour, linewidth=linewidth, linestyle=linestyle)
+
+        if show_rug:
+            # Blended transform (x: data, y: axes-fraction) -- NOT data-unit
+            # offsets, since "density" (this axes' y-scale) and the
+            # property's own value range (rng) are unrelated magnitudes; a
+            # data-unit offset sized off one or the other either vanishes
+            # or swamps the whole plot depending on which property/group.
+            # Thinned to rug_max_points, evenly sampled across the SORTED
+            # values, for groups with many observations (a rug of a few
+            # hundred to a few thousand grains would otherwise render as
+            # one solid smear rather than a legible sparse rug).
+            rug_vals = np.sort(vals)
+            if rug_vals.size > rug_max_points:
+                idx = np.linspace(0, rug_vals.size - 1, rug_max_points).round().astype(int)
+                rug_vals = rug_vals[idx]
+            ax.plot(rug_vals, np.full_like(rug_vals, 0.03), '|',
+                    color=colour, markersize=9, markeredgewidth=1.2,
+                    transform=ax.get_xaxis_transform())
+
+        if show_peaks and ys is not None:
+            peak_idx, _ = find_peaks(ys, prominence=peak_prominence * ys.max())
+            for pi in peak_idx:
+                ax.axvline(xs[pi], color=colour, linewidth=0.8,
+                           linestyle='--', alpha=0.7)
+                ax.text(xs[pi], ys[pi] * 1.03, f'{xs[pi]:.3g}',
+                        fontsize=peak_fontsize, color=colour,
+                        ha='center', va='bottom', rotation=90)
+
+        if show_legend:
+            mn, mx = vals.min(), vals.max()
+            mu, sd = vals.mean(), vals.std()
+            disp = group_labels.get(grp, grp)
+            lbl  = (f'{disp} (n={len(vals)})\n'
+                    f'  µ={mu:.3g}  σ={sd:.3g}  [{mn:.3g}, {mx:.3g}]')
+            ax.plot([], [], color=colour, linewidth=2.5, linestyle=linestyle, label=lbl)
+
+    ax.set_xlabel(xlabel, fontsize=axis_fontsize)
+    ax.set_ylabel('Density' if ylabel is None else ylabel, fontsize=axis_fontsize)
+    ax.set_title(xlabel if title is None else title, fontsize=title_fontsize)
+    ax.set_xlim(vmin - pad, vmax + pad)
+    if show_legend:
+        ax.legend(fontsize=legend_fontsize, loc=legend_loc, framealpha=0.85,
+                  handlelength=1.2)
+    ax.tick_params(labelsize=tick_fontsize)
+    # Explicit overrides applied last, AFTER the data-driven autoscale
+    # above, so they win rather than compete with it.
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    return vmin, vmax
 
 
 # ── Pooled distribution with a per-slice KDE spread band ────────────────────

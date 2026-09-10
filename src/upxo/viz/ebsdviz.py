@@ -921,14 +921,43 @@ def plot_combined_parent_twin_map(
 # Grain-role morphological / topological statistics
 # ---------------------------------------------------------------------------
 
-GRAIN_ROLE_ALL_PROPS  = ['area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours']
+GRAIN_ROLE_ALL_PROPS  = [
+    # Tier 1 -- basic morphology/topology, already in prop_ebsd/neigh_gid.
+    'area', 'aspect_ratio', 'perimeter', 'solidity', 'n_neighbours',
+    'eq_diameter', 'major_axis_length', 'minor_axis_length',
+    'eccentricity', 'euler_number',
+    # Tier 2 -- boundary/junction geometry, from slice_metrics_2d.
+    'circularity', 'gb_segment_length', 'n_tjp',
+    # Tier 3 -- CSL/twin-pair participation, from parent_info.
+    'csl_parent_count', 'csl_twin_count', 'csl_type_count', 'dominant_csl_angle',
+    # Tier 4 -- neighbour role composition, from neigh_gid + role sets.
+    'nbr_frac_pure_parents', 'nbr_frac_pure_twins', 'nbr_frac_intermediates',
+    'nbr_frac_non_role', 'role_mix_diversity',
+]
 GRAIN_ROLE_ALL_GROUPS = ['pure_parents', 'pure_twins', 'intermediates', 'non_role']
 GRAIN_ROLE_PROP_LABELS = {
-    'area':         'Area (µm²)',
-    'aspect_ratio': 'Aspect ratio',
-    'perimeter':    'Perimeter (µm)',
-    'solidity':     'Solidity',
-    'n_neighbours': 'Nneigh',
+    'area':                  'Area (µm²)',
+    'aspect_ratio':          'Aspect ratio',
+    'perimeter':             'Perimeter (µm)',
+    'solidity':              'Solidity',
+    'n_neighbours':          'Nneigh',
+    'eq_diameter':           'Circle-Equiv. Diameter (µm)',
+    'major_axis_length':     'Major Axis Length (µm)',
+    'minor_axis_length':     'Minor Axis Length (µm)',
+    'eccentricity':          'Eccentricity',
+    'euler_number':          'Euler Number',
+    'circularity':           'Circularity',
+    'gb_segment_length':     'GB Segment Length (µm)',
+    'n_tjp':                 'Triple Junction Points',
+    'csl_parent_count':      'CSL Parent-Pair Count',
+    'csl_twin_count':        'CSL Twin-Pair Count',
+    'csl_type_count':        'Distinct CSL Types',
+    'dominant_csl_angle':    'Dominant CSL Angle (deg)',
+    'nbr_frac_pure_parents': 'Neighbour Frac.: Pure Parents',
+    'nbr_frac_pure_twins':   'Neighbour Frac.: Pure Twins',
+    'nbr_frac_intermediates': 'Neighbour Frac.: Intermediates',
+    'nbr_frac_non_role':     'Neighbour Frac.: Non-role',
+    'role_mix_diversity':    'Neighbour Role Diversity',
 }
 GRAIN_ROLE_GROUP_COLORS = {
     'pure_parents':  '#4878CF',
@@ -1011,19 +1040,28 @@ def compute_grain_role_property_distributions(
     parent_info : dict
         Output of ``identify_parent_grains()``.
     prop : dict
-        Per-grain property dict (grain_id → dict) as from ``prop_ebsd``.
+        Per-grain property dict (grain_id → dict) as from ``prop_ebsd``,
+        i.e. ``upxo.interfaces.defdap.ebsd_reader._char_lfi``'s output --
+        ALREADY in physical (µm) units, since ``EBSDReader.characterise()``
+        calls ``_char_lfi`` with the real ``step_size``, not px_size=1.
         Expected keys: ``'area'``, ``'aspect_ratio'``, ``'perimeter'``,
-        ``'solidity'``.
+        ``'solidity'``, ``'eq_diameter'``, ``'major_axis_length'``,
+        ``'minor_axis_length'``, ``'eccentricity'``, ``'euler_number'``
+        -- used as-is, with NO further step_size scaling here.
     neigh_gid : dict
         Neighbour-grain dict (grain_id → list of neighbour IDs) as from
-        ``neigh_gid_ebsd``.  Used to derive ``n_neighbours``.
+        ``neigh_gid_ebsd``.  Used to derive ``n_neighbours`` and every
+        Tier-4 neighbour-role-composition property.
     selected_props : list of str, optional
-        Subset of ``GRAIN_ROLE_ALL_PROPS``.  Defaults to all five.
+        Subset of ``GRAIN_ROLE_ALL_PROPS`` (see that constant's Tier
+        1-4 grouping for what each property needs).  Defaults to all.
     selected_groups : list of str, optional
         Subset of ``GRAIN_ROLE_ALL_GROUPS``.  Defaults to all four.
     step_size : float
-        EBSD step size (µm).  Multiplied into area (px² → µm²) and
-        perimeter (px → µm) values.
+        EBSD step size (µm).  Used ONLY for Tier 2 properties
+        (circularity/gb_segment_length/n_tjp), which are recomputed
+        fresh from `lfi` via ``compute_slice_metrics`` rather than read
+        from `prop` -- everything else already carries physical units.
 
     Returns
     -------
@@ -1037,6 +1075,7 @@ def compute_grain_role_property_distributions(
         selected_props  = GRAIN_ROLE_ALL_PROPS
     if selected_groups is None:
         selected_groups = GRAIN_ROLE_ALL_GROUPS
+    selected_props = list(selected_props)
 
     # Build grain-role sets (merged across all CSL types)
     all_pp: set[int] = set()
@@ -1061,6 +1100,35 @@ def compute_grain_role_property_distributions(
         'intermediates': intermediate_set,
         'non_role':      non_role_set,
     }
+    # gid -> its own role -- Tier 4's neighbour-composition properties
+    # look THIS up for each of a grain's neighbours, not the grain itself.
+    role_of = {gid: role for role, gids in grain_sets.items() for gid in gids}
+
+    # Tier 2 (circularity/gb_segment_length/n_tjp) needs a fresh
+    # per-label metrics pass over the label field -- computed once,
+    # not per grain, only if actually requested.
+    _TIER2_KEYS = {'circularity', 'gb_segment_length', 'n_tjp'}
+    tier2_metrics = None
+    if _TIER2_KEYS & set(selected_props):
+        from upxo.pxtal.fm_steel_3d.slice_metrics_2d import compute_slice_metrics
+        tier2_metrics = compute_slice_metrics(lfi, voxel_size=step_size)
+
+    # Tier 3 (CSL/twin-pair participation) needs one pass over every
+    # CSL type's labeled pairs -- also computed once, only if requested.
+    _TIER3_KEYS = {'csl_parent_count', 'csl_twin_count', 'csl_type_count', 'dominant_csl_angle'}
+    tier3_participation = None
+    if _TIER3_KEYS & set(selected_props):
+        from upxo.xtalphy.crystal_orientation import compute_grain_csl_participation
+        tier3_participation = compute_grain_csl_participation(parent_info)
+
+    _TIER3_FIELD = {
+        'csl_parent_count': 'parent_count', 'csl_twin_count': 'twin_count',
+        'csl_type_count': 'csl_type_count', 'dominant_csl_angle': 'dominant_csl_angle',
+    }
+    _TIER4_NBR_FRAC_ROLE = {
+        'nbr_frac_pure_parents': 'pure_parents', 'nbr_frac_pure_twins': 'pure_twins',
+        'nbr_frac_intermediates': 'intermediates', 'nbr_frac_non_role': 'non_role',
+    }
 
     # Extract property values per group into plain arrays
     def _get_vals(gids: set, pname: str) -> np.ndarray:
@@ -1071,15 +1139,45 @@ def compute_grain_role_property_distributions(
                 nb = neigh_gid.get(gid)
                 if nb is not None:
                     vals.append(len(nb))
+            elif pname in _TIER4_NBR_FRAC_ROLE:
+                # neigh_gid's values are numpy arrays (find_neighs2d), not
+                # plain lists -- `if nb:` on a multi-element array raises
+                # "truth value of an array... is ambiguous"; must check
+                # emptiness via length, not truthiness.
+                nb = neigh_gid.get(gid)
+                if nb is not None and len(nb) > 0:
+                    target_role = _TIER4_NBR_FRAC_ROLE[pname]
+                    vals.append(sum(1 for n in nb if role_of.get(int(n)) == target_role) / len(nb))
+            elif pname == 'role_mix_diversity':
+                nb = neigh_gid.get(gid)
+                if nb is not None and len(nb) > 0:
+                    vals.append(len({role_of[int(n)] for n in nb if int(n) in role_of}))
+            elif pname == 'gb_segment_length' and tier2_metrics is not None:
+                # Same island-grain rule as selfrepr_morphology.py: a
+                # grain with no triple junctions (an island, fully
+                # surrounded by one neighbour) has no TJP-to-TJP
+                # segment to speak of, so its whole perimeter IS its
+                # one boundary segment.
+                n_tjp_val = tier2_metrics['n_tjp'][gid]
+                v = (tier2_metrics['tjp_boundary_length'][gid] if n_tjp_val > 0
+                     else tier2_metrics['perimeter'][gid])
+                if np.isfinite(v):
+                    vals.append(float(v))
+            elif pname in _TIER2_KEYS and tier2_metrics is not None:
+                v = tier2_metrics[pname][gid]
+                if np.isfinite(v):
+                    vals.append(float(v))
+            elif pname in _TIER3_FIELD and tier3_participation is not None:
+                part = tier3_participation.get(gid)
+                if part is not None:
+                    vals.append(part[_TIER3_FIELD[pname]])
             else:
+                # prop_ebsd is ALREADY in physical units (characterise()
+                # calls _char_lfi with the real step_size, not px_size=1)
+                # -- used as-is, with no further scaling here.
                 p = prop.get(gid)
                 if p is not None and pname in p:
-                    v = float(p[pname])
-                    if pname == 'area':
-                        v *= step_size ** 2
-                    elif pname == 'perimeter':
-                        v *= step_size
-                    vals.append(v)
+                    vals.append(float(p[pname]))
         arr = np.array(vals, dtype=float)
         return arr[np.isfinite(arr)]
 
