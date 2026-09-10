@@ -1382,6 +1382,35 @@ class TwinnedSimple3DBase:
         return {p: np.array(v, dtype=float) for p, v in pooled.items()}
 
     @staticmethod
+    def percentile_trim(arr: np.ndarray, low_pct: float = 0.0, high_pct: float = 100.0) -> np.ndarray:
+        """Keep only values within [low_pct, high_pct] percentiles of
+        arr's own range -- a direct, user-facing percentile-of-range
+        outlier control, distinct from ``_iqr_trim``'s fixed 1.5*IQR
+        Tukey fence (that rule has no percentile knob at all; this one
+        exists specifically for UI controls that ask the user for an
+        explicit low/high percentile pair).
+
+        Parameters
+        ----------
+        low_pct, high_pct : float
+            0-100. Values below the low_pct percentile or above the
+            high_pct percentile are dropped. ``(0, 100)`` (the default)
+            is a no-op.
+
+        Returns arr unchanged if too few points (< 2) to define
+        percentiles meaningfully, or if the resulting mask drops
+        everything (keeps the original array rather than returning
+        empty, matching ``_iqr_trim``'s own fallback behaviour).
+        """
+        arr = np.asarray(arr, dtype=float)
+        if arr.size < 2 or (low_pct <= 0.0 and high_pct >= 100.0):
+            return arr
+        lo, hi = np.percentile(arr, [low_pct, high_pct])
+        mask = (arr >= lo) & (arr <= hi)
+        trimmed = arr[mask]
+        return trimmed if trimmed.size > 0 else arr
+
+    @staticmethod
     def _iqr_trim(arr: np.ndarray, trim_left: bool = True, trim_right: bool = True) -> np.ndarray:
         """Drop points outside the Tukey (1.5*IQR) fence.
 
