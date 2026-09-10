@@ -280,6 +280,41 @@ def classify_grain_positions_2d(lgi, gid):
     }
 
 
+def boundary_grain_fraction(lgi, gid=None):
+    """
+    Fraction of grains touching the domain boundary, for any 2D labelled
+    image -- built directly on ``classify_grain_positions_2d``.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+    gid : array-like of int, optional
+        All grain IDs present in lgi. Defaults to every positive label
+        actually present (``np.unique(lgi[lgi > 0])``).
+
+    Returns
+    -------
+    dict
+        ``{'n_boundary': int, 'n_internal': int, 'n_total': int, 'ratio': float}``
+        -- ``ratio`` is ``n_boundary / n_total`` (``nan`` if there are no
+        grains at all). Grain ID 0 (background/void) is never counted,
+        even if it happens to touch an edge row/column.
+    """
+    if gid is None:
+        gid = np.unique(lgi[lgi > 0])
+    positions = classify_grain_positions_2d(lgi, gid)
+    n_boundary = int(np.count_nonzero(positions['boundary'] > 0))
+    n_total = int(np.count_nonzero(np.asarray(gid) > 0))
+    ratio = float(n_boundary / n_total) if n_total > 0 else float('nan')
+    return {
+        'n_boundary': n_boundary,
+        'n_internal': n_total - n_boundary,
+        'n_total': n_total,
+        'ratio': ratio,
+    }
+
+
 def extract_prop_npixels(locs_list):
     """Return pixel counts for each grain from a list of location arrays."""
     return [len(loc) for loc in locs_list]

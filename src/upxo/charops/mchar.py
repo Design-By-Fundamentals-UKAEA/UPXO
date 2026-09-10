@@ -242,6 +242,26 @@ def classify_grain_positions_2d(lgi, gid):
     return _mchar2d.classify_grain_positions_2d(lgi, gid)
 
 
+def boundary_grain_fraction(lgi, gid=None):
+    """Fraction of grains touching the domain boundary, for any 2D
+    labelled image -- built on classify_grain_positions_2d.
+
+    Parameters
+    ----------
+    lgi : numpy.ndarray of int, shape (R, C)
+        Labelled grain image.
+    gid : array-like of int, optional
+        All grain IDs present in lgi. Defaults to every positive label
+        actually present.
+
+    Returns
+    -------
+    dict
+        {'n_boundary': int, 'n_internal': int, 'n_total': int, 'ratio': float}.
+    """
+    return _mchar2d.boundary_grain_fraction(lgi, gid)
+
+
 def build_grain_props(skprops, prop_flags, locs_list=None, gblocs_list=None, EPS=1e-10):
     """Extract all flagged grain properties from skimage RegionProperties.
 
