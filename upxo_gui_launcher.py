@@ -9,17 +9,39 @@ _SRC_DIR = os.path.join(_SCRIPT_DIR, "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-try:
-    from PIL import Image, ImageTk
-except ImportError:
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showerror(
-        "Dependency Error",
-        "Pillow (PIL) library is required to run the UPXO GUI.\n"
-        "Please install it using:\npip install Pillow"
-    )
-    sys.exit(1)
+# Set Windows High-DPI awareness before creating Tkinter / CustomTkinter windows
+if sys.platform.startswith("win"):
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            import ctypes
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+def check_core_dependencies():
+    required = [("Pillow", "PIL"), ("NumPy", "numpy"), ("SciPy", "scipy"), ("Pandas", "pandas"), ("Matplotlib", "matplotlib")]
+    missing = []
+    for pkg_name, module_name in required:
+        try:
+            __import__(module_name)
+        except ImportError:
+            missing.append(pkg_name)
+    if missing:
+        root = tk.Tk()
+        root.withdraw()
+        pip_pkgs = " ".join(pkg.lower() for pkg in missing)
+        messagebox.showerror(
+            "Dependency Error",
+            "The following required libraries are missing from your Python environment:\n\n"
+            + "\n".join(f" • {pkg}" for pkg in missing)
+            + f"\n\nPlease install them using:\npip install {pip_pkgs}"
+        )
+        sys.exit(1)
+
+check_core_dependencies()
 
 use_customtkinter = False
 try:
