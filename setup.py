@@ -12,7 +12,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="upxo",
-    version="1.1.0.post5",
+    version="1.2.0",
     author="Dr. Sunil Anandatheertha",
     author_email="vaasu.anandatheertha@ukaea.uk",
     description=(
@@ -66,6 +66,10 @@ setup(
         "Programming Language :: Python :: 3.13",
     ],
     package_dir={"": "src"},
-    packages=find_packages(where="src", exclude=["upxo.gui", "upxo.gui.*"]),
+    packages=find_packages(where="src", exclude=[
+        "upxo.gui", "upxo.gui.*",
+        "upxo.pxtal.fm_steel_3d.gui", "upxo.pxtal.fm_steel_3d.gui.*",
+        "upxo.pxtal.twinned_simple_3d.gui", "upxo.pxtal.twinned_simple_3d.gui.*",
+    ]),
     include_package_data=True,
 )

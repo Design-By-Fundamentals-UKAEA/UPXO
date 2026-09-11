@@ -76,7 +76,7 @@ def main():
         print(f"{'='*60}")
         print("\n📍 Verify at: https://test.pypi.org/project/upxo/")
         print("\n🧪 Test installation with:")
-        print("   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ upxo==1.1.0")
+        print("   pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ upxo==1.2.0")
         return 0
     else:
         print(f"\n{'='*60}")
