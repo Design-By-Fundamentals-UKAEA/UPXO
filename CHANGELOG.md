@@ -2,6 +2,76 @@
 
 All notable changes to UPXO are documented in this file.
 
+## [1.2.0] — 2026-09-11
+
+### Added
+
+#### Grid-Cleaving Conformal Mesher
+- **`meshing/cleaving/`**: New voxel-lattice cleaving mesh generator
+  - `lattice.py`: Lattice construction from labelled voxel grids
+  - `cleave.py` / `labeling.py`: Cleave geometry and boundary labeling
+  - `relax.py`: Mesh relaxation
+  - `boundary_clip.py` / `rve_cap.py`: RVE-boundary clipping and capping
+  - `viz.py`: Visualization
+  - Full test suite (9 test modules); new pytest `slow` marker for on-demand stress verification
+
+#### Conformal Meshing Extensions
+- **`meshing/confMesh3d/`**: Optional surface remeshing stage (`surface_remesh.py`) and a TetGen tet-meshing backend (`tetgen_mesh.py`)
+
+#### Centralized Reporting
+- **`reporting/`**: Session/entries/HTML-rendering core for building structured pipeline reports
+- **`pxtal/fm_steel_3d/raw_export.py`**: Raw pipeline-state export across PAG/Packet/Block/Sub-block hierarchy levels
+- Reporting integration wired into `fm_steel_3d` and `twinned_simple_3d`
+
+#### Self-Representativeness Assessment (twinned_simple_3d)
+- `selfrepr_morphology.py`: Per-grain morphological parameters for EBSD self-representativeness studies
+- `representativeness_metrics.py`: Registry of two-sample distribution-comparison similarity metrics
+- `selfrepr_qualification.py`: Threshold-based qualification of representativeness results
+- `subsetting_2d.py`: 2D rectangular sub-domain extraction (sibling of the existing 3D `subsetting.py`)
+- `stride_study.py`: Moving-window stride/tiling study support
+- `mc_qualification.py`: Monte-Carlo candidate qualification
+- `base_3d.percentile_trim`: Percentile-of-range outlier trimming, alongside the existing IQR-based trim
+- `crystal_orientation.compute_grain_csl_participation`: Per-grain parent/twin role tally across all CSL types
+
+#### FM Steel Packet-Level Tooling
+- `orientation_mean_3d.py`: Crystallographically-correct packet mean orientation
+- `slice_metrics_2d.py`: Fast numpy-only 2D slice geometric metrics
+
+#### Visualization
+- Side-by-side voxel-grid comparison render
+- IPF triangle key plot and side-by-side LFI comparison render
+- Pole-figure size-colored scatter overlay with its own colorbar
+- Histogram-with-slice-band plotting (`vizDistr.plot_hist_with_slice_band`)
+- Per-axes property-distribution plotting (`vizDistr.plot_property_distribution_on_axes`)
+- Grain-role-aware EBSD visualization for CSL parent/twin analysis
+
+#### Other Core Additions
+- `charops.boundary_grain_fraction`: Fraction of grains touching the domain boundary, for 2D labelled images
+- `gsdataops/grid_ops`: Majority-vote-safe downsampling and anisotropic stretch
+- `pxtal/gridops`: Raw per-crossing lengths exposed from `axis_intercept_grain_size`
+- `upxo_gui_launcher.py`: Windows High-DPI awareness; full core-dependency check (Pillow, NumPy, SciPy, Pandas, Matplotlib) instead of Pillow-only
+
+#### Testing
+- Root GUI pipeline-registry and configuration-persistence regression tests
+- Reporting integration tests (fm_steel_3d, twinned_simple_3d)
+- Cleaving module test suite
+- FM steel raw-export and packet-orientation-mean tests
+
+### Changed
+
+- **Twinned FCC orientation assignment**: `max_retries` exposed; MDF bin width/angle range now derived from `mdf_ref` instead of a hardcoded 65°; `neighbour_frac` added to Pool B host allocation with do/do-not fallback; MRF Gibbs/MAP initialization reuses `self.fallback_quats` instead of drawing a fresh unseeded sample
+- **`xtalphy/texops.py`**: Fixed the same Bunge ZXZ Euler-decomposition bug present in `crystal_orientation.matrix_to_euler_bunge`; added texture-component detection; ported GUI-only quaternion helpers into core
+- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; new pytest `gui` marker for tests requiring a live Tkinter display
+
+### Not Included (Deferred)
+
+- MC Metropolis-acceptance refinement (permanently out of scope per architecture decision)
+- GB-energy/crystallography coupling for block selection (deferred to future versions)
+- Orientation-mode GUI exposure in Twinned FCC (deferred for UX refinement)
+- Multi-CSL twin registry beyond Sigma-3 Path A (CSL Path B deferred post-Path A validation)
+
+---
+
 ## [1.1.0] — 2026-08-04
 
 **First official PyPI release of UPXO.**
