@@ -202,9 +202,14 @@ def visualize_gs_mesh(
     show_stats: bool = True,
     lw_gb: float = 0.6,
     color_gb: str = 'k',
+    color_by_grain: bool = True,
+    show_nsets: bool = False,
 ) -> tuple:
     """
-    Visualize a mesh_gs result dict using see_femesh + grain boundary overlay.
+    Visualize a mesh_gs result dict.
+
+    Default is grain-coloured fill via ``confMesh2dGMSH.plot_by_grain``.
+    Set ``color_by_grain=False`` for the older wireframe ``see_femesh`` view.
 
     Parameters
     ----------
@@ -222,19 +227,25 @@ def visualize_gs_mesh(
     -------
     (fig, ax)
     """
-    from upxo.viz.meshviz import see_femesh
-    from matplotlib.collections import LineCollection
-    import numpy as np
-
     m = result['mesher']
-    pts, _, triangles, quads = m.get_mesh_geometry()
-
     title = (
         f'Conformal FE mesh — '
         f'{result["n_tri"]:,} tri + {result["n_quad"]:,} quad, '
         f'{result["n_nodes"]:,} nodes'
     )
+    if color_by_grain:
+        if not getattr(m, 'elsets_eltype', None):
+            m.form_elsets_gmsh()
+        fig, ax = m.plot_by_grain(
+            figsize=figsize, dpi=dpi, show_gb=True, show_nsets=show_nsets,
+            title=title)
+        ax.set_axis_on() if show_axis else ax.set_axis_off()
+        return fig, ax
 
+    from upxo.viz.meshviz import see_femesh
+    from matplotlib.collections import LineCollection
+
+    pts, _, triangles, quads = m.get_mesh_geometry()
     fig, ax = see_femesh(
         points_2d=pts,
         lines=None,
@@ -252,8 +263,6 @@ def visualize_gs_mesh(
         show_stats=show_stats,
         title=title,
     )
-
     segments = [np.column_stack(poly.exterior.xy) for poly in result['flat_cells'].values()]
     ax.add_collection(LineCollection(segments, colors=color_gb, linewidths=lw_gb, zorder=2))
-
     return fig, ax
