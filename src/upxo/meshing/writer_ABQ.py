@@ -1,8 +1,8 @@
 """
 Low-level Abaqus keyword writers for UPXO meshes.
 
-Helpers to write ``*Elset`` and related grain/element-set blocks used by
-2D/3D meshing export paths. Higher-level partitioned INP export lives in
+Helpers to write ``*Elset`` / ``*Nset`` blocks. 2D conformal INP export is
+``export_confmesh2d_inp``. 3D partitioned export lives in
 ``confMesh3d.export``, ``fm_steel_3d.mesh_exporter_3d``, and
 ``twinned_simple_3d.abaqus_exporter_3d``.
 """
@@ -25,6 +25,111 @@ def write_elset(f, name, elem_ids, per_line=16):
     for i in range(0, len(elem_ids), per_line):
         line = ", ".join(map(str, elem_ids[i:i+per_line]))
         f.write(line + "\n")
+
+
+def write_nset(f, name, node_ids, per_line=16):
+    """Write an Abaqus *Nset."""
+    node_ids = np.asarray(node_ids, dtype=int)
+    f.write(f"*Nset, nset={name}\n")
+    for i in range(0, len(node_ids), per_line):
+        f.write(", ".join(map(str, node_ids[i:i + per_line])) + "\n")
+
+
+def summarize_inp(path):
+    """Return which standard Abaqus keyword blocks are present in ``path``."""
+    from pathlib import Path
+    text = Path(path).read_text(encoding='utf-8')
+    keys = (
+        '*Node', '*Element', '*Elset', '*Nset', '*Solid Section', '*Material',
+    )
+    return {k: k.lower() in text.lower() for k in keys}
+
+
+def export_confmesh2d_inp(
+        path, nodes, elConn, elsets_eltype, nsets=None,
+        plane='stress', thickness=1.0, write_sections=True, heading=None):
+    """Write a 2D conformal mesh to an Abaqus ``.inp``.
+
+    Compacts sparse node tags to 1..N. ``plane='stress'`` → CPS3/CPS4,
+    ``plane='strain'`` → CPE3/CPE4. Dummy isotropic sections are optional.
+    """
+    from pathlib import Path
+
+    nodes = np.asarray(nodes)
+    valid = ~np.isnan(nodes[:, 0])
+    old_ids = np.where(valid)[0]
+    if old_ids.size == 0:
+        raise RuntimeError("No mesh nodes to export.")
+    remap = np.zeros(int(old_ids.max()) + 1, dtype=int)
+    remap[old_ids] = np.arange(1, old_ids.size + 1)
+    xy = nodes[old_ids, :2]
+
+    type_map = {
+        'stress': {'triangle': 'CPS3', 'quad': 'CPS4'},
+        'strain': {'triangle': 'CPE3', 'quad': 'CPE4'},
+    }
+    if plane not in type_map:
+        raise ValueError("plane must be 'stress' or 'strain'")
+    abq_types = type_map[plane]
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    nsets = nsets or {}
+    elsets_eltype = elsets_eltype or {}
+
+    with path.open('w', encoding='utf-8') as f:
+        f.write("*Heading\n")
+        f.write((heading or "UPXO confMesh2dGMSH conformal 2D mesh") + "\n")
+        f.write("*Preprint, echo=NO, model=NO, history=NO, contact=NO\n")
+        f.write("*Node\n")
+        for nid, (x, y) in zip(remap[old_ids], xy):
+            f.write(f"{nid}, {x:.8g}, {y:.8g}, 0.0\n")
+
+        eid_offset = 0
+        global_elsets = {}
+        for eltype in ('triangle', 'quad'):
+            conn = elConn.get(eltype) if elConn else None
+            if conn is None or len(conn) == 0:
+                continue
+            ncorn = 3 if eltype == 'triangle' else 4
+            f.write(f"*Element, type={abq_types[eltype]}\n")
+            for local_i, nds in enumerate(conn):
+                eid = eid_offset + local_i + 1
+                nstr = ", ".join(str(int(remap[n])) for n in nds[:ncorn])
+                f.write(f"{eid}, {nstr}\n")
+            for name, local_ids in elsets_eltype.get(eltype, {}).items():
+                gids = np.asarray(local_ids, dtype=int) + eid_offset + 1
+                if name in global_elsets:
+                    global_elsets[name] = np.concatenate(
+                        (global_elsets[name], gids))
+                else:
+                    global_elsets[name] = gids
+            eid_offset += len(conn)
+
+        for name, eids in global_elsets.items():
+            abq_name = name.replace('.', '_').replace('-', '_').upper()
+            write_elset(f, abq_name, eids)
+
+        for key in (
+            'LEFT', 'RIGHT', 'BOTTOM', 'TOP',
+            'BOTTOM_LEFT', 'BOTTOM_RIGHT', 'TOP_LEFT', 'TOP_RIGHT', 'GB',
+        ):
+            ids = nsets.get(key)
+            if ids is None or len(ids) == 0:
+                continue
+            write_nset(f, f"NS_{key}", remap[np.asarray(ids, dtype=int)])
+
+        if write_sections:
+            f.write("** Dummy isotropic sections — replace before a real job\n")
+            for name in global_elsets:
+                abq_name = name.replace('.', '_').replace('-', '_').upper()
+                f.write(f"*Material, name=MAT_{abq_name}\n")
+                f.write("*Elastic\n210000., 0.3\n")
+                f.write(
+                    f"*Solid Section, elset={abq_name}, material=MAT_{abq_name}\n"
+                )
+                f.write(f"{thickness},\n")
+    return str(path)
 
 
 def write_grain_elsets(f, elsets_dict, prefix="Grain"):
