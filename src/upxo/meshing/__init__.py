@@ -3,7 +3,8 @@ Finite-element meshing package for UPXO grain structures.
 
 Includes:
 
-* 2D conformal meshing (``conformal_mesher2d``, gmsh / legacy pygmsh paths)
+* 2D conformal meshing (``confMesh2dGMSH`` / ``gsmesh2d.mesh_gs``;
+  ``confMesh2d`` pygmsh path is deprecated)
 * Non-conformal structured meshes (``nonConformalMesher``)
 * 3D conformal tet pipeline (``confMesh3d`` — surface nets → gmsh → Abaqus)
 * Abaqus keyword helpers (``writer_ABQ``)
