@@ -1,12 +1,11 @@
 """
 2D grain-boundary-conformal meshing for UPXO tessellations.
 
-Provides ``confMesh2d`` (legacy pygmsh-oriented path) and related helpers for
-building planar meshes aligned with grain polygons. Prefer
-``confMesh2dGMSH`` / ``mesh_gs`` entry points where available in this package
-for new work (raw gmsh API). Used with Voronoi / geometric grain polygons
-prior to FE export.
+``confMesh2d`` is the legacy pygmsh path and is **deprecated**. New work
+must use ``confMesh2dGMSH`` (raw gmsh API) or ``gsmesh2d.mesh_gs``.
 """
+
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,17 +13,27 @@ from upxo.meshing import elemOps
 from upxo.viz import meshviz
 import pyvista as pv
 
+_CONFMESH2D_REMOVED_MSG = (
+    "upxo.meshing.conformal_mesher2d.confMesh2d (pygmsh) is deprecated "
+    "and will be removed in a future UPXO release. Use "
+    "confMesh2dGMSH.femesh_gmsh or gsmesh2d.mesh_gs instead."
+)
+
+
 class confMesh2d():
     """
-    Orchestrator for 2D conformal grain-structure meshing pipelines.
+    Deprecated pygmsh orchestrator for 2D conformal grain-structure meshing.
+
+    .. deprecated::
+        Use :class:`confMesh2dGMSH` or :func:`upxo.meshing.gsmesh2d.mesh_gs`.
+        Instantiating this class emits :class:`DeprecationWarning`.
 
     Builds conformal FE meshes on geometric polycrystals (typically
     :class:`~upxo.pxtal.polyxtal.vtpolyxtal2d` / VTGS), with triangle or
-    quad elements via pygmsh-oriented paths. Prefer
-    :class:`confMesh2dGMSH` for raw gmsh API workflows without pygmsh.
+    quad elements via pygmsh-oriented paths.
 
-    Usage
-    -----
+    Usage (legacy)
+    --------------
     >>> from upxo.meshing.conformal_mesher2d import confMesh2d as cm2d
     >>> m = confMesh2d.from_geometric_pxtal(pxtal=..., xbound=..., ybound=...)
     >>> m.femesh_pygmsh(elementShape='tri', elementOrder=1, ...)
@@ -47,6 +56,7 @@ class confMesh2d():
                  'elsets_eltype', 'elsets', 'elID_ranges')
     def __init__(self, gtess=None):
         """Initialise the instance."""
+        warnings.warn(_CONFMESH2D_REMOVED_MSG, DeprecationWarning, stacklevel=2)
         self.gtess = gtess
 
     @classmethod
@@ -54,7 +64,10 @@ class confMesh2d():
                 gsgen_method='shapely_pxtal_load',
                 pxtal=None, xbound=None, ybound=None):
         """
-        Class method to mesh geometrified grain struture
+        Class method to mesh geometrified grain struture.
+
+        Deprecated: prefer building Shapely ``flat_cells`` and calling
+        :meth:`confMesh2dGMSH.femesh_gmsh` or :func:`upxo.meshing.gsmesh2d.mesh_gs`.
         """
         from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
         gtess = vtpxtal(gsgen_method=gsgen_method, vt_base_tool='shapely', pxtal=pxtal,
@@ -66,7 +79,10 @@ class confMesh2d():
     def femesh_pygmsh(self, elementShape='tri', elementOrder=1, 
                     meshingAlgorithmID=4, elsize_global=[1.0],
                     intermediateFilename='femesh', intermediateFileformat='vtk'):
-        """Femesh pygmsh."""
+        """Femesh via pygmsh.
+
+        Deprecated: use :meth:`confMesh2dGMSH.femesh_gmsh`.
+        """
         self.mesherTool = 'pygmsh'
         self.elementShape = elementShape
         self.elementOrder = elementOrder
@@ -488,13 +504,16 @@ class confMesh2dGMSH():
     ...               mesh_algo=8, mesh_order=1, recombine_to_quads=True)
     >>> m.form_elsets_gmsh()
     >>> m.build_boundary_nsets(); m.build_grain_nsets(); m.build_gb_nset()
+
+    Geometric polycrystals (the old ``confMesh2d.from_geometric_pxtal``
+    path) use :meth:`from_geometric_pxtal` then :meth:`femesh_gmsh`.
     """
 
     ValidElTypesOptions = ('triangle', 'quad')
 
     __slots__ = (
         # geometry / topology inputs
-        'gtess', 'fids', 'gid_map',
+        'gtess', 'fids', 'gid_map', 'flat_cells',
         # gmsh internal bookkeeping
         'point_registry', 'surface_tags', 'physical_surface_tags',
         # mesh parameters
@@ -505,12 +524,15 @@ class confMesh2dGMSH():
         # element set / classification data
         'availableFeatures', 'availableElTypes', 'availableElTypeID',
         'elsets_eltype', 'elsets', 'elID_ranges',
+        '_physical_elsets',
+        '_elem_owners',
         # node sets
         'nsets',
         # pyvista grid (kept for optional pyvista workflows)
         'grid',
-        # export record
+        # export / validation
         '_exported',
+        'validation_report',
     )
 
     def __init__(self):
@@ -518,6 +540,7 @@ class confMesh2dGMSH():
         self.gtess = None
         self.fids = None
         self.gid_map = None
+        self.flat_cells = None
         self.point_registry = {}
         self.surface_tags = {}
         self.physical_surface_tags = {}
@@ -535,26 +558,67 @@ class confMesh2dGMSH():
         self.elsets_eltype = {}
         self.elsets = {}
         self.elID_ranges = {}
+        self._physical_elsets = {}
+        self._elem_owners = {}
         self.nsets = {}
         self.grid = None
         self._exported = []
+        self.validation_report = None
+
+    @classmethod
+    def from_geometric_pxtal(cls,
+                             gsgen_method='shapely_pxtal_load',
+                             pxtal=None, xbound=None, ybound=None):
+        """Build a ``confMesh2dGMSH`` from a geometric polycrystal.
+
+        Drop-in replacement for the deprecated
+        ``confMesh2d.from_geometric_pxtal``. Call :meth:`femesh_gmsh`
+        afterwards (``flat_cells`` may be omitted; they are taken from
+        the tessellation).
+        """
+        from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
+        from upxo.meshing.gsmesh2d import _flatten_cells
+
+        gtess = vtpxtal(
+            gsgen_method=gsgen_method, vt_base_tool='shapely', pxtal=pxtal,
+            points=None, point_method=None, point_object_deque=None,
+            mulpoint_object=None, locx_list=None, locy_list=None,
+            xbound=xbound, ybound=ybound, vis_vtgs=False, lean='no',
+            INSTANCE=None)
+        geoms = list(gtess.L0.pxtal.geoms)
+        cells = {i + 1: geom for i, geom in enumerate(geoms)}
+        flat_cells, gid_map = _flatten_cells(cells)
+        inst = cls()
+        inst.gtess = gtess
+        inst.flat_cells = flat_cells
+        inst.gid_map = gid_map
+        inst.fids = np.arange(1, len(geoms) + 1)
+        return inst
+
+    def set_fids(self, geomObject):
+        """Assign 1-based feature IDs from a sequence of grain geometries."""
+        self.fids = np.arange(1, len(geomObject) + 1)
 
     # ------------------------------------------------------------------
     # Main meshing entry point
     # ------------------------------------------------------------------
 
-    def femesh_gmsh(self, flat_cells, gid_map=None,
+    def femesh_gmsh(self, flat_cells=None, gid_map=None,
                     mesh_size_gb=1.0, mesh_size_bulk=4.0,
                     mesh_algo=6, mesh_order=1,
                     recombine_to_quads=False,
-                    out_dir=None, basename='gs_mesh', formats=None):
+                    out_dir=None, basename='gs_mesh', formats=None,
+                    field_sampling=None, n_threads=None,
+                    snap_tol=None, island_cover_frac=0.95,
+                    validate=True, verbose=False):
         """
         Full gmsh meshing pipeline.
 
         Parameters
         ----------
-        flat_cells : dict
-            {flat_id: shapely.geometry.Polygon}  — grain geometries.
+        flat_cells : dict or None
+            {flat_id: shapely.geometry.Polygon}.  If None, uses cells stored
+            by :meth:`from_geometric_pxtal`.
         gid_map : dict, optional
             {flat_id: original_grain_id}.  If None, flat_id is used as-is.
         mesh_size_gb : float
@@ -573,114 +637,209 @@ class confMesh2dGMSH():
             Filename stem for exported files (extension appended per format).
         formats : list of str or None
             File format extensions to export, e.g. ``['msh', 'inp', 'vtk']``.
+        field_sampling : int or None
+            Distance-field samples per curve.  None chooses from curve count.
+        n_threads : int or None
+            Gmsh ``Mesh.MaxNumThreads``.  None uses ``os.cpu_count()``.
+        snap_tol : float or None
+            Point-merge quantum.  None is 1e-9 of the domain diagonal.
+        island_cover_frac : float
+            Fraction of an inner polygon's area that must lie in an outer
+            polygon to treat it as an island (strict ``contains`` is too
+            brittle after smoothing).
+        validate : bool
+            Raise if a grain has no elements or inverted elements are found.
+        verbose : bool
+            Let Gmsh print to the terminal.
         """
-        import gmsh
         import os
+        try:
+            import gmsh
+        except ImportError as exc:
+            raise ImportError(
+                "confMesh2dGMSH requires the gmsh Python package. "
+                "Install with: pip install gmsh"
+            ) from exc
+
+        if flat_cells is None:
+            if not self.flat_cells:
+                raise ValueError(
+                    "flat_cells is required unless from_geometric_pxtal() "
+                    "was used.")
+            flat_cells = self.flat_cells
+        if gid_map is None:
+            gid_map = self.gid_map if self.gid_map is not None else {
+                k: k for k in flat_cells}
+
+        self.flat_cells = flat_cells
         self.elementShape = 'quad' if recombine_to_quads else 'tri'
         self.elementOrder = mesh_order
         self.meshingAlgorithmID = mesh_algo
         self.recombine_to_quads = recombine_to_quads
-        self.gid_map = gid_map if gid_map is not None else {k: k for k in flat_cells}
+        self.gid_map = gid_map
 
-        gmsh.initialize()
-        gmsh.model.add("upxo_confmesh")
-        gmsh.option.setNumber("General.Terminal", 0)
+        initialized = False
+        try:
+            gmsh.initialize()
+            initialized = True
+            gmsh.model.add("upxo_confmesh")
+            gmsh.option.setNumber("General.Terminal", 1 if verbose else 0)
+            threads = n_threads if n_threads is not None else (os.cpu_count() or 1)
+            threads = int(max(1, threads))
+            for opt in ("General.NumThreads", "Mesh.MaxNumThreads"):
+                try:
+                    gmsh.option.setNumber(opt, threads)
+                except Exception:
+                    pass
 
-        self._build_geometry(flat_cells, mesh_size_gb, gmsh)
-        self._assign_physical_groups(flat_cells, gmsh)
-        self._set_mesh_options_and_generate(mesh_size_gb, mesh_size_bulk,
-                                            mesh_algo, mesh_order,
-                                            recombine_to_quads, gmsh)
-        self._extract_nodes_and_elements(gmsh)
-        self._extract_gblines(gmsh)
+            self._build_geometry(
+                flat_cells, mesh_size_gb, gmsh,
+                snap_tol=snap_tol, island_cover_frac=island_cover_frac)
+            self._assign_physical_groups(flat_cells, gmsh)
+            self._set_mesh_options_and_generate(
+                mesh_size_gb, mesh_size_bulk, mesh_algo, mesh_order,
+                recombine_to_quads, gmsh, field_sampling=field_sampling)
+            self._extract_nodes_and_elements(gmsh)
+            self._extract_gblines(gmsh)
 
-        self._exported = []
-        if out_dir and formats:
-            os.makedirs(out_dir, exist_ok=True)
-            for fmt in formats:
-                path = os.path.join(out_dir, f'{basename}.{fmt}')
-                gmsh.write(path)
-                self._exported.append(path)
-
-        gmsh.finalize()
+            self._exported = []
+            if out_dir and formats:
+                os.makedirs(out_dir, exist_ok=True)
+                for fmt in formats:
+                    path = os.path.join(out_dir, f'{basename}.{fmt}')
+                    gmsh.write(path)
+                    self._exported.append(path)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Gmsh conformal 2D meshing failed: {exc}"
+            ) from exc
+        finally:
+            if initialized:
+                try:
+                    gmsh.finalize()
+                except Exception:
+                    pass
 
         self._detect_available_eltypes()
+        self._build_physical_elsets()
+        self._validate_mesh(flat_cells, raise_on_fail=validate)
 
     # ------------------------------------------------------------------
     # Geometry building
     # ------------------------------------------------------------------
 
-    def _build_geometry(self, flat_cells, mesh_size_gb, gmsh):
-        """Register points and build surfaces for every grain polygon.
+    @staticmethod
+    def _polygon_cover_frac(outer, inner):
+        """Fraction of ``inner`` area that lies in ``outer``."""
+        if inner is None or inner.area <= 0:
+            return 0.0
+        try:
+            return float(outer.intersection(inner).area / inner.area)
+        except Exception:
+            return 0.0
 
-        Island grains (polygons completely contained within another grain) are
-        registered as *holes* in the parent grain's Gmsh plane surface via a
-        three-pass approach:
-          Pass 1 — build all shared points + curve loops.
-          Pass 2 — detect containment (direct parent per island grain) using
-                   a Shapely STRtree for performance.
-          Pass 3 — create plane surfaces; island curve loops are passed as
-                   additional arguments to addPlaneSurface so Gmsh carves
-                   them out of the parent surface instead of overlapping.
+    def _build_geometry(self, flat_cells, mesh_size_gb, gmsh,
+                        snap_tol=None, island_cover_frac=0.95):
+        """Register shared points/curves and build one surface per grain.
+
+        Shared grain-boundary edges get a single Gmsh line (the neighbour
+        reuses the reverse tag). Shapely interior rings become holes.
+        Island grains (coverage ≥ ``island_cover_frac`` of a larger parent)
+        are also carved from the parent unless they already match a parent
+        interior ring.
         """
         from collections import defaultdict
+        from shapely.geometry import Polygon
         from shapely.strtree import STRtree
 
         self.point_registry = {}
         self.surface_tags = {}
 
-        round_digits = 10
+        xs, ys = [], []
+        for polygon in flat_cells.values():
+            x, y = polygon.exterior.xy
+            xs.extend(x)
+            ys.extend(y)
+        dx = (max(xs) - min(xs)) if xs else 1.0
+        dy = (max(ys) - min(ys)) if ys else 1.0
+        if snap_tol is None:
+            snap_tol = max(1e-12, 1e-9 * max(dx, dy, 1.0))
+        inv_snap = 1.0 / snap_tol
 
         def _get_or_add_point(x, y):
-            """ get or add point."""
-            key = (round(x, round_digits), round(y, round_digits))
+            key = (int(round(x * inv_snap)), int(round(y * inv_snap)))
             if key not in self.point_registry:
                 tag = gmsh.model.geo.addPoint(x, y, 0.0, mesh_size_gb)
                 self.point_registry[key] = tag
             return self.point_registry[key]
 
+        line_registry = {}
+
+        def _get_or_add_line(a, b):
+            if a == b:
+                raise ValueError("Degenerate Gmsh line: coincident endpoints.")
+            key, rev = (a, b), (b, a)
+            if key in line_registry:
+                return line_registry[key]
+            if rev in line_registry:
+                return -line_registry[rev]
+            tag = gmsh.model.geo.addLine(a, b)
+            line_registry[key] = tag
+            return tag
+
+        def _loop_from_coords(coords):
+            pts = [_get_or_add_point(x, y) for x, y in coords]
+            # Drop consecutive duplicates after snapping
+            dedup = [pts[0]]
+            for p in pts[1:]:
+                if p != dedup[-1]:
+                    dedup.append(p)
+            if len(dedup) > 1 and dedup[0] == dedup[-1]:
+                dedup = dedup[:-1]
+            if len(dedup) < 3:
+                raise ValueError("Polygon ring collapsed to fewer than 3 points.")
+            n = len(dedup)
+            lines = [_get_or_add_line(dedup[i], dedup[(i + 1) % n]) for i in range(n)]
+            return gmsh.model.geo.addCurveLoop(lines)
+
         flat_id_list = list(flat_cells.keys())
-        polygon_list  = [flat_cells[fid] for fid in flat_id_list]
+        polygon_list = [flat_cells[fid] for fid in flat_id_list]
 
-        # ── Pass 1: register all shared points and build curve loops ─────────
-        loop_tags: dict = {}
+        loop_tags = {}
+        interior_loops = defaultdict(list)
         for flat_id, polygon in flat_cells.items():
-            coords   = list(polygon.exterior.coords)[:-1]
-            pt_tags  = [_get_or_add_point(x, y) for x, y in coords]
-            n        = len(pt_tags)
-            line_tags = [
-                gmsh.model.geo.addLine(pt_tags[i], pt_tags[(i + 1) % n])
-                for i in range(n)
-            ]
-            loop_tags[flat_id] = gmsh.model.geo.addCurveLoop(line_tags)
+            loop_tags[flat_id] = _loop_from_coords(list(polygon.exterior.coords)[:-1])
+            for ring in polygon.interiors:
+                interior_loops[flat_id].append(
+                    _loop_from_coords(list(ring.coords)[:-1]))
 
-        # ── Pass 2: detect island grains — find direct parent for each ───────
-        # For each polygon, find which OTHER polygons contain it (i.e., it is
-        # an island/inclusion inside them).  We do a bounding-box pre-filter
-        # via STRtree then an explicit .contains() check so the result is
-        # version-independent and numerically robust after Taubin smoothing.
-        outer_to_holes: dict = defaultdict(list)
+        outer_to_island_holes = defaultdict(list)
         tree = STRtree(polygon_list)
         for i, fid_inner in enumerate(flat_id_list):
-            # tree.query without predicate returns bounding-box candidates only
-            candidates = tree.query(polygon_list[i])
+            inner = polygon_list[i]
+            candidates = tree.query(inner)
             container_indices = [
                 j for j in candidates
-                if j != i and polygon_list[j].contains(polygon_list[i])
+                if j != i
+                and polygon_list[j].area > inner.area
+                and self._polygon_cover_frac(polygon_list[j], inner) >= island_cover_frac
             ]
-            if container_indices:
-                # Direct parent = smallest-area container (handles nesting)
-                direct_parent_idx = min(container_indices,
-                                        key=lambda j: polygon_list[j].area)
-                outer_to_holes[flat_id_list[direct_parent_idx]].append(
-                    loop_tags[fid_inner]
-                )
+            if not container_indices:
+                continue
+            parent_idx = min(container_indices, key=lambda j: polygon_list[j].area)
+            parent = polygon_list[parent_idx]
+            already_interior = any(
+                self._polygon_cover_frac(Polygon(ring), inner) >= island_cover_frac
+                for ring in parent.interiors
+            )
+            if not already_interior:
+                outer_to_island_holes[flat_id_list[parent_idx]].append(
+                    loop_tags[fid_inner])
 
-        # ── Pass 3: create plane surfaces; holes carved from parent ──────────
         for flat_id in flat_cells:
-            outer_loop = loop_tags[flat_id]
-            hole_loops  = outer_to_holes.get(flat_id, [])
-            surf_tag    = gmsh.model.geo.addPlaneSurface([outer_loop] + hole_loops)
+            holes = list(interior_loops.get(flat_id, []))
+            holes.extend(outer_to_island_holes.get(flat_id, []))
+            surf_tag = gmsh.model.geo.addPlaneSurface([loop_tags[flat_id]] + holes)
             self.surface_tags[flat_id] = surf_tag
 
         gmsh.model.geo.synchronize()
@@ -700,13 +859,15 @@ class confMesh2dGMSH():
 
     def _set_mesh_options_and_generate(self, mesh_size_gb, mesh_size_bulk,
                                        mesh_algo, mesh_order,
-                                       recombine_to_quads, gmsh):
+                                       recombine_to_quads, gmsh,
+                                       field_sampling=None):
         """Apply size fields, algorithm, and generate the mesh."""
-        # Distance field on all curves (grain boundaries)
         all_curves = [t for (_, t) in gmsh.model.getEntities(1)]
+        if field_sampling is None:
+            field_sampling = max(20, min(100, 2000 // max(len(all_curves), 1)))
         dist_tag = gmsh.model.mesh.field.add("Distance")
         gmsh.model.mesh.field.setNumbers(dist_tag, "CurvesList", all_curves)
-        gmsh.model.mesh.field.setNumber(dist_tag, "Sampling", 100)
+        gmsh.model.mesh.field.setNumber(dist_tag, "Sampling", int(field_sampling))
 
         thresh_tag = gmsh.model.mesh.field.add("Threshold")
         gmsh.model.mesh.field.setNumber(thresh_tag, "InField", dist_tag)
@@ -737,40 +898,47 @@ class confMesh2dGMSH():
     # ------------------------------------------------------------------
 
     def _extract_nodes_and_elements(self, gmsh):
-        """Populate self.nodes and self.elConn from gmsh mesh data."""
+        """Populate self.nodes and self.elConn from gmsh mesh data.
+
+        Elements are stored in ``surface_tags`` order so physical-group
+        ELSETs can be filled in the same pass (see ``_build_physical_elsets``).
+        """
         node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
         coords = node_coords.reshape(-1, 3)
-        # Build zero-based node array indexed by tag
-        max_tag = int(node_tags.max())
-        node_array = np.full((max_tag + 1, 3), np.nan)
-        for tag, coord in zip(node_tags, coords):
-            node_array[int(tag)] = coord
+        tags = np.asarray(node_tags, dtype=np.int64)
+        node_array = np.full((int(tags.max()) + 1, 3), np.nan)
+        node_array[tags] = coords
         self.nodes = node_array
 
-        tri_conn = []
-        quad_conn = []
-
-        # element type codes: 2=3-node tri, 3=4-node quad,
-        #                      9=6-node tri2, 16=8-node quad2
         TRI_TYPES = {2, 9}
         QUAD_TYPES = {3, 16}
 
-        for dim, tag in gmsh.model.getEntities(2):
-            el_types, el_tags, el_node_tags = gmsh.model.mesh.getElements(dim, tag)
+        tri_conn = []
+        quad_conn = []
+        tri_owners = []  # orig_gid per triangle row
+        quad_owners = []
+
+        for flat_id, surf_tag in self.surface_tags.items():
+            orig_gid = self.gid_map.get(flat_id, flat_id)
+            el_types, el_tags, el_node_tags = gmsh.model.mesh.getElements(2, surf_tag)
             for etype, etags, entags in zip(el_types, el_tags, el_node_tags):
-                props = gmsh.model.mesh.getElementProperties(etype)
-                n_nodes = props[3]
-                connectivity = entags.reshape(-1, n_nodes).astype(int)
+                n_nodes = gmsh.model.mesh.getElementProperties(etype)[3]
+                connectivity = np.asarray(entags, dtype=int).reshape(-1, n_nodes)
                 if etype in TRI_TYPES:
                     tri_conn.append(connectivity)
+                    tri_owners.append(np.full(len(connectivity), orig_gid, dtype=int))
                 elif etype in QUAD_TYPES:
                     quad_conn.append(connectivity)
+                    quad_owners.append(np.full(len(connectivity), orig_gid, dtype=int))
 
         self.elConn = {}
+        self._elem_owners = {}
         if tri_conn:
             self.elConn['triangle'] = np.vstack(tri_conn)
+            self._elem_owners['triangle'] = np.concatenate(tri_owners)
         if quad_conn:
             self.elConn['quad'] = np.vstack(quad_conn)
+            self._elem_owners['quad'] = np.concatenate(quad_owners)
 
     def _extract_gblines(self, gmsh):
         """Extract boundary (curve) line segments into self.GBlines."""
@@ -792,6 +960,71 @@ class confMesh2dGMSH():
         self.availableElTypes = [et for et in ('triangle', 'quad') if et in self.elConn]
         self.availableElTypeID = {et: i for i, et in enumerate(self.availableElTypes)}
         self.availableFeatures = self.availableElTypes.copy()
+
+    def _build_physical_elsets(self, prefix='grain.'):
+        """ELSETs from Gmsh surface ownership (physical groups / surface tags).
+
+        MultiPolygon parts that share ``orig_gid`` land in the same set.
+        """
+        from collections import defaultdict
+        self._physical_elsets = {}
+        for eltype, owners in self._elem_owners.items():
+            mapping = defaultdict(list)
+            for i, gid in enumerate(owners):
+                mapping[f"{prefix}{gid}"].append(i)
+            self._physical_elsets[eltype] = {
+                name: np.asarray(idx, dtype=int) for name, idx in mapping.items()
+            }
+
+    @staticmethod
+    def _signed_areas(nodes, conn, n_corners):
+        """Shoelace signed area of the first ``n_corners`` nodes of each element."""
+        xy = nodes[conn[:, :n_corners], :2]
+        x, y = xy[:, :, 0], xy[:, :, 1]
+        return 0.5 * np.sum(x * np.roll(y, -1, axis=1) - np.roll(x, -1, axis=1) * y, axis=1)
+
+    def _validate_mesh(self, flat_cells, raise_on_fail=True):
+        """Check every grain has elements and 2D signed areas are non-negative."""
+        orig_gids = sorted({self.gid_map.get(fid, fid) for fid in flat_cells})
+        missing = []
+        counts = {}
+        for gid in orig_gids:
+            key = f"grain.{gid}"
+            n = 0
+            for mapping in self._physical_elsets.values():
+                n += len(mapping.get(key, ()))
+            counts[gid] = n
+            if n == 0:
+                missing.append(gid)
+
+        clockwise = 0
+        degenerate = 0
+        for etype, n_corners in (('triangle', 3), ('quad', 4)):
+            if etype not in self.elConn:
+                continue
+            areas = self._signed_areas(self.nodes, self.elConn[etype], n_corners)
+            clockwise += int(np.count_nonzero(areas < -1e-18))
+            degenerate += int(np.count_nonzero(np.abs(areas) < 1e-18))
+
+        n_tri = 0 if 'triangle' not in self.elConn else len(self.elConn['triangle'])
+        n_quad = 0 if 'quad' not in self.elConn else len(self.elConn['quad'])
+        self.validation_report = {
+            'n_tri': n_tri,
+            'n_quad': n_quad,
+            'grain_element_counts': counts,
+            'grains_missing_elements': missing,
+            'clockwise_elements': clockwise,
+            'degenerate_elements': degenerate,
+        }
+        if not raise_on_fail:
+            return self.validation_report
+        if missing:
+            raise RuntimeError(
+                f"Conformal 2D mesh is missing elements for grain IDs: {missing}")
+        if degenerate:
+            raise RuntimeError(
+                f"Conformal 2D mesh has {degenerate} degenerate element(s).")
+        return self.validation_report
 
     # ------------------------------------------------------------------
     # Element sets
@@ -819,27 +1052,79 @@ class confMesh2dGMSH():
         for flat_id, polygon in flat_cells.items():
             orig_gid = self.gid_map.get(flat_id, flat_id)
             key = f"{prefix}{orig_gid}"
-            elsets[key] = self._form_elset_(polygon, elCentroids, elCentroidsTree)
+            ids = self._form_elset_(polygon, elCentroids, elCentroidsTree)
+            if key in elsets and len(elsets[key]) and len(ids):
+                elsets[key] = np.unique(np.concatenate((elsets[key], ids)))
+            elif key in elsets and len(elsets[key]) and not len(ids):
+                pass
+            else:
+                elsets[key] = ids
         return elsets
 
-    def form_elsets_gmsh(self, flat_cells, prefix='grain.'):
+    def form_elsets_gmsh(self, flat_cells=None, prefix='grain.',
+                         verbose=False, verify_shapely=False):
         """
-        Build per-grain element sets from flat_cells polygons.
+        Build per-grain element sets.
+
+        Default source is Gmsh physical-group / surface ownership recorded
+        at extract time. The old centroid-in-polygon walk is kept as an
+        optional check (``verify_shapely=True``) or as a fallback if
+        physical ELSETs were not built.
 
         Parameters
         ----------
-        flat_cells : dict
-            {flat_id: shapely.geometry.Polygon} — same dict used in femesh_gmsh.
+        flat_cells : dict or None
+            {flat_id: shapely.geometry.Polygon}.  Defaults to the dict
+            used in :meth:`femesh_gmsh`.
         prefix : str
             Prefix for element set names (default 'grain.').
+        verbose : bool
+            Print per-element-type progress.
+        verify_shapely : bool
+            Also run the centroid-in-polygon assignment and warn if the
+            grain membership counts disagree.
         """
-        print(f"Available element types: {self.availableElTypes}")
+        if flat_cells is None:
+            flat_cells = self.flat_cells
+        if verbose:
+            print(f"Available element types: {self.availableElTypes}")
+
         self.elsets_eltype = {}
-        for eltype in self.availableElTypes:
-            print(f"  Forming elsets for element type: {eltype}")
-            self.elsets_eltype[eltype] = self._form_elsets_elType_(
-                flat_cells, self.nodes, self.elConn[eltype], prefix=prefix
-            )
+        if self._physical_elsets:
+            for eltype in self.availableElTypes:
+                mapping = self._physical_elsets.get(eltype, {})
+                if prefix == 'grain.':
+                    self.elsets_eltype[eltype] = dict(mapping)
+                else:
+                    self.elsets_eltype[eltype] = {
+                        f"{prefix}{name.split('.', 1)[-1]}": idx
+                        for name, idx in mapping.items()
+                    }
+        else:
+            if flat_cells is None:
+                raise RuntimeError(
+                    "form_elsets_gmsh needs flat_cells or a prior femesh_gmsh.")
+            for eltype in self.availableElTypes:
+                if verbose:
+                    print(f"  Forming elsets for element type: {eltype}")
+                self.elsets_eltype[eltype] = self._form_elsets_elType_(
+                    flat_cells, self.nodes, self.elConn[eltype], prefix=prefix
+                )
+
+        if verify_shapely and flat_cells is not None and self._physical_elsets:
+            for eltype in self.availableElTypes:
+                shapely_sets = self._form_elsets_elType_(
+                    flat_cells, self.nodes, self.elConn[eltype], prefix=prefix)
+                phys = self.elsets_eltype[eltype]
+                for name, idx in phys.items():
+                    other = shapely_sets.get(name, np.array([], dtype=int))
+                    if len(idx) != len(other):
+                        warnings.warn(
+                            f"ELSET {name!r} ({eltype}): physical-tag count "
+                            f"{len(idx)} != centroid-in-polygon count {len(other)}",
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
 
         self.find_elID_ranges()
 
@@ -847,12 +1132,11 @@ class confMesh2dGMSH():
             self.elsets = self.elsets_eltype[self.availableElTypes[0]]
             return
 
-        # Merge multiple element types with offset global numbering
         self.elsets = {name: elset.tolist()
                        for name, elset in self.elsets_eltype[self.availableElTypes[0]].items()}
         nel0 = self.elID_ranges[self.availableElTypes[0]][1]
         for name, elset in self.elsets_eltype[self.availableElTypes[1]].items():
-            elset_offset = elset + nel0
+            elset_offset = np.asarray(elset) + nel0
             self.elsets.setdefault(name, [])
             self.elsets[name].extend(elset_offset.tolist())
             self.elsets[name] = np.array(self.elsets[name], dtype=np.int32)
@@ -1023,6 +1307,27 @@ class confMesh2dGMSH():
         """See femesh."""
         from upxo.viz.meshviz import see_femesh
         return see_femesh(*args, **kwargs)
+
+    def plot_by_grain(self, **kwargs):
+        """Grain-coloured 2D mesh plot. See ``upxo.viz.meshviz.plot_conformal_2d_by_grain``."""
+        from upxo.viz.meshviz import plot_conformal_2d_by_grain
+        if not self.elsets_eltype:
+            self.form_elsets_gmsh()
+        return plot_conformal_2d_by_grain(
+            self.nodes, self.elConn, self.elsets_eltype,
+            GBlines=self.GBlines, nsets=self.nsets, **kwargs)
+
+    def export_abaqus_inp(self, path, **kwargs):
+        """Abaqus ``.inp`` export. See ``upxo.meshing.writer_ABQ.export_confmesh2d_inp``."""
+        from upxo.meshing.writer_ABQ import export_confmesh2d_inp
+        if not self.elsets_eltype:
+            self.form_elsets_gmsh()
+        if not any(k in self.nsets for k in ('LEFT', 'RIGHT', 'TOP', 'BOTTOM')):
+            self.build_boundary_nsets()
+            self.build_gb_nset()
+        return export_confmesh2d_inp(
+            path, self.nodes, self.elConn, self.elsets_eltype,
+            nsets=self.nsets, **kwargs)
 
     def see_gbElements_grains(self, grain_name, **kwargs):
         """See gbelements grains."""
