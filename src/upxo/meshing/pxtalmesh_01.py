@@ -32,8 +32,8 @@ class geo_pxtal_mesh():
     ``vtpolyxtal2d``. Supports triangle/quad elements, per-grain
     element sizes, and optional VTK/INP export.
 
-    Prefer higher-level orchestrators (``confMesh2d``,
-    ``confMesh2dGMSH``) for current workflows; this class holds
+    Prefer ``confMesh2dGMSH`` / ``gsmesh2d.mesh_gs`` for current
+    workflows. ``confMesh2d`` (pygmsh) is deprecated. This class holds
     lower-level mesh bookkeeping and historical pygmsh/gmsh notes.
 
     Attributes
