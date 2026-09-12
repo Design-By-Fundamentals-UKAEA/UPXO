@@ -18,6 +18,13 @@ All notable changes to UPXO are documented in this file.
 #### Conformal Meshing Extensions
 - **`meshing/confMesh3d/`**: Optional surface remeshing stage (`surface_remesh.py`) and a TetGen tet-meshing backend (`tetgen_mesh.py`)
 
+#### 2D conformal meshing (raw Gmsh)
+- **`confMesh2dGMSH`**: Shared grain-boundary line tags, island/void interiors, Gmsh physical-group ELSETs, `from_geometric_pxtal`, safer `try`/`finally` Gmsh sessions, vectorised mesh extract
+- **`viz.meshviz.plot_conformal_2d_by_grain`**: Grain-ELSET fill with optional GB overlay and face NSETs (used by `confMesh2dGMSH.plot_by_grain` and `gsmesh2d.visualize_gs_mesh`)
+- **`writer_ABQ.export_confmesh2d_inp`**: Compact 1..N nodes, CPS3/CPS4 or CPE3/CPE4, `GRAIN_*` ELSETs, `NS_LEFT`/`RIGHT`/`TOP`/`BOTTOM`/`GB` NSETs, optional dummy sections (`summarize_inp` helper)
+- **Demos** (force-tracked under `src/upxo/demos/confMesh/`): `confMesh2d_gmsh.ipynb` (canonical path), `confMesh2d_export.ipynb` (plot + Abaqus INP); `confMesh2d5.ipynb` adopted the GMSH path
+- **Tests**: `tests/meshing/test_confmesh2d_gmsh.py`
+
 #### Centralized Reporting
 - **`reporting/`**: Session/entries/HTML-rendering core for building structured pipeline reports
 - **`pxtal/fm_steel_3d/raw_export.py`**: Raw pipeline-state export across PAG/Packet/Block/Sub-block hierarchy levels
@@ -61,7 +68,9 @@ All notable changes to UPXO are documented in this file.
 
 - **Twinned FCC orientation assignment**: `max_retries` exposed; MDF bin width/angle range now derived from `mdf_ref` instead of a hardcoded 65°; `neighbour_frac` added to Pool B host allocation with do/do-not fallback; MRF Gibbs/MAP initialization reuses `self.fallback_quats` instead of drawing a fresh unseeded sample
 - **`xtalphy/texops.py`**: Fixed the same Bunge ZXZ Euler-decomposition bug present in `crystal_orientation.matrix_to_euler_bunge`; added texture-component detection; ported GUI-only quaternion helpers into core
-- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; new pytest `gui` marker for tests requiring a live Tkinter display
+- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; new pytest `gui` marker for tests requiring a live Tkinter display; optional extra `[mesh]` now also installs `gmsh>=4.13`
+- **`confMesh2d` (pygmsh)** is deprecated; new 2D conformal work must use `confMesh2dGMSH` / `gsmesh2d.mesh_gs`
+- Removed redundant tracked demos `confMesh2d9.ipynb` and `mesh2d01.ipynb`
 
 ### Not Included (Deferred)
 
