@@ -16,8 +16,11 @@ class nonConformalMesher():
 
     Builds a regular grid of elements and assigns grain IDs as element
     sets — grain boundaries are *not* geometrically conformal (edges do
-    not follow GB curves). Prefer :class:`~upxo.meshing.conformal_mesher2d.confMesh2d`
-    / confMesh3d when conformal GB meshes are required.
+    not follow GB curves). Prefer
+    :class:`~upxo.meshing.conformal_mesher2d.confMesh2dGMSH` /
+    :func:`~upxo.meshing.gsmesh2d.mesh_gs` (2D) or ``confMesh3d`` (3D)
+    when conformal GB meshes are required. ``confMesh2d`` (pygmsh) is
+    deprecated.
 
     Element types
     -------------
