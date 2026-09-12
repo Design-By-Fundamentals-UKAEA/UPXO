@@ -743,3 +743,58 @@ def see_gbElements_grains(gb_elements_grain, eltypes=None, elConn=None,
             show_colorbar=(idx == len(eltypes)-1), title=title)
     plt.tight_layout()
     return fig, ax
+
+
+def plot_conformal_2d_by_grain(
+        nodes, elConn, elsets_eltype, GBlines=None, nsets=None,
+        figsize=(7, 7), dpi=140, cmap='tab20', show_gb=True,
+        show_nsets=False, title=None, ax=None):
+    """Fill 2D conformal elements by grain ELSET; overlay GB and optional NSETs.
+
+    Used by ``confMesh2dGMSH.plot_by_grain`` and ``gsmesh2d.visualize_gs_mesh``.
+    """
+    from matplotlib.patches import Patch
+
+    pts = np.asarray(nodes)[:, :2]
+    fig = None
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    cmap_obj = plt.get_cmap(cmap)
+    grain_names = []
+    for mapping in (elsets_eltype or {}).values():
+        grain_names.extend(mapping.keys())
+    grain_names = sorted(set(grain_names), key=str)
+    legend_handles = []
+    for i, name in enumerate(grain_names):
+        color = cmap_obj(i % cmap_obj.N)
+        legend_handles.append(Patch(facecolor=color, edgecolor='none', label=name))
+        for eltype, ncorn in (('triangle', 3), ('quad', 4)):
+            conn = (elConn or {}).get(eltype)
+            ids = (elsets_eltype or {}).get(eltype, {}).get(name, np.array([], dtype=int))
+            if conn is None or len(ids) == 0:
+                continue
+            ax.add_collection(PolyCollection(
+                pts[conn[ids][:, :ncorn]], facecolors=color, edgecolors='0.35',
+                linewidths=0.15, alpha=0.92))
+    if show_gb and GBlines is not None and len(GBlines):
+        ax.add_collection(LineCollection(
+            pts[np.asarray(GBlines)], colors='k', linewidths=0.7, zorder=3))
+    if show_nsets and nsets:
+        styles = {
+            'LEFT': ('C0', '<'), 'RIGHT': ('C3', '>'),
+            'BOTTOM': ('C2', 'v'), 'TOP': ('C1', '^'),
+        }
+        for key, (col, mk) in styles.items():
+            ids = nsets.get(key, np.array([], dtype=int))
+            if len(ids):
+                ax.scatter(pts[ids, 0], pts[ids, 1], s=12, c=col, marker=mk,
+                           zorder=4, label=key)
+    ax.set_aspect('equal')
+    ax.autoscale_view()
+    ax.set_title(title or 'Conformal 2D mesh by grain')
+    if len(grain_names) <= 12:
+        ax.legend(handles=legend_handles, fontsize=7, loc='upper right',
+                  framealpha=0.9)
+    if fig is not None:
+        fig.tight_layout()
+    return fig, ax
