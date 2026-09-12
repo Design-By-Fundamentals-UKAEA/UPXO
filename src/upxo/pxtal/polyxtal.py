@@ -55,8 +55,9 @@ class vtpolyxtal2d():
 
     Builds a level-0 geometric polycrystal from seed multipoints or
     coordinate lists within ``xbound`` / ``ybound``. Used as the geometry
-    source for conformal 2D meshing (``confMesh2d.from_geometric_pxtal``)
-    and VTGS-style workflows. Related higher-level multi-instance API:
+    source for conformal 2D meshing (``confMesh2dGMSH`` /
+    ``gsmesh2d.mesh_gs``; ``confMesh2d.from_geometric_pxtal`` is
+    deprecated) and VTGS-style workflows. Related higher-level multi-instance API:
     :class:`~upxo.pxtal.vortess2d.gtess2d`.
 
     Parameters
