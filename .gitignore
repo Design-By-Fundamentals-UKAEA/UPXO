@@ -138,3 +138,6 @@ src/upxo/Important links.md
 *.exe
 
 /src/upxo/__glbbckup/
+
+# Local conformal meshing development notes
+/src/upxo/meshing/gbconformant/d3v2p0/CM05_FREEZING.md
