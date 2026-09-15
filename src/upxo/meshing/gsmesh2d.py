@@ -68,12 +68,13 @@ def _mesh_conformal(
     mesh_order: int,
     mesh_algo: int,
     recombine_to_quads: bool,
-    dist_min: float,
-    dist_max: float,
+    dist_min: float | None,
+    dist_max: float | None,
     out_dir: str | None,
     basename: str,
     formats: list | None,
     verbose: bool,
+    optimize: bool = False,
 ) -> dict:
     """ mesh conformal."""
     from upxo.meshing.conformal_mesher2d import confMesh2dGMSH
@@ -94,6 +95,10 @@ def _mesh_conformal(
         out_dir=out_dir,
         basename=basename,
         formats=formats,
+        dist_min=dist_min,
+        dist_max=dist_max,
+        optimize=optimize,
+        verbose=verbose,
     )
     elapsed = time.perf_counter() - t0
 
@@ -113,6 +118,8 @@ def _mesh_conformal(
         'n_quad':     n_quad,
         'elapsed':    elapsed,
         'exported':   list(getattr(m, '_exported', [])),
+        'fidelity':   getattr(m, 'fidelity_report', None),
+        'quality':    getattr(m, 'quality_report', None),
     }
 
 
@@ -128,12 +135,13 @@ def mesh_gs(
     mesh_order: int = 1,
     mesh_algo: int = 8,
     recombine_to_quads: bool = True,
-    dist_min: float = 0.5,
-    dist_max: float = 5.0,
+    dist_min: float | None = None,
+    dist_max: float | None = None,
     out_dir: str | None = None,
     basename: str = 'gs_mesh',
     formats: list | None = None,
     verbose: bool = False,
+    optimize: bool = False,
 ) -> dict:
     """
     Orchestrate FE meshing for a dict of Shapely grain polygons.
@@ -147,8 +155,9 @@ def mesh_gs(
     mesh_order       : Element order (1 = linear, 2 = quadratic).
     mesh_algo        : Gmsh algorithm ID (6=Frontal, 8=Frontal-Delaunay quads).
     recombine_to_quads: Recombine triangles into quads after generation.
-    dist_min         : Distance field DistMin (passed through; currently stored in result).
-    dist_max         : Distance field DistMax (passed through; currently stored in result).
+    dist_min         : Threshold DistMin (default: mesh_size_gb).
+    dist_max         : Threshold DistMax (default: 2 * mesh_size_bulk).
+    optimize         : Run Gmsh Laplace2D / Relocate2D after generate.
     out_dir          : Directory for exported files.  No export when None.
     basename         : Filename stem (extension appended per format).
     formats          : List of format extensions, e.g. ``['msh', 'inp', 'vtk']``.
@@ -181,6 +190,7 @@ def mesh_gs(
             basename=basename,
             formats=formats,
             verbose=verbose,
+            optimize=optimize,
         )
     elif method == 'non_conformal':
         raise NotImplementedError('Non-conformal meshing orchestration: coming soon.')
