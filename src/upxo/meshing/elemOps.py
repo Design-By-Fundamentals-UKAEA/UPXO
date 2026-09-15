@@ -31,8 +31,18 @@ def get_elCentroids_2d(nodes, elConn, availableElTypes):
         centroid_data['UPXOMultiPoint'][eltype] = mulpoint2d(elCentroids_coords[eltype])
     return centroid_data
 
+def _corner_count(eltype, n_nodes):
+    """Number of corner vertices (ignore mid-side nodes on quadratic elements)."""
+    if eltype == 'triangle' or str(eltype).startswith('tri'):
+        return 3
+    if eltype == 'quad':
+        return 4
+    return min(4, int(n_nodes))
+
+
 def compute_elementQuality_AR_2d(nodes, elConn):
-    """
+    """Max/min corner-edge length ratio per element (quadratic uses corners only).
+
     Usage
     -----
     from upxo.meshing.elemOps import compute_elementQuality_AR as compute_elq_AR
@@ -43,17 +53,44 @@ def compute_elementQuality_AR_2d(nodes, elConn):
         if conn is None or len(conn) == 0:
             aspect_ratios[eltype] = np.array([], dtype=float)
             continue
-        edge_lengths = []
-        for elem in conn:
-            pts = coords[elem]
-            edges = np.roll(pts, -1, axis=0) - pts
-            edge_lengths.append(np.linalg.norm(edges, axis=1))
-        edge_lengths = np.array(edge_lengths)
+        conn = np.asarray(conn)
+        ncorn = _corner_count(eltype, conn.shape[1])
+        pts = coords[conn[:, :ncorn]]
+        edges = np.roll(pts, -1, axis=1) - pts
+        edge_lengths = np.linalg.norm(edges, axis=2)
         max_len = edge_lengths.max(axis=1)
         min_len = edge_lengths.min(axis=1)
-        aspect_ratios[eltype] = np.divide(max_len, min_len, out=np.full_like(max_len, np.nan, dtype=float),
-                                          where=min_len > 0)
+        aspect_ratios[eltype] = np.divide(
+            max_len, min_len,
+            out=np.full_like(max_len, np.nan, dtype=float),
+            where=min_len > 0)
     return aspect_ratios
+
+
+def compute_min_angle_deg_2d(nodes, elConn):
+    """Smallest interior corner angle (degrees) per element."""
+    coords = np.asarray(nodes)[:, :2]
+    out = {}
+    for eltype, conn in elConn.items():
+        if conn is None or len(conn) == 0:
+            out[eltype] = np.array([], dtype=float)
+            continue
+        conn = np.asarray(conn)
+        ncorn = _corner_count(eltype, conn.shape[1])
+        pts = coords[conn[:, :ncorn]]
+        prev = np.roll(pts, 1, axis=1)
+        nxt = np.roll(pts, -1, axis=1)
+        v1 = prev - pts
+        v2 = nxt - pts
+        n1 = np.linalg.norm(v1, axis=2)
+        n2 = np.linalg.norm(v2, axis=2)
+        den = n1 * n2
+        cosang = np.divide(
+            np.sum(v1 * v2, axis=2), den,
+            out=np.ones_like(den), where=den > 0)
+        cosang = np.clip(cosang, -1.0, 1.0)
+        out[eltype] = np.degrees(np.arccos(cosang)).min(axis=1)
+    return out
 
 def find_elIDs_by_quality(elQual=None, quality_parameter='ar', 
                           elTypes=['triangle', 'quad'], vmin=1, vmax=2):
