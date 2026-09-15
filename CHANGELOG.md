@@ -22,7 +22,7 @@ All notable changes to UPXO are documented in this file.
 - **`confMesh2dGMSH`**: Shared grain-boundary line tags, island/void interiors, Gmsh physical-group ELSETs, `from_geometric_pxtal`, safer `try`/`finally` Gmsh sessions, vectorised mesh extract
 - **`viz.meshviz.plot_conformal_2d_by_grain`**: Grain-ELSET fill with optional GB overlay and face NSETs (used by `confMesh2dGMSH.plot_by_grain` and `gsmesh2d.visualize_gs_mesh`)
 - **`writer_ABQ.export_confmesh2d_inp`**: Compact 1..N nodes, CPS3/CPS4 or CPE3/CPE4, `GRAIN_*` ELSETs, `NS_LEFT`/`RIGHT`/`TOP`/`BOTTOM`/`GB` NSETs, optional dummy sections (`summarize_inp` helper)
-- **Demos** (force-tracked under `src/upxo/demos/confMesh/`): `confMesh2d_gmsh.ipynb` (canonical path), `confMesh2d_export.ipynb` (plot + Abaqus INP); `confMesh2d5.ipynb` adopted the GMSH path
+- **Demos** (force-tracked under `src/upxo/demos/confMesh/`): `confMesh2d_gmsh.ipynb` (canonical), `confMesh2d_export.ipynb` (plot + Abaqus INP), `confMesh2d_mcgs.ipynb` (MCGS teaching path), `confMesh2d_geometrify.ipynb` (polygonise then `mesh_gs`), `confMesh2d_technique_b.ipynb` (Technique B then `mesh_gs`)
 - **Tests**: `tests/meshing/test_confmesh2d_gmsh.py`
 
 #### Centralized Reporting
