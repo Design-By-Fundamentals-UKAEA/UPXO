@@ -45,13 +45,35 @@ def summarize_inp(path):
     return {k: k.lower() in text.lower() for k in keys}
 
 
+def _abaqus_shell_type(eltype, n_nodes, plane):
+    """Return ``(Abaqus *Element type, nodes written)`` for a 2D connectivity.
+
+    Linear: CPS3/CPS4 or CPE3/CPE4. Quadratic: CPS6/CPE6 (6-node tri) and
+    CPS8/CPE8 (8-node serendipity quad). Gmsh 6-node tri / 8-node quad node
+    order matches Abaqus (corners then mid-side nodes).
+    """
+    if plane not in ('stress', 'strain'):
+        raise ValueError("plane must be 'stress' or 'strain'")
+    s = plane == 'stress'
+    if eltype == 'triangle':
+        if n_nodes >= 6:
+            return ('CPS6' if s else 'CPE6'), 6
+        return ('CPS3' if s else 'CPE3'), 3
+    if eltype == 'quad':
+        if n_nodes >= 8:
+            return ('CPS8' if s else 'CPE8'), 8
+        return ('CPS4' if s else 'CPE4'), 4
+    raise ValueError(f"Unsupported element type {eltype!r}")
+
+
 def export_confmesh2d_inp(
         path, nodes, elConn, elsets_eltype, nsets=None,
         plane='stress', thickness=1.0, write_sections=True, heading=None):
     """Write a 2D conformal mesh to an Abaqus ``.inp``.
 
-    Compacts sparse node tags to 1..N. ``plane='stress'`` → CPS3/CPS4,
-    ``plane='strain'`` → CPE3/CPE4. Dummy isotropic sections are optional.
+    Compacts sparse node tags to 1..N. ``plane='stress'`` → CPS3/CPS6/CPS4/CPS8,
+    ``plane='strain'`` → CPE3/CPE6/CPE4/CPE8, chosen from connectivity width.
+    Dummy isotropic sections are optional.
     """
     from pathlib import Path
 
@@ -63,14 +85,6 @@ def export_confmesh2d_inp(
     remap = np.zeros(int(old_ids.max()) + 1, dtype=int)
     remap[old_ids] = np.arange(1, old_ids.size + 1)
     xy = nodes[old_ids, :2]
-
-    type_map = {
-        'stress': {'triangle': 'CPS3', 'quad': 'CPS4'},
-        'strain': {'triangle': 'CPE3', 'quad': 'CPE4'},
-    }
-    if plane not in type_map:
-        raise ValueError("plane must be 'stress' or 'strain'")
-    abq_types = type_map[plane]
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,11 +105,12 @@ def export_confmesh2d_inp(
             conn = elConn.get(eltype) if elConn else None
             if conn is None or len(conn) == 0:
                 continue
-            ncorn = 3 if eltype == 'triangle' else 4
-            f.write(f"*Element, type={abq_types[eltype]}\n")
+            n_nodes = int(np.asarray(conn).shape[1])
+            abq_type, n_write = _abaqus_shell_type(eltype, n_nodes, plane)
+            f.write(f"*Element, type={abq_type}\n")
             for local_i, nds in enumerate(conn):
                 eid = eid_offset + local_i + 1
-                nstr = ", ".join(str(int(remap[n])) for n in nds[:ncorn])
+                nstr = ", ".join(str(int(remap[n])) for n in nds[:n_write])
                 f.write(f"{eid}, {nstr}\n")
             for name, local_ids in elsets_eltype.get(eltype, {}).items():
                 gids = np.asarray(local_ids, dtype=int) + eid_offset + 1
