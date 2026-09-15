@@ -21,7 +21,8 @@ All notable changes to UPXO are documented in this file.
 #### 2D conformal meshing (raw Gmsh)
 - **`confMesh2dGMSH`**: Shared grain-boundary line tags, island/void interiors, Gmsh physical-group ELSETs, `from_geometric_pxtal`, safer `try`/`finally` Gmsh sessions, vectorised mesh extract
 - **`viz.meshviz.plot_conformal_2d_by_grain`**: Grain-ELSET fill with optional GB overlay and face NSETs (used by `confMesh2dGMSH.plot_by_grain` and `gsmesh2d.visualize_gs_mesh`)
-- **`writer_ABQ.export_confmesh2d_inp`**: Compact 1..N nodes, CPS3/CPS4 or CPE3/CPE4, `GRAIN_*` ELSETs, `NS_LEFT`/`RIGHT`/`TOP`/`BOTTOM`/`GB` NSETs, optional dummy sections (`summarize_inp` helper)
+- **`writer_ABQ.export_confmesh2d_inp`**: Compact 1..N nodes; CPS3/CPS6/CPS4/CPS8 or CPE3/CPE6/CPE4/CPE8 from connectivity width; `GRAIN_*` ELSETs, `NS_LEFT`/`RIGHT`/`TOP`/`BOTTOM`/`GB` NSETs, optional dummy sections (`summarize_inp` helper)
+- **2D mesh fidelity**: `prepare_grain_polygons` (snap / orient); Threshold `dist_min`/`dist_max` actually applied; optional Laplace2D optimize; clockwise elements reversed after extract; `fidelity_report` (mesh vs Shapely area/GB length) and `quality_report` (aspect ratio, min angle)
 - **Demos** (force-tracked under `src/upxo/demos/confMesh/`): `confMesh2d_gmsh.ipynb` (canonical), `confMesh2d_export.ipynb` (plot + Abaqus INP), `confMesh2d_mcgs.ipynb` (MCGS teaching path), `confMesh2d_geometrify.ipynb` (polygonise then `mesh_gs`), `confMesh2d_technique_b.ipynb` (Technique B then `mesh_gs`); capability notebooks `confMesh2d_tri_vs_quad`, `confMesh2d_islands_voids`, `confMesh2d_voronoi`, `confMesh2d_size_field`, `confMesh2d_quadratic`, `confMesh2d_quality`, `confMesh2d_nsets`
 - **Tests**: `tests/meshing/test_confmesh2d_gmsh.py`
 
