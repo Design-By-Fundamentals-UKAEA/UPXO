@@ -533,6 +533,8 @@ class confMesh2dGMSH():
         # export / validation
         '_exported',
         'validation_report',
+        'fidelity_report',
+        'quality_report',
     )
 
     def __init__(self):
@@ -564,6 +566,8 @@ class confMesh2dGMSH():
         self.grid = None
         self._exported = []
         self.validation_report = None
+        self.fidelity_report = None
+        self.quality_report = None
 
     @classmethod
     def from_geometric_pxtal(cls,
@@ -610,7 +614,11 @@ class confMesh2dGMSH():
                     out_dir=None, basename='gs_mesh', formats=None,
                     field_sampling=None, n_threads=None,
                     snap_tol=None, island_cover_frac=0.95,
-                    validate=True, verbose=False):
+                    validate=True, verbose=False,
+                    dist_min=None, dist_max=None,
+                    clean_geometry=True, unify_winding=True,
+                    optimize=False, mesh_size_from_curvature=False,
+                    fidelity_tol=None):
         """
         Full gmsh meshing pipeline.
 
@@ -651,6 +659,22 @@ class confMesh2dGMSH():
             Raise if a grain has no elements or inverted elements are found.
         verbose : bool
             Let Gmsh print to the terminal.
+        dist_min, dist_max : float or None
+            Threshold-field distances.  Defaults: ``mesh_size_gb`` and
+            ``2 * mesh_size_bulk``.
+        clean_geometry : bool
+            Snap near-duplicate vertices, drop collapsed edges, and orient
+            rings CCW/CW before Gmsh.
+        unify_winding : bool
+            Reverse clockwise elements after extract so signed areas are >= 0.
+        optimize : bool
+            Run Gmsh ``Laplace2D`` (then ``Relocate2D`` if available) after
+            generate.  Leftover triangles after recombination are kept.
+        mesh_size_from_curvature : bool
+            Let Gmsh grade size from GB curvature in addition to the
+            distance Threshold field.
+        fidelity_tol : float or None
+            If set, raise when max grain-area relative error exceeds this.
         """
         import os
         try:
@@ -671,12 +695,29 @@ class confMesh2dGMSH():
             gid_map = self.gid_map if self.gid_map is not None else {
                 k: k for k in flat_cells}
 
+        if snap_tol is None:
+            xs, ys = [], []
+            for polygon in flat_cells.values():
+                x, y = polygon.exterior.xy
+                xs.extend(x)
+                ys.extend(y)
+            dx = (max(xs) - min(xs)) if xs else 1.0
+            dy = (max(ys) - min(ys)) if ys else 1.0
+            snap_tol = max(1e-12, 1e-9 * max(dx, dy, 1.0))
+        if clean_geometry:
+            flat_cells = self.prepare_grain_polygons(
+                flat_cells, min_edge=None, snap_tol=snap_tol)
+
         self.flat_cells = flat_cells
         self.elementShape = 'quad' if recombine_to_quads else 'tri'
         self.elementOrder = mesh_order
         self.meshingAlgorithmID = mesh_algo
         self.recombine_to_quads = recombine_to_quads
         self.gid_map = gid_map
+        if dist_min is None:
+            dist_min = mesh_size_gb
+        if dist_max is None:
+            dist_max = mesh_size_bulk * 2
 
         initialized = False
         try:
@@ -698,8 +739,11 @@ class confMesh2dGMSH():
             self._assign_physical_groups(flat_cells, gmsh)
             self._set_mesh_options_and_generate(
                 mesh_size_gb, mesh_size_bulk, mesh_algo, mesh_order,
-                recombine_to_quads, gmsh, field_sampling=field_sampling)
-            self._extract_nodes_and_elements(gmsh)
+                recombine_to_quads, gmsh, field_sampling=field_sampling,
+                dist_min=dist_min, dist_max=dist_max,
+                optimize=optimize,
+                mesh_size_from_curvature=mesh_size_from_curvature)
+            self._extract_nodes_and_elements(gmsh, unify_winding=unify_winding)
             self._extract_gblines(gmsh)
 
             self._exported = []
@@ -723,10 +767,72 @@ class confMesh2dGMSH():
         self._detect_available_eltypes()
         self._build_physical_elsets()
         self._validate_mesh(flat_cells, raise_on_fail=validate)
+        self.report_fidelity(flat_cells)
+        self.report_quality()
+        if fidelity_tol is not None:
+            err = self.fidelity_report.get('max_area_rel_error', 0.0)
+            if err > fidelity_tol:
+                raise RuntimeError(
+                    f"Conformal 2D mesh grain-area relative error "
+                    f"{err:.4g} exceeds fidelity_tol={fidelity_tol}")
 
     # ------------------------------------------------------------------
     # Geometry building
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def prepare_grain_polygons(flat_cells, min_edge=None, snap_tol=1e-9):
+        """Snap near-duplicate vertices, drop collapsed edges, orient rings.
+
+        Exterior rings are forced CCW and interiors CW (Shapely ``orient``).
+        Invalid results fall back to the input polygon.
+        """
+        from shapely.geometry import Polygon
+        from shapely.geometry.polygon import orient
+
+        inv = 1.0 / max(float(snap_tol), 1e-18)
+
+        def _clean_ring(coords):
+            snapped = []
+            for x, y in coords:
+                key = (int(round(x * inv)), int(round(y * inv)))
+                pt = (key[0] / inv, key[1] / inv)
+                if not snapped or pt != snapped[-1]:
+                    snapped.append(pt)
+            if len(snapped) > 1 and snapped[0] == snapped[-1]:
+                snapped = snapped[:-1]
+            if min_edge is not None and min_edge > 0 and len(snapped) >= 3:
+                kept = [snapped[0]]
+                for pt in snapped[1:]:
+                    dx = pt[0] - kept[-1][0]
+                    dy = pt[1] - kept[-1][1]
+                    if (dx * dx + dy * dy) ** 0.5 >= min_edge:
+                        kept.append(pt)
+                if len(kept) >= 2:
+                    dx = kept[0][0] - kept[-1][0]
+                    dy = kept[0][1] - kept[-1][1]
+                    if (dx * dx + dy * dy) ** 0.5 < min_edge:
+                        kept = kept[:-1]
+                snapped = kept
+            return snapped
+
+        cleaned = {}
+        for fid, poly in flat_cells.items():
+            try:
+                ext = _clean_ring(list(poly.exterior.coords)[:-1])
+                holes = [_clean_ring(list(r.coords)[:-1]) for r in poly.interiors]
+                holes = [h for h in holes if len(h) >= 3]
+                if len(ext) < 3:
+                    cleaned[fid] = poly
+                    continue
+                newp = Polygon(ext, holes)
+                if not newp.is_valid or newp.area <= 0:
+                    cleaned[fid] = poly
+                    continue
+                cleaned[fid] = orient(newp, sign=1.0)
+            except Exception:
+                cleaned[fid] = poly
+        return cleaned
 
     @staticmethod
     def _polygon_cover_frac(outer, inner):
@@ -860,11 +966,18 @@ class confMesh2dGMSH():
     def _set_mesh_options_and_generate(self, mesh_size_gb, mesh_size_bulk,
                                        mesh_algo, mesh_order,
                                        recombine_to_quads, gmsh,
-                                       field_sampling=None):
+                                       field_sampling=None,
+                                       dist_min=None, dist_max=None,
+                                       optimize=False,
+                                       mesh_size_from_curvature=False):
         """Apply size fields, algorithm, and generate the mesh."""
         all_curves = [t for (_, t) in gmsh.model.getEntities(1)]
         if field_sampling is None:
             field_sampling = max(20, min(100, 2000 // max(len(all_curves), 1)))
+        if dist_min is None:
+            dist_min = mesh_size_gb
+        if dist_max is None:
+            dist_max = mesh_size_bulk * 2
         dist_tag = gmsh.model.mesh.field.add("Distance")
         gmsh.model.mesh.field.setNumbers(dist_tag, "CurvesList", all_curves)
         gmsh.model.mesh.field.setNumber(dist_tag, "Sampling", int(field_sampling))
@@ -873,14 +986,20 @@ class confMesh2dGMSH():
         gmsh.model.mesh.field.setNumber(thresh_tag, "InField", dist_tag)
         gmsh.model.mesh.field.setNumber(thresh_tag, "SizeMin", mesh_size_gb)
         gmsh.model.mesh.field.setNumber(thresh_tag, "SizeMax", mesh_size_bulk)
-        gmsh.model.mesh.field.setNumber(thresh_tag, "DistMin", mesh_size_gb)
-        gmsh.model.mesh.field.setNumber(thresh_tag, "DistMax", mesh_size_bulk * 2)
+        gmsh.model.mesh.field.setNumber(thresh_tag, "DistMin", dist_min)
+        gmsh.model.mesh.field.setNumber(thresh_tag, "DistMax", dist_max)
 
         gmsh.model.mesh.field.setAsBackgroundMesh(thresh_tag)
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromPoints", 0)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
+        curv = 12.0 if mesh_size_from_curvature else 0.0
+        for opt in ("Mesh.MeshSizeFromCurvature",
+                    "Mesh.CharacteristicLengthFromCurvature"):
+            try:
+                gmsh.option.setNumber(opt, curv)
+            except Exception:
+                pass
         gmsh.option.setNumber("Mesh.Algorithm", mesh_algo)
         gmsh.option.setNumber("Mesh.ElementOrder", mesh_order)
 
@@ -893,11 +1012,35 @@ class confMesh2dGMSH():
         if mesh_order > 1:
             gmsh.model.mesh.setOrder(mesh_order)
 
+        if optimize:
+            for method in ("Laplace2D", "Relocate2D"):
+                try:
+                    gmsh.model.mesh.optimize(method)
+                except Exception:
+                    pass
+
     # ------------------------------------------------------------------
     # Mesh extraction
     # ------------------------------------------------------------------
 
-    def _extract_nodes_and_elements(self, gmsh):
+    @staticmethod
+    def _flip_winding(conn, n_corners):
+        """Reverse orientation; keep mid-side nodes on the same edges."""
+        conn = np.array(conn, copy=True)
+        n = conn.shape[1]
+        if n_corners == 3:
+            if n >= 6:
+                conn[:, [1, 2, 3, 5]] = conn[:, [2, 1, 5, 3]]
+            else:
+                conn[:, [1, 2]] = conn[:, [2, 1]]
+        elif n_corners == 4:
+            if n >= 8:
+                conn[:, [1, 3, 4, 5, 6, 7]] = conn[:, [3, 1, 7, 6, 5, 4]]
+            else:
+                conn[:, [1, 3]] = conn[:, [3, 1]]
+        return conn
+
+    def _extract_nodes_and_elements(self, gmsh, unify_winding=True):
         """Populate self.nodes and self.elConn from gmsh mesh data.
 
         Elements are stored in ``surface_tags`` order so physical-group
@@ -934,10 +1077,24 @@ class confMesh2dGMSH():
         self.elConn = {}
         self._elem_owners = {}
         if tri_conn:
-            self.elConn['triangle'] = np.vstack(tri_conn)
+            tri = np.vstack(tri_conn)
+            if unify_winding:
+                areas = self._signed_areas(self.nodes, tri, 3)
+                flip = areas < -1e-18
+                if np.any(flip):
+                    tri = tri.copy()
+                    tri[flip] = self._flip_winding(tri[flip], 3)
+            self.elConn['triangle'] = tri
             self._elem_owners['triangle'] = np.concatenate(tri_owners)
         if quad_conn:
-            self.elConn['quad'] = np.vstack(quad_conn)
+            quad = np.vstack(quad_conn)
+            if unify_winding:
+                areas = self._signed_areas(self.nodes, quad, 4)
+                flip = areas < -1e-18
+                if np.any(flip):
+                    quad = quad.copy()
+                    quad[flip] = self._flip_winding(quad[flip], 4)
+            self.elConn['quad'] = quad
             self._elem_owners['quad'] = np.concatenate(quad_owners)
 
     def _extract_gblines(self, gmsh):
@@ -1025,6 +1182,107 @@ class confMesh2dGMSH():
             raise RuntimeError(
                 f"Conformal 2D mesh has {degenerate} degenerate element(s).")
         return self.validation_report
+
+    def report_fidelity(self, flat_cells=None):
+        """Compare mesh grain area and GB length to the input Shapely polygons.
+
+        Relative error is ``|mesh - shapely| / shapely`` per original grain id.
+        Shared GB edges are counted once in the mesh length and match
+        ``polygon.boundary.length`` per grain (each shared edge appears on
+        two grain boundaries).
+        """
+        if flat_cells is None:
+            flat_cells = self.flat_cells or {}
+        gid_map = self.gid_map or {k: k for k in flat_cells}
+
+        shapely_area = {}
+        shapely_gb = {}
+        for fid, poly in flat_cells.items():
+            gid = gid_map.get(fid, fid)
+            shapely_area[gid] = shapely_area.get(gid, 0.0) + float(poly.area)
+            shapely_gb[gid] = shapely_gb.get(gid, 0.0) + float(poly.boundary.length)
+
+        mesh_area = {gid: 0.0 for gid in shapely_area}
+        for etype, ncorn in (('triangle', 3), ('quad', 4)):
+            conn = self.elConn.get(etype)
+            owners = self._elem_owners.get(etype)
+            if conn is None or owners is None or len(conn) == 0:
+                continue
+            areas = np.abs(self._signed_areas(self.nodes, conn, ncorn))
+            for gid in shapely_area:
+                mesh_area[gid] += float(areas[owners == gid].sum())
+
+        mesh_gb = {gid: 0.0 for gid in shapely_area}
+        if self.GBlines is not None and len(self.GBlines):
+            pts = self.nodes[:, :2]
+            seg = np.asarray(self.GBlines)
+            lengths = np.linalg.norm(pts[seg[:, 1]] - pts[seg[:, 0]], axis=1)
+            # Map each GB node to grains that use it, then assign a segment
+            # to a grain if both endpoints belong to that grain.
+            node_to_gids = {}
+            for etype, conn in self.elConn.items():
+                owners = self._elem_owners.get(etype)
+                if conn is None or owners is None:
+                    continue
+                for i, nds in enumerate(conn):
+                    gid = int(owners[i])
+                    for n in np.unique(nds):
+                        node_to_gids.setdefault(int(n), set()).add(gid)
+            for (a, b), L in zip(seg, lengths):
+                ga = node_to_gids.get(int(a), set())
+                gb = node_to_gids.get(int(b), set())
+                for gid in ga.intersection(gb):
+                    if gid in mesh_gb:
+                        mesh_gb[gid] += float(L)
+
+        def _rel(mesh_v, shp_v):
+            if shp_v <= 0:
+                return 0.0 if mesh_v == 0 else 1.0
+            return abs(mesh_v - shp_v) / shp_v
+
+        area_err = {gid: _rel(mesh_area[gid], shapely_area[gid])
+                    for gid in shapely_area}
+        gb_err = {gid: _rel(mesh_gb[gid], shapely_gb[gid])
+                  for gid in shapely_gb}
+        self.fidelity_report = {
+            'shapely_area': shapely_area,
+            'mesh_area': mesh_area,
+            'grain_area_rel_error': area_err,
+            'shapely_gb_length': shapely_gb,
+            'mesh_gb_length': mesh_gb,
+            'grain_gb_length_rel_error': gb_err,
+            'max_area_rel_error': max(area_err.values()) if area_err else 0.0,
+            'max_gb_length_rel_error': max(gb_err.values()) if gb_err else 0.0,
+        }
+        return self.fidelity_report
+
+    def report_quality(self):
+        """Aspect-ratio and min-angle statistics (corners only on quadratic)."""
+        ar = elemOps.compute_elementQuality_AR_2d(self.nodes, self.elConn)
+        ang = elemOps.compute_min_angle_deg_2d(self.nodes, self.elConn)
+
+        def _stats(arr):
+            arr = np.asarray(arr, dtype=float)
+            arr = arr[np.isfinite(arr)]
+            if arr.size == 0:
+                return {'n': 0, 'min': None, 'max': None, 'mean': None, 'p95': None}
+            return {
+                'n': int(arr.size),
+                'min': float(arr.min()),
+                'max': float(arr.max()),
+                'mean': float(arr.mean()),
+                'p95': float(np.percentile(arr, 95)),
+            }
+
+        leftover_tri = 0
+        if self.recombine_to_quads and 'triangle' in self.elConn:
+            leftover_tri = len(self.elConn['triangle'])
+        self.quality_report = {
+            'aspect_ratio': {et: _stats(v) for et, v in ar.items()},
+            'min_angle_deg': {et: _stats(v) for et, v in ang.items()},
+            'leftover_triangles_after_recombine': leftover_tri,
+        }
+        return self.quality_report
 
     # ------------------------------------------------------------------
     # Element sets
@@ -1347,6 +1605,7 @@ class confMesh2dGMSH():
             self.elQual = elQual
         if throw:
             return elQual
+        return elQual
 
     def find_elIDs_by_quality(self, **kwargs):
         """Find elIDs by quality."""
