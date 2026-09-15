@@ -113,6 +113,65 @@ def test_abaqus_inp_export(tmp_path):
     plt.close(fig)
 
 
+def test_quadratic_abaqus_inp_export(tmp_path):
+    m = confMesh2dGMSH()
+    m.femesh_gmsh(_two_squares(), mesh_size_gb=0.4, mesh_size_bulk=0.6,
+                  mesh_order=2, recombine_to_quads=False)
+    m.form_elsets_gmsh()
+    m.build_boundary_nsets()
+    assert m.elConn['triangle'].shape[1] == 6
+    out = tmp_path / 'rve_q2.inp'
+    written = m.export_abaqus_inp(out, plane='stress')
+    text = Path(written).read_text(encoding='utf-8')
+    assert '*Element, type=CPS6' in text
+    assert '*Element, type=CPS3' not in text
+    in_cps6 = False
+    for ln in text.splitlines():
+        if ln.startswith('*Element'):
+            in_cps6 = 'CPS6' in ln
+            continue
+        if in_cps6 and ln.startswith('*'):
+            break
+        if in_cps6 and ln[:1].isdigit():
+            assert len(ln.split(',')) == 7
+            break
+    written_s = m.export_abaqus_inp(tmp_path / 'rve_q2_cpe.inp', plane='strain')
+    assert '*Element, type=CPE6' in Path(written_s).read_text(encoding='utf-8')
+
+
+def test_winding_unified():
+    cells = {
+        1: box(0, 0, 3, 3).difference(box(1, 1, 2, 2)),
+        2: box(1, 1, 2, 2),
+    }
+    m = confMesh2dGMSH()
+    m.femesh_gmsh(cells, mesh_size_gb=0.35, mesh_size_bulk=0.6,
+                  recombine_to_quads=False, unify_winding=True)
+    assert m.validation_report['clockwise_elements'] == 0
+
+
+def test_fidelity_report_two_squares():
+    m = confMesh2dGMSH()
+    m.femesh_gmsh(_two_squares(), mesh_size_gb=0.4, mesh_size_bulk=0.6,
+                  recombine_to_quads=False)
+    fid = m.fidelity_report
+    assert fid is not None
+    assert fid['max_area_rel_error'] < 0.05
+    q = m.quality_report
+    assert q['aspect_ratio']['triangle']['n'] > 0
+    assert q['min_angle_deg']['triangle']['min'] > 0
+
+
+def test_quadratic_quad_inp(tmp_path):
+    m = confMesh2dGMSH()
+    m.femesh_gmsh(_two_squares(), mesh_size_gb=0.4, mesh_size_bulk=0.6,
+                  mesh_order=2, mesh_algo=8, recombine_to_quads=True)
+    m.form_elsets_gmsh()
+    text = Path(m.export_abaqus_inp(tmp_path / 'q8.inp', plane='stress')).read_text(
+        encoding='utf-8')
+    assert ('CPS8' in text) or ('CPS6' in text)
+
+
 def test_missing_gmsh_message(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, 'gmsh', None)
