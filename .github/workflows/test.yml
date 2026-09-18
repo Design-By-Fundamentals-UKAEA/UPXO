@@ -21,23 +21,16 @@ jobs:
       - name: Install test dependencies
         run: |
           pip install --upgrade pip
-          # Install the package in editable mode without optional extras.
-          # pyvista[jupyter] (which requires VTK/OpenGL) is excluded here
-          # because the test suite does not exercise any visualisation code.
-          pip install -e . --no-deps
-          # Mirror pyproject core deps (except pyvista/VTK — no OpenGL on runner).
-          # Do not install optional extras as if they were core (defdap, pyvoro, plotly).
-          pip install \
-            numpy scipy matplotlib pandas \
-            numba \
-            networkx \
-            scikit-image scikit-learn \
-            shapely \
-            tqdm seaborn colorama termcolor \
-            connected-components-3d \
-            xlrd openpyxl ipywidgets \
-            Pillow \
-            pytest
+          # Install the package in editable mode with its core dependencies
+          # (includes pyvista, which several core pxtal/geoEntities modules
+          # need just to be importable, not only for visualisation).
+          pip install -e .
+          # tetgen and gmsh are optional [mesh] extras but are genuinely
+          # imported by vortess3d.py and the gbconformant/d3v2p0 mesh tests.
+          # rasterio/defdap/pyvoro/plotly are NOT needed -- rasterio's only
+          # use (geometrification.py's polygonize()) is a lazy import, and
+          # nothing in tests/ exercises defdap/pyvoro/plotly-dependent code.
+          pip install tetgen "gmsh>=4.13" pytest
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest tests/ -v -m "not gui and not slow"
