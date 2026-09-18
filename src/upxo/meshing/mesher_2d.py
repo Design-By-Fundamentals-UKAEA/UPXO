@@ -240,8 +240,15 @@ class mesh_mcgs2d():
 
         This is akin to the element-set defined in ABAQUS
         '''
-        # Make global element ids array
-        eids = np.reshape(self.ABQ_ELEMENTS.T[0], self.xgrid.shape)
+        # Make global element ids array. Elements were generated x-outer,
+        # y-inner (see mesh_abaqus_upxo_nonconformal_quad4), so the flat
+        # element-id array is in (nx, ny) order -- reshaping it directly to
+        # xgrid.shape (which is (ny, nx), from meshgrid(..., indexing='xy'))
+        # would silently scramble the id<->(row,col) correspondence for any
+        # non-square grid. Reshape to the actual generation order, then
+        # transpose to match xgrid/lfi's (row=y, col=x) convention.
+        eids = np.reshape(self.ABQ_ELEMENTS.T[0],
+                          (self.xgrid.shape[1], self.xgrid.shape[0])).T
         # Find locations in lfi, where values equal different grain id numbers
         a = [(np.where(self.lfi == gid)) for gid in range(1, self.lfi.max()+1)]
         a = [[list(_a[0]), list(_a[1])] for _a in a]  # Reformat data structure
