@@ -18,6 +18,14 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install system libraries for gmsh
+        run: |
+          # gmsh's shared library is built with GUI-linked symbols even for
+          # headless mesh generation, so it fails to load at all without
+          # these -- ubuntu-latest runners don't ship with them by default.
+          sudo apt-get update
+          sudo apt-get install -y libglu1-mesa libxcursor1 libxinerama1 libxft2
+
       - name: Install test dependencies
         run: |
           pip install --upgrade pip
