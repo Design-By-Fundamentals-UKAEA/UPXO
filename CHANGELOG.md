@@ -45,6 +45,13 @@ All notable changes to UPXO are documented in this file.
 - `orientation_mean_3d.py`: Crystallographically-correct packet mean orientation
 - `slice_metrics_2d.py`: Fast numpy-only 2D slice geometric metrics
 
+#### FM Steel 3D Demo Automation
+- **`pxtal/fm_steel_3d/steps/`**: New automation-ready wrapper package, one thin module per pipeline stage (start, base grain structure, cleaning, transformations, PAG clustering, block generation, sub-block generation, visualization, raw export, mesh export, ensemble seed config); lives inside the installed package (unlike Twinned3D's own `steps/`, which sits under `demos/`) so it is directly importable by automation scripts, not just notebooks
+- `geom_metrics_3d.feature_aspect_ratio_bbox`: Free-function per-feature 3D bounding-box aspect ratio, generalizing the existing 2D/instance-bound versions
+- `viz/grain_structure_viz_3d.GrainStructureViz3D.build_distinguishable_cmap`: Shuffled large-N colormap so per-feature ID coloring stays distinguishable past `tab20`'s 20-color limit
+- `viz/grain_structure_viz_3d.GrainStructureViz3D.lfi_to_polydata`: New `jupyter_backend` param to embed an interactive PyVista widget (e.g. `'trame'`) in a notebook cell instead of a blocking native window
+- **Demos**: `fm_steel_3d_bas0.ipynb` (concise, full pipeline through mesh export/ensemble config), `fm_steel_3d_bas1.ipynb` (annotated, + Quick-Demo Mode toggle) under `src/upxo/demos/FMSteel3D/`
+
 #### Visualization
 - Side-by-side voxel-grid comparison render
 - IPF triangle key plot and side-by-side LFI comparison render
