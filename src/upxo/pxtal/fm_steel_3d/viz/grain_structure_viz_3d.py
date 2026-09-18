@@ -20,7 +20,41 @@ class GrainStructureViz3D:
         self._default_cmap = default_cmap
         self._default_window_size = default_window_size
         self._default_opacity = default_opacity
-    
+
+    @staticmethod
+    def build_distinguishable_cmap(n_ids: int, seed: int = 42):
+        """A qualitative colormap with `n_ids + 1` (label 0 included)
+        visually distinguishable-ish entries, for per-feature ID coloring
+        where a fixed small palette like 'tab20' (only 20 colors) would
+        force many features to share an identical color once n_ids exceeds
+        it -- exactly the failure mode that made a genuinely fine-grained,
+        hundreds-of-features structure (e.g. martensitic blocks) render as
+        a handful of indistinguishable blobs. Below 20 IDs, 'tab20' itself
+        is returned unchanged (it's already maximally distinguishable at
+        that count, and shuffling it would only lose its designed-in
+        adjacent-color contrast for no benefit). Above that, samples
+        'nipy_spectral' (already the higher-N choice for this exact
+        problem, see FMSteel3DBase's own 2D preview coloring) then
+        deterministically shuffles the order so spatially/numerically
+        adjacent labels aren't also colormap-adjacent (adjacent-labels-
+        similar-color is otherwise the norm for a sequential colormap, and
+        would visually blend touching same-family features together).
+
+        Returns
+        -------
+        matplotlib.colors.Colormap or str : pass straight through to
+        pyvista's `cmap=` argument.
+        """
+        if n_ids <= 20:
+            return 'tab20'
+        import matplotlib.cm as _mcm
+        import matplotlib.colors as _mcolors
+        import numpy as _np
+        base = _mcm.get_cmap('nipy_spectral', n_ids + 1)
+        colors = [base(i) for i in range(n_ids + 1)]
+        order = _np.random.default_rng(seed).permutation(n_ids + 1)
+        return _mcolors.ListedColormap([colors[i] for i in order])
+
     def plot_gs_pvvox(self, lgi: np.ndarray, grain_locs: Dict[int, np.ndarray],
                       alpha: float = 1.0, title: str = 'Grain Structure',
                       cmap: Optional[str] = None, voxel_size: float = 1.0,
@@ -278,8 +312,16 @@ class GrainStructureViz3D:
     def lfi_to_polydata(self, lfi, scalar_array, voxel_size=1.0, cmap='tab20',
                         title='', scalar_name='value', show_scalar_bar=True,
                         threshold_min=0.5, clim=None, below_color=None,
-                        show_edges=True):
-        """Show a voxel grid coloured by a per-voxel scalar array."""
+                        show_edges=True, jupyter_backend=None):
+        """Show a voxel grid coloured by a per-voxel scalar array.
+
+        `jupyter_backend`: None (default) preserves the original behaviour
+        -- a blocking native VTK window, or whatever PyVista's global
+        default is. Pass 'trame' (or any other pyvista-supported backend
+        name) to render as an interactive, rotatable widget embedded
+        directly in a Jupyter notebook cell's output instead of a static
+        screenshot or a separate window.
+        """
         nx, ny, nz = lfi.shape
         grid = pv.ImageData()
         grid.dimensions = (nx + 1, ny + 1, nz + 1)
@@ -305,7 +347,8 @@ class GrainStructureViz3D:
         pl.set_background('white')
         pl.show_axes()
         try:
-            pl.show()
+            show_kwargs = {} if jupyter_backend is None else {'jupyter_backend': jupyter_backend}
+            pl.show(**show_kwargs)
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
