@@ -2728,15 +2728,12 @@ class mcgs3_grain_structure():
         # ---------------------------------------
         if not check_for_neigh:
             merge_success = MergeGrains()
+        elif self.check_for_neigh(parent_gid, other_gid):
+            merge_success = MergeGrains()
+            # print(f"Grain {other_gid} merged with grain {parent_gid}.")
         else:
-            fx_cfn = self.check_for_neigh
-            if check_for_neigh and not fx_cfn(parent_gid, other_gid):
-                # print('Check for neigh failed. Nothing merged.')
-                merge_success = False
-            # ---------------------------------------
-            if any((check_for_neigh, fx_cfn(parent_gid, other_gid))):
-                merge_success = MergeGrains()
-                # print(f"Grain {other_gid} merged with grain {parent_gid}.")
+            # print('Check for neigh failed. Nothing merged.')
+            merge_success = False
         return merge_success
 
     def perform_post_grain_merge_ops(self, merged_gid):

@@ -1143,13 +1143,14 @@ class polyxtal2d():
                 merge_success = False  # As of now, this willd efault to False.
             return merge_success
         # ---------------------------------------
-        if check_for_neigh and not self.check_for_neigh(parent_gid, other_gid):
-            # print('Check for neigh failed. Nothing merged.')
-            merge_success = False
-        # ---------------------------------------
-        if any((check_for_neigh, self.check_for_neigh(parent_gid, other_gid))):
+        if not check_for_neigh:
+            merge_success = MergeGrains()
+        elif self.check_for_neigh(parent_gid, other_gid):
             merge_success = MergeGrains()
             # print(f"Grain {other_gid} merged with grain {parent_gid}.")
+        else:
+            # print('Check for neigh failed. Nothing merged.')
+            merge_success = False
         return merge_success
 
     def get_grain_pixel_coords(self, gid):
