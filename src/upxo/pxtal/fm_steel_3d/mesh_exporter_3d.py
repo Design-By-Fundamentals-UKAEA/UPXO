@@ -119,15 +119,15 @@ _UPXO_HEADER = (
 
 # Kuhn decomposition — 6 tets sharing the body diagonal (i,j,k)→(i+1,j+1,k+1).
 # Each row: (n1,n2,n3,n4) as (di,dj,dk) offsets from voxel min-corner.
-# Node ordering satisfies positive Abaqus C3D4 Jacobian:
-#   face 1-2-3 outward normal points AWAY from node 4 (apex).
+# Node ordering satisfies positive Abaqus C3D4 Jacobian, i.e.
+# det([n2-n1, n3-n1, n4-n1]) > 0 for every row (verified numerically).
 _KUHN_TETS: Tuple = (
-    ((0, 0, 0), (1, 1, 0), (1, 0, 0), (1, 1, 1)),  # base at z=k
-    ((0, 0, 0), (1, 0, 0), (1, 0, 1), (1, 1, 1)),  # base at y=j
-    ((0, 0, 0), (0, 1, 0), (1, 1, 0), (1, 1, 1)),  # base at z=k, y-side
-    ((0, 0, 0), (0, 1, 1), (0, 1, 0), (1, 1, 1)),  # base at x=i
-    ((0, 0, 0), (1, 0, 1), (0, 0, 1), (1, 1, 1)),  # base at y=j, z-side
-    ((0, 0, 0), (0, 0, 1), (0, 1, 1), (1, 1, 1)),  # base at x=i, yz-side
+    ((0, 0, 0), (1, 0, 0), (1, 1, 0), (1, 1, 1)),  # base at z=k
+    ((0, 0, 0), (1, 0, 1), (1, 0, 0), (1, 1, 1)),  # base at y=j
+    ((0, 0, 0), (1, 1, 0), (0, 1, 0), (1, 1, 1)),  # base at z=k, y-side
+    ((0, 0, 0), (0, 1, 0), (0, 1, 1), (1, 1, 1)),  # base at x=i
+    ((0, 0, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1)),  # base at y=j, z-side
+    ((0, 0, 0), (0, 1, 1), (0, 0, 1), (1, 1, 1)),  # base at x=i, yz-side
 )
 
 
@@ -988,66 +988,66 @@ class MeshExporter3D:
 
                 bdm_ijk   = bdm_off + i * bdm_si + j_v * NZ + k_v + 1
 
-                # Tet 0: n1=c000 n2=c110 n3=c100 n4=c111
-                # N5=mid(1,2)=xydm(i,j,k)  N6=mid(2,3)=ymid(i+1,j,k)
-                # N7=mid(1,3)=xmid(i,j,k)  N8=mid(1,4)=bdm
-                # N9=mid(2,4)=zmid(i+1,j+1,k)  N10=mid(3,4)=yzdm(i+1,j,k)
+                # Tet 0: n1=c000 n2=c100 n3=c110 n4=c111
+                # N5=mid(1,2)=xmid(i,j,k)  N6=mid(2,3)=ymid(i+1,j,k)
+                # N7=mid(1,3)=xydm(i,j,k)  N8=mid(1,4)=bdm
+                # N9=mid(2,4)=yzdm(i+1,j,k)  N10=mid(3,4)=zmid(i+1,j+1,k)
                 buf.append(
                     f"{tet_base+1:>10d},"
-                    f" {c000:>10d}, {c110:>10d}, {c100:>10d}, {c111:>10d},\n"
-                    f"           {xydm_ijk:>10d}, {ym_i1jk:>10d},"
-                    f" {xm_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {zm_i1j1k:>10d}, {yzdm_i1jk:>10d}\n"
+                    f" {c000:>10d}, {c100:>10d}, {c110:>10d}, {c111:>10d},\n"
+                    f"           {xm_ijk:>10d}, {ym_i1jk:>10d},"
+                    f" {xydm_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {yzdm_i1jk:>10d}, {zm_i1j1k:>10d}\n"
                 )
-                # Tet 1: n1=c000 n2=c100 n3=c101 n4=c111
-                # N5=xmid(i,j,k)  N6=zmid(i+1,j,k)  N7=xzdm(i,j,k)
-                # N8=bdm  N9=yzdm(i+1,j,k)  N10=ymid(i+1,j,k+1)
+                # Tet 1: n1=c000 n2=c101 n3=c100 n4=c111
+                # N5=xzdm(i,j,k)  N6=zmid(i+1,j,k)  N7=xmid(i,j,k)
+                # N8=bdm  N9=ymid(i+1,j,k+1)  N10=yzdm(i+1,j,k)
                 buf.append(
                     f"{tet_base+2:>10d},"
-                    f" {c000:>10d}, {c100:>10d}, {c101:>10d}, {c111:>10d},\n"
-                    f"           {xm_ijk:>10d}, {zm_i1jk:>10d},"
-                    f" {xzdm_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {yzdm_i1jk:>10d}, {ym_i1jk1:>10d}\n"
+                    f" {c000:>10d}, {c101:>10d}, {c100:>10d}, {c111:>10d},\n"
+                    f"           {xzdm_ijk:>10d}, {zm_i1jk:>10d},"
+                    f" {xm_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {ym_i1jk1:>10d}, {yzdm_i1jk:>10d}\n"
                 )
-                # Tet 2: n1=c000 n2=c010 n3=c110 n4=c111
-                # N5=ymid(i,j,k)  N6=xmid(i,j+1,k)  N7=xydm(i,j,k)
-                # N8=bdm  N9=xzdm(i,j+1,k)  N10=zmid(i+1,j+1,k)
+                # Tet 2: n1=c000 n2=c110 n3=c010 n4=c111
+                # N5=xydm(i,j,k)  N6=xmid(i,j+1,k)  N7=ymid(i,j,k)
+                # N8=bdm  N9=zmid(i+1,j+1,k)  N10=xzdm(i,j+1,k)
                 buf.append(
                     f"{tet_base+3:>10d},"
-                    f" {c000:>10d}, {c010:>10d}, {c110:>10d}, {c111:>10d},\n"
-                    f"           {ym_ijk:>10d}, {xm_ij1k:>10d},"
-                    f" {xydm_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {xzdm_ij1k:>10d}, {zm_i1j1k:>10d}\n"
+                    f" {c000:>10d}, {c110:>10d}, {c010:>10d}, {c111:>10d},\n"
+                    f"           {xydm_ijk:>10d}, {xm_ij1k:>10d},"
+                    f" {ym_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {zm_i1j1k:>10d}, {xzdm_ij1k:>10d}\n"
                 )
-                # Tet 3: n1=c000 n2=c011 n3=c010 n4=c111
-                # N5=yzdm(i,j,k)  N6=zmid(i,j+1,k)  N7=ymid(i,j,k)
-                # N8=bdm  N9=xmid(i,j+1,k+1)  N10=xzdm(i,j+1,k)
+                # Tet 3: n1=c000 n2=c010 n3=c011 n4=c111
+                # N5=ymid(i,j,k)  N6=zmid(i,j+1,k)  N7=yzdm(i,j,k)
+                # N8=bdm  N9=xzdm(i,j+1,k)  N10=xmid(i,j+1,k+1)
                 buf.append(
                     f"{tet_base+4:>10d},"
-                    f" {c000:>10d}, {c011:>10d}, {c010:>10d}, {c111:>10d},\n"
-                    f"           {yzdm_ijk:>10d}, {zm_ij1k:>10d},"
-                    f" {ym_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {xm_ij1k1:>10d}, {xzdm_ij1k:>10d}\n"
+                    f" {c000:>10d}, {c010:>10d}, {c011:>10d}, {c111:>10d},\n"
+                    f"           {ym_ijk:>10d}, {zm_ij1k:>10d},"
+                    f" {yzdm_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {xzdm_ij1k:>10d}, {xm_ij1k1:>10d}\n"
                 )
-                # Tet 4: n1=c000 n2=c101 n3=c001 n4=c111
-                # N5=xzdm(i,j,k)  N6=xmid(i,j,k+1)  N7=zmid(i,j,k)
-                # N8=bdm  N9=ymid(i+1,j,k+1)  N10=xydm(i,j,k+1)
+                # Tet 4: n1=c000 n2=c001 n3=c101 n4=c111
+                # N5=zmid(i,j,k)  N6=xmid(i,j,k+1)  N7=xzdm(i,j,k)
+                # N8=bdm  N9=xydm(i,j,k+1)  N10=ymid(i+1,j,k+1)
                 buf.append(
                     f"{tet_base+5:>10d},"
-                    f" {c000:>10d}, {c101:>10d}, {c001:>10d}, {c111:>10d},\n"
-                    f"           {xzdm_ijk:>10d}, {xm_ijk1:>10d},"
-                    f" {zm_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {ym_i1jk1:>10d}, {xydm_ijk1:>10d}\n"
+                    f" {c000:>10d}, {c001:>10d}, {c101:>10d}, {c111:>10d},\n"
+                    f"           {zm_ijk:>10d}, {xm_ijk1:>10d},"
+                    f" {xzdm_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {xydm_ijk1:>10d}, {ym_i1jk1:>10d}\n"
                 )
-                # Tet 5: n1=c000 n2=c001 n3=c011 n4=c111
-                # N5=zmid(i,j,k)  N6=ymid(i,j,k+1)  N7=yzdm(i,j,k)
-                # N8=bdm  N9=xydm(i,j,k+1)  N10=xmid(i,j+1,k+1)
+                # Tet 5: n1=c000 n2=c011 n3=c001 n4=c111
+                # N5=yzdm(i,j,k)  N6=ymid(i,j,k+1)  N7=zmid(i,j,k)
+                # N8=bdm  N9=xmid(i,j+1,k+1)  N10=xydm(i,j,k+1)
                 buf.append(
                     f"{tet_base+6:>10d},"
-                    f" {c000:>10d}, {c001:>10d}, {c011:>10d}, {c111:>10d},\n"
-                    f"           {zm_ijk:>10d}, {ym_ijk1:>10d},"
-                    f" {yzdm_ijk:>10d}, {bdm_ijk:>10d},"
-                    f" {xydm_ijk1:>10d}, {xm_ij1k1:>10d}\n"
+                    f" {c000:>10d}, {c011:>10d}, {c001:>10d}, {c111:>10d},\n"
+                    f"           {yzdm_ijk:>10d}, {ym_ijk1:>10d},"
+                    f" {zm_ijk:>10d}, {bdm_ijk:>10d},"
+                    f" {xm_ij1k1:>10d}, {xydm_ijk1:>10d}\n"
                 )
 
             if len(buf) >= 2048:
