@@ -26,7 +26,6 @@ import math
 import numpy as np
 from copy import deepcopy
 from scipy.spatial import cKDTree
-import vtk
 import upxo._sup.dataTypeHandlers as dth
 from upxo.geoEntities.bases import UPXO_Point, UPXO_Edge
 from upxo.geoEntities.featmake import make_p2d, make_p3d
@@ -1080,6 +1079,7 @@ class Point3d(UPXO_Point):
             x, y, z = vtkobj['pd'].GetPoint(vtkobj['id'])
             print(x, y, z)
         """
+        import vtk
         points = vtk.vtkPoints()
         point_id = points.InsertNextPoint(self.x,
                                           self.y,

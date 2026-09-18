@@ -239,7 +239,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import generic_filter
 # import cv2
-import vtk
 import warnings
 from random import Random
 from math import floor
@@ -403,7 +402,6 @@ class mcgs3_grain_structure():
                  'gid_gpid', 'triples', 'ctrls', 'tc_info', 'cluster_sets')
     EPS, __maxGridSizeToIgnoreStoringGrids = 1e-1, 200**3
     CUBIC_SYMM_OPS = None
-    _vtk_ievnt_ = vtk.vtkCommand.InteractionEvent
     _mprop3d2d_ = {'eqdia': ('eqdia'),
                    'feqdia': ('feqdia'),
                    'arbbox': ('arbbox', 'arellfit'),

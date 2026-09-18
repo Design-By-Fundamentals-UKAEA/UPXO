@@ -22,7 +22,6 @@ coordinate lists, NumPy arrays, UPXO lean and full point objects.
 import math
 import numpy as np
 from copy import deepcopy
-import vtk
 from shapely.geometry import Point as ShPnt, Polygon as ShPol
 from functools import wraps
 import matplotlib.pyplot as plt

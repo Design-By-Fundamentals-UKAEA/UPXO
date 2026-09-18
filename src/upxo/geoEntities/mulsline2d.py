@@ -99,7 +99,6 @@ import math
 import numpy as np
 from copy import deepcopy
 from scipy.spatial import cKDTree
-import vtk
 from shapely.geometry import Point as ShPnt, Polygon as ShPol
 from functools import wraps
 import matplotlib.pyplot as plt
