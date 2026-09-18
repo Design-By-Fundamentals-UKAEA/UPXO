@@ -175,6 +175,14 @@ def mesh_gs(
         n_quad      int
         elapsed     float — total wall-clock seconds.
         exported    list[str] — paths of files written.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``method='non_conformal'`` -- not yet implemented, reserved
+        for future use. Use ``method='conformal'`` (the default).
+    ValueError
+        If ``method`` is neither 'conformal' nor 'non_conformal'.
     """
     if method == 'conformal':
         return _mesh_conformal(

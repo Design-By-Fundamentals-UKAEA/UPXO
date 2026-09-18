@@ -299,7 +299,14 @@ class nonConformalMesher():
         self.xoriUnits = xoriUnits
 
     def map_pxtal_orientations_to_elements(self):
-        """Map pxtal orientations to elements."""
+        """Not implemented. Placeholder for mapping per-grain crystallographic
+        orientations onto the non-conformal mesh's elements.
+
+        Raises
+        ------
+        NotImplementedError
+            Always -- this method is not yet implemented.
+        """
         raise NotImplementedError("map_pxtal_orientations_to_elements is not yet implemented.")
 
     def make_base_coordinates_ABQ(self, **kwargs):

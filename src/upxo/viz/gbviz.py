@@ -19,7 +19,21 @@ def see_all_gbsegs(gbsegImage, figsize=(5, 5), dpi=75, cmap='nipy_spectral',
     ----------
     gbsegImage : 2D array-like
         The image containing the GB segments, where each segment is represented by a unique ID (float).
-    
+    figsize : tuple of float, optional
+        Matplotlib figure size in inches. Default (5, 5).
+    dpi : int, optional
+        Figure resolution. Default 75.
+    cmap : str, optional
+        Matplotlib colormap name for the segment-ID image. Default 'nipy_spectral'.
+    title : str, optional
+        Plot title. Default "GB segments".
+    xlabel : str, optional
+        X-axis label. Default "X-axis, um".
+    ylabel : str, optional
+        Y-axis label. Default "Y-axis, um".
+    cbarLabel : str, optional
+        Colorbar label. Default "Segment ID (float)".
+
     Usage
     -----
     import upxo.viz.gbviz as gbViz
