@@ -20,7 +20,6 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import generic_filter
-import vtk
 import warnings
 # import vedo as vd
 import pyvista as pv
