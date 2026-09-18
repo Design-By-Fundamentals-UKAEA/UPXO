@@ -10,21 +10,28 @@ from pathlib import Path
 from upxo.interfaces.defdap.ebsd_reader import EBSDReader, write_subsampled_ctf
 from upxo.repgen.repgen2dmcgs import repgen2d
 
-DEFAULT_CTF_FILE = (
-    r"C:\Development\EBSD datasets\UKAEA__OFHCCu\OFHC_Cu_dataset\EBSD_pre\warp_out_s2.ctf")
 
-
-def subsample_and_load(ctf_file=DEFAULT_CTF_FILE, subsample=True,
+def subsample_and_load(ctf_file=None, subsample=True,
                         stride_x=5, stride_y=5, reuse_subsampled=False):
     """Step 1 -- optionally subsample (recommended for large maps), then
     load the map (grain detection is a separate step, matching
     EBSDReader.load's own docstring on why load()/detect_grains() are
     split).
 
+    Parameters
+    ----------
+    ctf_file : str or Path
+        Path to the source .ctf file. Required -- there is no default,
+        since it is necessarily specific to your own EBSD dataset.
+
     Returns
     -------
     EBSDReader
     """
+    if ctf_file is None:
+        raise ValueError(
+            "ctf_file must be supplied -- point it at your own .ctf dataset. "
+            "There is no package-provided default EBSD map.")
     load_path = ctf_file
     if subsample:
         src = Path(ctf_file)
@@ -51,15 +58,25 @@ def crop(rdr, xstart_pct=1.0, ystart_pct=1.0, xend_pct=99.0, yend_pct=99.0):
     return rdr.crop([xstart_pct, ystart_pct, xend_pct, yend_pct], inplace=False)
 
 
-def clean_and_characterize(rdr, ctf_file=DEFAULT_CTF_FILE, connectivity=4,
+def clean_and_characterize(rdr, ctf_file=None, connectivity=4,
                             min_grain_size=0, verbose=True):
     """Step 4 -- builds the repgen2d object the rest of the pipeline
     works with (`rg`), re-characterizing the cropped/detected map.
+
+    Parameters
+    ----------
+    ctf_file : str or Path
+        Path to the source .ctf file. Required -- there is no default,
+        since it is necessarily specific to your own EBSD dataset.
 
     Returns
     -------
     upxo.repgen.repgen2dmcgs.repgen2d
     """
+    if ctf_file is None:
+        raise ValueError(
+            "ctf_file must be supplied -- point it at your own .ctf dataset. "
+            "There is no package-provided default EBSD map.")
     rg = repgen2d.from_tgs(tgs=None, tgstype='ebsd2d', ebsd_file=ctf_file)
     rg.set_ebsd_step(rdr.step_size)
     rg.clean_and_rechar_from_rdr(
@@ -68,7 +85,7 @@ def clean_and_characterize(rdr, ctf_file=DEFAULT_CTF_FILE, connectivity=4,
     return rg
 
 
-def import_and_clean(ctf_file=DEFAULT_CTF_FILE, subsample=True, stride_x=5, stride_y=5,
+def import_and_clean(ctf_file=None, subsample=True, stride_x=5, stride_y=5,
                       reuse_subsampled=False, min_grain_size_detect=10, misori_tol=10.0,
                       xstart_pct=1.0, ystart_pct=1.0, xend_pct=99.0, yend_pct=99.0,
                       connectivity=4, min_grain_size_clean=0, verbose=True):
@@ -76,6 +93,12 @@ def import_and_clean(ctf_file=DEFAULT_CTF_FILE, subsample=True, stride_x=5, stri
     individual functions above in the notebook itself (one cell per step,
     so each step's result/log is visible before the next runs); this is
     here for completeness and for the other steps_*.py modules' own tests.
+
+    Parameters
+    ----------
+    ctf_file : str or Path
+        Path to the source .ctf file. Required -- there is no default,
+        since it is necessarily specific to your own EBSD dataset.
 
     Returns
     -------
