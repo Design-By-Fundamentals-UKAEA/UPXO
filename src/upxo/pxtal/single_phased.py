@@ -557,11 +557,11 @@ class OFHC_Cu_vox():
                 self.fdb[instance_name]['data']['twin_map_g_t_coords'] = twin_map_g_t_coords
             self.fdb[instance_name]['data']['twin_map_g_t_missed'] = twin_map_g_t_missed
             self.fdb[instance_name]['data']['twin_zero_voxels'] =  twin_zero_voxels
-            self.fdb[instance_name]['data']['twin_vol_total'] = sum(self.fdb[instance_name]['data']['twin_nvox'])
+            self.fdb[instance_name]['data']['twin_vol_total'] = sum(self.fdb[instance_name]['data']['twin_nvox'].values())
             parent_ids = self.fdb[instance_name]['data']['twin_map_g_t_nvox'].keys()
             # Correct twin volume fraction data and just re-writing it!!
             parent_vols = np.array([self.grain_locs[pid].shape[0] for pid in parent_ids])
-            tw_vfs = np.array([twvol/pgrainvol for twvol, pgrainvol in zip(self.fdb[instance_name]['data']['twin_nvox'], parent_vols)])
+            tw_vfs = np.array([twvol/pgrainvol for twvol, pgrainvol in zip(self.fdb[instance_name]['data']['twin_nvox'].values(), parent_vols)])
             self.fdb[instance_name]['data']['twin_vf'] = tw_vfs
             self.fdb[instance_name]['data']['twin_vf_total'] = self.fdb[instance_name]['data']['twin_vol_total'] / self.domvol
             print('\n', f"\nTwin volume fraction: {self.fdb[instance_name]['data']['twin_vf_total']}")
