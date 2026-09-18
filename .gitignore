@@ -150,3 +150,6 @@ src/upxo/Important links.md
 
 # Stray local duplicate of meshing/gbconformant/d3v2p0/
 /src/upxo/meshing/confMesh3D_01/
+
+# WIP: cleaving migration destination, not ready to commit yet
+/src/upxo/meshing/gbconformant/cleaving3dV1P0/
