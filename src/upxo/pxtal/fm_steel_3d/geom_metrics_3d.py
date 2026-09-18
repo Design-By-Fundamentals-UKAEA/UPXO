@@ -426,6 +426,42 @@ def junction_point_coords(
 
 
 # ---------------------------------------------------------------------------
+# Aspect ratio (axis-aligned bounding box)
+# ---------------------------------------------------------------------------
+
+def feature_aspect_ratio_bbox(lgi: np.ndarray) -> np.ndarray:
+    """
+    Per-feature 3D aspect ratio from each feature's axis-aligned bounding
+    box: max(extent) / min(extent) across the three voxel-count axes.
+
+    Generalizes slice_metrics_2d.label_aspect_ratio_bbox (2D, 2 axes) and
+    twinned_simple_3d.base_3d.compute_aspect_ratio_bbox (3D, but bound to
+    an instance) to a free function over any 3D LGI array, matching this
+    module's own label-indexed-array return convention. A tilted plate
+    (e.g. a martensitic block sliced along a {111} habit plane not aligned
+    with x/y/z) can have a large axis-aligned bounding box despite being
+    genuinely thin along its own habit-plane normal -- this metric only
+    detects thinness aligned with the voxel grid's own axes.
+
+    Returns
+    -------
+    ndarray (max_label+1,) float64 — result[label] is that feature's
+    bounding-box aspect ratio (>= 1.0); result[0] (void) is always 0.
+    """
+    from scipy import ndimage
+    max_label = int(lgi.max())
+    ar = np.zeros(max_label + 1, dtype=np.float64)
+    objects = ndimage.find_objects(lgi)
+    for label in range(1, max_label + 1):
+        sl = objects[label - 1] if 0 <= label - 1 < len(objects) else None
+        if sl is None:
+            continue
+        extents = [s.stop - s.start for s in sl]
+        ar[label] = float(max(extents) / min(extents))
+    return ar
+
+
+# ---------------------------------------------------------------------------
 # All metrics in one pass
 # ---------------------------------------------------------------------------
 
