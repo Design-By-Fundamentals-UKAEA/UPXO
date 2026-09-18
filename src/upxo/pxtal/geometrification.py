@@ -194,7 +194,7 @@ class polygonised_grain_structure():
     @property
     def holes_exist(self):
         """Holes exist."""
-        return len(self.polygons_raw_holes.keys()) == 0
+        return any(not isinstance(v, list) for v in self.polygons_raw_holes.values())
 
     @property
     def allpol(self):
