@@ -1,4 +1,13 @@
-﻿import numpy as np
+﻿"""
+meshviz.py
+==========
+Finite-element mesh visualization for UPXO: plotting full meshes
+(lines/triangles/quads with optional node/element numbering and
+quality coloring), element subsets selected by ID or geometric grain,
+and grain-boundary-distance band plots.
+"""
+
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection, LineCollection
 import numpy as np

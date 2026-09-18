@@ -1,3 +1,13 @@
+"""
+osops.py
+========
+OS and filesystem operations for UPXO: locating files/directories
+within the UPXO source and data trees, loading and exporting data
+files, path-depth helpers relative to a named ancestor directory,
+decorators for import/export error handling, and the ``FileManager``
+class.
+"""
+
 import os
 # import shutil
 import pandas as pd

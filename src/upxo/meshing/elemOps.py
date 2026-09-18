@@ -1,4 +1,14 @@
-﻿import numpy as np
+﻿"""
+elemOps.py
+==========
+Finite-element mesh element utilities for UPXO: rebuilding per-eltype
+connectivity from filtered mesh cells, computing element centroids and
+quality metrics (aspect ratio, minimum angle), building global element
+numbering, and finding element neighbours and grain-boundary-adjacent
+element bands.
+"""
+
+import numpy as np
 
 def rebuild_elConnectivity(availableElTypes=None, availableFeatures=None,
                            filtered_mesh_cells=None):

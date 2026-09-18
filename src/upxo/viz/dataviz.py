@@ -1,4 +1,12 @@
-﻿from upxo._sup import dataTypeHandlers as dth
+﻿"""
+dataviz.py
+==========
+Grain-property distribution visualization for UPXO: histogram/KDE plots
+of grain-structure property data (area, perimeter, orientation,
+solidity, etc.) across multiple properties in a single figure.
+"""
+
+from upxo._sup import dataTypeHandlers as dth
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -6,7 +14,7 @@ import seaborn as sns
 from scipy import stats
 
 
-def see_distr(self, gsdim=2, vis='hist', 
+def see_distr(self, gsdim=2, vis='hist',
             prop_data_format='dataframe', prop_df=None, 
             prop_names=['area', 'perimeter', 'orientation', 'solidity'],
             props={'area': [], 'perimeter': [], 'orientation': [], 'solidity': []},

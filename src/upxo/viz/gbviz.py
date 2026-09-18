@@ -1,4 +1,12 @@
-﻿import numpy as np
+﻿"""
+gbviz.py
+========
+Grain-boundary segment visualization for UPXO: plotting labeled
+grain-boundary segment images, isolating a single segment by ID, and
+overlaying junction-point markers styled by junction order.
+"""
+
+import numpy as np
 import matplotlib.pyplot as plt
 
 def see_all_gbsegs(gbsegImage, figsize=(5, 5), dpi=75, cmap='nipy_spectral',
