@@ -1,10 +1,8 @@
 """Geometrification module for converting raster grain structures to polygon representations."""
 import numpy as np
-import rasterio
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from rasterio.features import shapes
 from shapely.strtree import STRtree
 from shapely.geometry import Point
 import upxo._sup.data_ops as DO
@@ -88,6 +86,7 @@ class polygonised_grain_structure():
     def polygonize(self, user_lgi=False, lgi=None, user_gids=False, gids=None,
                    verbose=True):
         """Polygonize grains in self.lgi."""
+        import rasterio
         if verbose:
             print("Polygonizing the raster image of the grain structure.")
         if not user_lgi:
