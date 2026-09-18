@@ -62,10 +62,11 @@ class ebsd_data():
         pxt.detect_grains()
         tslice = 20  # Temporal slice number
         pxt.char_morph_2d(tslice)
-        pxt.gs[tslice].export_ctf(r'D:\export_folder', 'sunil')
+        export_folder = 'src/upxo/_written_data/_ctf_export_2dmcgs'
+        pxt.gs[tslice].export_ctf(export_folder, 'sample_export')
 
         from upxo.interfaces.defdap.importebsd import ebsd_data
-        fileName = r'D:\export_folder\sunil'
+        fileName = export_folder + '/sample_export'
         ebsd_data.load_ctf(fileName)
         """
         # VALIDATE IF FILE EXISTS
