@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from upxo._sup.gops import att
-import defdap.ebsd as defDap_ebsd
-# from defdap.quat import Quat
 from scipy.ndimage import generic_filter
 from upxo._sup.validation_values import _validation
 from scipy.ndimage import binary_dilation, generate_binary_structure
