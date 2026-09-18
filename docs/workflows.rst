@@ -71,6 +71,56 @@ in the ``char_morph_2d`` call. Available flags include: ``npixels``, ``area``,
 
 ----
 
+Workflow 1b — 2D Voronoi Polycrystal Generation (High-Fidelity VTGS)
+---------------------------------------------------------------------
+
+UPXO supports high-fidelity 2D Voronoi tessellation with:
+
+* **Direct Coordinate Input**: Pass ``(N, 2)`` numpy arrays or :class:`~upxo.geoEntities.mulpoint2d.MPoint2d` objects directly.
+* **Periodic Boundary Conditions (PBC)**: Generate fully periodic Representative Volume Elements (RVEs).
+* **Laguerre / Power Diagrams**: Seed-weighted Voronoi tessellation for custom grain-size distributions.
+* **Centroidal Voronoi (CVT)**: Lloyd relaxation iterations to produce regular, equiaxed microstructure seeds.
+* **Non-linear Interface Perturbation**: Curved, natural grain boundary morphologies while preserving manifold junctions.
+
+.. code-block:: python
+
+   import numpy as np
+   from upxo.pxtal.vortess2d import gtess2d
+
+   # 1. Generate seeds or load coordinates
+   seeds = np.array([
+       [10.0, 10.0], [30.0, 10.0], [50.0, 10.0],
+       [20.0, 30.0], [40.0, 30.0],
+       [10.0, 50.0], [30.0, 50.0], [50.0, 50.0],
+   ])
+   bounds = [[0.0, 60.0], [0.0, 60.0]]
+
+   # 2. Build high-fidelity tessellation with CVT and boundary curvature
+   tess = gtess2d.from_seed_points(
+       seeds,
+       bounds=bounds,
+       periodic=(True, True),     # Periodic Boundary Conditions
+       cvt_iterations=5,          # Lloyd relaxation iterations
+       perturb_factor=0.03,       # Boundary interface curvature
+   )
+
+   # 3. Access grain polygons and properties
+   pxtal = tess.pxtals[1]         # Shapely MultiPolygon of grains
+   print(f"Number of grains: {len(pxtal.geoms)}")
+   print(f"Domain area: {pxtal.area:.2f}")
+
+   # 4. Conformal 2D FE Meshing with GMSH
+   from upxo.meshing.conformal_mesher2d import confMesh2dGMSH
+
+   mesher = confMesh2dGMSH.from_geometric_pxtal(
+       pxtal=pxtal, xbound=(0, 60), ybound=(0, 60)
+   )
+   mesher.femesh_gmsh(mesh_size_gb=2.0, mesh_size_bulk=4.0, recombine_to_quads=False)
+   mesher.form_elsets_gmsh()
+   print(f"Created {len(mesher.elsets)} grain element sets.")
+
+----
+
 Workflow 2 — Visualise the Labelled Grain Image (2D)
 -----------------------------------------------------
 
