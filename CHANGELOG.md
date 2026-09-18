@@ -74,9 +74,8 @@ All notable changes to UPXO are documented in this file.
 ### Changed
 
 - **Twinned FCC orientation assignment**: `max_retries` exposed; MDF bin width/angle range now derived from `mdf_ref` instead of a hardcoded 65°; `neighbour_frac` added to Pool B host allocation with do/do-not fallback; MRF Gibbs/MAP initialization reuses `self.fallback_quats` instead of drawing a fresh unseeded sample
-- **`xtalphy/texops.py`**: Fixed the same Bunge ZXZ Euler-decomposition bug present in `crystal_orientation.matrix_to_euler_bunge`; added texture-component detection; ported GUI-only quaternion helpers into core
-- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; optional extra `[mesh]` now also installs `gmsh>=4.13`
-- **GUI applications removed from version control**: `upxo_gui_launcher.py` and the GUI test suites are untracked (kept local-only); all GUI source under `src/upxo/gui/`, `fm_steel_3d/gui/`, and `twinned_simple_3d/gui/` remains local-only and out of this release
+- **`xtalphy/texops.py`**: Fixed the same Bunge ZXZ Euler-decomposition bug present in `crystal_orientation.matrix_to_euler_bunge`; added texture-component detection; ported previously interactive-only quaternion helpers into core
+- **Packaging**: `requirements.txt` enables `tetgen`; optional extra `[mesh]` now also installs `gmsh>=4.13`
 - **`confMesh2d` (pygmsh)** is deprecated; new 2D conformal work must use `confMesh2dGMSH` / `gsmesh2d.mesh_gs`
 - Removed redundant tracked demos `confMesh2d9.ipynb` and `mesh2d01.ipynb`
 - The voxel-lattice cleaving mesh generator (`meshing/cleaving/`) is untracked pending relocation to `meshing/gbconformant/cleaving3dV1P0/` (WIP, not part of this release)
@@ -85,7 +84,6 @@ All notable changes to UPXO are documented in this file.
 
 - MC Metropolis-acceptance refinement (permanently out of scope per architecture decision)
 - GB-energy/crystallography coupling for block selection (deferred to future versions)
-- Orientation-mode GUI exposure in Twinned FCC (deferred for UX refinement)
 - Multi-CSL twin registry beyond Sigma-3 Path A (CSL Path B deferred post-Path A validation)
 - Cleaving mesh generator migration to `meshing/gbconformant/cleaving3dV1P0/` (WIP, untracked)
 
@@ -93,29 +91,9 @@ All notable changes to UPXO are documented in this file.
 
 ## [1.1.0] — 2026-08-04
 
-**First official PyPI release of UPXO.**
+**First official TestPyPI release of UPXO.**
 
 ### Added
-
-#### GUI Applications
-- **FM Steel GUI**: Interactive Tkinter/CustomTkinter wizard for hierarchical Ferritic-Martensitic steel microstructure generation
-  - PAG generation (Voronoi or Monte Carlo)
-  - PAG clustering and packet subdivision
-  - Block and sub-block (lath) generation with configurable thickness ranges
-  - KS (Kurdjumov–Sachs) variant assignment (random, adjacency-aware, or deterministic)
-  - Retained austenite modeling
-  - Texture-guided PAG orientation assignment
-  - Real-time visualization and feasibility validation
-  - Abaqus `.inp` and VTK export
-
-- **Twinned FCC GUI**: Interactive wizard for twinned grain generation in Cu, CuCrZr, OFHC-Cu
-  - Host grain allocation with spatial-dispersal-aware MIS algorithm
-  - Texture-guided orientation assignment via EBSD ODF
-  - EBSD microstructure import (CIF, HDF5 formats)
-  - Sigma-3 twin lamella embedding with configurable density and thickness
-  - Twin artifact removal and cleaning
-  - Real-time visualization of grain and twin distributions
-  - Abaqus and VTK export
 
 #### Core Pipeline Modules
 - **`pxtal/fm_steel_3d/`**: Hierarchical microstructure generation for FM steels
@@ -167,7 +145,6 @@ All notable changes to UPXO are documented in this file.
 - Comprehensive wiki (18+ pages) covering all capabilities
 - Detailed workflow examples (20 workflows covering 2D/3D generation, meshing, visualization)
 - Updated README with all new capabilities highlighted
-- Updated Sphinx documentation with GUI application exposure
 - Demo notebooks for FM Steel and Twinned FCC pipelines
 
 #### Testing
@@ -182,7 +159,6 @@ All notable changes to UPXO are documented in this file.
 
 - **`pxtalops/twin3d.py`**: Added optional `host_coords` parameter to `introduce_twin_lamella_3d()` for coordinate caching optimization
 - **README.md**: Expanded Core Capabilities and Microstructures Supported sections; fixed typos
-- **Sphinx documentation**: Updated introduction and getting_started sections with GUI application exposure
 - **Workflows documentation**: Expanded from 8 to 20 workflows covering all major capabilities
 
 ### Fixed
@@ -192,7 +168,7 @@ All notable changes to UPXO are documented in this file.
 
 ### Infrastructure
 
-- Added `.gitignore` entries for legacy GUI folder and generated output directories
+- Added `.gitignore` entries for legacy local-only folders and generated output directories
 - Organized data, sessions, and generated output structures
 - Sphinx build workflow configured for automated API documentation generation
 
@@ -200,11 +176,10 @@ All notable changes to UPXO are documented in this file.
 
 - MC Metropolis-acceptance refinement (permanently out of scope per architecture decision)
 - GB-energy/crystallography coupling for block selection (deferred to future versions)
-- Orientation-mode GUI exposure in Twinned FCC (deferred for UX refinement)
 - Multi-CSL twin registry beyond Sigma-3 Path A (CSL Path B deferred post-Path A validation)
 
 ---
 
 ## [1.0.0] — Development Only (Never Published)
 
-Initial development version. Features and APIs evolved significantly before first PyPI release.
+Initial development version. Features and APIs evolved significantly before first TestPyPI release.
