@@ -85,7 +85,7 @@ class geotess2d():
         Metadata (including whether built ``from_mcgs``).
     """
 
-    __slots__ = ('bounds', 'seeds', 'grid',
+    __slots__ = ('bounds', 'seeds', 'grid', 'gridpoints',
                  'jp', 'vp',
                  'gbedges', 'gbseg',
                  'xtals',
@@ -103,6 +103,7 @@ class geotess2d():
         self.bounds = None
         self.seeds = None
         self.xtals = []
+        self.grid = None
         self.gridpoints = None
         self.gid = []
         self.neigh_gid = {}
@@ -111,9 +112,8 @@ class geotess2d():
         self.gbseg = []
         self.vp = []
         # ---------------------------------
-        self.info = {}
-        self.info['from_mcgs'] = from_mcgs
-        self.info['from_mcgs'] = ''
+        self.info = {'from_mcgs': from_mcgs}
+        self.prop = None
 
     def __iter__(self):
         """Iterate over xtals in vtgs2d."""
@@ -123,37 +123,75 @@ class geotess2d():
         """Return the number of items in this instance."""
         return len(self.xtals)
 
-    def __getitem__(self):
+    def __getitem__(self, key):
         """Return item at the given index or key."""
-        raise NotImplementedError("__getitem__ is not yet implemented.")
+        if isinstance(key, (int, slice)):
+            return self.xtals[key]
+        if isinstance(key, str) and isinstance(self.prop, pd.DataFrame):
+            return self.prop[key]
+        if key in self.neigh_gid:
+            return self.neigh_gid[key]
+        raise KeyError(f"Key {key} not found in geotess2d")
 
-    def __setitem__(self):
+    def __setitem__(self, key, value):
         """Set item at the given index or key."""
-        raise NotImplementedError("__setitem__ is not yet implemented.")
+        if isinstance(key, (int, slice)):
+            self.xtals[key] = value
+        elif isinstance(key, str) and isinstance(self.prop, pd.DataFrame):
+            self.prop[key] = value
+        else:
+            raise KeyError(f"Cannot set key {key} in geotess2d")
 
     def __repr__(self):
         """Return a string representation of this instance."""
-        raise NotImplementedError("__repr__ is not yet implemented.")
+        return f"<geotess2d: {len(self.xtals)} grains, bounds={self.bounds}>"
 
     def set_seed_points(self, upxo_mp2d=None):
         """Set or update seed points."""
         self.seeds = upxo_mp2d
 
-    def make_seeds_random(self):
+    def make_seeds_random(self, nsp=50, bounds=None):
         """Build and return seeds random."""
-        raise NotImplementedError("make_seeds_random is not yet implemented.")
+        if bounds is not None:
+            self.bounds = bounds
+        b = self.bounds or [0.0, 1.0, 0.0, 1.0]
+        xmin, xmax, ymin, ymax = b[0], b[1], b[2], b[3]
+        x = np.random.uniform(xmin, xmax, nsp)
+        y = np.random.uniform(ymin, ymax, nsp)
+        coords = np.column_stack([x, y])
+        try:
+            self.seeds = mulpoint2d.from_coords(coords)
+        except Exception:
+            self.seeds = coords
+        return self.seeds
 
-    def make_seeds_pdisc(self):
-        """Build and return seeds pdisc."""
-        raise NotImplementedError("make_seeds_pdisc is not yet implemented.")
+    def make_seeds_pdisc(self, char_length=0.1, bounds=None):
+        """Build and return seeds pdisc using Bridson Poisson disc sampling."""
+        from upxo.statops.sampling import bridson_uniform_density
+        if bounds is not None:
+            self.bounds = bounds
+        b = self.bounds or [0.0, 1.0, 0.0, 1.0]
+        xmin, xmax, ymin, ymax = b[0], b[1], b[2], b[3]
+        width = xmax - xmin
+        height = ymax - ymin
+        pts = bridson_uniform_density(width=width, height=height, radius=char_length)
+        pts = np.asarray(pts)
+        if len(pts) > 0:
+            pts[:, 0] += xmin
+            pts[:, 1] += ymin
+        try:
+            self.seeds = mulpoint2d.from_coords(pts)
+        except Exception:
+            self.seeds = pts
+        return self.seeds
 
     def make_seeds_dart(self):
         """Build and return seeds dart."""
         raise NotImplementedError("make_seeds_dart is not yet implemented.")
 
-    def set_seeds(self):
+    def set_seeds(self, seeds):
         """Set or update seeds."""
-        raise NotImplementedError("set_seeds is not yet implemented.")
+        self.seeds = seeds
 
     def save(self):
         """Save."""
@@ -164,24 +202,94 @@ class geotess2d():
         raise NotImplementedError("load is not yet implemented.")
 
     def find_neighbours(self):
-        """Find neighbours."""
-        raise NotImplementedError("find_neighbours is not yet implemented.")
+        """Find neighbours for all grains in xtals using boundary topology."""
+        n = len(self.xtals)
+        gids = self.gid if len(self.gid) == n else list(range(n))
+        self.neigh_gid = {g: [] for g in gids}
+        for i in range(n):
+            poly_i = self.xtals[i]
+            gid_i = gids[i]
+            for j in range(i + 1, n):
+                poly_j = self.xtals[j]
+                gid_j = gids[j]
+                if poly_i.touches(poly_j) or poly_i.intersects(poly_j):
+                    inter = poly_i.intersection(poly_j)
+                    if not inter.is_empty and (inter.length > 1e-9 or inter.geom_type in ('LineString', 'MultiLineString')):
+                        self.neigh_gid[gid_i].append(gid_j)
+                        self.neigh_gid[gid_j].append(gid_i)
+        return self.neigh_gid
 
-    def find_first_nearest_neighbours(self):
+    def find_first_nearest_neighbours(self, gid=None):
         """Find first nearest neighbours."""
-        raise NotImplementedError("find_first_nearest_neighbours is not yet implemented.")
+        if not self.neigh_gid:
+            self.find_neighbours()
+        if gid is not None:
+            return self.neigh_gid.get(gid, [])
+        return self.neigh_gid
 
-    def find_second_nearest_neighbours(self):
+    def find_second_nearest_neighbours(self, gid=None):
         """Find second nearest neighbours."""
-        raise NotImplementedError("find_second_nearest_neighbours is not yet implemented.")
+        if not self.neigh_gid:
+            self.find_neighbours()
 
-    def filter_grains_by_prop(self):
-        """Filter grains by prop."""
-        raise NotImplementedError("filter_grains_by_prop is not yet implemented.")
+        def _2nd(target_id):
+            first = set(self.neigh_gid.get(target_id, []))
+            second = set()
+            for n1 in first:
+                for n2 in self.neigh_gid.get(n1, []):
+                    if n2 != target_id and n2 not in first:
+                        second.add(n2)
+            return sorted(list(second))
 
-    def filter_grains_by_loc(self):
-        """Filter grains by loc."""
-        raise NotImplementedError("filter_grains_by_loc is not yet implemented.")
+        if gid is not None:
+            return _2nd(gid)
+        return {g: _2nd(g) for g in self.neigh_gid}
+
+    def filter_boundary_grains(self):
+        """Return grain IDs that touch or intersect the domain boundary."""
+        if not self.bounds or not self.xtals:
+            return []
+        from shapely.geometry import box
+        xmin, xmax, ymin, ymax = self.bounds[0], self.bounds[1], self.bounds[2], self.bounds[3]
+        domain_box = box(xmin, ymin, xmax, ymax)
+        domain_boundary = domain_box.boundary
+        gids = self.gid if len(self.gid) == len(self.xtals) else list(range(len(self.xtals)))
+        boundary_grains = []
+        for gid, poly in zip(gids, self.xtals):
+            if poly.intersects(domain_boundary):
+                boundary_grains.append(gid)
+        return boundary_grains
+
+    def filter_internal_grains(self):
+        """Return grain IDs that do not touch the domain boundary."""
+        b_grains = set(self.filter_boundary_grains())
+        gids = self.gid if len(self.gid) == len(self.xtals) else list(range(len(self.xtals)))
+        return [gid for gid in gids if gid not in b_grains]
+
+    def filter_grains_by_loc(self, loc='internal'):
+        """Filter grains by loc ('internal' or 'boundary')."""
+        if loc == 'internal':
+            return self.filter_internal_grains()
+        elif loc == 'boundary':
+            return self.filter_boundary_grains()
+        else:
+            raise ValueError(f"Unknown location '{loc}'; expected 'internal' or 'boundary'.")
+
+    def filter_grains_by_prop(self, col, op, val):
+        """Filter grains by property."""
+        if self.prop is None or not isinstance(self.prop, pd.DataFrame):
+            raise ValueError("geotess2d.prop is not a valid pandas DataFrame.")
+        query_ops = {
+            '>': lambda c, v: self.prop[self.prop[c] > v],
+            '>=': lambda c, v: self.prop[self.prop[c] >= v],
+            '<': lambda c, v: self.prop[self.prop[c] < v],
+            '<=': lambda c, v: self.prop[self.prop[c] <= v],
+            '==': lambda c, v: self.prop[self.prop[c] == v],
+            '!=': lambda c, v: self.prop[self.prop[c] != v],
+        }
+        if op not in query_ops:
+            raise ValueError(f"Unsupported operator '{op}'.")
+        return query_ops[op](col, val)
 
     def _add_vertexpoint_in_grainboundaries(self):
         """ add vertexpoint in grainboundaries."""
@@ -195,11 +303,14 @@ class geotess2d():
         """Move new vertex point."""
         raise NotImplementedError("move_new_vertex_point is not yet implemented.")
 
-    def perturb_grain_boundaries(self, factor):
-        """Perturb grain boundaries."""
-        self.divide_all_edges_in_half()
-        for gbe in self.gbedges:
-            pass
+    def perturb_grain_boundaries(self, factor=0.05, seed=None):
+        """Perturb grain boundaries with controlled curvature while keeping junctions fixed."""
+        from upxo.pxtal.voronoi_tessellation_2d.engine import perturb_interfaces_2d
+        if not self.xtals:
+            return self.xtals
+        perturbed = perturb_interfaces_2d(self.xtals, bounds=self.bounds, factor=factor, seed=seed)
+        self.xtals = list(perturbed.geoms) if hasattr(perturbed, 'geoms') else list(perturbed)
+        return self.xtals
 
     def convert_to_pixels(self):
         """Convert to pixels."""
