@@ -354,6 +354,182 @@ class gtess2d():
         - Centroidal Voronoi (CVT / Lloyd relaxation)
         - Boundary interface perturbation / curvature
         - Poisson-disk (Bridson), dart, and uniform random generative sampling
+
+        Parameters
+        ----------
+        sp_input: str or array-like or MPoint2d, optional
+            Seed point input method. If 'load', then seed_coords must be
+            specified. If 'gen', parameters concerning generating the seed
+            points must be specified. An ``(N, 2)`` coordinate array or an
+            ``MPoint2d`` instance may also be passed directly here, in which
+            case it is treated the same as ``sp_input='load'`` with that
+            value as ``seed_coords``. Default value is 'gen'.
+
+        seed_coords: np.ndarray or MPoint2d, optional
+            ``(N, 2)`` coordinate array or ``MPoint2d`` instance, used when
+            ``sp_input='load'``. Default value is None.
+
+        xbound: list, optional
+            Spatial bound of expected pxtal along x-axis, [xmin, xmax].
+            Default value is [0, 100].
+
+        ybound: list, optional
+            Spatial bound of expected pxtal along y-axis, [ymin, ymax].
+            Default value is [0, 100].
+
+        nsp: int, optional
+            Number of seed points. Default value is 600.
+
+        n_instances: int, optional
+            Number of poly-xtal instances to be generated.
+            Default value is 1.
+
+        nsp_dev_ninstances: int, optional
+            Allowable deviation in number of seed points across instances. The
+            first instance will be used as a reference. The value to be input
+            is a percentage value. If value entered is 10, this would mean,
+            the second and other instances will be created ensuring that the
+            parameters needed to create them are to so as to keep the number
+            of seed points between -5% and +5% of that of the 1st instance.
+            This is to ensure similar morphological parameter distributions
+            across all instances. Default value is 10.
+
+        sp_distr: int, optional
+            Spatial distribution of the seed points desired. Options insluce
+            'random'. Default value is 'random'.
+
+        gr_tech: str, optional
+            Gridding technique. Options include 'random', 'pds'.
+            Default value is 'pds'.
+
+        smp_tech: str, optional
+            Sampling technique. Options include 'uniform', 'dart', 'bridson1'.
+            Default value is 'bridson1'.
+
+        randuni_calc: str, optional
+            Random uniform calculations.
+            Default value is 'by_points'.
+
+        lean: str, optional
+            UPXO point lean option used for creatinhg multipoint.
+            Default value is 'veryhigh'.
+
+        char_length: list, optional
+            Characteristic lengths needed for seed point creation.
+            In case of 'dart' and 'bridson1' sampling tecjhnique,
+            char_length[0] determines the average spatial distance between the
+            points. The higher the value, the greater the distane, which means
+            the lesser the number of points and greater the mean area of
+            poly-xtals. Default value is [3, 2].
+
+        niter: int, optional
+            NUmber of iterations needed for seed point creation.
+            Default value is 500.
+
+        ntrials: int, optional
+            Number of trials used in the creation of the 1st pxtal instance.
+            The irterations will be done to ensure pxtal parameter agrees to
+            as prescibed by repr_prop. Default value is -1.
+
+        k_char_length_inc: float, optional
+            Factor to increase the characteristic length. Value must be greater
+            than 0. Prescribed domain [0.02, 0.25]. A very small value would
+            increase the number of iterations needed to avchieve the required
+            morphologycal parameter requirement. Too big a value may lead to
+            oscillating iterations. Default value is 0.1.
+
+        k_char_length_dec: float, optional
+            Factor to decrease the characteristic length. Value must be greater
+            than 0. Prescribed domain [0.02, 0.25]. A very small value would
+            increase the number of iterations needed to avchieve the required
+            morphologycal parameter requirement. Too big a value may lead to
+            oscillating iterations. Default value is 0.1.
+
+        repr_prop: dict, optional
+            Representativeness requirement of properties.
+            Default value is {'area': {'mean': 6,
+                                       'dev': 10,
+                                       'consider_boundary_grains': True
+                                       }
+                              }.
+
+        make_point_objects: bool, optional
+            Default value is True.
+        make_ckdtree: bool, optional
+            Default value is True.
+        char_length_mean: float, optional
+            Default value is 0.24598.
+        char_length_min: float, optional
+            Default value is 0.1111.
+        char_length_max: float, optional
+            Default value is 0.9999.
+        nt: int, optional
+            Default value is 10.
+        space: str, optional
+            Default value is 'linear'.
+        bounds: array-like, optional
+            ``[[xmin, xmax], [ymin, ymax]]`` (or any format accepted by
+            :func:`~upxo.pxtal.voronoi_tessellation_2d.engine.coerce_bounds_2d`).
+            When given, overrides ``xbound``/``ybound``. When omitted and
+            ``sp_input='load'``, bounds are inferred from the seed extents.
+            Default value is None.
+        periodic: tuple of bool, optional
+            ``(periodic_x, periodic_y)``. Enables Periodic Boundary
+            Conditions along either axis for a fully periodic RVE.
+            Default value is (False, False).
+        weights: array-like, optional
+            Per-seed weights ``(N,)`` for Laguerre / power-diagram
+            (weighted Voronoi) tessellation. None gives a standard,
+            unweighted Voronoi tessellation. Default value is None.
+        cvt_iterations: int, optional
+            Number of Lloyd relaxation iterations for Centroidal Voronoi
+            Tessellation (CVT). 0 disables CVT and uses the seeds as given.
+            Default value is 0.
+        perturb_factor: float, optional
+            Magnitude of non-linear grain-boundary interface perturbation
+            (curvature), applied while preserving manifold junctions. 0
+            disables perturbation. Default value is 0.0.
+        sp_in: array-like or MPoint2d, optional
+            Alias for ``seed_coords``, used only when ``seed_coords`` is not
+            already given. Default value is None.
+        **kwargs:
+            Accepted and ignored, for forward compatibility with callers
+            passing extra keyword arguments.
+
+        Returns
+        -------
+        gtess2d
+            New instance holding the generated poly-xtal instance(s) in
+            ``self.pxtals`` (Shapely MultiPolygons, keyed by instance number)
+            and the corresponding seed points in ``self.sps``.
+
+        Examples
+        --------
+        from upxo.pxtal.vortess2d import gtess2d
+        repr_prop={'area': {'mean': {'val': 50, 'dev': 7.5,},
+                            'consider_boundary_grains': True } }
+
+        # here we get Poisson disc sampling ------------>
+        gset = gtess2d.from_seed_points(sp_input='gen', xbound=[0, 100],
+                 ybound = [0, 100], sp_distr='random', gr_tech='pds',
+                 smp_tech='bridson1', lean='veryhigh', char_length=[4.5],
+                 ntp=10, ntrials=100, n_instances=25, repr_prop=repr_prop,
+                 k_char_length_inc=0.05, k_char_length_dec=0.05,)
+
+        # Here we get dart sampling ------------>
+        gset = gtess2d.from_seed_points(sp_input='gen', xbound=[0, 100],
+                 ybound = [0, 100], sp_distr='random', gr_tech='random',
+                 smp_tech='dart', lean='veryhigh', char_length=[4.5],
+                 niter=10, ntrials=100, n_instances=2, repr_prop=repr_prop,
+                 k_char_length_inc=0.05, k_char_length_dec=0.05,)
+
+        gset.plot()
+
+        # High-fidelity: periodic boundaries, CVT relaxation, perturbation
+        seeds = np.random.uniform(0, 60, size=(30, 2))
+        gset = gtess2d.from_seed_points(
+            seeds, bounds=[[0, 60], [0, 60]],
+            periodic=(True, True), cvt_iterations=5, perturb_factor=0.03)
         """
         from upxo.pxtal.voronoi_tessellation_2d.engine import (
             coerce_bounds_2d, generate_voronoi_2d
