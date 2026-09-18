@@ -1447,6 +1447,10 @@ class ring2d():
     ``ring2d`` is in active development. Closure enforcement, reordering, and
     polygon generation are implemented; polygon meshing is not yet available.
 
+    Name collision: :class:`upxo.geoEntities.ring2d.ring2d` is a separate,
+    unrelated, currently-unused class (built on ``muledge2d`` rather than
+    ``MSline2d`` segments). Mind the module path when importing.
+
     Examples
     --------
     .. code-block:: python

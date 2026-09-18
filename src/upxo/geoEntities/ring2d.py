@@ -47,6 +47,12 @@ class ring2d():
     -----
     The source ``muledge2d`` is expected to be ordered, continuous, and free
     from self-intersections before the closing edge is added.
+
+    Unused elsewhere in UPXO -- not currently imported by any other module.
+    The actively-used ring implementation is
+    :class:`upxo.geoEntities.mulsline2d.ring2d` (a same-named but unrelated
+    class built on ``MSline2d`` segments rather than ``muledge2d``); mind the
+    name collision when importing.
     """
     EPS = 0.000000000001
     __slots__ = ('dim',  # Dimensionality
