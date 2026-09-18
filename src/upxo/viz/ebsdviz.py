@@ -592,7 +592,7 @@ def print_parent_grain_summary(
     header = (f"{'CSL type':<18} {'ref °':>6}  {'pairs':>6}  "
               f"{'pure parents':>13}  {'pure twins':>11}  {'intermediates':>14}")
     print(header)
-    print('─' * 75)
+    print('-' * 75)
     for lbl, v in parent_info.items():
         n_pairs = len(csl_grains[lbl]['pairs']) if lbl in csl_grains else 0
         print(f"{lbl:<18} {v['csl_angle']:>6.2f}  {n_pairs:>6}  "

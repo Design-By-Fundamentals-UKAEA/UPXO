@@ -1153,7 +1153,7 @@ def detect_mdf_peaks(
         delta   = angle - csl[nearest]
         within  = abs(delta) <= csl_tol
         csl_nearest.append((nearest, float(delta)))
-        csl_tag = f'  ≈ {nearest} (Δ={delta:+.1f}°)' if within else ''
+        csl_tag = f'  ~ {nearest} (delta={delta:+.1f} deg)' if within else ''
         peak_labels.append(f'{angle:.1f}°  (density={density[pi]:.4f}){csl_tag}')
 
     kde        = _gaussian_kde(mdf['miso_deg'], bw_method=bw_method)
@@ -2878,7 +2878,7 @@ def exmp_get_ks_rotations():
 
     print("=== exmp_get_ks_rotations ===")
     print(f"  Output shape            : {ks.shape}")
-    print(f"  All det(R) ≈ +1         : {np.allclose(dets,  1.0, atol=1e-10)}")
+    print(f"  All det(R) ~ +1          : {np.allclose(dets,  1.0, atol=1e-10)}")
     print(f"  All ||RR^T - I||_F < 1e-10 : {np.all(errs < 1e-10)}")
     print(f"  Max orthogonality error : {errs.max():.2e}")
 

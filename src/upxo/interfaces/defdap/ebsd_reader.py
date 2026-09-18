@@ -435,9 +435,9 @@ class EBSDReader:
         quat_c  = self.quat_ebsd[row0:row1, col0:col1, :].copy()
         new_shape = lfi_c.shape   # (ny_crop, nx_crop)
 
-        print(f"[crop] region=[{xs}, {ys}, {xe}, {ye}]%  →  "
+        print(f"[crop] region=[{xs}, {ys}, {xe}, {ye}]%  ->  "
               f"rows {row0}:{row1}, cols {col0}:{col1}  |  "
-              f"original {ny}×{nx}  →  cropped {new_shape[0]}×{new_shape[1]}",
+              f"original {ny}x{nx}  ->  cropped {new_shape[0]}x{new_shape[1]}",
               flush=True)
 
         if inplace:

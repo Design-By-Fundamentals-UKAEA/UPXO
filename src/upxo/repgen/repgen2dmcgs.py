@@ -1261,7 +1261,7 @@ class repgen2d:
         peaks = detect_mdf_peaks(mdf, prominence=prominence, distance=distance,
                                  csl=csl, csl_tol=csl_tol, bw_method=bw_method,
                                  n_kde=n_kde, angle_max=angle_range[1])
-        print(f"{'Detected peaks':─^55}")
+        print(f"{'Detected peaks':-^55}")
         for label, (csl_name, delta) in zip(peaks['peak_labels'], peaks['csl_nearest']):
             print(f'  {label}')
         # ------------------------------------------------
@@ -1324,7 +1324,7 @@ class repgen2d:
 
         # Summary table
         print(f"{'CSL type':<18} {'ref °':>6}  {'pairs':>6}  {'grains':>7}")
-        print('─' * 42)
+        print('-' * 42)
         for lbl, info in csl_grains.items():
             print(f"{lbl:<18} {info['csl_angle']:>6.2f}  "
                 f"{len(info['pairs']):>6}  {len(info['grains_all']):>7}")
@@ -1480,7 +1480,7 @@ class repgen2d:
         # ── Table ─────────────────────────────────────────────────────────────────────
         print(f"{'CSL type':<18} {'ref °':>6}  {'grains':>7}  "
             f"{'pixels':>8}  {'VF (indexed)':>13}  {'VF (total)':>11}")
-        print('─' * 70)
+        print('-' * 70)
         for lbl, v in vf.items():
             print(f"{lbl:<18} {v['csl_angle']:>6.2f}  {v['n_grains']:>7}  "
                 f"{v['n_pixels']:>8}  {v['vf_indexed']:>12.2%}  {v['vf_total']:>10.2%}")
@@ -1619,7 +1619,7 @@ class repgen2d:
 
         if csl_label is None:
             csl_label = next(iter(ext))
-            print(f'compute_ebsd_tvf: auto-selected CSL label  → "{csl_label}"')
+            print(f'compute_ebsd_tvf: auto-selected CSL label  -> "{csl_label}"')
             print(f'  Available labels: {list(ext.keys())}')
         elif csl_label not in ext:
             raise KeyError(
@@ -1808,7 +1808,7 @@ class repgen2d:
         print(f'Twin-hosting target fraction : {target_fraction:.4f}')
         hdr = f'{"Slice":>10}  {"n_total":>8}  {"n_hosts":>8}  {"actual_frac":>12}  {"excluded":>9}'
         print(hdr)
-        print('─' * len(hdr))
+        print('-' * len(hdr))
 
         for k in mc_slices:
             gs = cntr.gsset.get(k)
@@ -2088,7 +2088,7 @@ class repgen2d:
         result = {}
         print(f'CSL label : {csl_key}')
         print(f'  {"Slice":>6}  {"n_hosts":>8}  {"pool_size":>10}  {"n_fallback":>10}')
-        print('  ' + '─' * 42)
+        print('  ' + '-' * 42)
 
         for slice_key, info in mc_twin_hosts.items():
             gs = cntr.gsset[slice_key]
@@ -2153,7 +2153,7 @@ class repgen2d:
                   f' scatter σ={ang_scatter_gaussian_deg}°,'
                   f' synthetic orientations used)')
             print('  ' + hdr2)
-            print('  ' + '─' * len(hdr2))
+            print('  ' + '-' * len(hdr2))
 
             _do_scatter = ang_scatter_gaussian_deg > 0.0
 
@@ -2466,7 +2466,7 @@ class repgen2d:
         print(f'  Twin thickness ({stats["col"]}) and intercept statistics (EBSD):')
         header = f'  {"Metric":<28}  {"Q1":>8}  {"Q2 (med)":>10}  {"Q3":>8}  {"IQR":>8}'
         print(header)
-        print('  ' + '─' * (len(header) - 2))
+        print('  ' + '-' * (len(header) - 2))
         if n_twins > 0:
             tq1, tq2, tq3 = stats['thick_q1'], stats['median'], stats['thick_q3']
             print(f'  {"Thickness (µm)":<28}  {tq1:>8.2f}  {tq2:>10.2f}  {tq3:>8.2f}  {(tq3-tq1):>8.2f}')
@@ -2555,7 +2555,7 @@ class repgen2d:
         hdr = (f'{"Slice":>6}  {"n_hosts":>8}  {"n_prim_twins":>13}  '
                f'{"n_abrupt":>9}  {"abrupt_frac":>12}  {"n_sec_twins":>12}')
         print(hdr)
-        print('─' * len(hdr))
+        print('-' * len(hdr))
 
         for sk, host_info in mc_twin_hosts.items():
             gs         = cntr.gsset[sk]
@@ -4755,7 +4755,7 @@ class repgen2d:
             )
             if verbose:
                 r = results[sk]
-                print(f'  → {r["n_nodes"]:,} nodes, {r["n_tri"]:,} tri, '
+                print(f'  -> {r["n_nodes"]:,} nodes, {r["n_tri"]:,} tri, '
                       f'{r["n_quad"]:,} quad  ({r["elapsed"]:.2f}s)')
         self.mc_smooth_mesh = results
         return self.mc_smooth_mesh
