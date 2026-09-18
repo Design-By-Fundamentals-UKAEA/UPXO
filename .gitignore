@@ -158,3 +158,4 @@ src/upxo/Important links.md
 
 # WIP: cleaving migration destination, not ready to commit yet
 /src/upxo/meshing/gbconformant/cleaving3dV1P0/
+/tests/meshing/gbconformant/cleaving3dV1P0/
