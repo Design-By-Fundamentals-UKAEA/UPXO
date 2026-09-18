@@ -88,7 +88,7 @@ ebsd = ["defdap==0.93.6"]
 all  = ["upxo[viz,mesh,io,ebsd]"]
 
 [tool.setuptools.package-data]
-"*" = ["*.xls", "*.xlsx", "*.m"]
+"*" = ["*.xls", "*.xlsx", "*.m", "*.txt", "*.json"]
 
 [project.urls]
 Homepage = "https://github.com/Design-By-Fundamentals-UKAEA/UPXO"

@@ -62,7 +62,7 @@ import math
 import numpy as np
 import random
 import seaborn as sns
-# from pathlib import Path
+from pathlib import Path
 from copy import deepcopy
 from typing import Iterable
 import matplotlib.pyplot as plt
@@ -92,6 +92,11 @@ from upxo.geoEntities.sline2d import Sline2d as sl2d
 from upxo.geoEntities.mulpoint2d import MPoint2d as mulpoint2d
 from upxo.pxtalops import manipulator_mergers as manm
 import upxo._sup.decorators as decorators
+
+# Bundled package resource (ships with the installed wheel); resolved relative
+# to this module so it works from a source checkout or an installed package.
+_DEFAULT_CTF_HEADER = str(
+    Path(__file__).resolve().parent.parent / '_writer_data' / '_ctf_header_CuCrZr_1.txt')
 
 @njit(parallel=True)
 def get_neighbor_mask(arr, gid):
@@ -3398,8 +3403,9 @@ class mcgs2_grain_structure():
             pxt.detect_grains()
             tslice = 20  # Temporal slice number
             pxt.char_morph_2d(tslice)
-            pxt.gs[tslice].export_ctf(r'D:/export_folder', 'sunil')
-            path_filename_noext = r'D:/export_folder/sunil'
+            export_folder = 'src/upxo/_written_data/_ctf_export_2dmcgs'
+            pxt.gs[tslice].export_ctf(export_folder, 'sample_export')
+            path_filename_noext = export_folder + '/sample_export'
             pxt.gs[tslice].set_pxtal(path_filename_noext=path_filename_noext)
             pxt.gs[tslice].pxtal.map
         """
@@ -5908,7 +5914,7 @@ class mcgs2_grain_structure():
 
         with open(file_path, 'w') as f:
             f.write("Channel Text File\n")
-            f.write("Prj	C:/CHANNEL5_olddata/Joe's Creeping Crud/Joes creeping crud on Cu/Cugrid_after 2nd_15kv_2kx_2.cpr\n")
+            f.write("Prj	[Unknown]\n")
             f.write("Author	[Unknown]\n")
             f.write("JobMode	Grid\n")
             f.write("XCells	550\n")
@@ -5943,7 +5949,7 @@ class mcgs2_grain_structure():
         pass
 
     def export_ctf(self, folder, fileName, pathFinding='direct',
-            headerFileLocation='C:\\Development\\UPXO\\upxo_library\\src\\upxo\\_writer_data\\_ctf_header_CuCrZr_1.txt',
+            headerFileLocation=_DEFAULT_CTF_HEADER,
             factor=1, method='nearest'):
         """
         Export the grain structure to a CTF file for downstream EBSD tools.
@@ -5973,7 +5979,7 @@ class mcgs2_grain_structure():
         --------
         .. code-block:: python
 
-            ctf.export_ctf('D:/export_folder', 'sunil')
+            ctf.export_ctf('src/upxo/_written_data/_ctf_export_2dmcgs', 'sample_export')
         """
         if method not in ('nearest', 'decimate'):
             raise ValueError('Invalid method provided. Valid: nearest or decimate')
