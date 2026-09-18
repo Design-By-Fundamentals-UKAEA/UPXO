@@ -193,17 +193,14 @@ class gtess2d():
                  uinputs=None, phid=1, gen_method='from_seed_points'):
         """Initialise the instance."""
         # ------------------------------------------------------------------
-        print(50*'#')
-        print(50*'#')
-        print(pxtals)
-        print(50*'#')
-        print(50*'#')
         self.gen_method = gen_method
         self.sps = sps
-        self.pxtals = pxtals
-        self.ninst = len(pxtals.keys())
+        self.pxtals = pxtals if pxtals is not None else {}
+        self.ninst = len(self.pxtals.keys())
         self.instn = range(1, self.ninst+1)
-        self.uinputs = uinputs
+        self.uinputs = uinputs if uinputs is not None else {}
+        self.xbound = xbound
+        self.ybound = ybound
         self.fdb_base, self.geolink = {}, {}
         self.fdb_subgrains = {}
         self.fdb_paps = {}
@@ -213,8 +210,8 @@ class gtess2d():
                              }
                       for inst in self.instn}
         # Topological properties.
-        self.tprop = {inst: {'ncells': len(self.pxtals[inst].geoms),
-                             'ncrange': range(len(self.pxtals[inst].geoms)),
+        self.tprop = {inst: {'ncells': len(self.pxtals[inst].geoms) if inst in self.pxtals else 0,
+                             'ncrange': range(len(self.pxtals[inst].geoms)) if inst in self.pxtals else range(0),
                              'nneigh': [],
                              'ngb': [], 'jpo': [],
                              }
@@ -254,10 +251,59 @@ class gtess2d():
         """Return a string representation of this instance."""
         return f"gtess2d instances. n: {self.ninst}. "
 
+    def __len__(self):
+        """Return the number of instances."""
+        return self.ninst
+
+    @property
+    def bounds(self):
+        """Return dictionary of bounds."""
+        return {'xbound': self.xbound, 'ybound': self.ybound}
+
+    @property
+    def info(self):
+        """Return metadata dictionary compatible with gtess3d."""
+        return {'uinputs': self.uinputs, 'bounds': self.bounds}
+
+    @property
+    def seeds(self):
+        """Return primary seed points."""
+        return self.sps.get(1, None) if self.sps else None
+
     @classmethod
-    def from_shapely_mulpolygon(cls, mpol):
-        """Construct this instance from shapely mulpolygon."""
-        raise NotImplementedError("from_shapely_mulpolygon is not yet implemented.")
+    def from_mpoint2d(cls, mpt, bounds=None, **kwargs):
+        """Construct gtess2d from an MPoint2d instance."""
+        return cls.from_seed_points(mpt, bounds=bounds, **kwargs)
+
+    @classmethod
+    def from_shapely_mulpolygon(cls, mpol, bounds=None, phid=1):
+        """Construct this instance from a Shapely MultiPolygon or list of Polygons."""
+        if isinstance(mpol, MultiPolygon):
+            pxtals = {1: mpol}
+        elif isinstance(mpol, dict):
+            pxtals = mpol
+        elif isinstance(mpol, (list, tuple)):
+            pxtals = {1: MultiPolygon(list(mpol))}
+        else:
+            raise TypeError("mpol must be a Shapely MultiPolygon, list of Polygons, or dict.")
+
+        if bounds is not None:
+            from upxo.pxtal.voronoi_tessellation_2d.engine import coerce_bounds_2d
+            b2d = coerce_bounds_2d(bounds)
+            xbound, ybound = b2d[0], b2d[1]
+        else:
+            ref_geom = pxtals[1]
+            minx, miny, maxx, maxy = ref_geom.bounds
+            xbound, ybound = [float(minx), float(maxx)], [float(miny), float(maxy)]
+
+        sps = {}
+        for inst, geom in pxtals.items():
+            centroids = np.array([[c.centroid.x, c.centroid.y] for c in geom.geoms])
+            sps[inst] = mp2d.from_coords(centroids)
+
+        uinputs = {'xbound': xbound, 'ybound': ybound, 'bounds': [xbound, ybound]}
+        return cls(sps=sps, pxtals=pxtals, xbound=xbound, ybound=ybound,
+                   uinputs=uinputs, phid=phid, gen_method='from_shapely_mulpolygon')
 
     @classmethod
     def from_geometrified_mcgs2d(cls, polgs):
@@ -294,164 +340,132 @@ class gtess2d():
                          make_point_objects=True, make_ckdtree=True,
                          char_length_mean=0.24598,
                          char_length_min=0.1111, char_length_max=0.9999,
-                         nt=10, space='linear',):
+                         nt=10, space='linear',
+                         bounds=None, periodic=(False, False),
+                         weights=None, cvt_iterations=0, perturb_factor=0.0,
+                         sp_in=None, **kwargs):
         """
-        Parameters
-        ----------
-        sp_input: str, optional
-            Seed point input method. If 'load', then seed_coords must be
-            specified. If 'gen', parameters concerning generating the
-            seed points must be specififed. Default value is 'gen'.
+        Construct 2D Voronoi tessellation polycrystal from seed points or generative sampling.
 
-        seed_coords: np.ndarray, optional
-            2D coordinate numpy array. Default value is None.
-
-        xbound: list, optional
-            Spatial bound of expected pxtal along x-axis, [xmin, xmax].
-            Default value is [0, 100].
-
-        ybound: list, optional
-            Spatial bound of expected pxtal along y-axis, [ymin, ymax].
-            Default value is [0, 100].
-
-        nsp: int, optional
-            Number of seed points. Default value is 600.
-
-        n_instances: int, optional
-            Number of poly-xtal instances to be generated.
-            Default value is 1.
-
-        nsp_dev_ninstances: int, optional
-            Allowable deviation in number of seed points across instances. The
-            first instance will be used as a reference. The value to be input
-            is a percentage value. If value entered is 10, this would mean,
-            the second and other instances will be created ensuring that the
-            parameters needed to create them are to so as to keep the number
-            of seed points between -5% and +5% of that of the 1st instance.
-            This is to ensure similar morphological parameter distributions
-            across all instances. Default value is 10.
-
-        sp_distr: int, optional
-            Spatial distribution of the seed points desired. Options insluce
-            'random'. Default value is 'random'.
-
-        gr_tech: str, optional
-            Gridding technique. Options include 'random', 'pds'.
-            Default value is 'pds'.
-
-        smp_tech: str, optional
-            Sampling technique. Options include 'uniform', 'dart', 'bridson1'.
-            Default value is 'bridson1'.
-
-        randuni_calc: str, optional
-            Random uniform calculations.
-            Default value is 'by_points'.
-
-        lean: str, optional
-            UPXO point lean option used for creatinhg multipoint.
-            Default value is 'veryhigh'.
-
-        char_length: list, optional
-            Characteristic lengths needed for seed point creation.
-            In case of 'dart' and 'bridson1' sampling tecjhnique,
-            char_length[0] determines the average spatial distance between the
-            points. The higher the value, the greater the distane, which means
-            the lesser the number of points and greater the mean area of
-            poly-xtals. Default value is [3, 2].
-
-        niter: int, optional
-            NUmber of iterations needed for seed point creation.
-            Default value is 500.
-
-        ntrials: int, optional
-            Number of trials used in the creation of the 1st pxtal instance.
-            The irterations will be done to ensure pxtal parameter agrees to
-            as prescibed by repr_prop. Default value is -1.
-
-        k_char_length_inc: float, optional
-            Factor to increase the characteristic length. Value must be greater
-            than 0. Prescribed domain [0.02, 0.25]. A very small value would
-            increase the number of iterations needed to avchieve the required
-            morphologycal parameter requirement. Too big a value may lead to
-            oscillating iterations. Default value is 0.1.
-
-        k_char_length_dec: float, optional
-            Factor to decrease the characteristic length. Value must be greater
-            than 0. Prescribed domain [0.02, 0.25]. A very small value would
-            increase the number of iterations needed to avchieve the required
-            morphologycal parameter requirement. Too big a value may lead to
-            oscillating iterations. Default value is 0.1.
-
-        repr_prop: dict, optional
-            Representativeness requirement of properties.
-            Default value is {'area': {'mean': 6,
-                                       'dev': 10,
-                                       'consider_boundary_grains': True
-                                       }
-                              }.
-
-        make_point_objects: bool, optional
-            Default value is True.
-        make_ckdtree: bool, optional
-            Default value is True.
-        char_length_mean: float, optional
-            Default value is 0.24598.
-        char_length_min: float, optional
-            Default value is 0.1111.
-        char_length_max: float, optional
-            Default value is 0.9999.
-        nt: int, optional
-            Default value is 10.
-        space: str, optional
-            Default value is 'linear'.
-
-        Examples
-        --------
-        from upxo.pxtal.vortess2d import gtess2d
-        repr_prop={'area': {'mean': {'val': 50, 'dev': 7.5,},
-                            'consider_boundary_grains': True } }
-
-        # here we get Poisson disc sampling ------------>
-        gset = gtess2d.from_seed_points(sp_input='gen', xbound=[0, 100],
-                 ybound = [0, 100], sp_distr='random', gr_tech='pds',
-                 smp_tech='bridson1', lean='veryhigh', char_length=[4.5],
-                 ntp=10, ntrials=100, n_instances=25, repr_prop=repr_prop,
-                 k_char_length_inc=0.05, k_char_length_dec=0.05,)
-
-        # Here we get dart sampling ------------>
-        gset = gtess2d.from_seed_points(sp_input='gen', xbound=[0, 100],
-                 ybound = [0, 100], sp_distr='random', gr_tech='random',
-                 smp_tech='dart', lean='veryhigh', char_length=[4.5],
-                 niter=10, ntrials=100, n_instances=2, repr_prop=repr_prop,
-                 k_char_length_inc=0.05, k_char_length_dec=0.05,)
-
-        gset.plot()
+        Supports high-fidelity features:
+        - Direct coordinate arrays ``(N, 2)`` or ``MPoint2d`` instances
+        - Periodic Boundary Conditions (PBC) across X, Y, or both
+        - Laguerre / Power diagram tessellation via seed weights
+        - Centroidal Voronoi (CVT / Lloyd relaxation)
+        - Boundary interface perturbation / curvature
+        - Poisson-disk (Bridson), dart, and uniform random generative sampling
         """
+        from upxo.pxtal.voronoi_tessellation_2d.engine import (
+            coerce_bounds_2d, generate_voronoi_2d
+        )
+
+        if sp_in is not None and seed_coords is None:
+            seed_coords = sp_in
+
+        if bounds is not None:
+            b2d = coerce_bounds_2d(bounds)
+            xbound = b2d[0]
+            ybound = b2d[1]
+
+        # Handle raw coordinate array or MPoint2d passed as first argument
+        if not isinstance(sp_input, str):
+            seed_coords = sp_input
+            sp_input = 'load'
+
         if ntrials == -1:
             ntrials = 100
 
         pxtals = {}
         sps = {}
-
         pxtal_count = 1
 
+        uinputs = {
+            'sp_input': sp_input,
+            'xbound': xbound, 'ybound': ybound,
+            'bounds': [xbound, ybound],
+            'periodic': periodic,
+            'weights': weights,
+            'cvt_iterations': cvt_iterations,
+            'perturb_factor': perturb_factor,
+            'n_instances': n_instances,
+            'gr_tech': gr_tech,
+            'smp_tech': smp_tech,
+            'sp_distr': sp_distr,
+        }
+
         if sp_input == 'load':
-            seed_coords = seed_coords
+            if seed_coords is None:
+                raise ValueError("seed_coords must be specified when sp_input='load'.")
+
+            if isinstance(seed_coords, mp2d):
+                coords = np.asarray(seed_coords.coords, dtype=float) if hasattr(seed_coords, 'coords') else np.column_stack((seed_coords.x, seed_coords.y))
+                sp_obj = seed_coords
+            else:
+                coords = np.asarray(seed_coords, dtype=float)
+                if coords.ndim != 2 or coords.shape[1] != 2:
+                    raise ValueError("seed_coords must have shape (N, 2).")
+                sp_obj = mp2d.from_coords(coords)
+
+            if bounds is None:
+                b2d = coerce_bounds_2d(None, seeds=coords)
+                xbound, ybound = b2d[0], b2d[1]
+
+            res = generate_voronoi_2d(
+                coords, bounds=[xbound, ybound],
+                periodic=periodic, weights=weights,
+                cvt_iterations=cvt_iterations,
+                perturb_factor=perturb_factor,
+                clip=True
+            )
+            pxtals[1] = res['pxtal']
+            if cvt_iterations > 0:
+                sps[1] = mp2d.from_coords(res['seeds'])
+            else:
+                sps[1] = sp_obj
+
+            uinputs = {
+                'sp_input': 'load',
+                'seed_coords': coords,
+                'xbound': xbound, 'ybound': ybound,
+                'bounds': [xbound, ybound],
+                'periodic': periodic,
+                'weights': weights,
+                'cvt_iterations': cvt_iterations,
+                'perturb_factor': perturb_factor,
+            }
+            return cls(sps=sps, pxtals=pxtals, xbound=xbound, ybound=ybound,
+                       uinputs=uinputs, gen_method='from_seed_points')
 
         if sp_input == 'gen':
             if sp_distr == 'random':
                 # ----------------------------
-                if gr_tech == 'random':
-                    if smp_tech == 'uniform':
-                        _char_length = char_length
-                        # Remaining codes here to generate the pxtal
+                if gr_tech == 'random' and smp_tech == 'uniform':
+                    _def = cls._make_pxtal_single_instance
+                    pxt = _def(spinput=sp_input,
+                               xbound=xbound, ybound=ybound,
+                               nsp=nsp, sp_distr=sp_distr,
+                               gridding_technique=gr_tech,
+                               sampling_technique=smp_tech,
+                               randuni_calc=randuni_calc, niter=niter,
+                               ntp=ntp,
+                               lean=lean, char_length=char_length,
+                               make_point_objects=make_point_objects,
+                               make_ckdtree=make_ckdtree, space=space,
+                               char_length_mean=char_length_mean,
+                               char_length_min=char_length_min,
+                               char_length_max=char_length_max, nt=nt,
+                               periodic=periodic, weights=weights,
+                               cvt_iterations=cvt_iterations,
+                               perturb_factor=perturb_factor)
+                    pxtals[pxtal_count] = pxt['pxtal']
+                    sps[pxtal_count] = pxt['sp']
                 # ----------------------------
                 if gr_tech in ('random', 'pds'):
                     if smp_tech in ('dart', 'bridson1'):
                         _char_length = [char_length[0]]
+                        _char_length_ = _char_length
                         _def = cls._make_pxtal_single_instance
                         for trial in range(ntrials):
-                            print(f"Generating pxtal. Iteration {trial+1}")
                             pxt = _def(spinput=sp_input,
                                        xbound=xbound, ybound=ybound,
                                        nsp=nsp, sp_distr=sp_distr,
@@ -464,8 +478,10 @@ class gtess2d():
                                        make_ckdtree=make_ckdtree, space=space,
                                        char_length_mean=char_length_mean,
                                        char_length_min=char_length_min,
-                                       char_length_max=char_length_max, nt=nt)
-                            print(f"No. of seed points: {pxt['sp'].npoints}")
+                                       char_length_max=char_length_max, nt=nt,
+                                       periodic=periodic, weights=weights,
+                                       cvt_iterations=cvt_iterations,
+                                       perturb_factor=perturb_factor)
                             if rep_gen:
                                 if 'area' in repr_prop.keys():
                                     areas = np.array([g.area
@@ -492,53 +508,39 @@ class gtess2d():
                                             k = 1 - trial*k_char_length_dec
                                             _char_length = [char_length[0] * k]
                                             _char_length_ = _char_length
-            if rep_gen:
-                if trial == ntrials-1:
-                    print(50*'#', '\n')
-                    print('WARNING')
-                    print('        Maximum number of iterations reached')
-                    print('        Grain Structure DID NOT converge !!!\n')
-                    print(50*'#')
-                print(40*'-')
-                print(f"Grain structure search converged in {trial} iterations")
-                print('Sample set parent found.')
-                print('----')
-                print(f"Target mean grain area: {repr_prop['area']['mean']['val']}")
-                print(f"Sample mean grain area: {np.round(areas.mean(), 6)}")
-                print('----')
-                print(f"Input Char. length: {char_length}")
-                print(f"Final Char. length: {np.round(_char_length_, 4)}")
-                print('----')
-                print(f"No. of seed points: {pxt['sp'].npoints}")
-                print(f"No. of grains: {len(pxt['pxtal'].geoms)}")
-                print(40*'-')
+                            else:
+                                pxtals[pxtal_count] = pxt['pxtal']
+                                sps[pxtal_count] = pxt['sp']
+                                break
+                        if pxtal_count not in pxtals and 'pxt' in locals():
+                            pxtals[pxtal_count] = pxt['pxtal']
+                            sps[pxtal_count] = pxt['sp']
+
             uinputs = {'sp_input': sp_input,
                        'xbound': xbound, 'ybound': ybound, 'nsp': nsp,
                        'sp_distr': sp_distr, 'gridding_technique': gr_tech,
                        'sampling_technique': smp_tech,
                        'randuni_calc': randuni_calc, 'lean': lean,
-                       'char_length': _char_length, 'niter': niter,
+                       'char_length': _char_length if 'char_length' in locals() else char_length,
+                       'niter': niter,
                        'make_point_objects': make_point_objects,
                        'make_ckdtree': make_ckdtree,
                        'char_length_mean': char_length_mean,
                        'char_length_min': char_length_min,
                        'char_length_max': char_length_max,
-                       'nt': nt, 'space': space}
+                       'nt': nt, 'space': space,
+                       'periodic': periodic,
+                       'weights': weights,
+                       'cvt_iterations': cvt_iterations,
+                       'perturb_factor': perturb_factor}
 
             if n_instances > 1:
                 for inst in range(n_instances-1):
-                    print(f"Generating instance number: {inst+2} using sample set parent GS.")
                     if sp_input == 'gen':
                         if sp_distr == 'random':
-                            # ----------------------------
-                            if gr_tech == 'random':
-                                if smp_tech == 'uniform':
-                                    _char_length = char_length
-                                    # Remaining codes here to generate the pxtal
-                            # ----------------------------
                             if gr_tech in ('random', 'pds'):
-                                if smp_tech in ('dart', 'bridson1'):
-                                    _char_length = [char_length[0]]
+                                if smp_tech in ('dart', 'bridson1', 'uniform'):
+                                    _char_length = [char_length[0]] if isinstance(char_length, (list, tuple)) else [char_length]
                                     _def = cls._make_pxtal_single_instance
                                     pxtal_count += 1
                                     pxt = _def(spinput=sp_input,
@@ -550,15 +552,18 @@ class gtess2d():
                                                randuni_calc=randuni_calc,
                                                niter=niter,
                                                lean=lean,
-                                               char_length=_char_length_,
+                                               char_length=_char_length_ if '_char_length_' in locals() else _char_length,
                                                make_point_objects=make_point_objects,
                                                make_ckdtree=make_ckdtree,
                                                space=space,
                                                char_length_mean=char_length_mean,
                                                char_length_min=char_length_min,
                                                char_length_max=char_length_max,
-                                               nt=nt)
-                                    # print(pxt)
+                                               nt=nt,
+                                               periodic=periodic,
+                                               weights=weights,
+                                               cvt_iterations=cvt_iterations,
+                                               perturb_factor=perturb_factor)
                                     pxtals[pxtal_count] = pxt['pxtal']
                                     sps[pxtal_count] = pxt['sp']
 
@@ -583,8 +588,10 @@ class gtess2d():
                                     char_length_mean=0.24598,
                                     char_length_min=0.1111,
                                     char_length_max=0.9999,
-                                    nt=10, space='linear',):
-        """ make pxtal single instance."""
+                                    nt=10, space='linear',
+                                    periodic=(False, False), weights=None,
+                                    cvt_iterations=0, perturb_factor=0.0):
+        """Make pxtal single instance using high-fidelity geometry engine."""
         if sp_distr == 'random':
             if gridding_technique == 'random':
                 if sampling_technique == 'uniform':
@@ -627,18 +634,21 @@ class gtess2d():
             seed_point_coords = np.vstack((sp.locx, sp.locy)).T
             xmin, xmax = xbound
             ymin, ymax = ybound
-            pxtal = voronoi_diagram(ShMultiPoint(seed_point_coords),
-                                    tolerance=0.0, edges=False)
+
+            from upxo.pxtal.voronoi_tessellation_2d.engine import generate_voronoi_2d
+            res = generate_voronoi_2d(
+                seed_point_coords, bounds=[xbound, ybound],
+                periodic=periodic, weights=weights,
+                cvt_iterations=cvt_iterations,
+                perturb_factor=perturb_factor,
+                clip=True
+            )
+            PXTAL_bound = res['pxtal']
             PXTAL_boundary = Polygon([[xmin, ymin], [xmax, ymin],
                                       [xmax, ymax], [xmin, ymax]])
+            if cvt_iterations > 0:
+                sp = mp2d.from_coords(res['seeds'])
 
-            contained, contained_cropped = [], []
-            for count in range(len(pxtal.geoms)):
-                if pxtal.geoms[count].intersects(PXTAL_boundary):
-                    contained.append(pxtal.geoms[count])
-                    intr = pxtal.geoms[count].intersection
-                    contained_cropped.append(intr(PXTAL_boundary))
-            PXTAL_bound = MultiPolygon(contained_cropped)
         return {'sp': sp,
                 'pxtal': PXTAL_bound,
                 'bp': PXTAL_boundary,
@@ -708,8 +718,15 @@ class gtess2d():
             coords_cid = np.vstack([np.hstack(c.centroid.xy) for c in cells])
             coords_all = coords_cid
         elif mfname == 'c_vp':
-            coords_cid = [np.vstack(c.boundary.xy).T for c in cells]
-            coords_all = np.unique(np.vstack(coords_cid), axis=0)
+            def _extract_vp(g):
+                if hasattr(g.boundary, 'xy'):
+                    return np.vstack(g.boundary.xy).T
+                elif hasattr(g, 'geoms'):
+                    pts = [np.vstack(sub.boundary.xy).T for sub in g.geoms if hasattr(sub.boundary, 'xy')]
+                    return np.vstack(pts) if pts else np.empty((0, 2))
+                return np.empty((0, 2))
+            coords_cid = [_extract_vp(c) for c in cells]
+            coords_all = np.unique(np.vstack(coords_cid), axis=0) if coords_cid else np.empty((0, 2))
         # ------------------------------------
         if make_upxo_mp:
             mp_all = mp2d.from_coords(coords_all)
