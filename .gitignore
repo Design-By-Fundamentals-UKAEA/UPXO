@@ -159,3 +159,8 @@ src/upxo/Important links.md
 # WIP: cleaving migration destination, not ready to commit yet
 /src/upxo/meshing/gbconformant/cleaving3dV1P0/
 /tests/meshing/gbconformant/cleaving3dV1P0/
+
+# Orphaned MATLAB scripts -- unreferenced anywhere, stale hardcoded output
+# path from the pre-rename project layout. Kept local-only.
+/src/upxo/interfaces/matlab/write_fcc_miso_lookup_table909090.m
+/src/upxo/interfaces/matlab/write_fcc_miso_lookup_table360180360.m
