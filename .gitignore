@@ -143,3 +143,10 @@ src/upxo/Important links.md
 /src/upxo/meshing/gbconformant/d3v2p0/CM05_FREEZING.md
 /src/upxo/meshing/gbconformant/d3v2p0/README.md
 /src/upxo/meshing/gbconformant/README.md
+/src/upxo/meshing/gbconformant/d3v2p0/COMMIT_MESSAGES.txt
+
+# Legacy cleaving module, superseded by meshing/gbconformant/cleaving3dV1P0/
+/src/upxo/meshing/cleaving/
+
+# Stray local duplicate of meshing/gbconformant/d3v2p0/
+/src/upxo/meshing/confMesh3D_01/
