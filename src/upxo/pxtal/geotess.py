@@ -151,7 +151,27 @@ class geotess2d():
         self.seeds = upxo_mp2d
 
     def make_seeds_random(self, nsp=50, bounds=None):
-        """Build and return seeds random."""
+        """
+        Build uniform-random seed points within the domain bounds.
+
+        Parameters
+        ----------
+        nsp : int, optional
+            Number of seed points to generate. Default value is 50.
+        bounds : list or tuple, optional
+            Domain bounds as ``[xmin, xmax, ymin, ymax]``. If given,
+            replaces and updates ``self.bounds``. If ``None``, uses the
+            existing ``self.bounds``, falling back to ``[0.0, 1.0, 0.0,
+            1.0]`` when unset.
+
+        Returns
+        -------
+        seeds : MPoint2d or numpy.ndarray
+            The generated seed points, also stored in ``self.seeds``.
+            Returned as an ``upxo.geoEntities.mulpoint2d.MPoint2d`` when
+            construction from coordinates succeeds, otherwise as a plain
+            ``(nsp, 2)`` array of x, y coordinates.
+        """
         if bounds is not None:
             self.bounds = bounds
         b = self.bounds or [0.0, 1.0, 0.0, 1.0]
@@ -166,7 +186,36 @@ class geotess2d():
         return self.seeds
 
     def make_seeds_pdisc(self, char_length=0.1, bounds=None):
-        """Build and return seeds pdisc using Bridson Poisson disc sampling."""
+        """
+        Build Poisson-disc seed points using Bridson sampling.
+
+        Parameters
+        ----------
+        char_length : float, optional
+            Minimum allowed spacing (disc radius) between seed points,
+            in the same length units as ``bounds``. Default value is
+            0.1.
+        bounds : list or tuple, optional
+            Domain bounds as ``[xmin, xmax, ymin, ymax]``. If given,
+            replaces and updates ``self.bounds``. If ``None``, uses the
+            existing ``self.bounds``, falling back to ``[0.0, 1.0, 0.0,
+            1.0]`` when unset.
+
+        Returns
+        -------
+        seeds : MPoint2d or numpy.ndarray
+            The generated seed points, also stored in ``self.seeds``.
+            Returned as an ``upxo.geoEntities.mulpoint2d.MPoint2d`` when
+            construction from coordinates succeeds, otherwise as a plain
+            ``(n, 2)`` array of x, y coordinates.
+
+        Notes
+        -----
+        Delegates to
+        ``upxo.statops.sampling.bridson_uniform_density``, which samples
+        in a ``width x height`` window before the result is translated
+        by ``(xmin, ymin)`` back into the requested bounds.
+        """
         from upxo.statops.sampling import bridson_uniform_density
         if bounds is not None:
             self.bounds = bounds
@@ -202,7 +251,35 @@ class geotess2d():
         raise NotImplementedError("load is not yet implemented.")
 
     def find_neighbours(self):
-        """Find neighbours for all grains in xtals using boundary topology."""
+        """
+        Find neighbours for all grains in ``xtals`` using boundary topology.
+
+        For every pair of grain polygons, checks whether they touch or
+        intersect and, if so, whether their intersection is a genuine
+        shared boundary (a non-empty line with length ``> 1e-9``, or a
+        ``LineString``/``MultiLineString`` intersection geometry) rather
+        than a single touching point. Qualifying pairs are recorded as
+        mutual neighbours.
+
+        This is an exhaustive O(n^2) pairwise scan over ``self.xtals``
+        (n grains), each pairwise check itself calling into Shapely's
+        ``touches``/``intersects``/``intersection``. There is no spatial
+        index, so this does not scale well to large grain counts.
+
+        Returns
+        -------
+        neigh_gid : dict
+            Mapping of grain ID to a list of neighbouring grain IDs.
+            Also stored on ``self.neigh_gid``, replacing any previous
+            content. Keys are ``self.gid`` when its length matches
+            ``len(self.xtals)``, otherwise ``range(len(self.xtals))``.
+
+        Notes
+        -----
+        Mutates ``self.neigh_gid`` in place (it is reset to an
+        empty-list-per-grain dict at the start of the call) in addition
+        to returning it.
+        """
         n = len(self.xtals)
         gids = self.gid if len(self.gid) == n else list(range(n))
         self.neigh_gid = {g: [] for g in gids}
@@ -220,7 +297,27 @@ class geotess2d():
         return self.neigh_gid
 
     def find_first_nearest_neighbours(self, gid=None):
-        """Find first nearest neighbours."""
+        """
+        Return first-nearest (directly touching) neighbour grain IDs.
+
+        Computes ``self.neigh_gid`` via :meth:`find_neighbours` first if
+        it has not been populated yet (i.e. is falsy/empty); an already
+        populated ``self.neigh_gid`` is reused as-is and not recomputed.
+
+        Parameters
+        ----------
+        gid : hashable, optional
+            Grain ID to query. If ``None`` (default), results for all
+            grains are returned.
+
+        Returns
+        -------
+        neighbours : list or dict
+            If ``gid`` is given: a list of first-nearest-neighbour grain
+            IDs for that grain (``[]`` if ``gid`` is unknown). If
+            ``gid`` is ``None``: the full ``self.neigh_gid`` dict mapping
+            every grain ID to its list of first-nearest-neighbour IDs.
+        """
         if not self.neigh_gid:
             self.find_neighbours()
         if gid is not None:
@@ -228,7 +325,32 @@ class geotess2d():
         return self.neigh_gid
 
     def find_second_nearest_neighbours(self, gid=None):
-        """Find second nearest neighbours."""
+        """
+        Return second-nearest neighbour grain IDs (neighbours of neighbours).
+
+        For a given grain, the second-nearest neighbours are the union
+        of first-nearest neighbours of each of its first-nearest
+        neighbours, excluding the grain itself and excluding any grain
+        already counted as a first-nearest neighbour.
+
+        Computes ``self.neigh_gid`` via :meth:`find_neighbours` first if
+        it has not been populated yet (i.e. is falsy/empty); an already
+        populated ``self.neigh_gid`` is reused as-is and not recomputed.
+
+        Parameters
+        ----------
+        gid : hashable, optional
+            Grain ID to query. If ``None`` (default), results for all
+            grains present in ``self.neigh_gid`` are returned.
+
+        Returns
+        -------
+        neighbours : list or dict
+            If ``gid`` is given: a sorted list of second-nearest-neighbour
+            grain IDs for that grain. If ``gid`` is ``None``: a dict
+            mapping every grain ID in ``self.neigh_gid`` to its sorted
+            list of second-nearest-neighbour IDs.
+        """
         if not self.neigh_gid:
             self.find_neighbours()
 
@@ -246,7 +368,16 @@ class geotess2d():
         return {g: _2nd(g) for g in self.neigh_gid}
 
     def filter_boundary_grains(self):
-        """Return grain IDs that touch or intersect the domain boundary."""
+        """
+        Return grain IDs that touch or intersect the domain boundary.
+
+        Returns
+        -------
+        boundary_grains : list
+            Grain IDs whose polygon intersects the boundary of the
+            domain box built from ``self.bounds``. Empty list if
+            ``self.bounds`` or ``self.xtals`` is unset/empty.
+        """
         if not self.bounds or not self.xtals:
             return []
         from shapely.geometry import box
@@ -261,7 +392,16 @@ class geotess2d():
         return boundary_grains
 
     def filter_internal_grains(self):
-        """Return grain IDs that do not touch the domain boundary."""
+        """
+        Return grain IDs that do not touch the domain boundary.
+
+        Returns
+        -------
+        internal_grains : list
+            Grain IDs in ``self.gid`` (or ``range(len(self.xtals))`` when
+            ``self.gid`` doesn't match in length) that are not in the
+            result of :meth:`filter_boundary_grains`.
+        """
         b_grains = set(self.filter_boundary_grains())
         gids = self.gid if len(self.gid) == len(self.xtals) else list(range(len(self.xtals)))
         return [gid for gid in gids if gid not in b_grains]
@@ -276,7 +416,31 @@ class geotess2d():
             raise ValueError(f"Unknown location '{loc}'; expected 'internal' or 'boundary'.")
 
     def filter_grains_by_prop(self, col, op, val):
-        """Filter grains by property."""
+        """
+        Filter grains in ``self.prop`` by a comparison on one property column.
+
+        Parameters
+        ----------
+        col : str
+            Column name in ``self.prop`` to filter on.
+        op : str
+            Comparison operator. One of ``'>'``, ``'>='``, ``'<'``,
+            ``'<='``, ``'=='``, ``'!='``.
+        val : object
+            Value to compare ``self.prop[col]`` against.
+
+        Returns
+        -------
+        filtered : pandas.DataFrame
+            Subset of ``self.prop`` where ``self.prop[col] op val`` is
+            True.
+
+        Raises
+        ------
+        ValueError
+            If ``self.prop`` is not a pandas DataFrame, or if ``op`` is
+            not one of the supported operator strings.
+        """
         if self.prop is None or not isinstance(self.prop, pd.DataFrame):
             raise ValueError("geotess2d.prop is not a valid pandas DataFrame.")
         query_ops = {
@@ -304,7 +468,29 @@ class geotess2d():
         raise NotImplementedError("move_new_vertex_point is not yet implemented.")
 
     def perturb_grain_boundaries(self, factor=0.05, seed=None):
-        """Perturb grain boundaries with controlled curvature while keeping junctions fixed."""
+        """
+        Perturb grain boundaries with controlled curvature while keeping junctions fixed.
+
+        Parameters
+        ----------
+        factor : float, optional
+            Magnitude of the boundary perturbation (curvature strength),
+            passed through to
+            ``upxo.pxtal.voronoi_tessellation_2d.engine.perturb_interfaces_2d``.
+            Default value is 0.05. Larger values produce more strongly
+            curved grain boundaries; junctions (grain-boundary triple
+            points) remain fixed regardless of ``factor``.
+        seed : int, optional
+            Random seed for reproducible perturbation. Default value is
+            ``None`` (non-deterministic).
+
+        Returns
+        -------
+        xtals : list
+            The updated list of grain polygons, also stored in
+            ``self.xtals``. Returned unchanged (and ``self.xtals`` is
+            left untouched) if ``self.xtals`` is empty.
+        """
         from upxo.pxtal.voronoi_tessellation_2d.engine import perturb_interfaces_2d
         if not self.xtals:
             return self.xtals
@@ -321,8 +507,10 @@ class geoxtal2d():
     """
     Single 2D geometric grain (crystal) within a tessellation.
 
-    Planned companion to :class:`geotess2d` for per-grain geometry.
-    Not implemented yet — constructing raises ``NotImplementedError``.
+    Placeholder for future work. Planned companion to :class:`geotess2d`
+    for per-grain geometry. Every method, including ``__init__``,
+    currently raises ``NotImplementedError``; this class cannot be
+    instantiated or used in its current form. Do not use.
     """
     def __init__(self):
         """Initialise the instance."""
@@ -337,9 +525,11 @@ class vtgs3d():
     """
     3D Voronoi / geometric tessellation grain structure (API stub).
 
-    Intended 3D counterpart of :class:`geotess2d` with bounds, seeds,
-    grains, junction topology, and property storage. Methods are not
-    implemented yet — constructing raises ``NotImplementedError``.
+    Placeholder for future work. Intended 3D counterpart of
+    :class:`geotess2d` with bounds, seeds, grains, junction topology,
+    and property storage. Every method, including ``__init__``,
+    currently raises ``NotImplementedError``; this class cannot be
+    instantiated or used in its current form. Do not use.
 
     Attributes (planned)
     --------------------

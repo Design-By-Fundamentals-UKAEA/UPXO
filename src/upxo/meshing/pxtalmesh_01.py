@@ -1,3 +1,21 @@
+"""
+Legacy pygmsh-based finite element mesher for geometric polycrystals.
+
+Provides :class:`geo_pxtal_mesh`, a lower-level pygmsh/gmsh orchestrator
+for meshing 2D geometric polycrystals (``pxtal`` with level-0 grains).
+It is reached today only through the deprecated
+``upxo.meshing.conformal_mesher2d.confMesh2d.femesh_pygmsh`` path, which
+itself emits a ``DeprecationWarning`` on instantiation.
+
+Legacy meshing module. Superseded by ``upxo.meshing.confMesh3d`` /
+``upxo.meshing.gbconformant`` (voxel/Gmsh-conformal meshing) and by
+``confMesh2dGMSH`` / ``gsmesh2d.mesh_gs`` for current 2D conformal-mesh
+work. Several public methods on :class:`geo_pxtal_mesh` are unimplemented
+stubs (``assign_pygmsh_elsets``, ``read_pygmsh_mesh``,
+``write_pygmsh_mesh``, ``mesh_abaqus``, ``read_abaqus_mesh``,
+``write_abaqus_mesh``, ``assess_abaqus_mesh``); calling them raises
+``NotImplementedError``. New work should not build on this module.
+"""
 # //////////////////////////////////////////////////////////////////////////////
 # Script information for the file.
 __name__ = "UPXO.femesh"
