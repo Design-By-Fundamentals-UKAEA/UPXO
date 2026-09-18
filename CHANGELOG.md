@@ -6,14 +6,15 @@ All notable changes to UPXO are documented in this file.
 
 ### Added
 
-#### Grid-Cleaving Conformal Mesher
-- **`meshing/cleaving/`**: New voxel-lattice cleaving mesh generator
-  - `lattice.py`: Lattice construction from labelled voxel grids
-  - `cleave.py` / `labeling.py`: Cleave geometry and boundary labeling
-  - `relax.py`: Mesh relaxation
-  - `boundary_clip.py` / `rve_cap.py`: RVE-boundary clipping and capping
-  - `viz.py`: Visualization
-  - Full test suite (9 test modules); new pytest `slow` marker for on-demand stress verification
+#### 2D Voronoi Tessellation Engine
+- **`pxtal/voronoi_tessellation_2d/`**: Standalone high-fidelity 2D Voronoi geometry engine — periodic boundary conditions, Laguerre/power diagrams (weighted Voronoi), centroidal Voronoi tessellation (CVT) via Lloyd relaxation, and grain-boundary interface perturbation
+- **`pxtal/vortess2d.gtess2d`**: Wired onto the new engine — `periodic`, `weights`, `cvt_iterations`, `perturb_factor` exposed as constructor keywords; new `from_mpoint2d` and working `from_shapely_mulpolygon` constructors; `bounds`/`info`/`seeds` properties; `__len__`
+- **`pxtal/geotess.geotess2d`**: Completed previously-stubbed container/topology methods — `__getitem__`/`__setitem__`/`__repr__`, `make_seeds_random`/`make_seeds_pdisc` (Bridson sampling), first/second nearest-neighbour topology, boundary/internal grain filtering; `perturb_grain_boundaries` now delegates to the new engine
+- **Tests**: `tests/pxtal/test_vortess2d.py` covering the engine, `gtess2d`, and `geotess2d` integration
+
+#### Twinned FCC 3D Demo Automation
+- **`pxtal/twinned_simple_3d/steps/`**: Automation-ready wrapper package for the Twinned FCC pipeline, mirroring `fm_steel_3d/steps/`
+- **Demos**: `twinned_fcc_bas0.ipynb`/`bas1.ipynb` (minimal, annotated), `twinned_fcc_int0.ipynb`/`int1.ipynb` (full pipeline with validation/diagnostics), `twinned_fcc_adv0.ipynb`/`adv1.ipynb` (deeper tuning, mapping optimization, slice sweep) under `src/upxo/demos/Twinned3D/`
 
 #### Conformal Meshing Extensions
 - **`meshing/confMesh3d/`**: Optional surface remeshing stage (`surface_remesh.py`) and a TetGen tet-meshing backend (`tetgen_mesh.py`)
@@ -64,21 +65,21 @@ All notable changes to UPXO are documented in this file.
 - `charops.boundary_grain_fraction`: Fraction of grains touching the domain boundary, for 2D labelled images
 - `gsdataops/grid_ops`: Majority-vote-safe downsampling and anisotropic stretch
 - `pxtal/gridops`: Raw per-crossing lengths exposed from `axis_intercept_grain_size`
-- `upxo_gui_launcher.py`: Windows High-DPI awareness; full core-dependency check (Pillow, NumPy, SciPy, Pandas, Matplotlib) instead of Pillow-only
 
 #### Testing
-- Root GUI pipeline-registry and configuration-persistence regression tests
 - Reporting integration tests (fm_steel_3d, twinned_simple_3d)
-- Cleaving module test suite
 - FM steel raw-export and packet-orientation-mean tests
+- GB-conformant meshing (`meshing/gbconformant/d3v2p0`) test suite
 
 ### Changed
 
 - **Twinned FCC orientation assignment**: `max_retries` exposed; MDF bin width/angle range now derived from `mdf_ref` instead of a hardcoded 65°; `neighbour_frac` added to Pool B host allocation with do/do-not fallback; MRF Gibbs/MAP initialization reuses `self.fallback_quats` instead of drawing a fresh unseeded sample
 - **`xtalphy/texops.py`**: Fixed the same Bunge ZXZ Euler-decomposition bug present in `crystal_orientation.matrix_to_euler_bunge`; added texture-component detection; ported GUI-only quaternion helpers into core
-- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; new pytest `gui` marker for tests requiring a live Tkinter display; optional extra `[mesh]` now also installs `gmsh>=4.13`
+- **Packaging**: `requirements.txt` enables `tetgen`; `setup.py`/`pyproject.toml` exclude the local-only `upxo.gui` package from the built distribution; optional extra `[mesh]` now also installs `gmsh>=4.13`
+- **GUI applications removed from version control**: `upxo_gui_launcher.py` and the GUI test suites are untracked (kept local-only); all GUI source under `src/upxo/gui/`, `fm_steel_3d/gui/`, and `twinned_simple_3d/gui/` remains local-only and out of this release
 - **`confMesh2d` (pygmsh)** is deprecated; new 2D conformal work must use `confMesh2dGMSH` / `gsmesh2d.mesh_gs`
 - Removed redundant tracked demos `confMesh2d9.ipynb` and `mesh2d01.ipynb`
+- The voxel-lattice cleaving mesh generator (`meshing/cleaving/`) is untracked pending relocation to `meshing/gbconformant/cleaving3dV1P0/` (WIP, not part of this release)
 
 ### Not Included (Deferred)
 
@@ -86,6 +87,7 @@ All notable changes to UPXO are documented in this file.
 - GB-energy/crystallography coupling for block selection (deferred to future versions)
 - Orientation-mode GUI exposure in Twinned FCC (deferred for UX refinement)
 - Multi-CSL twin registry beyond Sigma-3 Path A (CSL Path B deferred post-Path A validation)
+- Cleaving mesh generator migration to `meshing/gbconformant/cleaving3dV1P0/` (WIP, untracked)
 
 ---
 
