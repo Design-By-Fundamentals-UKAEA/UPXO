@@ -1071,51 +1071,41 @@ class PoleFigure:
             plt.show()
         return fig, ax
 
-    def plot_density_difference(
+    def compute_density_difference(
         self,
         other: "PoleFigure",
         pole_family: Union[str, List[int], Tuple[int, int, int]] = '100',
-        ax: Optional[plt.Axes] = None,
         grid_points: Union[int, str] = 'auto',
         half_width_deg: float = 7.5,
         unit_normalize: bool = False,
-        cmap: str = 'RdBu_r',
-        levels: int = 10,
-        x_label: Optional[str] = None,
-        y_label: Optional[str] = None,
-        z_label: Optional[str] = None,
-        colorbar_decimals: Optional[int] = None,
-        title: Optional[str] = None,
-    ) -> Tuple[plt.Figure, plt.Axes]:
+    ) -> dict:
         """
-        Plots the difference between this PoleFigure's MUD density field
-        and `other`'s (e.g. an EBSD reference vs a synthetic structure),
-        evaluated on an identical grid (same pole_family / grid_points /
-        half_width_deg on both sides) so the two are directly comparable
-        point-for-point. self is treated as the reference/"real" side and
-        `other` as the "synthetic" side for the colorbar title only -- the
-        underlying math is symmetric up to an overall sign flip.
+        Computes the difference between this PoleFigure's MUD density
+        field and `other`'s (e.g. an EBSD reference vs a synthetic
+        structure), evaluated on an identical grid (same pole_family /
+        grid_points / half_width_deg on both sides) so the two are
+        directly comparable point-for-point -- the pure-compute
+        counterpart to :meth:`plot_density_difference`, which calls this
+        internally and then draws the contour plot. self is treated as
+        the reference/"real" side, `other` as the "synthetic" side.
 
-        unit_normalize=False (default): plots the raw difference,
+        unit_normalize=False (default): raw difference,
             MUD.PF-REAL - MUD.PF-SYNTH.
         unit_normalize=True: each field is divided by its own max before
         differencing, so the comparison is of *shape* rather than
         absolute magnitude,
             (MUD.PF-REAL)/max - (MUD'.PF-SYNTH.)/max
 
-        A diverging colormap centered at zero is used since the
-        difference can be positive or negative.
-
-        colorbar_decimals : optional number of decimal places for the
-        colour-bar's tick labels. Default None: matplotlib's own
-        automatic tick formatting.
+        Returns
+        -------
+        dict
+            ``'Xi'``, ``'Yi'`` -- grid coordinate arrays.
+            ``'zi_diff'`` -- the difference field itself, same shape.
+            ``'iqr'`` -- interquartile range (float) of ``zi_diff``'s
+            finite grid values -- a single-number summary of how much
+            the two pole figures disagree (lower = more alike), in MUD
+            units (or normalized-shape units when ``unit_normalize``).
         """
-        standalone = ax is None
-        if standalone:
-            fig, ax = plt.subplots(figsize=(6, 6))
-        else:
-            fig = ax.get_figure()
-
         poles_self = self._get_symmetric_poles(pole_family)
         if poles_self.size == 0:
             raise ValueError("No poles generated for this family.")
@@ -1139,10 +1129,59 @@ class PoleFigure:
             zi_self_n = zi_self / max_self if max_self and np.isfinite(max_self) else zi_self
             zi_other_n = zi_other / max_other if max_other and np.isfinite(max_other) else zi_other
             zi_diff = zi_self_n - zi_other_n
-            cbar_label = "[(MUD.PF-REAL)/max - (MUD'.PF-SYNTH.)/max]"
         else:
             zi_diff = zi_self - zi_other
-            cbar_label = "[MUD.PF-REAL - MUD.PF-SYNTH.]"
+
+        finite = zi_diff[np.isfinite(zi_diff)]
+        if finite.size:
+            q75, q25 = np.percentile(finite, [75, 25])
+            iqr = float(q75 - q25)
+        else:
+            iqr = 0.0
+
+        return {'Xi': Xi, 'Yi': Yi, 'zi_diff': zi_diff, 'iqr': iqr}
+
+    def plot_density_difference(
+        self,
+        other: "PoleFigure",
+        pole_family: Union[str, List[int], Tuple[int, int, int]] = '100',
+        ax: Optional[plt.Axes] = None,
+        grid_points: Union[int, str] = 'auto',
+        half_width_deg: float = 7.5,
+        unit_normalize: bool = False,
+        cmap: str = 'RdBu_r',
+        levels: int = 10,
+        x_label: Optional[str] = None,
+        y_label: Optional[str] = None,
+        z_label: Optional[str] = None,
+        colorbar_decimals: Optional[int] = None,
+        title: Optional[str] = None,
+    ) -> Tuple[plt.Figure, plt.Axes]:
+        """
+        Plots the difference between this PoleFigure's MUD density field
+        and `other`'s (e.g. an EBSD reference vs a synthetic structure).
+        See :meth:`compute_density_difference` (called internally here)
+        for the underlying math -- this just draws the contour plot.
+
+        A diverging colormap centered at zero is used since the
+        difference can be positive or negative.
+
+        colorbar_decimals : optional number of decimal places for the
+        colour-bar's tick labels. Default None: matplotlib's own
+        automatic tick formatting.
+        """
+        standalone = ax is None
+        if standalone:
+            fig, ax = plt.subplots(figsize=(6, 6))
+        else:
+            fig = ax.get_figure()
+
+        diff = self.compute_density_difference(
+            other, pole_family=pole_family, grid_points=grid_points,
+            half_width_deg=half_width_deg, unit_normalize=unit_normalize)
+        Xi, Yi, zi_diff = diff['Xi'], diff['Yi'], diff['zi_diff']
+        cbar_label = ("[(MUD.PF-REAL)/max - (MUD'.PF-SYNTH.)/max]" if unit_normalize
+                      else "[MUD.PF-REAL - MUD.PF-SYNTH.]")
 
         abs_max = np.nanmax(np.abs(zi_diff))
         if not np.isfinite(abs_max) or abs_max == 0:
