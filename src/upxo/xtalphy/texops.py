@@ -1,3 +1,21 @@
+"""
+texops.py
+=========
+Texture operations for UPXO: synthetic FCC texture-component stacks,
+cubic-symmetry and misorientation utilities, and pole-figure plotting.
+
+The public entry point is :class:`tops`, whose primary constructor
+:meth:`tops.synth_fcc` builds multi-instance orientation samples from
+named ideal FCC texture components (copper, brass, Goss, cube, ...)
+with user-specified volume fractions, optional cubic-symmetry expansion,
+and Gaussian-scattered sampling around each component's mean
+orientation. Supporting functionality covers Bunge Euler <-> rotation
+matrix conversion, cubic symmetry operators, cubic misorientation
+(angle/axis), and FCC ``{100}``/``{110}``/``{111}`` pole-figure plots
+(scatter and MUD density, delegating to
+:mod:`upxo.viz.xphy.pole_figure`).
+"""
+
 from copy import deepcopy
 import numpy as np
 from typing import Union, List, Tuple, Optional, Any
@@ -65,6 +83,48 @@ class tops:
                   n_sampling_instances=50,
                   apply_symmetry: Optional[dict] = None):
         """
+        Primary constructor: build a synthetic FCC texture sample from
+        named texture components.
+
+        Parameters
+        ----------
+        N : int, optional
+            Total number of orientations sampled per sampling instance,
+            allocated across texture components proportionally to their
+            requested volume fractions (see ``tc_info``). Default 1000.
+        tc_info : dict, optional
+            Texture components to sample from. Each key is a component
+            name and each value a list ``[percentage, [phi1, Phi, phi2]]``
+            (Bunge Euler angles in degrees), with optional further
+            elements for per-angle spread, std-k, and percentage
+            tolerance (see :meth:`set_tc_info` for the full format).
+            Default is a 4-component copper/brass/goss/rotated-cube mix.
+        n_tex_instances : int, optional
+            Number of independent texture instances to generate (each an
+            independent random draw of component mean orientations and
+            their symmetric equivalents). Default 2.
+        n_sampling_instances : int, optional
+            Number of orientation sampling instances (sub-sets) drawn per
+            texture instance. Default 50.
+        apply_symmetry : dict {component_name: bool} or None
+            Per-component override of whether a texture component's mean
+            orientation is expanded to its 24 cubic-symmetric equivalents
+            before sampling around it (the default, unconditional
+            behaviour prior to this parameter's introduction) or used as a
+            single literal orientation instead (apply_symmetry[name] =
+            False). Components not present in the dict default to True.
+            None (default): every component uses the symmetry-expanded
+            behaviour, unchanged from prior versions.
+
+        Returns
+        -------
+        tops
+            A new :class:`tops` instance with ``tc_info`` normalized and
+            stored, and ``tex`` populated (via
+            :meth:`gen_tex_fcc_synthetic`) with the generated texture and
+            sampling instances, keyed as
+            ``tex['tex_instance.<i>']['sampling_instances']['ossi.<j>']``.
+
         Examples
         --------
         >>> from upxo.xtalphy.texops import tops

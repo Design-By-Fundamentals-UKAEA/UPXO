@@ -342,9 +342,75 @@ def apply_sample_symmetry(
 
 class PoleFigure:
     """
-    Advanced self-sufficient pole figure generator and density analyzer.
+    Self-sufficient pole figure generator, density analyzer, and
+    dataset-to-dataset comparison tool for crystallographic orientations.
+
+    Wraps a stack of orientations (quaternion, Euler, or rotation-matrix
+    convention) together with a crystal symmetry group, and provides:
+
+    * Discrete pole figures -- :meth:`plot_scatter`, colored by
+      hemisphere, grain role, grain size, IPF direction, or a custom
+      per-grain value.
+    * Continuous MUD (Multiples of Uniform Distribution) density fields
+      over a pole family, computed with a numerically stable,
+      antipodal-wrapped spherical von Mises-Fisher kernel --
+      :meth:`plot_density` (2D contours) and :meth:`plot_density_3d`
+      (3D spherical dome, PyVista or Matplotlib backend).
+    * Density comparison between two ``PoleFigure`` instances evaluated
+      on an identical grid (e.g. an EBSD reference vs. a synthetic
+      structure) -- :meth:`compute_density_difference` and
+      :meth:`plot_density_difference`.
+
+    Pole families may be named FCC families (``'100'``, ``'110'``,
+    ``'111'``), an arbitrary 3-digit Miller index string (e.g.
+    ``'123'``), or an explicit ``[h, k, l]`` seed vector; in every case
+    the family is expanded to its full symmetric equivalents using the
+    instance's ``symmetry_ops``.
+
+    Parameters
+    ----------
+    orientations : np.ndarray
+        Orientation data. Shapes:
+        - 'quaternion': (N, 4)
+        - 'euler_deg' or 'euler_rad': (N, 3)
+        - 'matrix': (N, 3, 3)
+    convention : str
+        Convention type of orientations.
+    gids : np.ndarray, optional
+        Grain IDs corresponding to the orientations, used for metadata-based coloring.
+    symmetry : str or np.ndarray
+        Crystal symmetry to use. Either a string ('cubic', 'hexagonal', 'tetragonal',
+        'trigonal', 'orthorhombic', 'triclinic') or a custom array of shape (M, 3, 3).
+
+    Attributes
+    ----------
+    FCC_POLES : dict
+        Class-level lookup of raw (non-deduplicated) pole vectors for the
+        standard FCC families ``'100'``, ``'110'``, ``'111'``, each an
+        ``(M, 3)`` array. Used as a fast path by :meth:`_get_symmetric_poles`
+        before falling back to symmetry-expanding an arbitrary Miller index.
+    SYM_OPS : np.ndarray
+        Class-level stack of the 24 proper cubic (m-3m) symmetry rotation
+        matrices, shape (24, 3, 3), built once via
+        :func:`cubic_symmetry_operators`. Note this is independent of the
+        per-instance ``symmetry_ops`` attribute set in ``__init__``, which
+        reflects whatever ``symmetry`` was actually requested (cubic or
+        otherwise).
+    symmetry_ops : np.ndarray
+        Instance attribute: the (M, 3, 3) stack of symmetry rotation
+        matrices actually in effect for this instance (set from the
+        ``symmetry`` constructor argument).
+    R_stack : np.ndarray
+        Instance attribute: standardized (N, 3, 3) rotation matrices
+        (crystal-to-sample) for the stored orientations.
+    quats : np.ndarray
+        Instance attribute: (N, 4) quaternions for the stored orientations,
+        used for IPF coloring.
+    gids : np.ndarray or None
+        Instance attribute: grain IDs aligned with the orientations, if
+        provided.
     """
-    
+
     FCC_POLES = {
         '100': np.array([[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]]),
         '110': np.array([[1,1,0], [-1,-1,0], [1,-1,0], [-1,1,0], [1,0,1], [-1,0,-1],
@@ -1096,6 +1162,30 @@ class PoleFigure:
         absolute magnitude,
             (MUD.PF-REAL)/max - (MUD'.PF-SYNTH.)/max
 
+        Parameters
+        ----------
+        other : PoleFigure
+            The second dataset to compare against (e.g. an EBSD
+            reference). Its own orientations/symmetry are used to build
+            its side of the density field.
+        pole_family : str or list or tuple, optional
+            Pole family evaluated on both datasets -- '100', '110', '111',
+            a 3-digit Miller index string, or an explicit [h, k, l] seed.
+            Default '100'.
+        grid_points : int or 'auto', optional
+            Grid resolution along each axis of the MUD grid, shared by
+            both datasets. 'auto' resolves via :meth:`auto_grid_points`.
+            Default 'auto'. Pass an explicit integer (rather than 'auto')
+            when comparing two datasets whose 'auto' resolution could
+            otherwise differ, since a shape mismatch raises ValueError.
+        half_width_deg : float, optional
+            Half-width (degrees) of the vMF density kernel, shared by
+            both datasets. Default 7.5.
+        unit_normalize : bool, optional
+            If True, each field is normalized by its own maximum before
+            differencing (comparison of shape rather than magnitude). If
+            False (default), the raw MUD difference is used.
+
         Returns
         -------
         dict
@@ -1166,9 +1256,57 @@ class PoleFigure:
         A diverging colormap centered at zero is used since the
         difference can be positive or negative.
 
-        colorbar_decimals : optional number of decimal places for the
-        colour-bar's tick labels. Default None: matplotlib's own
-        automatic tick formatting.
+        Parameters
+        ----------
+        other : PoleFigure
+            The second dataset to compare against (e.g. an EBSD
+            reference). Forwarded to :meth:`compute_density_difference`.
+        pole_family : str or list or tuple, optional
+            Pole family evaluated on both datasets -- '100', '110', '111',
+            a 3-digit Miller index string, or an explicit [h, k, l] seed.
+            Default '100'.
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw into. Default None: a new standalone figure/axes
+            is created and shown at the end.
+        grid_points : int or 'auto', optional
+            Grid resolution shared by both datasets, forwarded to
+            :meth:`compute_density_difference`. Default 'auto'.
+        half_width_deg : float, optional
+            Half-width (degrees) of the vMF density kernel, shared by
+            both datasets. Default 7.5.
+        unit_normalize : bool, optional
+            If True, each field is normalized by its own maximum before
+            differencing (comparison of shape rather than magnitude).
+            Default False.
+        cmap : str, optional
+            Diverging matplotlib colormap name, centered at zero. Default
+            'RdBu_r'.
+        levels : int, optional
+            Number of contour levels on each side of zero (the actual
+            level array spans ``2 * levels + 1`` values from ``-abs_max``
+            to ``abs_max``). Default 10.
+        x_label : str, optional
+            Label for the sample X direction crosshair (e.g. "RD").
+            Default None: no label drawn.
+        y_label : str, optional
+            Label for the sample Y direction crosshair (e.g. "TD").
+            Default None: no label drawn.
+        z_label : str, optional
+            Corner label for the sample Z (out-of-plane) direction (e.g.
+            "ND"). Default None: no label drawn.
+        colorbar_decimals : int, optional
+            Number of decimal places for the colour-bar's tick labels.
+            Default None: matplotlib's own automatic tick formatting.
+        title : str, optional
+            Plot title. Default None: an auto-generated title naming the
+            pole family is used.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure containing the plot.
+        ax : matplotlib.axes.Axes
+            The axes the difference contours were drawn into.
         """
         standalone = ax is None
         if standalone:
@@ -1224,6 +1362,38 @@ class PoleFigure:
     ) -> Any:
         """
         Plot the MUD density as a 3D spherical dome surface using PyVista (default) or Matplotlib.
+
+        Parameters
+        ----------
+        pole_family : str or list or tuple, optional
+            Pole family to evaluate -- '100', '110', '111', a 3-digit
+            Miller index string, or an explicit [h, k, l] seed. Default
+            '100'.
+        grid_points : int, optional
+            Number of points along each of the co-latitude (0-90 deg) and
+            azimuth (0-360 deg) axes of the spherical evaluation grid.
+            Default 60.
+        half_width_deg : float, optional
+            Half-width (degrees) of the vMF density kernel. Default 7.5.
+        cmap : str, optional
+            Matplotlib/PyVista colormap name for the MUD surface. Default
+            'viridis'.
+        backend : str, optional
+            Rendering backend: 'pyvista' (interactive 3D structured-grid
+            surface) or 'matplotlib' (static 3D surface plot). Default
+            'pyvista'; silently falls back to 'matplotlib' with a warning
+            if PyVista is not installed.
+        title : str, optional
+            Plot title. Default None: an auto-generated title naming the
+            pole family is used.
+
+        Returns
+        -------
+        pyvista.Plotter or tuple
+            When ``backend='pyvista'``, the configured
+            ``pyvista.Plotter`` instance (not yet shown). When
+            ``backend='matplotlib'``, a ``(fig, ax)`` tuple with the
+            Matplotlib 3D figure and axes.
         """
         # Resolve pyvista fallback if backend is pyvista
         if backend == 'pyvista':
