@@ -246,8 +246,8 @@ class mc2repr():
                 sample_skewness = skew(sample.prop[parameter_name])
                 sample_kurt = kurtosis(sample.prop[parameter_name])
                 stat, p = shapiro(sample.prop[parameter_name])
-                self.distr_type[sample_name][parameter_name]['skewness'] = target_skewness
-                self.distr_type[sample_name][parameter_name]['kurtosis'] = target_kurt
+                self.distr_type[sample_name][parameter_name]['skewness'] = sample_skewness
+                self.distr_type[sample_name][parameter_name]['kurtosis'] = sample_kurt
                 if sample_skewness > 0:
                     self.distr_type[sample_name][parameter_name]['right_skewed'] = True
                     if sample_kurt > 0:
@@ -260,7 +260,7 @@ class mc2repr():
                         self.distr_type[sample_name][parameter_name]['leptokurtic'] = True
                     else:
                         self.distr_type[sample_name][parameter_name]['platykurtic'] = True
-                if abs(sample_skewness) < 0.5 and abs(sample_kurt) < 1 and shapiro_p > 0.05:
+                if abs(sample_skewness) < 0.5 and abs(sample_kurt) < 1 and p > 0.05:
                         self.distr_type[sample_name][parameter_name]['normal'] = True
                 else:
                     self.distr_type[sample_name][parameter_name]['normal'] = False
