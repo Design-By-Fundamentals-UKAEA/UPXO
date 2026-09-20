@@ -691,7 +691,7 @@ class UPXO_Edge(ABC):
         numpy.ndarray
             Endpoint coordinate array supplied by the concrete edge class.
         """
-        return np.array([self.x, self.y])
+        pass
 
     @abstractmethod
     def array_translation(self, *,
