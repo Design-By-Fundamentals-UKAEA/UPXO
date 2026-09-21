@@ -1644,6 +1644,16 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
     # Interface Detection
     gy, gx = np.gradient(lfi)
     boundary_mask = (gx != 0) | (gy != 0)
+    # Central differences miss a pixel whose opposite neighbours share a
+    # label different from its own (e.g. a one-pixel island in a host, or a
+    # one-pixel-wide grain), so such grains would get no seed and no cell.
+    # Also flag any pixel that differs from a 4-neighbour.
+    differs = np.zeros_like(boundary_mask)
+    differs[:, 1:] |= lfi[:, 1:] != lfi[:, :-1]
+    differs[:, :-1] |= lfi[:, :-1] != lfi[:, 1:]
+    differs[1:, :] |= lfi[1:, :] != lfi[:-1, :]
+    differs[:-1, :] |= lfi[:-1, :] != lfi[1:, :]
+    boundary_mask = boundary_mask | differs
     # Perform Equidistant Boundary Sampling
     coords_boundary = np.argwhere(boundary_mask).astype(float)
     stride = max(1, int(target_spacing / 1.0))
