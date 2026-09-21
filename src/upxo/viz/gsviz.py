@@ -314,13 +314,13 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
                         points=None, point_color='red', point_size=20, 
                         point_marker='o', point_alpha=0.8, point_label='Points')
     """
-    from matplotlib.patches import Polygon
-    from matplotlib.collections import PatchCollection
+    from matplotlib.patches import PathPatch
+    from matplotlib.path import Path as MPath
     import matplotlib.cm as cm
 
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    
+
     # Get colormap
     if isinstance(cmap, str):
         cmap = cm.get_cmap(cmap)
@@ -330,20 +330,18 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
     
     # Plot each polygon individually with unique color
     for idx, poly in enumerate(gs_geometric.geoms):
-        # Get exterior coordinates
-        exterior_coords = np.array(poly.exterior.coords)
-        polygon_patch = Polygon(exterior_coords, closed=True, 
-                            facecolor=colors[idx], edgecolor=edgecolor,
-                            linewidth=lw, alpha=alpha)
-        ax.add_patch(polygon_patch)
-        
-        # Plot holes (interiors) if any - use white or transparent
-        for interior in poly.interiors:
-            interior_coords = np.array(interior.coords)
-            hole_patch = Polygon(interior_coords, closed=True,
-                            facecolor='white', edgecolor=edgecolor,
-                            linewidth=lw, alpha=1.0)
-            ax.add_patch(hole_patch)
+        # Exterior plus interiors as one compound path, so holes are true
+        # cut-outs and whatever lies in them (island grains) stays visible
+        # whatever the drawing order.
+        rings = [np.array(poly.exterior.coords)]
+        rings += [np.array(r.coords) for r in poly.interiors]
+        verts = np.vstack(rings)
+        codes = np.concatenate([[MPath.MOVETO]
+                                + [MPath.LINETO] * (len(r) - 2)
+                                + [MPath.CLOSEPOLY] for r in rings])
+        ax.add_patch(PathPatch(MPath(verts, codes), facecolor=colors[idx],
+                               edgecolor=edgecolor, linewidth=lw,
+                               alpha=alpha))
     
     # Plot coordinate points if provided
     if points is not None:
