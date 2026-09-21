@@ -215,12 +215,14 @@ class polygonised_grain_structure():
         if self.gid.size == 1:
             self.neigh_gid = {int(self.gid[0]): [int(self.gid[0])]}
             return
-        polygons, self.neigh_gid = self.allpol, {}
-        for i, polygon in enumerate(polygons, start=1):
-            self.neigh_gid[i] = []
-            for j, other_polygon in enumerate(polygons, start=1):
-                if i != j and polygon.touches(other_polygon):
-                    self.neigh_gid[i].append(j)
+        polygons = self.allpol
+        self.neigh_gid = {i: [] for i in range(1, len(polygons) + 1)}
+        # R-tree query instead of testing every pair. A polygon never
+        # touches itself, so i != j needs no separate test.
+        ii, jj = STRtree(polygons).query(np.array(polygons),
+                                         predicate='touches')
+        for i, j in sorted(zip(ii.tolist(), jj.tolist())):
+            self.neigh_gid[i + 1].append(j + 1)
 
     def val_neigh_gid(self, pixl_gs_neigh_gid):
         """
@@ -614,7 +616,8 @@ class polygonised_grain_structure():
         if verbose:
             print("\n \n ------ > Phase-3 <----- \n \n")
         self.build_jnp_grain_wise_indices(verbose=verbose)
-        self.build_gbp_grain_wise_indices_geometric(verbose=verbose)
+        # build_gbp_grain_wise_indices_geometric is not called: the
+        # coordinate-based build below replaces its result entirely.
         self.build_gbp_grain_wise_indices_coordbased(verbose=verbose)
         self.build_gbp_grain_wise_indices_pointsbased(verbose=verbose)
         self.build_gbmullines_grain_wise(verbose=verbose)
@@ -763,14 +766,13 @@ class polygonised_grain_structure():
 
             xmin, xmax, ymin, ymax = self.get_bounds_from_grain_boundary_points()
         """
-        for gid in self.gid:
-            _ripolres_ = self.raster_img_polygonisation_results[gid-1][0][0]
-            if gid == 1:
-                gbpoints = np.array(_ripolres_['coordinates'][0][:-1])-self.xyoffset
-            else:
-                new_gbpoints = np.array(_ripolres_['coordinates'][0][:-1])-self.xyoffset
-                gbpoints = np.array(list(gbpoints) + list(new_gbpoints))
-        gbpoints = np.unique(gbpoints, axis=1)
+        # Stack once (repeated concatenation is quadratic). The former
+        # np.unique(axis=1) sorted the x and y columns against each other
+        # and swapped them for images wider than tall, so it is dropped.
+        gbpoints = np.vstack(
+            [np.array(self.raster_img_polygonisation_results[gid-1][0][0]
+                      ['coordinates'][0][:-1]) - self.xyoffset
+             for gid in self.gid])
         xmin, xmax = gbpoints[:, 0].min(), gbpoints[:, 0].max()
         ymin, ymax = gbpoints[:, 1].min(), gbpoints[:, 1].max()
         return xmin, xmax, ymin, ymax
@@ -952,14 +954,20 @@ class polygonised_grain_structure():
         if verbose:
             print("Extracting grain boundary segments and junction points")
         self.JNP = []
+        # Only pairs whose polygons intersect can contribute a junction
+        # point, so candidate pairs come from an R-tree query.
+        pols = [self.polygons[g-1] for g in self.gid]
+        ii, jj = STRtree(pols).query(np.array(pols), predicate='intersects')
+        partners = {g: [] for g in self.gid}
+        for i, j in sorted(zip(ii.tolist(), jj.tolist())):
+            if self.gid[j] > self.gid[i]:
+                partners[self.gid[i]].append(self.gid[j])
         for gid1 in self.gid:
             gid1_xy = []
             if gid1 % 50 == 0:
                 _s_ = "Extracting Junction points"
                 print(f'{_s_} {np.round(gid1*100/self.n, 2)} % complete.')
-            for gid2 in self.gid:
-                if gid2 <= gid1:
-                    continue
+            for gid2 in partners[gid1]:
                 # print(gid1, gid2)
                 self.polygons[gid1-1]
                 self.polygons[gid2-1]
@@ -1121,15 +1129,14 @@ class polygonised_grain_structure():
         """
         if verbose:
             print("Building grain boundary point objects based on grain-wise coordinates.")
-        self.jnp_grain_wise_indices = {}
-        for gid in self.gid:
-            self.jnp_grain_wise_indices[gid] = []
-            pol_shapely = ShAff.translate(self.polygons[gid-1],
-                                          xoff=-self.xyoffset,
-                                          yoff=-self.xyoffset)
-            for i, jnp_shapely in enumerate(self.jnp_all_shapely, start=0):
-                if pol_shapely.touches(jnp_shapely):
-                    self.jnp_grain_wise_indices[gid].append(i)
+        self.jnp_grain_wise_indices = {gid: [] for gid in self.gid}
+        pols = [ShAff.translate(self.polygons[gid-1], xoff=-self.xyoffset,
+                                yoff=-self.xyoffset) for gid in self.gid]
+        # R-tree query instead of testing every junction against every grain.
+        jnp_i, pol_k = STRtree(pols).query(np.array(self.jnp_all_shapely),
+                                           predicate='touches')
+        for i, k in sorted(zip(jnp_i.tolist(), pol_k.tolist())):
+            self.jnp_grain_wise_indices[self.gid[k]].append(i)
 
     def build_gbp_grain_wise_indices_geometric(self, verbose=True):
         """
@@ -1153,11 +1160,15 @@ class polygonised_grain_structure():
         """Build and return  gbp grain wise indices coordbased."""
         if verbose:
             print("Building grain boundary point objects based on grain-wise indices and geometric coordinates.")
-        findloc = DO.find_coorda_loc_in_coords_arrayb
+        # Coordinates in gbp_all_coords are unique, so a hash map gives the
+        # same index as an exact-equality search, without scanning the array.
+        index_of = {(x, y): i for i, (x, y)
+                    in enumerate(self.gbp_all_coords.tolist())}
         self.gbp_grain_wise_indices = {gid: None for gid in self.gid}
         for gid in self.gid:
             plist = self.gbp_grain_wise_coords[gid]
-            self.gbp_grain_wise_indices[gid] = [findloc(p, self.gbp_all_coords) for p in plist]
+            self.gbp_grain_wise_indices[gid] = [index_of[(x, y)]
+                                                for x, y in plist.tolist()]
 
     def build_gbp_grain_wise_indices_pointsbased(self, verbose=True):
         """Build and return  gbp grain wise indices pointsbased."""
@@ -1211,14 +1222,19 @@ class polygonised_grain_structure():
         # find_coord_loc = DO.find_coorda_loc_in_coords_arrayb
         self.jnp_all_sorted_coords = {gid: None for gid in self.gid}
         self.jnp_all_sorted_upxo = {gid: None for gid in self.gid}
+        # Junction points are unique, so look each grain's own coordinates up
+        # in a hash map instead of scanning every junction point per grain.
+        jnp_index = {(x, y): i for i, (x, y)
+                     in enumerate(self.jnp_all_coords.tolist())}
         for gid in self.gid:
             # gbpoints_thisgrain = self.gbmullines_grain_wise[gid].nodes
             gbcoords_thisgrain = self.gbmullines_grain_wise[gid].get_node_coords()
             junction_points_upxo, junction_points_coord = [], []
-            for i, jnpcoord in enumerate(self.jnp_all_coords):
-                if DO.is_a_in_b(jnpcoord, gbcoords_thisgrain):
-                    junction_points_coord.append(jnpcoord)
-                    junction_points_upxo.append(self.jnp_all_upxo[i])
+            on_grain = {jnp_index[(x, y)] for x, y
+                        in gbcoords_thisgrain.tolist() if (x, y) in jnp_index}
+            for i in sorted(on_grain):
+                junction_points_coord.append(self.jnp_all_coords[i])
+                junction_points_upxo.append(self.jnp_all_upxo[i])
             # junction_points_coord = arrange_junction_point_coords(gbcoords_thisgrain, junction_points_coord)
             # self.arrange_junction_point_coords_new(self.gbcoords_thisgrain, self.junction_points_coord)
             junction_points_coord, _ = self.arrange_junction_point_coords_new(gbcoords_thisgrain, junction_points_coord)
@@ -1954,12 +1970,9 @@ class polygonised_grain_structure():
         """Set or update pure gbpoints."""
         if verbose:
             print("Setting up pure grain boundary points.")
-        GBP_pure = []
-        for gbp in np.unique(self.GBP, axis=0):
-            if DO.is_a_in_b(gbp, np.unique(self.JNP, axis=0)):
-                pass
-            else:
-                GBP_pure.append(gbp)
+        jnp_set = set(map(tuple, self.JNP.tolist()))
+        GBP_pure = [gbp for gbp in np.unique(self.GBP, axis=0)
+                    if tuple(gbp.tolist()) not in jnp_set]
         self.GBP_pure = np.array(GBP_pure)
 
     def plot_reordered_GBCoords(self, gid, force_close=True):
@@ -2059,18 +2072,10 @@ class polygonised_grain_structure():
         """Assemblegbsegs."""
         if verbose:
             print("Assembling grain boundary segments into grain boundary multi-linestrings")
-        mids_all_gbsegs = []
-        for gb in GB.values():
-            mids_all_gbsegs.extend([id(seg) for seg in gb.segments])
-        mids_all_gbsegs = np.unique(mids_all_gbsegs)
-        sgseg_obj_list = [None for mid in mids_all_gbsegs]
-        # --------------------------
-        for i, mid in enumerate(mids_all_gbsegs, start=0):
-            for gid in self.gid:
-                for gb in GB[gid].segments:
-                    if mid == id(gb):
-                        sgseg_obj_list[i] = gb
-        sgseg_obj_list = np.array(sgseg_obj_list)
+        by_id = {id(seg): seg for gb in GB.values() for seg in gb.segments}
+        mids_all_gbsegs = np.unique(list(by_id))
+        sgseg_obj_list = np.array([by_id[mid]
+                                   for mid in mids_all_gbsegs.tolist()])
         # --------------------------
         if saa:
             self.mids_all_gbsegs = mids_all_gbsegs
@@ -2271,21 +2276,42 @@ class GrainManifold2D(VoronoiMasking):
         # 2. Ghost Seed Padding (Reflect boundary points to trap infinite rays)
         # Using a 10% buffer based on RVE size
         pad = max(width, height) * 0.1
-        
-        left = seeds[seeds[:, 0] < pad].copy()
+
+        # Mirror only seeds inside the RVE. Seeds already outside it (the
+        # guard rails) must not be mirrored: their reflections land inside
+        # the RVE and carve voids out of the real cells, since only the
+        # original seeds' cells are kept.
+        inside = ((seeds[:, 0] >= 0) & (seeds[:, 0] <= width) &
+                  (seeds[:, 1] >= 0) & (seeds[:, 1] <= height))
+        s_in = seeds[inside]
+
+        left = s_in[s_in[:, 0] < pad].copy()
         left[:, 0] = -left[:, 0]
-        
-        right = seeds[seeds[:, 0] > (width - pad)].copy()
+
+        right = s_in[s_in[:, 0] > (width - pad)].copy()
         right[:, 0] = 2 * width - right[:, 0]
-        
-        bottom = seeds[seeds[:, 1] < pad].copy()
+
+        bottom = s_in[s_in[:, 1] < pad].copy()
         bottom[:, 1] = -bottom[:, 1]
-        
-        top = seeds[seeds[:, 1] > (height - pad)].copy()
+
+        top = s_in[s_in[:, 1] > (height - pad)].copy()
         top[:, 1] = 2 * height - top[:, 1]
         
-        # Stack original seeds with ghosts
-        all_seeds = np.vstack([seeds, left, right, bottom, top])
+        # Ring of guard seeds just outside every seed and ghost, so that
+        # each original seed (including the outermost rails, which sit on
+        # the convex hull) has a finite Voronoi region that extends only
+        # about ``gap`` beyond it, keeping the unclipped cells compact.
+        stacked = np.vstack([seeds, left, right, bottom, top])
+        gap = max(2.0, 0.05 * max(width, height))
+        lo, hi = stacked.min(axis=0) - 2 * gap, stacked.max(axis=0) + 2 * gap
+        xs = np.arange(lo[0], hi[0] + gap, gap)
+        ys = np.arange(lo[1], hi[1] + gap, gap)
+        ring = np.vstack([np.c_[xs, np.full_like(xs, lo[1])],
+                          np.c_[xs, np.full_like(xs, hi[1])],
+                          np.c_[np.full_like(ys, lo[0]), ys],
+                          np.c_[np.full_like(ys, hi[0]), ys]])
+
+        all_seeds = np.vstack([stacked, ring])
         
         # 3. Generate Voronoi
         vor = Voronoi(all_seeds)
@@ -2321,8 +2347,21 @@ class GrainManifold2D(VoronoiMasking):
     
     def smooth_interfaces(self, iterations=10, lmbda=0.5, mu=-0.53,
                           method='taubin', ma_window=3, corner_angle_deg=30.0,
-                          thin_grain_px=0.0):
-        """Smooth interfaces."""
+                          thin_grain_px=1.5):
+        """Smooth interfaces.
+
+        Parameters
+        ----------
+        thin_grain_px : float, optional
+            Vertices of every grain whose minimum bounding-rectangle width is
+            below this (pixel units) are held fixed. Smoothing shrinks any
+            small closed loop, since its Laplacian modes all lie outside the
+            Taubin passband. A four-vertex single-pixel grain retains about
+            0.77 of its size per iteration, so an island (whose vertices are
+            not junctions and so are not pinned otherwise) collapsed to a
+            sliver. Default 1.5 keeps single-pixel grains and one-pixel-wide
+            grains exact. Use 0 to disable.
+        """
         if method == 'taubin':
             from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
             adj = self._get_vertex_adjacency()
