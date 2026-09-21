@@ -137,6 +137,7 @@ src/upxo/Important links.md
 
 # notebooks still outside ignored folders
 *.ipynb
+!/src/upxo/demos/confMesh/confMesh2d_compare_techniques.ipynb
 /src/upxo/ggrowth/Untitled-2.ipynb
 *.o
 *.c
