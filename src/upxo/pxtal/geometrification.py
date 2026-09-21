@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from shapely.strtree import STRtree
+from shapely.ops import unary_union
 from shapely.geometry import Point
 import upxo._sup.data_ops as DO
 from shapely import affinity as ShAff
@@ -21,6 +22,8 @@ from upxo.geoEntities.mulsline2d import ring2d
 from upxo._sup.data_ops import find_common_coordinates
 # from meshpy.triangle import MeshInfo, build
 from scipy.ndimage import generic_filter
+from upxo._sup.raster_polygonize import polygonize_labels
+from upxo._sup.raster_islands import find_island_regions
 
 
 class polygonised_grain_structure():
@@ -63,7 +66,8 @@ class polygonised_grain_structure():
                  'gid_pair_ids_unique_lr', 'gid_pair_ids_unique_rl',
                  'nconn', 'GBSEGMENTS', 'consolidated_segments',
                  'GB', 'GBCoords', 'GRAINS', 'POLYXTAL', 'mids_all_gbsegs',
-                 'sgseg_obj_list', 'smoothed')
+                 'sgseg_obj_list', 'smoothed', '_main', '_main_map',
+                 '_islands')
 
     EPS_coord_coincide = 1E-8
 
@@ -78,6 +82,7 @@ class polygonised_grain_structure():
         self.polygons_raw_holes = {gid: [] for gid in self.gid}
         self.gsmp = None
         self.smoothed = {}
+        self._main = self._main_map = self._islands = None
 
     def geometrify(self, verbose=True):
         """Geometrify."""
@@ -86,30 +91,12 @@ class polygonised_grain_structure():
     def polygonize(self, user_lgi=False, lgi=None, user_gids=False, gids=None,
                    verbose=True):
         """Polygonize grains in self.lgi."""
-        import rasterio
         if verbose:
             print("Polygonizing the raster image of the grain structure.")
         if not user_lgi:
             lgi, gid = self.lgi, self.gid
-        # ----------------------------------------
-        # Validations
-        # ----------------------------------------
-        rioshapes = rasterio.features.shapes
-        with rasterio.Env():
-            profile = rasterio.profiles.DefaultGTiffProfile()
-            profile.update(width=lgi.shape[1], height=lgi.shape[0],
-                           count=1, dtype=lgi.dtype,
-                           transform=rasterio.transform.Affine.identity())
-            # ----------------------------------------
-            with rasterio.MemoryFile() as memfile:
-                with memfile.open(**profile) as dataset:
-                    dataset.write(lgi, 1)
-                    self.raster_img_polygonisation_results = []
-                    for _gid_ in gid:
-                        mask = (lgi == _gid_).astype(np.uint8)
-                        rs = list(rioshapes(mask, mask=mask,
-                                            transform=dataset.transform))
-                        self.raster_img_polygonisation_results.append(rs)
+        res = polygonize_labels(lgi, gid)
+        self.raster_img_polygonisation_results = [res[_gid_] for _gid_ in gid]
 
     def setup_gsmp_datastructure(self):
         """Setup gsmp datastructure."""
@@ -589,7 +576,17 @@ class polygonised_grain_structure():
         self.xyoffset = xyoffset
 
     def pix_to_geom(self, polygonisation_offset=0.5, verbose=True, perform_xtal_dict_check=True):
-        """Pix to geom."""
+        """Pix to geom.
+
+        Grain structures with island grains (a grain enclosed by another)
+        are split into a hole-free structure plus one structure per island
+        cluster; see :meth:`_pix_to_geom_islands`.
+        """
+        filled_lgi, filled_labels, clusters = find_island_regions(self.lgi)
+        if clusters:
+            return self._pix_to_geom_islands(
+                filled_lgi, filled_labels, clusters, polygonisation_offset,
+                verbose, perform_xtal_dict_check)
         if verbose:
             print(40*'-', "\n", "Starting geometrification of the grain structure.")
         if verbose:
@@ -669,6 +666,87 @@ class polygonised_grain_structure():
         if verbose:
             print(40*'-', "\n", "Completed geometrification of the grain structure.")
 
+    def _pix_to_geom_islands(self, filled_lgi, filled_labels, clusters,
+                             polygonisation_offset, verbose,
+                             perform_xtal_dict_check):
+        """Geometrify a structure that contains island grains.
+
+        The hole-free filled structure (hosts have absorbed their island
+        regions) and every island cluster are geometrified independently
+        by this same pipeline. Smoothed or raw, each island is then cut
+        out of its host, so the host's interior ring is exactly the
+        island's boundary and the two are conformal.
+        """
+        if verbose:
+            print(40*'-', "\n", f"{len(clusters)} island region(s) found. "
+                  "Geometrifying the filled structure and each island region.")
+        kw = dict(polygonisation_offset=polygonisation_offset,
+                  verbose=verbose,
+                  perform_xtal_dict_check=perform_xtal_dict_check)
+        cls = type(self)
+        main = cls(filled_lgi, np.arange(1, len(filled_labels) + 1), None)
+        main.pix_to_geom(**kw)
+        self._main = main
+        self._main_map = {k: int(lab) for k, lab in
+                          enumerate(filled_labels, start=1)}
+        self._islands = []
+        for cl in clusters:
+            child = cls(cl['lgi'], np.arange(1, cl['lgi'].max() + 1), None)
+            child.pix_to_geom(**kw)
+            self._islands.append({
+                'host': cl['host'], 'offset': cl['offset'], 'geom': child,
+                'map': {k: int(lab) for k, lab in enumerate(cl['labels'],
+                                                            start=1)
+                        if lab != 0}})
+        self._assemble_island_results()
+
+    def _collect_grains(self, name=None):
+        """Return ``{label: polygon}`` (raw, or smoothed set ``name``).
+
+        Island polygons are cut out of their hosts.
+        """
+        if self._main is None:
+            src = self.GRAINS if name is None else \
+                self.smoothed[name]['GRAINS']
+            return dict(src)
+        grains = self._main._collect_grains(name)
+        out = {orig: grains[k] for k, orig in self._main_map.items()}
+        for isl in self._islands:
+            r0, c0 = isl['offset']
+            child = isl['geom']._collect_grains(name)
+            inner = {isl['map'][k]: ShAff.translate(p, xoff=c0, yoff=r0)
+                     for k, p in child.items() if k in isl['map']}
+            out[isl['host']] = out[isl['host']].difference(
+                unary_union(list(inner.values())))
+            out.update(inner)
+        return out
+
+    def _assemble_island_results(self, name=None):
+        """Set raw grains/polyxtal, or the smoothed set ``name``."""
+        grains = self._collect_grains(name)
+        grains = {g: grains[g] for g in self.gid}
+        polyxtal = MultiPolygon(list(grains.values()))
+        if name is None:
+            self.GRAINS, self.POLYXTAL = grains, polyxtal
+            self.polygons = list(grains.values())
+            self.GB = self._main.GB
+            self.GBCoords = self._main.GBCoords
+        else:
+            main = self._main.smoothed[name]
+            self.smoothed[name] = {'GB': main['GB'],
+                                   'GBCoords': main['GBCoords'],
+                                   'GRAINS': grains, 'POLYXTAL': polyxtal}
+
+    def _smooth_gbsegs_islands(self, npasses, max_smooth_levels, name):
+        """Smooth the filled structure and every island cluster."""
+        self._main.smooth_gbsegs(self._main.GB, npasses, max_smooth_levels,
+                                 plot=False, name=name)
+        for isl in self._islands:
+            geom = isl['geom']
+            geom.smooth_gbsegs(geom.GB, npasses, max_smooth_levels,
+                               plot=False, name=name)
+        self._assemble_island_results(name)
+
     def get_bounds_from_grain_boundary_points(self):
         """
         Get x and y bounds from grain boundary points.
@@ -747,13 +825,14 @@ class polygonised_grain_structure():
                 if any((coords[:, 0] == xmin) & (coords[:, 1] == ymin)):
                     corner_grain_flags[gid-1] = True
                     bl_grain_flags[gid-1] = True  # Bottom left
-                elif any((coords[:, 0] == xmin) & (coords[:, 1] == ymax)):
+                # Independent tests: a grain may span more than one corner.
+                if any((coords[:, 0] == xmin) & (coords[:, 1] == ymax)):
                     corner_grain_flags[gid-1] = True
                     tl_grain_flags[gid-1] = True  # Top left
-                elif any((coords[:, 0] == xmax) & (coords[:, 1] == ymin)):
+                if any((coords[:, 0] == xmax) & (coords[:, 1] == ymin)):
                     corner_grain_flags[gid-1] = True
                     br_grain_flags[gid-1] = True  # Bottom right
-                elif any((coords[:, 0] == xmax) & (coords[:, 1] == ymax)):
+                if any((coords[:, 0] == xmax) & (coords[:, 1] == ymax)):
                     corner_grain_flags[gid-1] = True
                     tr_grain_flags[gid-1] = True  # Top right
             else:
@@ -892,7 +971,7 @@ class polygonised_grain_structure():
                 if isinstance(intersec, LineString):
                     # print(intersec.coords.self.JNP)
                     self.JNP.append([intersec.coords.xy[0][0], intersec.coords.xy[1][0]])
-                    pass
+                    self.JNP.append([intersec.coords.xy[0][-1], intersec.coords.xy[1][-1]])
                 elif isinstance(intersec, MultiLineString):
                     # print(dir(intersec))
                     # print(intersec.boundary)#.coords.xy)
@@ -1597,6 +1676,25 @@ class polygonised_grain_structure():
                 for _gbs_ in gbs:
                     self.consolidated_segments[gid].append(_gbs_)
 
+        # Completion pass. A grain that touches an edge in more than one
+        # stretch (e.g. wraps a one-pixel grain on the edge) has edge
+        # segments that reach no corner. Register any edge segment of any
+        # boundary grain that is still missing.
+        # A segment spanning two corners is also registered once per corner,
+        # so duplicates (same object) are removed here.
+        for gid in self.grain_loc_ids['boundary']:
+            have = []
+            for s in self.consolidated_segments[gid]:
+                if not any(s is h for h in have):
+                    have.append(s)
+            for axis, location in (('x', xmin), ('x', xmax),
+                                   ('y', ymin), ('y', ymax)):
+                _, gbs = self.find_segs_at_loc(self.gbsegments[gid],
+                                               axis=axis, location=location)
+                have.extend(s for s in gbs
+                            if not any(s is h for h in have))
+            self.consolidated_segments[gid] = have
+
         if plot:
             self.plot_consolidated_segments()
 
@@ -1994,10 +2092,17 @@ class polygonised_grain_structure():
 
     def smooth_gbsegs(self, GB, npasses=2, max_smooth_levels=[3, 3], plot=True,
                       name='kali'):
-        """Smooth gbsegs."""
+        """Smooth gbsegs.
+
+        For a structure with islands, ``GB`` is ignored: the filled structure
+        and each island cluster are smoothed from their own ``GB``.
+        """
         # Validations
         if type(max_smooth_levels) in dth.dt.NUMBERS:
             max_smooth_levels = [max_smooth_levels]
+        if self._main is not None:
+            return self._smooth_gbsegs_islands(npasses, max_smooth_levels,
+                                               name)
         # -----------------------------------------------
         GB_smooth = deepcopy(GB)
         all_mids, sgseg_list = self.AssembleGBSEGS(GB_smooth, saa=False, throw=True)
