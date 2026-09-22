@@ -743,6 +743,137 @@ class EBSDReader:
         print("[rechar_lfi] Done.", flush=True)
 
     # ------------------------------------------------------------------
+    # Grain connectivity cleanup
+    # ------------------------------------------------------------------
+
+    def split_disconnected_grains(self, connectivity=4):
+        """
+        Ensure every grain id in ``lfi_ebsd`` is one spatially connected
+        pixel region.
+
+        A grain is one connected region by construction; the same id
+        spread across more than one spatially disjoint pixel cluster is a
+        labelling artifact, not a real grain -- most commonly caused by
+        :meth:`crop` slicing a rectangular window through a single grain's
+        irregular shape in more than one place, exposing two or more
+        disconnected pieces under the same id. Left uncorrected, this
+        breaks pixel-exact geometrification code that assumes one polygon
+        per grain id (``polygonised_grain_structure.pix_to_geom``).
+
+        For every grain id with more than one connected component, the
+        largest component keeps the original id; every additional
+        component is relabelled with a new, previously-unused id appended
+        after the current maximum. ``euler_ebsd`` / ``quat_ebsd`` are left
+        untouched -- the per-pixel orientation data is already correct
+        regardless of which id a pixel ends up under, so a split-off
+        fragment still averages correctly from its own pixels via
+        :meth:`grain_average_euler_deg`.
+
+        Parameters
+        ----------
+        connectivity : int
+            cc3d connectivity for identifying disconnected components
+            within a single grain id. Valid 2D values: 4 or 8. Default 4.
+
+        Returns
+        -------
+        dict
+            Mapping new_id -> original_id for every id introduced by a
+            split. Ids that were not split are unchanged and not included.
+
+        Raises
+        ------
+        ValueError
+            If ``connectivity`` is not 4 or 8.
+        """
+        import cc3d
+
+        if connectivity not in (4, 8):
+            raise ValueError("connectivity must be 4 or 8 for 2D cc3d.")
+
+        lfi = self.lfi_ebsd
+        next_id = int(lfi.max()) + 1
+        new_to_orig = {}
+
+        for gid in np.unique(lfi):
+            if gid <= 0:
+                continue
+            mask = lfi == gid
+            cc = cc3d.connected_components(mask.astype(np.uint8),
+                                           connectivity=connectivity)
+            n_cc = int(cc.max())
+            if n_cc <= 1:
+                continue
+            sizes = sorted(
+                ((int((cc == c).sum()), c) for c in range(1, n_cc + 1)),
+                reverse=True)
+            # Largest component keeps gid; every other component is
+            # relabelled with a fresh id.
+            for _, c in sizes[1:]:
+                lfi[cc == c] = next_id
+                new_to_orig[next_id] = int(gid)
+                next_id += 1
+
+        return new_to_orig
+
+    # ------------------------------------------------------------------
+    # Grain-averaged orientation
+    # ------------------------------------------------------------------
+
+    def grain_average_euler_deg(self):
+        """
+        Compute per-grain Bunge Euler angles (phi1, Phi, phi2), in degrees,
+        averaged over every pixel belonging to each grain.
+
+        Averaging is done on ``quat_ebsd`` (mean quaternion, renormalised,
+        positive-hemisphere convention), then converted to Bunge Euler --
+        the same approach already used internally by :meth:`rechar_lfi` to
+        fill unindexed pixels, exposed here as a standalone per-grain
+        result. This is an arithmetic quaternion mean, not a symmetry-aware
+        SO(3) mean: adequate for the low intra-grain misorientation spread
+        typical of a single EBSD grain, not for averaging across
+        misorientation-related variants.
+
+        Requires ``lfi_ebsd`` to contain only positive grain labels (call
+        :meth:`rechar_lfi` or :meth:`characterise` first if the map still
+        has unindexed / sub-minimum-size / remnant-boundary pixels).
+
+        Returns
+        -------
+        dict
+            Mapping grain_id (int) -> (phi1, Phi, phi2) tuple of floats,
+            in degrees.
+
+        Raises
+        ------
+        ValueError
+            If ``lfi_ebsd`` contains non-positive pixels.
+        """
+        from scipy.ndimage import mean as _ndmean
+
+        lfi = self.lfi_ebsd
+        if (lfi <= 0).any():
+            raise ValueError(
+                "grain_average_euler_deg() requires lfi_ebsd to contain "
+                "only positive grain labels -- call rechar_lfi() or "
+                "characterise() first to fill non-positive pixels."
+            )
+
+        grain_ids = np.unique(lfi)
+        avg_quat = np.stack(
+            [_ndmean(self.quat_ebsd[:, :, ch], labels=lfi, index=grain_ids)
+             for ch in range(4)], axis=1
+        )                                        # (n_grains, 4)
+
+        norms = np.linalg.norm(avg_quat, axis=1, keepdims=True)
+        avg_quat /= np.where(norms > 0, norms, 1.0)
+        neg = avg_quat[:, 0] < 0
+        avg_quat[neg] *= -1
+
+        return {int(gid): _quat_to_bunge_euler_deg(q)
+                for gid, q in zip(grain_ids, avg_quat)}
+
+    # ------------------------------------------------------------------
     # Visualisation orchestrator — thin wrappers around ebsdviz
     # ------------------------------------------------------------------
 
@@ -945,6 +1076,37 @@ def _char_lfi(lfi, px_size=1.0, min_grain_size=0):
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _quat_to_bunge_euler_deg(q):
+    """
+    Convert unit quaternion [w, x, y, z] (positive-hemisphere, active
+    rotation) to Bunge-Euler angles (phi1, Phi, phi2) in degrees, using
+    the ZXZ convention. Mirrors
+    ``pxtal.twinned_simple_3d.abaqus_exporter_3d._quat_to_bunge`` -- kept
+    as an independent copy here since the two callers belong to unrelated
+    pipelines and neither should import the other's internals.
+    """
+    import math
+    w, x, y, z = float(q[0]), float(q[1]), float(q[2]), float(q[3])
+    r13 = 2 * (x * z + y * w)
+    r23 = 2 * (y * z - x * w)
+    r31 = 2 * (x * z - y * w)
+    r32 = 2 * (y * z + x * w)
+    r33 = 1 - 2 * (x * x + y * y)
+    r11 = 1 - 2 * (y * y + z * z)
+    r12 = 2 * (x * y - z * w)
+
+    sin_Phi = math.sqrt(max(0.0, 1.0 - r33 * r33))
+    if sin_Phi > 1e-6:
+        Phi = math.acos(max(-1.0, min(1.0, r33)))
+        phi1 = math.atan2(r31, -r32)
+        phi2 = math.atan2(r13, r23)
+    else:
+        Phi = 0.0 if r33 > 0 else math.pi
+        phi1 = math.atan2(-r12, r11)
+        phi2 = 0.0
+    return (math.degrees(phi1), math.degrees(Phi), math.degrees(phi2))
+
 
 def _require_defdap():
     if not _DEFDAP_AVAILABLE:

@@ -68,12 +68,28 @@ def _abaqus_shell_type(eltype, n_nodes, plane):
 
 def export_confmesh2d_inp(
         path, nodes, elConn, elsets_eltype, nsets=None,
-        plane='stress', thickness=1.0, write_sections=True, heading=None):
+        plane='stress', thickness=1.0, write_sections=True, heading=None,
+        material_format='isotropic', grain_euler_deg=None, n_depvar=1,
+        elastic_constants=(210000., 0.3)):
     """Write a 2D conformal mesh to an Abaqus ``.inp``.
 
     Compacts sparse node tags to 1..N. ``plane='stress'`` → CPS3/CPS6/CPS4/CPS8,
     ``plane='strain'`` → CPE3/CPE6/CPE4/CPE8, chosen from connectivity width.
-    Dummy isotropic sections are optional.
+
+    ``material_format`` controls the ``*Material`` block written per elset
+    (only used when ``write_sections=True``):
+
+    * ``'isotropic'`` (default) -- dummy isotropic ``*Elastic`` section
+      (``elastic_constants``), unchanged from before this parameter existed.
+    * ``'bunge_euler'`` -- one ``*Material`` per grain carrying its
+      grain-averaged Bunge-Euler angles (degrees) as ``*User Material,
+      constants=3`` plus a ``*Depvar`` block, for a crystal-plasticity UMAT.
+      Mirrors the convention used by
+      ``pxtal.twinned_simple_3d.abaqus_exporter_3d.AbaqusExporter3D``.
+      Requires ``grain_euler_deg``: dict ``{grain_id: (phi1, Phi, phi2)}``
+      in degrees, keyed by the grain id embedded in each elset name (the
+      part after the last ``.`` in the un-sanitised elset name, e.g.
+      ``grain.42`` -> ``42``).
     """
     from pathlib import Path
 
@@ -135,15 +151,40 @@ def export_confmesh2d_inp(
             write_nset(f, f"NS_{key}", remap[np.asarray(ids, dtype=int)])
 
         if write_sections:
-            f.write("** Dummy isotropic sections — replace before a real job\n")
-            for name in global_elsets:
-                abq_name = name.replace('.', '_').replace('-', '_').upper()
-                f.write(f"*Material, name=MAT_{abq_name}\n")
-                f.write("*Elastic\n210000., 0.3\n")
-                f.write(
-                    f"*Solid Section, elset={abq_name}, material=MAT_{abq_name}\n"
-                )
-                f.write(f"{thickness},\n")
+            if material_format == 'bunge_euler':
+                if grain_euler_deg is None:
+                    raise ValueError(
+                        "material_format='bunge_euler' requires grain_euler_deg "
+                        "(dict {grain_id: (phi1, Phi, phi2)} in degrees).")
+                f.write("** One *Material per grain "
+                         "(Bunge-Euler angles in degrees).\n")
+                f.write("** Replace with full CPFEM constitutive block as "
+                         "needed.\n")
+                for name in global_elsets:
+                    abq_name = name.replace('.', '_').replace('-', '_').upper()
+                    gid = int(name.rsplit('.', 1)[-1])
+                    phi1, Phi, phi2 = grain_euler_deg[gid]
+                    f.write(f"*Material, name=MAT_{abq_name}\n")
+                    f.write(f"** Bunge-Euler (deg): phi1={phi1:.4f}, "
+                            f"Phi={Phi:.4f}, phi2={phi2:.4f}\n")
+                    f.write("*User Material, constants=3\n")
+                    f.write(f"{phi1:.6f}, {Phi:.6f}, {phi2:.6f}\n")
+                    f.write(f"*Depvar\n{n_depvar},\n")
+                    f.write(
+                        f"*Solid Section, elset={abq_name}, material=MAT_{abq_name}\n"
+                    )
+                    f.write(f"{thickness},\n")
+            else:
+                f.write("** Dummy isotropic sections — replace before a real job\n")
+                e_mod, nu = elastic_constants
+                for name in global_elsets:
+                    abq_name = name.replace('.', '_').replace('-', '_').upper()
+                    f.write(f"*Material, name=MAT_{abq_name}\n")
+                    f.write(f"*Elastic\n{e_mod}, {nu}\n")
+                    f.write(
+                        f"*Solid Section, elset={abq_name}, material=MAT_{abq_name}\n"
+                    )
+                    f.write(f"{thickness},\n")
     return str(path)
 
 

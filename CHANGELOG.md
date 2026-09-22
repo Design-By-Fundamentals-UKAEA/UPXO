@@ -2,6 +2,17 @@
 
 All notable changes to UPXO are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **EBSD → smoothed mesh → Abaqus (2D)**: end-to-end pipeline from a real EBSD `.ctf` map to a conformal 2D mesh with per-grain, EBSD-measured Bunge-Euler orientations in the exported Abaqus `.inp`.
+  - `interfaces/defdap/ebsd_reader.py`: `EBSDReader.split_disconnected_grains(connectivity=4)` — a grain id spread across spatially disconnected pixel regions (most commonly from `crop()` slicing an irregular grain in two) is relabelled so every id is one connected region; `euler_ebsd`/`quat_ebsd` untouched. `EBSDReader.grain_average_euler_deg()` — per-grain Bunge-Euler angles (degrees) from a mean of `quat_ebsd` over each grain's pixels (renormalised, positive-hemisphere), exposed as a standalone public method (the same averaging approach `rechar_lfi` already used internally).
+  - `meshing/writer_ABQ.py`: `export_confmesh2d_inp` gains `material_format='bunge_euler'` — writes one `*Material` + `*User Material, constants=3` (the grain's Bunge-Euler angles) + `*Depvar` per grain, from a `grain_euler_deg` dict, mirroring the convention already used by the 3D exporter (`twinned_simple_3d.abaqus_exporter_3d.AbaqusExporter3D`). Default behaviour (`material_format='isotropic'`) unchanged; also gains an `elastic_constants` override for that path.
+  - Demo: `src/upxo/demos/ebsdOps/ebsd_to_abaqus_2d.ipynb` — EBSD read → crop → characterise → split disconnected grains → grain-averaged orientation → Technique A geometrification/smoothing → conformal mesh → element-quality statistics → Abaqus export → interactive PyVista mesh-vs-grain-boundary view.
+  - Wiki: new [EBSD to Abaqus (2D)](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/EBSD-to-Abaqus-2D) page, cross-linked from Data I/O, Meshing, and Use Cases.
+  - Tests: `tests/interfaces/defdap/test_ebsd_reader.py`, `tests/meshing/test_writer_abq.py` — synthetic-array fixtures, no DefDAP / `.ctf` file / Gmsh dependency.
+
 ## [1.2.1] — 2026-09-22
 
 ### Fixed
