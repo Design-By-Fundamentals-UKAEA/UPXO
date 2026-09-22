@@ -25,6 +25,7 @@ xlrd>=2.0.1
 openpyxl>=3.1.0
 ipywidgets>=8.0.0
 Pillow>=10.0.0
+statsmodels>=0.14.0
 
 # --- Optional extras (uncomment or: pip install upxo[all]) ---
 # viz
