@@ -1689,6 +1689,32 @@ def generate_constrained_hybrid_seeds(lfi, target_spacing=0.5, bulk_spacing=10.0
         rail_coords.append([y, N + pad])   # Right rail
     seeds_guard = np.array(rail_coords)
     all_seeds = np.vstack([seeds_boundary, seeds_bulk, seeds_guard])[:, [1, 0]]
+
+    # Guarantee every grain gets at least one seed, independent of stride.
+    # seeds_boundary above is a density heuristic: coords_boundary[::stride]
+    # subsamples by flat array position, and for target_spacing >= 2
+    # (stride >= 2) that can skip every boundary pixel of a very small or
+    # isolated grain (e.g. a one-pixel island), even though the differs
+    # mask above correctly flagged them as candidates. This closes that gap
+    # directly, the same way map_seeds_to_lfi will later sample a seed's
+    # label (nearest pixel, coordinate clamped to the image if outside it,
+    # matching scipy.ndimage.map_coordinates(..., mode='nearest')): any
+    # label with no seed landing on one of its own pixels gets one placed
+    # at one of its pixels.
+    if len(all_seeds):
+        rows = np.clip(np.round(all_seeds[:, 1]).astype(int), 0, M - 1)
+        cols = np.clip(np.round(all_seeds[:, 0]).astype(int), 0, N - 1)
+        seeded_labels = set(np.unique(lfi[rows, cols]).tolist())
+    else:
+        seeded_labels = set()
+    missing = [lab for lab in np.unique(lfi).tolist() if lab not in seeded_labels]
+    if missing:
+        extra = []
+        for lab in missing:
+            r, c = np.argwhere(lfi == lab)[0]
+            extra.append([c, r])
+        all_seeds = np.vstack([all_seeds, np.asarray(extra, dtype=float)])
+
     if plot_seeds:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
