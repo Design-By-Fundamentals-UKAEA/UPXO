@@ -151,32 +151,39 @@ class mc2repr():
         """Set or update stests."""
         self.stest['tests'] = tests
 
+    @staticmethod
+    def _unit_interval(name, value):
+        """Return value if in [0, 1], else prompt until a valid one is given."""
+        while value < 0 or value > 1:
+            value = float(input(f"{name} [0, 1]: "))
+        return value
+
     def set_cor_thresh(self,
                        cor_threshold):
         """Set or update cor thresh."""
-        while cor_threshold < 0 or cor_threshold > 1:
-            self.stest['cor_threshold'] = float(input("cor_threshold [0, 1]: "))
+        self.stest['cor_threshold'] = self._unit_interval(
+            'cor_threshold', cor_threshold)
 
     def set_kldiv_thresh(self,
                          kldiv_thresh):
         """Set or update kldiv thresh."""
-        while kldiv_thresh < 0 or kldiv_thresh > 1:
-            self.stest['kldiv_thresh'] = float(input("kldiv_thresh [0, 1]: "))
+        self.stest['kldiv_thresh'] = self._unit_interval(
+            'kldiv_thresh', kldiv_thresh)
 
     def set_ks_thresh(self,
                       ks_thresh_D,
                       ks_thresh_P):
         """Set or update ks thresh."""
-        while ks_thresh_D < 0 or ks_thresh_D > 1:
-            self.stest['ks_thresh_D'] = float(input("ks_thresh_D [0, 1]: "))
-        while ks_thresh_P < 0 or ks_thresh_P > 1:
-            self.stest['ks_thresh_P'] = float(input("ks_thresh_P [0, 1]: "))
+        self.stest['ks_thresh_D'] = self._unit_interval(
+            'ks_thresh_D', ks_thresh_D)
+        self.stest['ks_thresh_P'] = self._unit_interval(
+            'ks_thresh_P', ks_thresh_P)
 
     def set_jsdiv_thresh(self,
                          jsdiv_thresh):
         """Set or update jsdiv thresh."""
-        while jsdiv_thresh < 0 or jsdiv_thresh > 1:
-            self.stest['jsdiv_thresh'] = float(input("jsdiv_thresh [0, 1]: "))
+        self.stest['jsdiv_thresh'] = self._unit_interval(
+            'jsdiv_thresh', jsdiv_thresh)
 
     def prop_to_excel(self,
                       filename="pxtal_properties",
@@ -239,8 +246,8 @@ class mc2repr():
                 sample_skewness = skew(sample.prop[parameter_name])
                 sample_kurt = kurtosis(sample.prop[parameter_name])
                 stat, p = shapiro(sample.prop[parameter_name])
-                self.distr_type[sample_name][parameter_name]['skewness'] = target_skewness
-                self.distr_type[sample_name][parameter_name]['kurtosis'] = target_kurt
+                self.distr_type[sample_name][parameter_name]['skewness'] = sample_skewness
+                self.distr_type[sample_name][parameter_name]['kurtosis'] = sample_kurt
                 if sample_skewness > 0:
                     self.distr_type[sample_name][parameter_name]['right_skewed'] = True
                     if sample_kurt > 0:
@@ -253,7 +260,7 @@ class mc2repr():
                         self.distr_type[sample_name][parameter_name]['leptokurtic'] = True
                     else:
                         self.distr_type[sample_name][parameter_name]['platykurtic'] = True
-                if abs(sample_skewness) < 0.5 and abs(sample_kurt) < 1 and shapiro_p > 0.05:
+                if abs(sample_skewness) < 0.5 and abs(sample_kurt) < 1 and p > 0.05:
                         self.distr_type[sample_name][parameter_name]['normal'] = True
                 else:
                     self.distr_type[sample_name][parameter_name]['normal'] = False

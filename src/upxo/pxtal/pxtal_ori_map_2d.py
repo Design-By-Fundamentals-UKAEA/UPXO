@@ -1481,34 +1481,15 @@ class polyxtal2d():
         polygons: list of shapely polygon objects of each grain
         multi_polygon: shapely multi-polygon object
         """
-        import rasterio
         from shapely.geometry import shape as ShShape
         from shapely.geometry import MultiPolygon
-        rioshapes = rasterio.features.shapes
-        # Create a raster dataset from the grid array
-        with rasterio.Env():
-            profile = rasterio.profiles.DefaultGTiffProfile()
-            profile.update(width=grid.shape[1],
-                           height=grid.shape[0], count=1,
-                           dtype=grid.dtype,
-                           transform=rasterio.transform.Affine.identity())
-            with rasterio.MemoryFile() as memfile:
-                with memfile.open(**profile) as dataset:
-                    dataset.write(grid, 1)
-                    # Find unique cell IDs; same as self.gid
-                    gids = np.unique(grid)
-                    # Polygonize each unique cell
-                    polygons = []
-                    RESULTS = []
-                    for gid in gids:
-                        mask = (grid == gid).astype(np.uint8)
-                        results = list(rioshapes(mask, mask=mask,
-                                                 transform=dataset.transform))
-                        if results:
-                            RESULTS.append(results)
-                            # Convert to Shapely polygons and append
-                            polygons.extend([ShShape(geom[0])
-                                             for geom in results])
+        from upxo._sup.raster_polygonize import polygonize_labels
+        polygons = []
+        RESULTS = []
+        for results in polygonize_labels(grid, np.unique(grid)).values():
+            if results:
+                RESULTS.append(results)
+                polygons.extend([ShShape(geom[0]) for geom in results])
 
         # Create a MultiPolygon from the collected polygons
         multi_polygon = MultiPolygon(polygons)

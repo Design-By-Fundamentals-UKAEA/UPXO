@@ -38,7 +38,6 @@ autodoc_mock_imports = [
     'tqdm',
     'seaborn',
     'defdap',
-    'rasterio',
     'colorama',
     'pyvoro',
     'tetgen',

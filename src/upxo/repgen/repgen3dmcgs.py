@@ -80,7 +80,8 @@ class repgen3d:
     """
 
     __slots__ = ('tdist', 'tstat', 'tgs', 'sgs',
-                 'iroute', 'mpflags', 'rm0tests', 'rm0')
+                 'tdim', 'sgstype', 'tgstype',
+                 'iroute', 'mpflags', 'rm0tests', 'rm0', 'rm1tests')
 
     VALiroutes = ('tdist.sgs', 'tstat.sgs', 'tgs.sgs')
 

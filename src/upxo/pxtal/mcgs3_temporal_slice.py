@@ -7313,7 +7313,7 @@ class mcgs3_grain_structure():
         """
         ntwins = len(twins)
         # ------------------------------------------------------
-        if ntwins == 1:
+        if ntwins <= 1:
             return twins
         # ------------------------------------------------------
         removal_stats = []
@@ -7328,7 +7328,7 @@ class mcgs3_grain_structure():
                 ntotal = twins[i].shape[0]
                 perc_removed = np.round(nremove*100/ntotal, 0).astype(int)
                 removal_stats.append(f"({i}: {nremove}, {perc_removed}%)")
-        print(f"ntwins: {i+1}.", "Coord. overlaps:", ", ".join(removal_stats))
+        print(f"ntwins: {ntwins}.", "Coord. overlaps:", ", ".join(removal_stats))
         # ------------------------------------------------------
         if enforce_twin_vf_check:
             cutoff_twvol = self.get_cutoff_twvol(gid, cutoff_twin_vf)

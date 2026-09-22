@@ -1647,7 +1647,7 @@ class KREPR():
                 r = DEF_rkf_nlsd(ktgt, ksmp,
                              timescales=timescales,
                              equal_bins=equal_bins)
-                self.rkf['ed'][neigh_order][idsmp, idtgt] = r
+                self.rkf['nlsd'][neigh_order][idsmp, idtgt] = r
 
     def calculate_rkf_ed_nlsd_generalized(self,
                                           neigh_order_tgt=1,

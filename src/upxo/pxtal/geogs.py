@@ -5,10 +5,8 @@ Created on Thu Jul 11 21:25:32 2024
 @author: Dr. Sunil Anandatheertha
 """
 import numpy as np
-import rasterio
 from copy import deepcopy
 import matplotlib.pyplot as plt
-from rasterio.features import shapes
 from shapely.strtree import STRtree
 from shapely.geometry import Point
 from upxo._sup import dataTypeHandlers as dth

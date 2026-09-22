@@ -1362,6 +1362,22 @@ class MSline2d():
         midpoints = [line.mid_point for line in self.lines]
         gradients = [line.gradient for line in self.lines]
 
+    def clone(self):
+        """
+        Return an independent copy of the node and line containers.
+
+        The node and line objects are shared with the original. That is safe
+        for :meth:`smooth`, which replaces ``nodes`` and ``lines`` with new
+        lists and new interior points rather than mutating them, and it is
+        far cheaper than ``copy.deepcopy``.
+        """
+        new = MSline2d.__new__(MSline2d)
+        new.lines = list(self.lines)
+        new.nodes = list(self.nodes)
+        new.closed = self.closed
+        new.features = dict(self.features)
+        return new
+
     def smooth(self, max_smooth_level=2):
         """
         Smooth the polyline by replacing node coordinates with local means.
@@ -1474,6 +1490,47 @@ class ring2d():
                  'coords', 'closed', 'conn0', 'conn1')
 
     EPS_coord_coincide = 1E-8
+
+    def clone(self, seg_clones):
+        """
+        Return a copy of this ring that uses cloned segments.
+
+        Parameters
+        ----------
+        seg_clones : dict
+            ``{id(original segment): cloned segment}``. Segments missing from
+            it are cloned and added, so a segment shared by several rings is
+            cloned once and stays shared among the copies.
+
+        Notes
+        -----
+        ``coords``, ``conn0`` and ``conn1`` are not populated anywhere in
+        the current geometrification/meshing pipeline before a ring is
+        cloned, so this has had no observed effect; they are still copied
+        by value rather than by reference so that ``connectivity1()`` or
+        ``set_coords()`` called later on the original or the clone cannot
+        silently corrupt the other, matching the "independent copy" this
+        method promises.
+        """
+        new = ring2d.__new__(ring2d)
+        for slot in ring2d.__slots__:
+            if not hasattr(self, slot):
+                continue
+            val = getattr(self, slot)
+            if slot in ('conn0', 'conn1') and isinstance(val, dict):
+                val = dict(val)
+            elif slot == 'coords' and isinstance(val, np.ndarray):
+                val = val.copy()
+            setattr(new, slot, val)
+        segments = []
+        for seg in self.segments:
+            if id(seg) not in seg_clones:
+                seg_clones[id(seg)] = seg.clone()
+            segments.append(seg_clones[id(seg)])
+        new.segments = segments
+        new.segids = list(self.segids)
+        new.segflips = list(self.segflips)
+        return new
 
     def __init__(self, segments=None, segids=None, segflips=None):
         """
