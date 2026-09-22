@@ -12,7 +12,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="upxo",
-    version="1.2.0",
+    version="1.2.1",
     author="Dr. Sunil Anandatheertha",
     author_email="vaasu.anandatheertha@ukaea.uk",
     description=(

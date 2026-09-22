@@ -2,6 +2,43 @@
 
 All notable changes to UPXO are documented in this file.
 
+## [1.2.1] — 2026-09-22
+
+### Fixed
+
+- **`pxtal/geometrification.py`**: Technique A (`polygonised_grain_structure`) now handles island grains (a grain fully enclosed by another) correctly. `pix_to_geom` splits the structure into a hole-filled version plus one geometrification pass per island cluster (recursing for nested islands), then cuts each island out of its host with a Shapely `difference`. Previously any structure containing an island grain raised `IndexError` or `AttributeError`, or produced a host with no interior ring.
+- Junction-point extraction (`get_junction_points_from_grain_intersections`) recorded only the first end of a `LineString` intersection; a grain with a four-grain corner could lose a junction point and raise `A linearring requires at least 4 coordinates`. Both ends are now recorded.
+- `set_grain_loc_ids` classified domain corners with an `elif` chain, so a grain spanning two corners (e.g. wrapping a one-pixel grain on the domain edge) lost the second corner's boundary segment; its ring then failed to close and the polygon collapsed to zero area. Corner tests are now independent; the boundary-segment consolidation step removes the resulting duplicate segments and adds any domain-edge segment still missing.
+- Island-containing structures: `self.GB` / `self.GBCoords` were keyed by the filled sub-structure's local relabelled ids rather than original grain ids, so indexing by `gid` could silently return a different grain's boundary ring. Now remapped to original ids; an island grain has no entry (its boundary is a hole in its host, not a same-level ring) rather than returning wrong data.
+- `set_grain_centroids_raw`'s vectorised fast path could raise `IndexError`, or silently return a wrong centroid, for a caller-supplied `gid` absent from the label image; it now returns `NaN` for that case, matching the original per-grain loop.
+- `ring2d.clone()` copied `coords`/`conn0`/`conn1` by reference despite documenting an independent copy; now copied by value.
+- **`GrainManifold2D`** (Technique B): single-pixel and other small grains, including islands, could collapse to a sliver under repeated Taubin smoothing passes — small-grain vertices are now frozen by default (`thin_grain_px`). Mirrored ghost seeds in `_generate_clipped_polygons` could carve spurious voids near the domain edge into the raw (untrimmed) manifold — guard-seed placement fixed. `generate_constrained_hybrid_seeds` could miss a single-pixel or one-pixel-wide grain's boundary entirely (a central-difference gradient blind spot) — a 4-neighbour-difference pass, plus a final per-label seed guarantee independent of the boundary-sampling stride, close both gaps.
+- **`viz/gsviz.plot_multipolygon_geometric`**: interior rings (holes) were drawn as opaque white polygons, hiding an island grain drawn earlier in iteration order. Each polygon is now one compound path so holes are true cut-outs.
+- **`repqual/`**: `determine_distr_type` used target values for every sample; `mc2repr` threshold setters could store invalid values and loop forever; NLSD results overwrote `rkf['ed']` instead of their own key.
+- **`pxtal/`**: zero-twin case in `remove_overlaps_in_twins` handled; `repgen3d` missing `__slots__` prevented construction; undefined `np` reference in `geoEntities`' abstract coords body removed.
+
+### Performance
+
+- Technique A (`polygonised_grain_structure.pix_to_geom` + `smooth_gbsegs`): roughly 15x faster (930 grains: 54 s → 3.7 s, then further to ~1.9 s in a second pass; scaling improved from roughly quadratic to roughly linear in grain count). All-pairs geometry tests replaced with Shapely `STRtree` candidate queries; array scans replaced with hash lookups; one method removed as dead work (its result was overwritten before being read); per-segment properties cached instead of recomputed for every neighbour pair; `deepcopy` in `smooth_gbsegs` replaced with new `MSline2d.clone()` / `ring2d.clone()`.
+- Technique B (`GrainManifold2D.smooth_interfaces` + `_generate_clipped_polygons`): the vertex-adjacency graph is now built once per smoothing run instead of once per Taubin pass; Voronoi cells that do not cross the RVE boundary skip the clipping step. Roughly 20-30% faster depending on grain-structure regularity. Neither technique is reliably faster than the other across all grain-structure types — see `confMesh2d_compare_techniques.ipynb` for current, measured numbers on a given case.
+
+### Removed
+
+- `rasterio` is no longer a UPXO dependency. `pxtal/geometrification.py`'s `polygonize()` and `pxtal_ori_map_2d.py`'s `polygonize_voronoi_grid` now use the new pure NumPy/Shapely `_sup/raster_polygonize.py`, matching `rasterio.features.shapes`'s output structure. The `[io]` extra is removed from `pyproject.toml` / `setup.py` / `requirements.txt`; `docs/conf.py`'s mock-imports list and the README / docs install instructions updated to match.
+
+### Added
+
+- **`_sup/raster_polygonize.py`**: pure NumPy/Shapely label-to-polygon tracer (4-connected, hole-aware).
+- **`_sup/raster_islands.py`**: detects grains fully enclosed by another grain (islands) ahead of polygonisation.
+- **Demo**: `confMesh2d_compare_techniques.ipynb` — Technique A vs Technique B on the same label image, with geometry, mesh-quality and timing comparisons.
+- Wiki: new 2D Grain Structure Geometrification page documenting both techniques, island handling, and how to choose between them.
+
+### Infrastructure
+
+- CI: Sphinx docs now also deploy on pushes to `dev` (previously `main` only); tests now also run on pushes to `main` (previously `dev` only).
+
+---
+
 ## [1.2.0] — 2026-09-11
 
 ### Added
