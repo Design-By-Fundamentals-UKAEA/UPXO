@@ -581,16 +581,29 @@ class polygonised_grain_structure():
         if verbose:
             print("Extracting grain boundary segments based on polygon intersections.")
         lgi = np.asarray(self.lgi)
-        if lgi.min() >= 0 and lgi.max() <= 4 * lgi.size:
+        gid = np.asarray(self.gid)
+        # self.gid is caller-supplied and not guaranteed to be a subset of
+        # the labels actually present in lgi (e.g. a grain id that has since
+        # merged away). Size the bincount arrays to cover every gid value as
+        # well as every lgi label, so indexing below never goes out of
+        # bounds, and let a gid with zero pixels divide 0/0 = NaN, matching
+        # what the per-grain np.argwhere(lgi == gid).mean() loop below would
+        # give for the same input -- rather than silently returning a
+        # plausible-looking wrong centroid.
+        lim = int(max(lgi.max(initial=-1), gid.max(initial=-1))) + 1 \
+            if lgi.size and gid.size else 0
+        if lgi.size and lgi.min() >= 0 and gid.min(initial=0) >= 0 \
+                and lim <= 4 * lgi.size:
             # One pass over the image: per-label pixel counts and row/col
             # sums (integer sums are exact in float64), so each centroid is
             # the same mean as np.argwhere(lgi == gid).mean(axis=0).
             rows, cols = np.indices(lgi.shape)
             lab = lgi.ravel()
-            count = np.bincount(lab)
-            row_mean = np.bincount(lab, weights=rows.ravel()) / np.maximum(count, 1)
-            col_mean = np.bincount(lab, weights=cols.ravel()) / np.maximum(count, 1)
-            gid = np.asarray(self.gid)
+            count = np.bincount(lab, minlength=lim).astype(float)
+            row_sum = np.bincount(lab, weights=rows.ravel(), minlength=lim)
+            col_sum = np.bincount(lab, weights=cols.ravel(), minlength=lim)
+            with np.errstate(invalid='ignore'):
+                row_mean, col_mean = row_sum / count, col_sum / count
             self.centroids_raw = np.c_[row_mean[gid], col_mean[gid]] - 0.5
             return
         centroids_raw = []
@@ -761,20 +774,38 @@ class polygonised_grain_structure():
         return out
 
     def _assemble_island_results(self, name=None):
-        """Set raw grains/polyxtal, or the smoothed set ``name``."""
+        """Set raw grains/polyxtal (or the smoothed set ``name``).
+
+        GRAINS/POLYXTAL are keyed by original grain id throughout (see
+        _collect_grains). GB/GBCoords cover the filled structure's
+        host/main grains only, remapped from the filled sub-structure's
+        local ids to original ids via self._main_map: island grains have
+        no entry, since their true boundary is a hole cut into their host
+        (see GRAINS/POLYXTAL), not a same-level ring, so they don't fit
+        this flat one-ring-per-grain bookkeeping. Indexing
+        self.GB[island_gid] raises KeyError rather than silently
+        returning another grain's ring (self._main.GB/GBCoords are keyed
+        by the filled structure's own local ids, which do not equal
+        self.gid whenever island absorption shifts ids).
+        """
         grains = self._collect_grains(name)
         grains = {g: grains[g] for g in self.gid}
         polyxtal = MultiPolygon(list(grains.values()))
         if name is None:
             self.GRAINS, self.POLYXTAL = grains, polyxtal
             self.polygons = list(grains.values())
-            self.GB = self._main.GB
-            self.GBCoords = self._main.GBCoords
+            self.GB = {orig: self._main.GB[k]
+                      for k, orig in self._main_map.items()}
+            self.GBCoords = {orig: self._main.GBCoords[k]
+                             for k, orig in self._main_map.items()}
         else:
             main = self._main.smoothed[name]
-            self.smoothed[name] = {'GB': main['GB'],
-                                   'GBCoords': main['GBCoords'],
-                                   'GRAINS': grains, 'POLYXTAL': polyxtal}
+            self.smoothed[name] = {
+                'GB': {orig: main['GB'][k]
+                      for k, orig in self._main_map.items()},
+                'GBCoords': {orig: main['GBCoords'][k]
+                            for k, orig in self._main_map.items()},
+                'GRAINS': grains, 'POLYXTAL': polyxtal}
 
     def _smooth_gbsegs_islands(self, npasses, max_smooth_levels, name):
         """Smooth the filled structure and every island cluster."""
