@@ -1501,11 +1501,27 @@ class ring2d():
             ``{id(original segment): cloned segment}``. Segments missing from
             it are cloned and added, so a segment shared by several rings is
             cloned once and stays shared among the copies.
+
+        Notes
+        -----
+        ``coords``, ``conn0`` and ``conn1`` are not populated anywhere in
+        the current geometrification/meshing pipeline before a ring is
+        cloned, so this has had no observed effect; they are still copied
+        by value rather than by reference so that ``connectivity1()`` or
+        ``set_coords()`` called later on the original or the clone cannot
+        silently corrupt the other, matching the "independent copy" this
+        method promises.
         """
         new = ring2d.__new__(ring2d)
         for slot in ring2d.__slots__:
-            if hasattr(self, slot):
-                setattr(new, slot, getattr(self, slot))
+            if not hasattr(self, slot):
+                continue
+            val = getattr(self, slot)
+            if slot in ('conn0', 'conn1') and isinstance(val, dict):
+                val = dict(val)
+            elif slot == 'coords' and isinstance(val, np.ndarray):
+                val = val.copy()
+            setattr(new, slot, val)
         segments = []
         for seg in self.segments:
             if id(seg) not in seg_clones:
