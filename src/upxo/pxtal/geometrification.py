@@ -14,7 +14,7 @@ from shapely.geometry import shape as ShShape
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.geometry.collection import GeometryCollection
 from shapely.geometry import Polygon, MultiPoint
-from upxo.geoEntities.point2d import Point2d
+from upxo.geoEntities.point2d import Point2d, p2d_leanest
 from upxo.geoEntities.mulpoint2d import MPoint2d
 from shapely.geometry import Point as ShPoint2d
 from upxo.geoEntities.mulsline2d import MSline2d
@@ -67,7 +67,7 @@ class polygonised_grain_structure():
                  'nconn', 'GBSEGMENTS', 'consolidated_segments',
                  'GB', 'GBCoords', 'GRAINS', 'POLYXTAL', 'mids_all_gbsegs',
                  'sgseg_obj_list', 'smoothed', '_main', '_main_map',
-                 '_islands')
+                 '_islands', '_segprops')
 
     EPS_coord_coincide = 1E-8
 
@@ -83,6 +83,7 @@ class polygonised_grain_structure():
         self.gsmp = None
         self.smoothed = {}
         self._main = self._main_map = self._islands = None
+        self._segprops = None
 
     def geometrify(self, verbose=True):
         """Geometrify."""
@@ -217,6 +218,30 @@ class polygonised_grain_structure():
             return
         polygons = self.allpol
         self.neigh_gid = {i: [] for i in range(1, len(polygons) + 1)}
+        lgi = np.asarray(self.lgi)
+        if (not self.holes_exist and len(polygons) == self.gid.size
+                and np.array_equal(self.gid, np.arange(1, self.gid.size + 1))
+                and lgi.min() >= 1):
+            # Without holes two grain polygons touch exactly when some pair
+            # of 8-connected pixels carries their two labels, since touching
+            # happens at pixel corners. Read the pairs off the label image.
+            n1 = self.gid.size + 1
+            pairs = []
+            for a, b in ((lgi[:, :-1], lgi[:, 1:]), (lgi[:-1, :], lgi[1:, :]),
+                         (lgi[:-1, :-1], lgi[1:, 1:]),
+                         (lgi[:-1, 1:], lgi[1:, :-1])):
+                m = a != b
+                lo = np.minimum(a[m], b[m]).astype(np.int64)
+                hi = np.maximum(a[m], b[m]).astype(np.int64)
+                pairs.append(lo * n1 + hi)
+            codes = np.unique(np.concatenate(pairs))
+            for c in codes.tolist():
+                i, j = divmod(c, n1)
+                self.neigh_gid[i].append(j)
+                self.neigh_gid[j].append(i)
+            for v in self.neigh_gid.values():
+                v.sort()
+            return
         # R-tree query instead of testing every pair. A polygon never
         # touches itself, so i != j needs no separate test.
         ii, jj = STRtree(polygons).query(np.array(polygons),
@@ -555,11 +580,22 @@ class polygonised_grain_structure():
         # Validations
         if verbose:
             print("Extracting grain boundary segments based on polygon intersections.")
+        lgi = np.asarray(self.lgi)
+        if lgi.min() >= 0 and lgi.max() <= 4 * lgi.size:
+            # One pass over the image: per-label pixel counts and row/col
+            # sums (integer sums are exact in float64), so each centroid is
+            # the same mean as np.argwhere(lgi == gid).mean(axis=0).
+            rows, cols = np.indices(lgi.shape)
+            lab = lgi.ravel()
+            count = np.bincount(lab)
+            row_mean = np.bincount(lab, weights=rows.ravel()) / np.maximum(count, 1)
+            col_mean = np.bincount(lab, weights=cols.ravel()) / np.maximum(count, 1)
+            gid = np.asarray(self.gid)
+            self.centroids_raw = np.c_[row_mean[gid], col_mean[gid]] - 0.5
+            return
         centroids_raw = []
         for gid in self.gid:
             centroid = list(np.argwhere(self.lgi == gid).mean(axis=0)-0.5)
-            #coordinates = self.raster_img_polygonisation_results[gid-1][0][0]['coordinates'][0][:-1]
-            #centroids_raw.append(list(np.array(coordinates).mean(axis=0)))
             centroids_raw.append(centroid)
         self.centroids_raw = np.array(centroids_raw)
 
@@ -950,51 +986,40 @@ class polygonised_grain_structure():
                               }
 
     def get_junction_points_from_grain_intersections(self, verbose=True):
-        """Return the junction points from grain intersections."""
+        """Return the junction points from grain intersections.
+
+        For every pair of intersecting grain polygons the end points of their
+        shared boundary are junction points: both ends of a line, the boundary
+        points of a multi-line, or a single touching point. Mixed
+        intersections (a line plus an isolated point) contribute nothing, as
+        before. Pairs come from an R-tree query and all intersections are
+        computed in one vectorised call.
+        """
         if verbose:
             print("Extracting grain boundary segments and junction points")
-        self.JNP = []
-        # Only pairs whose polygons intersect can contribute a junction
-        # point, so candidate pairs come from an R-tree query.
-        pols = [self.polygons[g-1] for g in self.gid]
-        ii, jj = STRtree(pols).query(np.array(pols), predicate='intersects')
-        partners = {g: [] for g in self.gid}
-        for i, j in sorted(zip(ii.tolist(), jj.tolist())):
-            if self.gid[j] > self.gid[i]:
-                partners[self.gid[i]].append(self.gid[j])
-        for gid1 in self.gid:
-            gid1_xy = []
-            if gid1 % 50 == 0:
-                _s_ = "Extracting Junction points"
-                print(f'{_s_} {np.round(gid1*100/self.n, 2)} % complete.')
-            for gid2 in partners[gid1]:
-                # print(gid1, gid2)
-                self.polygons[gid1-1]
-                self.polygons[gid2-1]
-                intersec = self.polygons[gid1-1].intersection(self.polygons[gid2-1])
-                # intersec = self.polygons[gid1-1].boundary.intersection(self.polygons[gid2-1].boundary)
-                # print(type(intersec))
-                # print(isinstance(intersec, MultiLineString))
-                # print(isinstance(intersec, LineString))
-                if isinstance(intersec, LineString):
-                    # print(intersec.coords.self.JNP)
-                    self.JNP.append([intersec.coords.xy[0][0], intersec.coords.xy[1][0]])
-                    self.JNP.append([intersec.coords.xy[0][-1], intersec.coords.xy[1][-1]])
-                elif isinstance(intersec, MultiLineString):
-                    # print(dir(intersec))
-                    # print(intersec.boundary)#.coords.xy)
-                    if isinstance(intersec.boundary, MultiPoint):
-                        for pnt in intersec.boundary.geoms:
-                            self.JNP.append([pnt.x, pnt.y])
-                    if isinstance(intersec.boundary, tuple):
-                        self.JNP.append([intersec.boundary[0][0], intersec.boundary[1][0]])
-                        self.JNP.append([intersec.boundary[0][1], intersec.boundary[1][1]])
-                    #for line in intersec.geoms:
-                    #    self.JNP.append([line.coords.self.JNP[0][0], line.coords.self.JNP[1][0]])
-                    #    self.JNP.append([line.coords.self.JNP[0][1], line.coords.self.JNP[1][1]])
-                elif isinstance(intersec, Point):
-                    self.JNP.append([intersec.x, intersec.y])
-        self.JNP = np.unique(self.JNP, axis = 0)-self.xyoffset
+        import shapely
+        gid = np.asarray(self.gid)
+        pols = np.array([self.polygons[g-1] for g in gid])
+        ii, jj = STRtree(pols).query(pols, predicate='intersects')
+        keep = gid[jj] > gid[ii]
+        geoms = shapely.intersection(pols[ii[keep]], pols[jj[keep]])
+        kind = shapely.get_type_id(geoms)
+        parts = []
+        lines = geoms[kind == 1]
+        if len(lines):
+            parts.append(shapely.get_coordinates(shapely.get_point(lines, 0)))
+            parts.append(shapely.get_coordinates(shapely.get_point(lines, -1)))
+        multilines = geoms[kind == 5]
+        if len(multilines):
+            bnd = shapely.boundary(multilines)
+            # Only a MultiPoint boundary is used (as before).
+            parts.append(shapely.get_coordinates(
+                bnd[shapely.get_type_id(bnd) == 4]))
+        points = geoms[kind == 0]
+        if len(points):
+            parts.append(shapely.get_coordinates(points))
+        self.JNP = np.vstack(parts).tolist() if parts else []
+        self.JNP = np.unique(self.JNP, axis=0)-self.xyoffset
 
     def extract_GBP(self, verbose=True):
         """Extract grain boundary points data from polygonization coordinate results."""
@@ -1447,6 +1472,23 @@ class polygonised_grain_structure():
                                      self.gbmullines_grain_wise[gid].get_node_coords()[-1]))
         return seg_ends
 
+    def _seg_props(self, seg):
+        """(nnodes, centroid array, length, lean centroid) of a segment.
+
+        Computed once per segment and cached in ``_segprops`` while the
+        connectivity steps run; a grain appears in several neighbour pairs,
+        so these were otherwise recomputed for every pair.
+        """
+        cache = self._segprops
+        if cache is None:
+            cache = self._segprops = {}
+        props = cache.get(id(seg))
+        if props is None:
+            c = seg.centroid
+            props = cache[id(seg)] = (seg.nnodes, c, seg.length,
+                                      p2d_leanest(*c))
+        return props
+
     def set_neigh_connectivity_flags_DS(self, centroid_eq_EPS=1E-8, verbose=True):
         """Set or update neigh connectivity flags DS."""
         if verbose:
@@ -1459,38 +1501,27 @@ class polygonised_grain_structure():
             # ====================================
             for gbseg1 in self.gbsegments[pair[0]]:
                 # Iterate through all grain boundary segments of the centre grain (pair[0]).
-                # gbseg1 = gbsegments[pair[0]][0]
-                gbseg1_nnodes = gbseg1.nnodes  # Number of nodes
-                gbseg1_centroid = gbseg1.centroid_p2dl  # Centroidal point object
-                gbseg1_length = gbseg1.length  # Total lemngth
+                gbseg1_nnodes, _, gbseg1_length, gbseg1_centroid =                     self._seg_props(gbseg1)
                 # ====================================
                 for gbseg2 in self.gbsegments[pair[1]]:
                     # Iterate through all grain boundary segments of the neighbour grain (pair[1]).
-                    gbseg2_nnodes = gbseg2.nnodes
-                    proceed = False
-                    # Prepare for the nnodes equality test.
-                    nnodes_equality = gbseg1_nnodes == gbseg2_nnodes
-                    if nnodes_equality:
-                        # nnodes equality test passed. Prepare for the next test.
-                        _fx_ = gbseg1_centroid.is_p2dl_within_cor
-                        centroid_equality = _fx_(gbseg2.centroid_p2dl,
-                                                 centroid_eq_EPS)
-                    else:
+                    gbseg2_nnodes, _, gbseg2_length, gbseg2_centroid =                         self._seg_props(gbseg2)
+                    # nnodes equality test.
+                    if gbseg1_nnodes != gbseg2_nnodes:
                         continue
-                    # ----------------------------
-                    if centroid_equality:
-                        # centroid equality test passed. Prepare for the next test.
-                        ldiff = abs(gbseg1_length - gbseg2.length)
-                        length_equality = ldiff <= centroid_eq_EPS
-                    else:
+                    # centroid equality test.
+                    if not gbseg1_centroid.is_p2dl_within_cor(
+                            gbseg2_centroid, centroid_eq_EPS):
                         continue
+                    # (The length difference was computed but never used to
+                    # reject a pair, so it is not tested here either.)
                     # ----------------------------
                     self.nconn[tuple(pair)]['gbseg'].append(gbseg1)
                     self.nconn[tuple(pair)]['gbseg'].append(gbseg2)
                     # ----------------------------
-                    self.nconn[tuple(pair)]['nnodes_eq'].append(gbseg1.nnodes == gbseg2.nnodes)
+                    self.nconn[tuple(pair)]['nnodes_eq'].append(gbseg1_nnodes == gbseg2_nnodes)
                     # ----------------------------
-                    self.nconn[tuple(pair)]['length_eq'].append(gbseg1.length == gbseg2.length)
+                    self.nconn[tuple(pair)]['length_eq'].append(gbseg1_length == gbseg2_length)
                     # ----------------------------
                     self.nconn[tuple(pair)]['n'].append(len(self.nconn[tuple(pair)]['gbseg']))
                     self.nconn[tuple(pair)]['uniquified'] = False
@@ -1541,9 +1572,11 @@ class polygonised_grain_structure():
             if len(_gbseg_) > 0:
                 ###########################################
                 # MAKE UNIQUE THE LIST OF gbsegments in _gbseg_.
-                nnodes = np.array([seg.nnodes for seg in self.nconn[tuple(pair)]['gbseg']])
-                lengths = np.array([seg.length for seg in self.nconn[tuple(pair)]['gbseg']])
-                centroids = np.array([seg.centroid for seg in self.nconn[tuple(pair)]['gbseg']])
+                props = [self._seg_props(seg)
+                         for seg in self.nconn[tuple(pair)]['gbseg']]
+                nnodes = np.array([p[0] for p in props])
+                lengths = np.array([p[2] for p in props])
+                centroids = np.array([p[1] for p in props])
                 ui = self.get_unique_object_indices(nnodes, lengths, centroids, tol=1e-8)
                 ###########################################
                 self.GBSEGMENTS[tuple(pair)] = [self.nconn[tuple(pair)]['gbseg'][_ui_] for _ui_ in ui]
@@ -1556,6 +1589,7 @@ class polygonised_grain_structure():
                 ###########################################
                 # Access
                 # [nconn[tuple((32, 36))]['gbseg'][_ui_] for _ui_ in ui]
+        self._segprops = None
 
     def consolidate_gbsegments(self, squeeze_segment_data_structure=False, verbose=True):
         """Consolidate grain boundary segments by grain ID.
@@ -2109,7 +2143,8 @@ class polygonised_grain_structure():
             return self._smooth_gbsegs_islands(npasses, max_smooth_levels,
                                                name)
         # -----------------------------------------------
-        GB_smooth = deepcopy(GB)
+        seg_clones = {}
+        GB_smooth = {gid: ring.clone(seg_clones) for gid, ring in GB.items()}
         all_mids, sgseg_list = self.AssembleGBSEGS(GB_smooth, saa=False, throw=True)
         for np in range(npasses):
             print(f"Carrying out smoothing pass: {np+1}")
@@ -2323,7 +2358,7 @@ class GrainManifold2D(VoronoiMasking):
         for i in range(len(seeds)):
             region_idx = vor.point_region[i]
             region = vor.regions[region_idx]
-            
+
             # In a padded setup, regions for original seeds are guaranteed to be finite
             # but we clip with the bounding box to ensure perfect RVE edges
             verts = vor.vertices[region]
@@ -2332,10 +2367,19 @@ class GrainManifold2D(VoronoiMasking):
             self.cell_vertices_raw.append([tuple(v) for v in verts])
 
             poly = Polygon(verts)
-            # Intersection ensures the cell stays within [0,0] to [width, height]
-            clipped_poly = poly.intersection(boundary_box)
+            # A cell whose vertices already lie within [0, width] x
+            # [0, height] needs no clipping: intersecting it with
+            # boundary_box would return the same polygon, at the cost of a
+            # full GEOS intersection. Only cells crossing or outside the
+            # RVE (a small minority, since seeds are guarded on all sides)
+            # go through intersection.
+            vmin, vmax = verts.min(axis=0), verts.max(axis=0)
+            if vmin[0] >= 0 and vmin[1] >= 0 and vmax[0] <= width and vmax[1] <= height:
+                clipped_poly = poly
+            else:
+                clipped_poly = poly.intersection(boundary_box)
             polygons.append(clipped_poly)
-            
+
         return polygons # This prevents the TypeError
 
     @classmethod
@@ -2380,9 +2424,16 @@ class GrainManifold2D(VoronoiMasking):
                             if ang < corner_angle_deg:
                                 frozen.add(tuple(c[i]))
             frozen |= self._collect_thin_grain_vertices(thin_grain_px)
+            # Topology (which vertex touches which) is fixed for the whole
+            # smoothing run: only coordinates move, and reconstruction from
+            # them happens once at the end. So adj is computed once here and
+            # passed to every step, instead of each step rebuilding it from
+            # every polygon of every cell.
             for _ in range(iterations):
-                coords = self._laplacian_step(lmbda, coords_map=coords, frozen=frozen)
-                coords = self._laplacian_step(mu,     coords_map=coords, frozen=frozen)
+                coords = self._laplacian_step(lmbda, coords_map=coords,
+                                              frozen=frozen, adj=adj)
+                coords = self._laplacian_step(mu, coords_map=coords,
+                                              frozen=frozen, adj=adj)
             self._reconstruct_from_coords(coords)
         elif method == 'moving_average':
             for _ in range(iterations):
@@ -2393,15 +2444,25 @@ class GrainManifold2D(VoronoiMasking):
             raise ValueError(f"Unknown smoothing method: {method!r}. "
                              f"Choose 'taubin' or 'moving_average'.")
 
-    def _laplacian_step(self, factor, coords_map=None, frozen=None):
+    def _laplacian_step(self, factor, coords_map=None, frozen=None, adj=None):
         """
         Smoothing step. Calculates displacement for each vertex toward the average of its neighbors.
+
+        Parameters
+        ----------
+        adj : dict, optional
+            Precomputed vertex-adjacency graph. Topology does not change
+            during a smoothing run (only coordinates do), so callers doing
+            several steps in a row should compute it once with
+            :meth:`_get_vertex_adjacency` and pass it here rather than
+            letting each step rebuild it from every cell's polygons.
         """
+        if adj is None:
+            adj = self._get_vertex_adjacency()
         # Use the current state of vertices if no intermediate map is provided
         if coords_map is None:
             # We use tuple keys to map original coordinates to current positions
-            coords_map = {p: p for p in self._get_vertex_adjacency().keys()}
-        adj = self._get_vertex_adjacency()
+            coords_map = {p: p for p in adj.keys()}
         height, width = self.lfi.shape[:2]
         new_coords = {}
         for p, neighbors in adj.items():
