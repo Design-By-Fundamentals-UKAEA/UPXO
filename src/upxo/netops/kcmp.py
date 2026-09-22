@@ -6,7 +6,6 @@ Created on Fri Jun  7 11:35:01 2024
 """
 import numpy as np
 import networkx as nx
-import netlsd
 from networkx.algorithms import community
 from upxo._sup.data_ops import calculate_angular_distance
 from upxo._sup.data_ops import calculate_density_bins
@@ -93,6 +92,7 @@ def calculate_rkfield_nlsd(kd_tgt, kd_smp,
     -----
     from upxo.netops.kcmp import calculate_rkfield_nlsd
     """
+    import netlsd
     descriptor1 = netlsd.heat(kd_tgt, timescales=timescales)
     descriptor2 = netlsd.heat(kd_smp, timescales=timescales)
     distance = np.linalg.norm(descriptor1 - descriptor2)
