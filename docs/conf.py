@@ -50,6 +50,7 @@ autodoc_mock_imports = [
     'meshio',
     'pygmsh',
     'gmsh',
+    'statsmodels',
 ]
 
 napoleon_google_docstring = True
