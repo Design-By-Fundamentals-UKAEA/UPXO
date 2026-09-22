@@ -48,9 +48,8 @@ setup(
     extras_require={
         "viz": ["plotly>=5.0.0"],
         "mesh": ["pyvoro>=1.3.2", "tetgen>=0.8.2"],
-        "io": ["rasterio>=1.4.3"],
         "ebsd": ["defdap==0.93.6"],
-        "all": ["upxo[viz,mesh,io,ebsd]"],
+        "all": ["upxo[viz,mesh,ebsd]"],
     },
     classifiers=[
         "Development Status :: 4 - Beta",

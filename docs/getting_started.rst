@@ -37,7 +37,6 @@ Install specific extras only:
 
    pip install upxo[viz]    # Plotly interactive plots
    pip install upxo[mesh]   # FE meshing (pyvoro, tetgen)
-   pip install upxo[io]     # Raster I/O (rasterio)
    pip install upxo[ebsd]   # EBSD data import (DefDAP)
 
 Developer install (editable, from source):

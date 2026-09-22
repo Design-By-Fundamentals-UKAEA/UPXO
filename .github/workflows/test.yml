@@ -33,11 +33,11 @@ jobs:
           # (includes pyvista, which several core pxtal/geoEntities modules
           # need just to be importable, not only for visualisation).
           pip install -e .
-          # tetgen and gmsh are optional [mesh] extras but are genuinely
-          # imported by vortess3d.py and the gbconformant/d3v2p0 mesh tests.
-          # rasterio/defdap/pyvoro/plotly are NOT needed -- rasterio's only
-          # use (geometrification.py's polygonize()) is a lazy import, and
-          # nothing in tests/ exercises defdap/pyvoro/plotly-dependent code.
+          # tetgen and gmsh are optional [mesh] extras but are imported by
+          # vortess3d.py and the gbconformant/d3v2p0 mesh tests.
+          # defdap/pyvoro/plotly are NOT needed -- nothing in tests/
+          # exercises defdap/pyvoro/plotly-dependent code. rasterio is no
+          # longer a UPXO dependency at all (the [io] extra was retired).
           pip install tetgen "gmsh>=4.13" pytest
 
       - name: Run tests

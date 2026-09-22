@@ -23,7 +23,7 @@ A dedicated wiki has been created to help users. Please find it [here](https://g
 pip install upxo
 ```
 
-Install with all optional extras (interactive plots, FE meshing, raster I/O, EBSD import):
+Install with all optional extras (interactive plots, FE meshing, EBSD import):
 
 ```bash
 pip install upxo[all]
@@ -35,7 +35,6 @@ Or select specific extras:
 |---|---|---|
 | `viz` | Interactive plots (Plotly) | `pip install upxo[viz]` |
 | `mesh` | FE meshing (pyvoro, tetgen, gmsh) | `pip install upxo[mesh]` |
-| `io` | Raster I/O (rasterio) | `pip install upxo[io]` |
 | `ebsd` | EBSD data import (DefDAP) | `pip install upxo[ebsd]` |
 
 Requires **Python >= 3.13**. See the [Getting Started wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Getting-started) for environment setup guides.
