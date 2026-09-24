@@ -19,6 +19,7 @@ from upxo.geoEntities.mulpoint2d import MPoint2d
 from shapely.geometry import Point as ShPoint2d
 from upxo.geoEntities.mulsline2d import MSline2d
 from upxo.geoEntities.mulsline2d import ring2d
+from upxo.geoEntities.polygon2d import Polygon2d, NestedPolygon2d
 from upxo._sup.data_ops import find_common_coordinates
 # from meshpy.triangle import MeshInfo, build
 from scipy.ndimage import generic_filter
@@ -65,7 +66,7 @@ class polygonised_grain_structure():
                  'jnp_all_sorted_upxo', 'gbsegments', 'gid_pair_ids',
                  'gid_pair_ids_unique_lr', 'gid_pair_ids_unique_rl',
                  'nconn', 'GBSEGMENTS', 'consolidated_segments',
-                 'GB', 'GBCoords', 'GRAINS', 'POLYXTAL', 'mids_all_gbsegs',
+                 'GB', 'GBCoords', 'GB_holes', 'GRAINS', 'POLYXTAL', 'mids_all_gbsegs',
                  'sgseg_obj_list', 'smoothed', '_main', '_main_map',
                  '_islands', '_segprops')
 
@@ -777,16 +778,22 @@ class polygonised_grain_structure():
         """Set raw grains/polyxtal (or the smoothed set ``name``).
 
         GRAINS/POLYXTAL are keyed by original grain id throughout (see
-        _collect_grains). GB/GBCoords cover the filled structure's
-        host/main grains only, remapped from the filled sub-structure's
-        local ids to original ids via self._main_map: island grains have
-        no entry, since their true boundary is a hole cut into their host
-        (see GRAINS/POLYXTAL), not a same-level ring, so they don't fit
-        this flat one-ring-per-grain bookkeeping. Indexing
-        self.GB[island_gid] raises KeyError rather than silently
-        returning another grain's ring (self._main.GB/GBCoords are keyed
-        by the filled structure's own local ids, which do not equal
-        self.gid whenever island absorption shifts ids).
+        _collect_grains). For the unsmoothed pass (name=None), GB/GBCoords
+        now cover every grain in self.gid, including islands: an island's
+        own ring2d -- built independently by its own child geometrification,
+        in the child's local pixel frame -- is translated into this
+        structure's global frame via ring2d.translate and stored directly,
+        so indexing self.GB[island_gid] no longer raises KeyError.
+
+        self.GB_holes maps a host gid to the ring2d(s) of the island(s) it
+        directly encloses. An island nested inside another island is a hole
+        of its immediate parent grain, not of the outermost host, so it is
+        excluded from the outer host's list (found via each cluster's own
+        recursively-built GB_holes) and instead surfaces as that parent
+        grain's own GB_holes entry. An island's ring is the *same* ring2d
+        object stored both as its own self.GB entry and as its host's hole,
+        matching the shared-object-identity guarantee used everywhere else
+        in this pipeline: editing either propagates to the other.
         """
         grains = self._collect_grains(name)
         grains = {g: grains[g] for g in self.gid}
@@ -798,6 +805,29 @@ class polygonised_grain_structure():
                       for k, orig in self._main_map.items()}
             self.GBCoords = {orig: self._main.GBCoords[k]
                              for k, orig in self._main_map.items()}
+            self.GB_holes = {}
+            for isl in self._islands:
+                child = isl['geom']
+                r0, c0 = isl['offset']
+                nested_local_ids = {v for isl2 in (child._islands or [])
+                                    for v in isl2['map'].values()}
+                # One dedup set per cluster: sibling grains in the same
+                # cluster can share a Point2d at their common wall, and
+                # each must be translated exactly once across every ring
+                # that references it, not once per ring.
+                seen = set()
+                for local_id, orig_id in isl['map'].items():
+                    ring = child.GB[local_id]
+                    ring.translate(c0, r0, seen)
+                    self.GB[orig_id] = ring
+                    self.GBCoords[orig_id] = (child.GBCoords[local_id]
+                                              + np.array([c0, r0]))
+                    if local_id not in nested_local_ids:
+                        self.GB_holes.setdefault(isl['host'], []).append(ring)
+                child_holes = getattr(child, 'GB_holes', {})
+                for local_id, orig_id in isl['map'].items():
+                    if local_id in child_holes:
+                        self.GB_holes[orig_id] = child_holes[local_id]
         else:
             main = self._main.smoothed[name]
             self.smoothed[name] = {
@@ -1028,29 +1058,10 @@ class polygonised_grain_structure():
         """
         if verbose:
             print("Extracting grain boundary segments and junction points")
-        import shapely
+        from upxo.pxtal._gb_topology import junction_points_from_polygons
         gid = np.asarray(self.gid)
         pols = np.array([self.polygons[g-1] for g in gid])
-        ii, jj = STRtree(pols).query(pols, predicate='intersects')
-        keep = gid[jj] > gid[ii]
-        geoms = shapely.intersection(pols[ii[keep]], pols[jj[keep]])
-        kind = shapely.get_type_id(geoms)
-        parts = []
-        lines = geoms[kind == 1]
-        if len(lines):
-            parts.append(shapely.get_coordinates(shapely.get_point(lines, 0)))
-            parts.append(shapely.get_coordinates(shapely.get_point(lines, -1)))
-        multilines = geoms[kind == 5]
-        if len(multilines):
-            bnd = shapely.boundary(multilines)
-            # Only a MultiPoint boundary is used (as before).
-            parts.append(shapely.get_coordinates(
-                bnd[shapely.get_type_id(bnd) == 4]))
-        points = geoms[kind == 0]
-        if len(points):
-            parts.append(shapely.get_coordinates(points))
-        self.JNP = np.vstack(parts).tolist() if parts else []
-        self.JNP = np.unique(self.JNP, axis=0)-self.xyoffset
+        self.JNP = junction_points_from_polygons(pols, gid, xyoffset=self.xyoffset)
 
     def extract_GBP(self, verbose=True):
         """Extract grain boundary points data from polygonization coordinate results."""
@@ -1826,120 +1837,21 @@ class polygonised_grain_structure():
         """Flip segments to reorder gbs."""
         if verbose:
             print("Flipping grain boundary segments to reorder them in a consistent manner.")
+        from upxo.pxtal._gb_topology import assemble_ring_from_wall_segments
         self.GB = {gid: None for gid in self.gid}
         self.quality['GBS_reordering_success'] = {gid: None for gid in self.gid}
         niterations = {gid: 0 for gid in self.gid}
-        from upxo.geoEntities.mulsline2d import ring2d
         for gid in self.gid:
             gbsegs = self.consolidated_segments[gid]
             if verbose:
                 print(40*'-')
-            _gbseg_ring_ = ring2d(segments=gbsegs,
-                                  segids=list(range(len(gbsegs))),
-                                  segflips=[False for _ in gbsegs])
-            # segments=None, segids=None, segflips=None
-            # _gbseg_ring_.segments
+            ring, success, itcount = assemble_ring_from_wall_segments(gbsegs, verbose=verbose)
+            self.GB[gid] = ring
+            self.quality['GBS_reordering_success'][gid] = success
+            niterations[gid] = itcount
             if plot_each_grain_details:
-                _gbseg_ring_.plot_segs(plot_centroid=True, centroid_text=gid,
-                                       plot_coord_order=True, visualize_flip_req=False)
-            # _gbseg_ring_.create_polygon_from_coords()
-            continuity, flip_needed, i_precede_chain = _gbseg_ring_.assess_spatial_continuity()
-            if verbose:
-                print(f'gid={gid}: ', 'gbsegs continuous' if continuity else 'gbsegs not continuous. Attempting reorder.')
-            # print(40*'-', '\n Extreme coordinates of gbsegs are:\n')
-            # for i, gbseg in enumerate(gbsegs, start = 0):
-                # print(f'Segment {i}: ', gbseg.nodes[0], gbseg.nodes[-1])
-            # print(40*'-')
-            # plt.imshow(geom.lgi==gid)
-            if continuity:
-                # If the segments are indeed continuous, ring formation is straightforward.
-                # segments=None, segids=None, segflips=None
-                NSEG_rng = range(len(gbsegs))
-                self.GB[gid] = ring2d(gbsegs, list(NSEG_rng), [False for _ in NSEG_rng])
-                # GB[gid].segments
-                # GB[gid].segids
-                # GB[gid].segflips
-                self.quality['GBS_reordering_success'][gid] = True
-                if plot_each_grain_details:
-                    self.GB[gid].plot_segs(plot_centroid=True, centroid_text=gid,
-                                           plot_coord_order=True, visualize_flip_req=True)
-            if not continuity:
-                # If segments are not continuous, ring formation requires computing exact
-                # segids and segflip values to ensure spatial continuity of adjacent segment nodes.
-                self.quality['GBS_reordering_success'][gid] = False
-                # ------------------------
-                segids = list(range(len(gbsegs)))
-                # segstart_flip set to True if gbsegs[0] goes counter-clockwise.
-                # Setting to False for now — needs separate assessment.
-                segstart_flip = False
-                self.GB[gid] = ring2d([gbsegs[0]], [0], [segstart_flip])
-                # GB[gid].segments
-                # GB[gid].segids
-                # GB[gid].segflips
-                seg_num = 0
-                used_segids = [seg_num]
-                search_segids = set(segids)
-                max_iterations = 10*len(gbsegs)
-                itcount = 1  # iteration_count
-                while len(search_segids) > 0:
-                    current_seg = self.GB[gid].segments[-1]
-                    flip_req_previous = self.GB[gid].segflips[-1]
-                    # print(40*'-', '\n Current segment end nodes:\n')
-                    # print(current_seg.nodes[0], current_seg.nodes[-1], '\n', 40*'-')
-                    search_segids = set(segids) - set(used_segids)
-                    adj = []
-                    for candidate_segid in search_segids:
-                        # candidate_segid = 2
-                        # print(40*'-', '\n Current segment end nodes:\n')
-                        # print(current_seg.nodes[0], current_seg.nodes[-1])
-                        candidate_seg = gbsegs[candidate_segid]
-                        if flip_req_previous:
-                            adjacency = current_seg.do_i_proceed(candidate_seg)
-                        else:
-                            adjacency = current_seg.do_i_precede(candidate_seg)
-                        adj.append(adjacency)
-                        # print(40*'-', f'\n Cand. seg. {candidate_segid} end nodes:')
-                        # print(candidate_seg.nodes[0], candidate_seg.nodes[-1])
-                        # print(40*'-', f'\n Current precede candidate: {adjacency}\n', 40*'-')
-                        # adjacency = current_seg.do_i_proceed(candidate_seg)
-                        # print(adjacency)
-                        if adjacency[0]:
-                            used_segids.append(candidate_segid)
-                            self.GB[gid].add_segment_unsafe(candidate_seg)
-                            self.GB[gid].add_segid(candidate_segid)
-                            self.GB[gid].add_segflip(adjacency[1])
-                            '''
-                            GB[gid].segments
-                            GB[gid].segids
-                            GB[gid].segflips
-                            GB[gid].plot_segs()
-
-                            for i, gbseg in enumerate(GB[gid].segments, start = 0):
-                                print(f'Segment {i}: ', gbseg.nodes[0], gbseg.nodes[-1])
-                            '''
-                            break
-                    if itcount >= max_iterations:
-                        'Prevent infinite loop.'
-                        break
-                    itcount += 1
-                if len(search_segids) == 0:
-                    # --------------------------------
-                    # Ensure complete connectivity
-                    if not self.GB[gid].segments[0].nodes[0].eq_fast(self.GB[gid].segments[-1].nodes[-1]):
-                        self.GB[gid].segflips[-1] = True
-                    # --------------------------------
-                    self.quality['GBS_reordering_success'][gid] = True
-                    niterations[gid] = itcount
-                    if verbose:
-                        print(f'Re-ordering success. gbsegs are continous. N.Segs={len(gbsegs)}. N.Iterations={itcount}')
-                else:
-                    # self.quality['GBS_reordering_success'][gid] = False < -- BY default.
-                    # So, nothinhg more to do here.
-                    pass
-                if plot_each_grain_details:
-                    self.GB[gid].plot_segs(plot_centroid=True, centroid_text=gid,
-                                           plot_coord_order=True, visualize_flip_req=True)
-                # GB[gid].segflips
+                self.GB[gid].plot_segs(plot_centroid=True, centroid_text=gid,
+                                       plot_coord_order=True, visualize_flip_req=True)
         if verbose:
             print(40*'-', f'\nTotal number of iterations: {sum(list(niterations.values()))}')
 
@@ -2080,9 +1992,28 @@ class polygonised_grain_structure():
                                                 coord_loop_dict,
                                                 dtype='shapely',
                                                 saa=True, throw=False):
-        """ self.construct_geometric_xtals_from_gbcoords(GBCoords)."""
+        """ self.construct_geometric_xtals_from_gbcoords(GBCoords).
+
+        dtype='upxo' wraps self.GB[gid] (already a ring2d) directly into a
+        Polygon2d -- zero-copy, ignores coord_loop_dict (which was only
+        ever a coordinate array derived from that same ring). A gid with
+        island hole(s) recorded in self.GB_holes (see
+        _assemble_island_results) becomes a NestedPolygon2d instead.
+        """
         if dtype == 'shapely':
             GRAINS = {gid: Polygon(coord_loop_dict[gid]) for gid in self.gid}
+        elif dtype == 'upxo':
+            holes_by_gid = getattr(self, 'GB_holes', {})
+            GRAINS = {}
+            for gid in self.gid:
+                host = Polygon2d.from_ring2d(self.GB[gid], gid=gid)
+                holes = holes_by_gid.get(gid)
+                if holes:
+                    GRAINS[gid] = NestedPolygon2d.from_host_and_holes(
+                        host, [Polygon2d.from_ring2d(h) for h in holes],
+                        gid=gid)
+                else:
+                    GRAINS[gid] = host
         if saa:
             self.GRAINS = GRAINS
         if throw:
@@ -2474,6 +2405,28 @@ class GrainManifold2D(VoronoiMasking):
         else:
             raise ValueError(f"Unknown smoothing method: {method!r}. "
                              f"Choose 'taubin' or 'moving_average'.")
+        self._clip_cells_to_domain()
+
+    def _clip_cells_to_domain(self):
+        """Re-clip every cell to the RVE domain box after smoothing.
+
+        ``_generate_clipped_polygons`` clips the initial Voronoi cells to
+        ``[0, width] x [0, height]``, but smoothing can still push a cell
+        outside it: Taubin's anti-shrinkage step (the negative ``mu`` pass)
+        actively inflates locally concave/convex boundary-adjacent
+        vertices, and ``_laplacian_step`` only pins a vertex that sits
+        *exactly* on the domain edge -- one that is merely near it (e.g. a
+        T-junction one step in, where a grain wall meets the boundary) is
+        free to move outward, with nothing afterward pulling it back in.
+        Re-clipping with the same box used at construction keeps every
+        cell within the true domain regardless of what smoothing did to
+        its boundary-adjacent vertices.
+        """
+        from shapely.geometry import box
+        height, width = self.lfi.shape[:2]
+        boundary_box = box(0, 0, width, height)
+        self.cells = {gid: geom.intersection(boundary_box)
+                     for gid, geom in self.cells.items()}
 
     def _laplacian_step(self, factor, coords_map=None, frozen=None, adj=None):
         """
