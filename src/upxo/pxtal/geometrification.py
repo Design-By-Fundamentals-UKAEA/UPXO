@@ -2004,13 +2004,16 @@ class polygonised_grain_structure():
             GRAINS = {gid: Polygon(coord_loop_dict[gid]) for gid in self.gid}
         elif dtype == 'upxo':
             holes_by_gid = getattr(self, 'GB_holes', {})
+            gid_of_ring = {id(ring): g for g, ring in self.GB.items()}
             GRAINS = {}
             for gid in self.gid:
                 host = Polygon2d.from_ring2d(self.GB[gid], gid=gid)
                 holes = holes_by_gid.get(gid)
                 if holes:
                     GRAINS[gid] = NestedPolygon2d.from_host_and_holes(
-                        host, [Polygon2d.from_ring2d(h) for h in holes],
+                        host,
+                        [Polygon2d.from_ring2d(h, gid=gid_of_ring.get(id(h)))
+                         for h in holes],
                         gid=gid)
                 else:
                     GRAINS[gid] = host
