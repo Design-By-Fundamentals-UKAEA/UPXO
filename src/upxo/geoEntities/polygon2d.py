@@ -66,6 +66,21 @@ def _merge_by_arclength(coords, new_entries):
     return np.array([e[1] for e in entries])
 
 
+def _with_end_node(seg):
+    """Return ``seg.nodes`` with the segment's final endpoint present.
+
+    ``MSline2d.by_coords(close=False)`` stores one node per line and omits
+    the last line's end point, so ``seg.nodes`` is one entry short of
+    ``seg.get_node_coords()``. For a closed loop built that way (a
+    ``from_shapely_polygon`` ring) the missing node is the return to the
+    start, so reading ``seg.nodes`` alone leaves the closing edge out of the
+    path. ``update_nodes`` restores it.
+    """
+    if len(seg.nodes) == len(seg.lines):
+        seg.update_nodes()
+    return seg.nodes
+
+
 class Polygon2d():
     """
     A single grain's smoothed 2D boundary, wrapping one ``ring2d``.
@@ -211,6 +226,7 @@ class Polygon2d():
             row does not match the segment's existing endpoint coordinate.
         """
         seg = self.ring.segments[seg_index]
+        _with_end_node(seg)
         new_node_coords = np.asarray(new_node_coords, dtype=float)
         if new_node_coords.shape[0] < 2:
             raise ValueError("new_node_coords needs at least 2 rows.")
@@ -276,15 +292,7 @@ class Polygon2d():
         if (n is None) == (at_fractions is None):
             raise ValueError("exactly one of n / at_fractions is required")
         seg = self.ring.segments[seg_index]
-        # seg.nodes, not seg.get_node_coords(): edit_segment validates new
-        # endpoint rows against seg.nodes[0]/[-1] directly, and the two can
-        # disagree by one entry for a segment built via MSline2d.by_coords
-        # (its own self.nodes bookkeeping under-counts by one node when
-        # close=False, independent of the by_coords(close=True) bug
-        # documented on Polygon2d.from_shapely_polygon -- get_node_coords()
-        # always recomputes n+1 points fresh from .lines and does not share
-        # that discrepancy).
-        coords = np.array([[node.x, node.y] for node in seg.nodes])
+        coords = np.array([[node.x, node.y] for node in _with_end_node(seg)])
         fractions = ([i / (n + 1) for i in range(1, n + 1)] if n is not None
                     else list(at_fractions))
         new_entries = [(f, _point_at_arclength_fraction(coords, f)) for f in fractions]
