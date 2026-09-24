@@ -12,6 +12,22 @@ All notable changes to UPXO are documented in this file.
   - Demo: `src/upxo/demos/ebsdOps/ebsd_to_abaqus_2d.ipynb` — EBSD read → crop → characterise → split disconnected grains → grain-averaged orientation → Technique A geometrification/smoothing → conformal mesh → element-quality statistics → Abaqus export → interactive PyVista mesh-vs-grain-boundary view.
   - Wiki: new [EBSD to Abaqus (2D)](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/EBSD-to-Abaqus-2D) page, cross-linked from Data I/O, Meshing, and Use Cases.
   - Tests: `tests/interfaces/defdap/test_ebsd_reader.py`, `tests/meshing/test_writer_abq.py` — synthetic-array fixtures, no DefDAP / `.ctf` file / Gmsh dependency.
+- **Editable 2D grain polygons**: grain boundaries built from UPXO geometry objects, convertible to and from Shapely, with per-grain scalar properties.
+  - `geoEntities/polygon2d.py`: `Polygon2d` (one grain, built on `ring2d`) and `NestedPolygon2d` (a host with hole polygons, nestable). `edit_segment` replaces the interior nodes of one boundary segment in place, keeping its two end nodes; `subdivide_segment(seg_index, n=None, at_fractions=None)` inserts interior points by arc-length fraction. `polygons_to_prop_dataframe` / `apply_prop_dataframe` move per-grain scalars to and from a DataFrame.
+  - `geoEntities/polygon2d_from_shapely.py`: `polygon_collection_from_shapely(cells, gid_key=None, tol=1e-6)` converts `{gid: Polygon | MultiPolygon | GeometryCollection}` (for example `GrainManifold2D.cells`, or a Voronoi tessellation) into `{gid: Polygon2d | NestedPolygon2d}`. Neighbouring grains reference the same `MSline2d` object for a shared wall, so an edit made through one grain is seen by the other, the boundary stays gap-free and total area is conserved. For a `MultiPolygon` cell the largest part is the value and the rest are in `props['extra_parts']`.
+  - `pxtal/geometrification.py`: `polygonised_grain_structure.construct_geometric_xtals_from_gbcoords(..., dtype='upxo')` returns `Polygon2d` / `NestedPolygon2d` built directly from `self.GB`, without copying.
+  - `geoEntities/mulsline2d.py`: `ring2d.translate(dx, dy, seen=None)`.
+  - Demos: `src/upxo/demos/geom/poly2d01.ipynb` to `poly2d06.ipynb` — `Polygon2d` basics, the Shapely converter, `subdivide_segment` with a hand-rolled boundary-roughening preview, and conversion of Voronoi, Monte Carlo (Technique B) and Technique A grain structures.
+  - Tests: `tests/geoEntities/test_polygon2d*.py`, `tests/pxtal/test_geometrification_polygon2d.py`, `tests/pxtal/test_polygon2d_from_shapely_grainmanifold.py`.
+
+### Changed
+
+- **`pxtal/geometrification.py`, Technique A with island grains**: `self.GB` and `self.GBCoords` now include island grains, keyed by original grain id (in 1.2.1 an island id had no entry). A new `self.GB_holes` maps a host grain id to the `ring2d` of each island it directly encloses; an island nested inside another island is a hole of its immediate parent. An island's `ring2d` is the same object in its own `self.GB` entry and in its host's `self.GB_holes` list. Tests: `tests/pxtal/test_geometrification_islands.py`.
+- `pxtal/_gb_topology.py` (new): `junction_points_from_polygons` and `assemble_ring_from_wall_segments`, extracted from `polygonised_grain_structure`; `get_junction_points_from_grain_intersections` and `flip_segments_to_reorder_GBS` call them. Behaviour is unchanged.
+
+### Fixed
+
+- **`GrainManifold2D.smooth_interfaces`**: cells could extend past the label-image domain after smoothing. `_laplacian_step` holds only vertices lying exactly on the domain edge, and the negative-`mu` Taubin pass can move other boundary-adjacent vertices outward. `smooth_interfaces` now ends with `trim_to_rve(bounds=(0, 0, width, height))`. `trim_to_rve(bounds)` remains available for cropping to a sub-window. Tests: `tests/pxtal/test_grainmanifold2d_domain_clip.py`.
 
 ## [1.2.1] — 2026-09-22
 
