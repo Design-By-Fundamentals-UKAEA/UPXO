@@ -1532,6 +1532,36 @@ class ring2d():
         new.segflips = list(self.segflips)
         return new
 
+    def translate(self, dx, dy, seen=None):
+        """
+        Translate every point of this ring by ``(dx, dy)``, in place.
+
+        Walks every Sline2d endpoint by object identity -- junction points
+        and consecutive-line nodes are shared across segments -- so a point
+        shared by several segments/lines is moved exactly once, then
+        resyncs each Sline2d's cached x0/y0/x1/y1 to match.
+
+        Parameters
+        ----------
+        seen : set, optional
+            ``{id(point): ...}`` of points already translated. Pass the same
+            set across several ``translate`` calls (e.g. one per sibling
+            ring in the same cluster) when their rings may share Point2d
+            objects at a common wall, so a shared point is not translated
+            once per ring that references it.
+        """
+        if seen is None:
+            seen = set()
+        for seg in self.segments:
+            for line in seg.lines:
+                for pnt in (line.pnta, line.pntb):
+                    if id(pnt) not in seen:
+                        pnt.x += dx
+                        pnt.y += dy
+                        seen.add(id(pnt))
+                line.reset_coords_to_points()
+        return seen
+
     def __init__(self, segments=None, segids=None, segflips=None):
         """
         Initialize ring2d from segment collection.
