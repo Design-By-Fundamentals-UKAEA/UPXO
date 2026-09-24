@@ -2405,28 +2405,9 @@ class GrainManifold2D(VoronoiMasking):
         else:
             raise ValueError(f"Unknown smoothing method: {method!r}. "
                              f"Choose 'taubin' or 'moving_average'.")
-        self._clip_cells_to_domain()
-
-    def _clip_cells_to_domain(self):
-        """Re-clip every cell to the RVE domain box after smoothing.
-
-        ``_generate_clipped_polygons`` clips the initial Voronoi cells to
-        ``[0, width] x [0, height]``, but smoothing can still push a cell
-        outside it: Taubin's anti-shrinkage step (the negative ``mu`` pass)
-        actively inflates locally concave/convex boundary-adjacent
-        vertices, and ``_laplacian_step`` only pins a vertex that sits
-        *exactly* on the domain edge -- one that is merely near it (e.g. a
-        T-junction one step in, where a grain wall meets the boundary) is
-        free to move outward, with nothing afterward pulling it back in.
-        Re-clipping with the same box used at construction keeps every
-        cell within the true domain regardless of what smoothing did to
-        its boundary-adjacent vertices.
-        """
-        from shapely.geometry import box
+        # Smoothing can push near-boundary vertices outside the RVE.
         height, width = self.lfi.shape[:2]
-        boundary_box = box(0, 0, width, height)
-        self.cells = {gid: geom.intersection(boundary_box)
-                     for gid, geom in self.cells.items()}
+        self.trim_to_rve(bounds=(0, 0, width, height))
 
     def _laplacian_step(self, factor, coords_map=None, frozen=None, adj=None):
         """
