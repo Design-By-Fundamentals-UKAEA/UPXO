@@ -71,3 +71,36 @@ def test_subdivide_requires_exactly_one_of_n_or_at_fractions():
         poly_a.subdivide_segment(1)
     with pytest.raises(ValueError):
         poly_a.subdivide_segment(1, n=2, at_fractions=[0.5])
+
+
+def _shapely_square_polygon():
+    from shapely.geometry import Polygon as ShPolygon
+    return Polygon2d.from_shapely_polygon(
+        ShPolygon([(0, 0), (4, 0), (4, 4), (0, 4)]), gid=1)
+
+
+def test_subdivide_closed_loop_from_shapely_covers_the_closing_edge():
+    """A from_shapely_polygon ring is one closed segment whose ``nodes`` list
+    omitted the return to the start (by_coords(close=False) stores one node
+    per line). Subdividing then spaced points along the open chain only, so
+    the closing edge got none."""
+    poly = _shapely_square_polygon()
+    poly.subdivide_segment(0, at_fractions=[0.125, 0.875])
+    seg = poly.ring.segments[0]
+    coords = seg.get_node_coords()
+    np.testing.assert_allclose(
+        coords,
+        [(0, 0), (2, 0), (4, 0), (4, 4), (0, 4), (0, 2), (0, 0)])
+    assert len(seg.nodes) == len(seg.lines) + 1
+    assert (seg.nodes[-1].x, seg.nodes[-1].y) == (0.0, 0.0)
+    assert poly.area == pytest.approx(16.0)
+
+
+def test_edit_closed_loop_from_shapely_accepts_the_true_end_row():
+    poly = _shapely_square_polygon()
+    coords = poly.ring.segments[0].get_node_coords()
+    assert np.allclose(coords[0], coords[-1])
+    new = coords.copy()
+    new[1] = (5.0, 0.0)          # square (0,0),(5,0),(4,4),(0,4): shoelace area 18
+    poly.edit_segment(0, new)
+    assert poly.area == pytest.approx(18.0)
