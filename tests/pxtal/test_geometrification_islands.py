@@ -78,6 +78,8 @@ def test_single_island_shares_ring_identity_with_host_hole():
 
     assert gs.GB[2] is gs.GB_holes[1][0]
     assert host.holes[0].ring is island.ring
+    assert host.holes[0].gid == 2
+    assert host.gids_all == [1, 2]
 
 
 def test_editing_island_boundary_propagates_to_host_hole():
