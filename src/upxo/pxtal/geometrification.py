@@ -774,26 +774,58 @@ class polygonised_grain_structure():
             out.update(inner)
         return out
 
+    def _place_cluster(self, isl, child_gb, child_gbcoords, child_holes):
+        """One island cluster's rings, as copies in this structure's frame.
+
+        The cluster's own rings stay in the cluster's local pixel frame:
+        smoothing runs on them, and ``_collect_grains`` translates the
+        cluster's grains itself, so translating the originals in place would
+        move a smoothed island twice. ``ring2d.translated_copy`` builds new,
+        shifted points and lines, sharing nothing with the originals, and its
+        one dict per cluster keeps a wall shared by two sibling grains shared
+        between the copies.
+
+        Returns ``({orig_id: ring}, {orig_id: coords}, {host_id: [rings]})``.
+        A grain nested inside another island is a hole of its immediate
+        parent (found from the cluster's own ``child_holes``), not of
+        ``isl['host']``.
+        """
+        r0, c0 = isl['offset']
+        child = isl['geom']
+        nested = {v for isl2 in (child._islands or [])
+                  for v in isl2['map'].values()}
+        seg_copies, clone_of = {}, {}
+        rings, coords, holes = {}, {}, {}
+        for local_id, orig_id in isl['map'].items():
+            ring = child_gb[local_id].translated_copy(c0, r0, seg_copies)
+            clone_of[id(child_gb[local_id])] = ring
+            rings[orig_id] = ring
+            coords[orig_id] = child_gbcoords[local_id] + np.array([c0, r0])
+            if local_id not in nested:
+                holes.setdefault(isl['host'], []).append(ring)
+        for local_id, orig_id in isl['map'].items():
+            if local_id in child_holes:
+                holes[orig_id] = [clone_of[id(h)] for h in child_holes[local_id]]
+        return rings, coords, holes
+
     def _assemble_island_results(self, name=None):
         """Set raw grains/polyxtal (or the smoothed set ``name``).
 
         GRAINS/POLYXTAL are keyed by original grain id throughout (see
-        _collect_grains). For the unsmoothed pass (name=None), GB/GBCoords
-        now cover every grain in self.gid, including islands: an island's
-        own ring2d -- built independently by its own child geometrification,
-        in the child's local pixel frame -- is translated into this
-        structure's global frame via ring2d.translate and stored directly,
-        so indexing self.GB[island_gid] no longer raises KeyError.
+        _collect_grains). GB/GBCoords cover every grain in self.gid,
+        including islands, for both the raw pass (name=None) and a smoothed
+        set: an island's ring2d -- built independently by its own child
+        geometrification, in the child's local pixel frame -- is copied into
+        this structure's frame by :meth:`_place_cluster`, so indexing
+        ``GB[island_gid]`` does not raise KeyError.
 
-        self.GB_holes maps a host gid to the ring2d(s) of the island(s) it
-        directly encloses. An island nested inside another island is a hole
-        of its immediate parent grain, not of the outermost host, so it is
-        excluded from the outer host's list (found via each cluster's own
-        recursively-built GB_holes) and instead surfaces as that parent
-        grain's own GB_holes entry. An island's ring is the *same* ring2d
-        object stored both as its own self.GB entry and as its host's hole,
-        matching the shared-object-identity guarantee used everywhere else
-        in this pipeline: editing either propagates to the other.
+        GB_holes maps a host gid to the ring2d(s) of the island(s) it
+        directly encloses (``self.GB_holes`` for the raw pass,
+        ``self.smoothed[name]['GB_holes']`` for a smoothed set). An island's
+        ring is the *same* ring2d object in its own GB entry and in its
+        host's hole list, matching the shared-object-identity guarantee used
+        everywhere else in this pipeline: editing either propagates to the
+        other.
         """
         grains = self._collect_grains(name)
         grains = {g: grains[g] for g in self.gid}
@@ -808,34 +840,29 @@ class polygonised_grain_structure():
             self.GB_holes = {}
             for isl in self._islands:
                 child = isl['geom']
-                r0, c0 = isl['offset']
-                nested_local_ids = {v for isl2 in (child._islands or [])
-                                    for v in isl2['map'].values()}
-                # One dedup set per cluster: sibling grains in the same
-                # cluster can share a Point2d at their common wall, and
-                # each must be translated exactly once across every ring
-                # that references it, not once per ring.
-                seen = set()
-                for local_id, orig_id in isl['map'].items():
-                    ring = child.GB[local_id]
-                    ring.translate(c0, r0, seen)
-                    self.GB[orig_id] = ring
-                    self.GBCoords[orig_id] = (child.GBCoords[local_id]
-                                              + np.array([c0, r0]))
-                    if local_id not in nested_local_ids:
-                        self.GB_holes.setdefault(isl['host'], []).append(ring)
-                child_holes = getattr(child, 'GB_holes', {})
-                for local_id, orig_id in isl['map'].items():
-                    if local_id in child_holes:
-                        self.GB_holes[orig_id] = child_holes[local_id]
+                rings, coords, holes = self._place_cluster(
+                    isl, child.GB, child.GBCoords, getattr(child, 'GB_holes', {}))
+                self.GB.update(rings)
+                self.GBCoords.update(coords)
+                for host, ring_list in holes.items():
+                    self.GB_holes.setdefault(host, []).extend(ring_list)
         else:
             main = self._main.smoothed[name]
-            self.smoothed[name] = {
-                'GB': {orig: main['GB'][k]
-                      for k, orig in self._main_map.items()},
-                'GBCoords': {orig: main['GBCoords'][k]
-                            for k, orig in self._main_map.items()},
-                'GRAINS': grains, 'POLYXTAL': polyxtal}
+            GB = {orig: main['GB'][k] for k, orig in self._main_map.items()}
+            GBCoords = {orig: main['GBCoords'][k]
+                        for k, orig in self._main_map.items()}
+            GB_holes = {}
+            for isl in self._islands:
+                sm = isl['geom'].smoothed[name]
+                rings, coords, holes = self._place_cluster(
+                    isl, sm['GB'], sm['GBCoords'], sm.get('GB_holes', {}))
+                GB.update(rings)
+                GBCoords.update(coords)
+                for host, ring_list in holes.items():
+                    GB_holes.setdefault(host, []).extend(ring_list)
+            self.smoothed[name] = {'GB': GB, 'GBCoords': GBCoords,
+                                   'GB_holes': GB_holes,
+                                   'GRAINS': grains, 'POLYXTAL': polyxtal}
 
     def _smooth_gbsegs_islands(self, npasses, max_smooth_levels, name):
         """Smooth the filled structure and every island cluster."""
@@ -1991,7 +2018,8 @@ class polygonised_grain_structure():
     def construct_geometric_xtals_from_gbcoords(self,
                                                 coord_loop_dict,
                                                 dtype='shapely',
-                                                saa=True, throw=False):
+                                                saa=True, throw=False,
+                                                smoothed=None):
         """ self.construct_geometric_xtals_from_gbcoords(GBCoords).
 
         dtype='upxo' wraps self.GB[gid] (already a ring2d) directly into a
@@ -1999,15 +2027,22 @@ class polygonised_grain_structure():
         ever a coordinate array derived from that same ring). A gid with
         island hole(s) recorded in self.GB_holes (see
         _assemble_island_results) becomes a NestedPolygon2d instead.
+        ``smoothed`` (dtype='upxo' only) is the ``name`` given to
+        ``smooth_gbsegs``: the smoothed rings and holes in
+        ``self.smoothed[name]`` are wrapped instead of the raw ones.
         """
         if dtype == 'shapely':
             GRAINS = {gid: Polygon(coord_loop_dict[gid]) for gid in self.gid}
         elif dtype == 'upxo':
-            holes_by_gid = getattr(self, 'GB_holes', {})
-            gid_of_ring = {id(ring): g for g, ring in self.GB.items()}
+            if smoothed is None:
+                rings, holes_by_gid = self.GB, getattr(self, 'GB_holes', {})
+            else:
+                rings = self.smoothed[smoothed]['GB']
+                holes_by_gid = self.smoothed[smoothed].get('GB_holes', {})
+            gid_of_ring = {id(ring): g for g, ring in rings.items()}
             GRAINS = {}
             for gid in self.gid:
-                host = Polygon2d.from_ring2d(self.GB[gid], gid=gid)
+                host = Polygon2d.from_ring2d(rings[gid], gid=gid)
                 holes = holes_by_gid.get(gid)
                 if holes:
                     GRAINS[gid] = NestedPolygon2d.from_host_and_holes(
