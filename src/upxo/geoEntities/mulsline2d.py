@@ -1562,6 +1562,52 @@ class ring2d():
                 line.reset_coords_to_points()
         return seen
 
+    @staticmethod
+    def _translated_segment(seg, dx, dy):
+        """A new ``MSline2d`` with the same layout as ``seg`` and every point
+        new and shifted by ``(dx, dy)``; nothing is shared with ``seg``."""
+        pts = [Point2d(x + dx, y + dy) for x, y in seg.get_node_coords()]
+        new = seg.clone()
+        new.nodes = pts
+        new.lines = [sl2d(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y)
+                     for i in range(len(pts) - 1)]
+        return new
+
+    def translated_copy(self, dx, dy, seg_copies):
+        """
+        Return a copy of this ring shifted by ``(dx, dy)`` that shares no point
+        or line with it; the original is not changed.
+
+        ``MSline2d.clone`` shares its point objects with the original, so
+        ``clone`` followed by :meth:`translate` would move the original too.
+
+        Parameters
+        ----------
+        seg_copies : dict
+            ``{id(original segment): its translated copy}``. Pass one dict for
+            rings that may share walls, so a wall shared by several rings is
+            copied once and stays shared among the copies.
+        """
+        new = ring2d.__new__(ring2d)
+        for slot in ring2d.__slots__:
+            if not hasattr(self, slot):
+                continue
+            val = getattr(self, slot)
+            if slot in ('conn0', 'conn1') and isinstance(val, dict):
+                val = dict(val)
+            elif slot == 'coords' and isinstance(val, np.ndarray):
+                val = val + np.array([dx, dy])
+            setattr(new, slot, val)
+        segments = []
+        for seg in self.segments:
+            if id(seg) not in seg_copies:
+                seg_copies[id(seg)] = ring2d._translated_segment(seg, dx, dy)
+            segments.append(seg_copies[id(seg)])
+        new.segments = segments
+        new.segids = list(self.segids)
+        new.segflips = list(self.segflips)
+        return new
+
     def __init__(self, segments=None, segids=None, segflips=None):
         """
         Initialize ring2d from segment collection.
