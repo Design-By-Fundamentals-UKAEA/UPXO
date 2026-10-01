@@ -1,5 +1,6 @@
 """AbaqusExporter3D element types: C3D8 (one brick per voxel) and C3D4
-(six tetrahedra per voxel), on a small hand-made twinned structure."""
+(six tetrahedra per voxel), on a small hand-made twinned structure.
+The materials, units and load step are in test_abaqus_exporter_3d_model.py."""
 import re
 from collections import Counter
 
@@ -26,13 +27,14 @@ def _structure():
     return lgi, twin_role, twin_parent_of, quats
 
 
-def _export(tmp_path, element_type):
+def _export(tmp_path, element_type, **kwargs):
+    """Geometry tests use length_scale=1, so a voxel is a unit cube."""
+    kwargs.setdefault('length_scale', 1.0)
     lgi, role, parent, quats = _structure()
     exp = AbaqusExporter3D(lgi=lgi, twin_role=role, twin_parent_of=parent,
                            all_quats=quats, element_type=element_type,
-                           write_variant_elsets=False)
-    with pytest.warns(UserWarning):           # 07/08 are still stubs
-        exp.write(str(tmp_path))
+                           write_variant_elsets=False, **kwargs)
+    exp.write(str(tmp_path))
     return exp
 
 
