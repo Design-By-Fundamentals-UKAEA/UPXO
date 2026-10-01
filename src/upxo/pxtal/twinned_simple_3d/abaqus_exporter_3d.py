@@ -13,10 +13,13 @@ model_master.inp
   03c_elsets_families.inp   family ELSETs          (Option 3, user flag)
   03d_elsets_variants.inp   Sigma3 variant ELSETs  (Option 5, user flag)
   04_nsets_bc.inp           boundary-condition node sets (faces of the domain)
-  05_materials.inp          one *Material per grain
+  05_materials.inp          one *Material per grain (reference UMAT layout by default)
   06_sections.inp           *Solid Section linking 03a ELSETs to 05 materials
-  07_interactions.inp       (stub — extend for cohesive zones etc.)
-  08_steps_output.inp       (stub — extend for load steps)
+  07_interactions.inp       none (as in the reference); extend for cohesive zones etc.
+  08_steps_output.inp       uniaxial static step, BCs and output requests (reference)
+
+The materials and the step follow the reference model
+upxo_support/collab/T25C.inp, which runs in Abaqus with the target UMAT.
 
 ELSET naming (03a — material assignment, no voxel overlap)
 ----------------------------------------------------------
@@ -67,6 +70,78 @@ _KUHN_TETS = (
     ((0, 0, 0), (0, 1, 1), (0, 0, 1), (1, 1, 1)),
 )
 _ELEMS_PER_VOXEL = {'C3D8': 1, 'C3D4': len(_KUHN_TETS)}
+
+# ---------------------------------------------------------------------------
+# Materials and load step copied from the reference model that runs in
+# Abaqus with the target UMAT (upxo_support/collab/T25C.inp). Constants 5 and
+# 6 are fixed at the reference's values; their meaning is set by that UMAT.
+# ---------------------------------------------------------------------------
+MATERIAL_FORMATS = ('reference_umat', 'bunge_euler', 'orientation')
+REFERENCE_UMAT_TAIL = (15.0, 0.0)
+REFERENCE_N_DEPVAR = 1
+LOAD_AXES = ('x', 'y', 'z')
+_FACE_NAMES = {'x': ('XMIN', 'XMAX'), 'y': ('YMIN', 'YMAX'), 'z': ('ZMIN', 'ZMAX')}
+_DOF = {'x': 1, 'y': 2, 'z': 3}
+
+
+def required_bc_faces(load_axis):
+    """Face node sets the uniaxial step needs: the loaded face (max face of
+    ``load_axis``) and the min face of every axis."""
+    return {_FACE_NAMES[load_axis][1]} | {_FACE_NAMES[a][0] for a in LOAD_AXES}
+
+
+def write_reference_umat_material(f, name, euler_deg, grain_number,
+                                  n_depvar=REFERENCE_N_DEPVAR, comment=None):
+    """One ``*Material`` in the reference layout: ``*Depvar`` then
+    ``*User Material, constants=6`` = phi1, Phi, phi2 (degrees, wrapped into
+    [0, 360)), the grain number, then ``REFERENCE_UMAT_TAIL``."""
+    phi1, Phi, phi2 = (float(a) % 360.0 for a in euler_deg)
+    f.write(f'*Material, name={name}\n')
+    if comment:
+        f.write(f'** {comment}\n')
+    f.write(f'*Depvar\n{int(n_depvar)},\n')
+    f.write('*User Material, constants=6\n')
+    tail = ', '.join(f'{v:g}.' if float(v).is_integer() else f'{v:g}'
+                     for v in REFERENCE_UMAT_TAIL)
+    f.write(f'{phi1:.6f}, {Phi:.6f}, {phi2:.6f}, {int(grain_number)}., {tail}\n')
+
+
+def write_uniaxial_static_step(f, nset_names, load_axis, displacement,
+                               step_time=80.0, initial_inc=0.01, min_inc=1e-8,
+                               max_inc=1.0, max_increments=10000):
+    """The reference load step: static, nlgeom, the max face of ``load_axis``
+    displaced by ``displacement`` along that axis, the min face of every axis
+    held in its own direction, and the reference output requests.
+
+    ``nset_names`` maps 'XMIN'..'ZMAX' to the node-set names in the model.
+    """
+    if load_axis not in LOAD_AXES:
+        raise ValueError(f'load_axis must be one of {LOAD_AXES}.')
+    top = nset_names[_FACE_NAMES[load_axis][1]]
+    d = _DOF[load_axis]
+    f.write('** STEP: Step-1\n**\n')
+    f.write(f'*Step, name=Step-1, nlgeom=YES, inc={int(max_increments)}\n')
+    f.write('*Static\n')
+    f.write(f'{initial_inc:g}, {step_time:g}, {min_inc:g}, {max_inc:g}\n')
+    f.write('**\n** BOUNDARY CONDITIONS\n**\n')
+    f.write(f'** Name: BC-1 Type: Displacement/Rotation (loaded face, {load_axis})\n')
+    f.write(f'*Boundary\n{top}, {d}, {d}, {displacement:.10g}\n')
+    for k, axis in enumerate(LOAD_AXES, start=2):
+        face = nset_names[_FACE_NAMES[axis][0]]
+        dof = _DOF[axis]
+        f.write(f'** Name: BC-{k} Type: Displacement/Rotation (min face, {axis})\n')
+        f.write(f'*Boundary\n{face}, {dof}, {dof}\n')
+    f.write('**\n** OUTPUT REQUESTS\n**\n')
+    f.write('*Restart, write, frequency=0\n')
+    f.write('**\n** FIELD OUTPUT: F-Output-1\n**\n')
+    f.write('*Output, field, time interval=0.5\n')
+    f.write('*Element Output, directions=YES\n')
+    f.write('LE, NE, S, SDV\n')
+    f.write('**\n** FIELD OUTPUT: F-Output-2\n**\n')
+    f.write('*Node Output\nU,\n')
+    f.write('**\n** HISTORY OUTPUT: H-Output-1\n**\n')
+    f.write('*Output, history, variable=PRESELECT\n')
+    f.write('*End Step\n')
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _LIB_ROOT = os.path.normpath(os.path.join(_THIS_DIR, '..', '..', '..', '..'))
@@ -163,10 +238,29 @@ class AbaqusExporter3D:
         tetrahedra per voxel). Element sets list the elements of every voxel
         they contain, so they hold six times as many ids for C3D4.
     material_format : str
+        'reference_umat' (default) → the layout of the reference model
+        T25C: *Depvar, then *User Material with 6 constants: Bunge-Euler
+        angles in degrees wrapped into [0, 360), a sequential grain number
+        1..N, then ``REFERENCE_UMAT_TAIL``.
         'bunge_euler' → *User Material with 3 Bunge-Euler constants.
-        'orientation' → *Orientation + *Elastic stub (for elastic studies).
+        'orientation' → *Elastic stub (for elastic studies).
     n_depvar : int
-        Number of UMAT state variables (used only for 'bunge_euler' format).
+        Number of UMAT state variables (*Depvar); default 1, as in the
+        reference. Not used by 'orientation'.
+    length_scale : float
+        Multiplies every node coordinate. Coordinates are voxel index x
+        voxel_size_um x length_scale; the default 1e-3 writes mm.
+    load_axis : str
+        'x', 'y' or 'z' (default): the axis of the uniaxial load in 08.
+    applied_strain : float
+        Nominal strain of the load step (default 0.2): the max face of
+        ``load_axis`` is displaced by applied_strain x the domain length
+        along that axis, in the scaled units.
+    step_time : float
+        Total time of the static step (default 80, as in the reference).
+    write_step : bool
+        Write the step in 08 (default True). The face node sets the step
+        needs are written even if disabled in ``nset_config``.
     write_role_elsets : bool
         Write 03b_elsets_roles.inp (Option 2 grouping).
     write_family_elsets : bool
@@ -307,8 +401,13 @@ class AbaqusExporter3D:
             twinmake=None,
             voxel_size_um:        float = 1.0,
             element_type:         str   = 'C3D8',
-            material_format:      str   = 'bunge_euler',
-            n_depvar:             int   = 100,
+            material_format:      str   = 'reference_umat',
+            n_depvar:             int   = REFERENCE_N_DEPVAR,
+            length_scale:         float = 1e-3,
+            load_axis:            str   = 'z',
+            applied_strain:       float = 0.2,
+            step_time:            float = 80.0,
+            write_step:           bool  = True,
             write_role_elsets:    bool  = True,
             write_family_elsets:  bool  = True,
             write_variant_elsets: bool  = True,
@@ -331,6 +430,14 @@ class AbaqusExporter3D:
             raise ValueError(
                 f'element_type={element_type!r} is not supported; '
                 f'choose one of {SUPPORTED_ELEMENT_TYPES}.')
+        if material_format not in MATERIAL_FORMATS:
+            raise ValueError(
+                f'material_format={material_format!r} is not supported; '
+                f'choose one of {MATERIAL_FORMATS}.')
+        if load_axis not in LOAD_AXES:
+            raise ValueError(f'load_axis must be one of {LOAD_AXES}.')
+        if not length_scale > 0:
+            raise ValueError('length_scale must be > 0.')
 
         if index is None:
             if lgi is None:
@@ -355,6 +462,21 @@ class AbaqusExporter3D:
         self.variant_prefix   = variant_prefix
         self.nset_config      = {**self._DEFAULT_NSET_CONFIG, **(nset_config or {})}
         self.material_level   = material_level
+        self.length_scale     = float(length_scale)
+        self.load_axis        = load_axis
+        self.applied_strain   = float(applied_strain)
+        self.step_time        = float(step_time)
+        self.write_step       = bool(write_step)
+        if self.write_step:
+            # the step's boundary conditions refer to these face node sets
+            for face in required_bc_faces(load_axis):
+                cfg = dict(self.nset_config.get(face, self._DEFAULT_NSET_CONFIG[face]))
+                if not cfg.get('enabled', True):
+                    warnings.warn(
+                        f"node set {face} is disabled but the load step needs "
+                        f"it; writing it anyway.", stacklevel=2)
+                    cfg['enabled'] = True
+                self.nset_config[face] = cfg
 
         # Populated by write() -- lets callers report how many ELSETs/NSETs
         # were actually written without re-deriving it from shared_state.
@@ -380,6 +502,12 @@ class AbaqusExporter3D:
     # -----------------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------------
+    @property
+    def _units(self) -> str:
+        names = {1.0: 'microns', 1e-3: 'mm', 1e-6: 'm'}
+        return names.get(self.length_scale,
+                         f'microns x {self.length_scale:g}')
+
     @property
     def n_elements(self) -> int:
         """Number of elements written (voxels x elements per voxel)."""
@@ -431,7 +559,8 @@ class AbaqusExporter3D:
             if fname == '03d_elsets_variants.inp' and not self.write_variants: skip = True
             fpath = os.path.join(out_dir, fname)
             if skip:
-                open(fpath, 'w').write(f'** {fname} skipped (disabled by user flag)\n')
+                with open(fpath, 'w') as f:
+                    f.write(f'** {fname} skipped (disabled by user flag)\n')
                 print(f'  [skipped]  {fname}')
                 continue
             t1 = time.perf_counter()
@@ -448,15 +577,17 @@ class AbaqusExporter3D:
     # 01 nodes
     # -----------------------------------------------------------------------
     def _write_nodes(self, f):
-        f.write('** Node coordinates  (units: microns)\n')
+        f.write(f'** Node coordinates = voxel index x {self.vox_um:g} um x '
+                f'length_scale {self.length_scale:g}  (units: {self._units})\n')
         f.write('*Node\n')
-        nx, ny, nz, vs = self.nx, self.ny, self.nz, self.vox_um
+        nx, ny, nz = self.nx, self.ny, self.nz
+        vs = self.vox_um * self.length_scale
         node_id = 0
         for ix in range(nx + 1):
             for iy in range(ny + 1):
                 for iz in range(nz + 1):
                     node_id += 1
-                    f.write(f'{node_id}, {ix*vs:.6g}, {iy*vs:.6g}, {iz*vs:.6g}\n')
+                    f.write(f'{node_id}, {ix*vs:.10g}, {iy*vs:.10g}, {iz*vs:.10g}\n')
 
     # -----------------------------------------------------------------------
     # 02 elements
@@ -650,6 +781,19 @@ class AbaqusExporter3D:
     # 05  materials
     # -----------------------------------------------------------------------
     def _write_materials(self, f):
+        if self.material_format == 'reference_umat':
+            f.write('** One *Material per grain, in the layout of the reference model.\n')
+            f.write('** *User Material constants: phi1, Phi, phi2 (Bunge, degrees, [0, 360)),\n')
+            f.write('** UMAT grain number (1..N), '
+                    + ', '.join(f'{v:g}' for v in REFERENCE_UMAT_TAIL) + '.\n**\n')
+            for number, gid in enumerate(self._grain_elems, start=1):
+                role_key = self._role_map.get(gid, 'non_host')
+                mat_name = f'{self._PREFIX[role_key][1]}_{gid}'
+                q = self.all_quats.get(gid, np.array([1., 0., 0., 0.]))
+                write_reference_umat_material(
+                    f, mat_name, _quat_to_bunge(q), number, self.n_depvar,
+                    comment=f'grain {gid} -> UMAT grain number {number}')
+            return
         f.write('** One *Material per grain (Bunge-Euler angles in degrees).\n')
         f.write('** Replace with full CPFEM constitutive block as needed.\n**\n')
         for gid in self._grain_elems:
@@ -682,27 +826,32 @@ class AbaqusExporter3D:
     # 07  interactions (stub)
     # -----------------------------------------------------------------------
     def _write_interactions(self, f):
-        warnings.warn(
-            "07_interactions.inp contains no interaction/constraint definitions "
-            "(cohesive zone, contact, etc.) -- this .inp is not simulation-ready "
-            "as exported and must be edited before submission.",
-            stacklevel=3,
-        )
-        f.write('** Interaction definitions (stub).\n')
-        f.write('** Extend for cohesive zone models, contact, etc.\n')
+        f.write('** Interaction definitions.\n')
+        f.write('** None: grains share nodes, and the reference model has no\n')
+        f.write('** interactions. Add cohesive zones, contact, etc. here.\n')
 
     # -----------------------------------------------------------------------
     # 08  steps / output (stub)
     # -----------------------------------------------------------------------
     def _write_steps_output(self, f):
-        warnings.warn(
-            "08_steps_output.inp contains no *Step/boundary-condition/*Output "
-            "definitions -- this .inp is not simulation-ready as exported and "
-            "must be edited before submission.",
-            stacklevel=3,
-        )
-        f.write('** Step and output request definitions (stub).\n')
-        f.write('** Define *Step, *Static / *Dynamic, *Output as required.\n')
+        if not self.write_step:
+            warnings.warn(
+                "08_steps_output.inp contains no *Step: write_step=False -- "
+                "add a step before submitting this model.", stacklevel=3)
+            f.write('** No step written (write_step=False).\n')
+            return
+        nset_names = {face: (self.nset_config[face].get('prefix')
+                             or self._DEFAULT_NSET_CONFIG[face]['prefix'])
+                      for face in self._DEFAULT_NSET_CONFIG}
+        n_vox = {'x': self.nx, 'y': self.ny, 'z': self.nz}[self.load_axis]
+        length = n_vox * self.vox_um * self.length_scale
+        displacement = self.applied_strain * length
+        f.write(f'** Uniaxial load along {self.load_axis}: nominal strain '
+                f'{self.applied_strain:g} x length {length:g} {self._units} '
+                f'= displacement {displacement:g} {self._units}.\n')
+        f.write('** Step and output requests as in the reference model.\n**\n')
+        write_uniaxial_static_step(f, nset_names, self.load_axis, displacement,
+                                   step_time=self.step_time)
 
     # -----------------------------------------------------------------------
     # master file
@@ -717,7 +866,8 @@ class AbaqusExporter3D:
             f.write(f'** Twinned OFHC Cu  element type: {self.element_type}\n')
             f.write(f'** Grid: {nx} x {ny} x {nz} voxels  '
                     f'|  Active elements: {n_elem:,}\n')
-            f.write(f'** Voxel size: {self.vox_um} microns\n**\n')
+            f.write(f'** Voxel size: {self.vox_um} microns  |  length scale '
+                    f'{self.length_scale:g}  |  units: {self._units}\n**\n')
             f.write('*PREPRINT, ECHO=NO, MODEL=NO, HISTORY=NO, CONTACT=NO\n**\n')
             for fname, _ in steps:
                 f.write(f'*INCLUDE, INPUT={fname}\n')
