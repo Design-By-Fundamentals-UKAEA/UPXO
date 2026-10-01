@@ -50,6 +50,24 @@ from typing import Optional, Dict, Set
 # __file__ : .../upxo_library/src/upxo/pxtal/twinned_simple_3d/abaqus_exporter_3d.py
 #              ↑  up 4 levels  ↑                                  upxo_library/
 # ---------------------------------------------------------------------------
+SUPPORTED_ELEMENT_TYPES = ('C3D8', 'C3D4')
+
+# Kuhn decomposition of a voxel into 6 tetrahedra sharing the body diagonal
+# (i,j,k)->(i+1,j+1,k+1); rows are (di,dj,dk) offsets from the voxel's min
+# corner, ordered for a positive C3D4 Jacobian. Same table as
+# fm_steel_3d.mesh_exporter_3d._KUHN_TETS (copied: importing that module
+# loads the whole fm_steel_3d package). Every voxel uses the same diagonal,
+# so the faces of neighbouring voxels' tets match.
+_KUHN_TETS = (
+    ((0, 0, 0), (1, 0, 0), (1, 1, 0), (1, 1, 1)),
+    ((0, 0, 0), (1, 0, 1), (1, 0, 0), (1, 1, 1)),
+    ((0, 0, 0), (1, 1, 0), (0, 1, 0), (1, 1, 1)),
+    ((0, 0, 0), (0, 1, 0), (0, 1, 1), (1, 1, 1)),
+    ((0, 0, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1)),
+    ((0, 0, 0), (0, 1, 1), (0, 0, 1), (1, 1, 1)),
+)
+_ELEMS_PER_VOXEL = {'C3D8': 1, 'C3D4': len(_KUHN_TETS)}
+
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _LIB_ROOT = os.path.normpath(os.path.join(_THIS_DIR, '..', '..', '..', '..'))
 DEFAULT_ABQ_OUT_DIR = os.path.join(_LIB_ROOT, 'data', 'ABQInputFiles', 'ofhcCu')
@@ -140,7 +158,10 @@ class AbaqusExporter3D:
     voxel_size_um : float
         Physical voxel edge length in microns for node coordinate output.
     element_type : str
-        Abaqus element type string, default 'C3D8' (linear hex brick).
+        Abaqus element type, one of ``SUPPORTED_ELEMENT_TYPES``: 'C3D8'
+        (default; one linear hex brick per voxel) or 'C3D4' (six linear
+        tetrahedra per voxel). Element sets list the elements of every voxel
+        they contain, so they hold six times as many ids for C3D4.
     material_format : str
         'bunge_euler' → *User Material with 3 Bunge-Euler constants.
         'orientation' → *Orientation + *Elastic stub (for elastic studies).
@@ -306,6 +327,11 @@ class AbaqusExporter3D:
                 'per-grain element membership, these are still used '
                 'directly by the write_* methods).')
 
+        if element_type not in SUPPORTED_ELEMENT_TYPES:
+            raise ValueError(
+                f'element_type={element_type!r} is not supported; '
+                f'choose one of {SUPPORTED_ELEMENT_TYPES}.')
+
         if index is None:
             if lgi is None:
                 raise ValueError('Either index=... or lgi=... must be provided.')
@@ -338,11 +364,27 @@ class AbaqusExporter3D:
         self.nx, self.ny, self.nz = index.nx, index.ny, index.nz
         self._role_map    = index.role_map
         self._lgi_flat     = self.lgi.ravel(order='C')
-        self._grain_elems = index.grain_elems
+        # index.grain_elems holds voxel ids (one per voxel, 1-based). With
+        # several elements per voxel, voxel v owns elements
+        # k*(v-1)+1 .. k*v. A new dict: the index may be reused for other
+        # exports with other settings.
+        k = _ELEMS_PER_VOXEL[element_type]
+        if k == 1:
+            self._grain_elems = index.grain_elems
+        else:
+            local = np.arange(1, k + 1, dtype=np.int64)
+            self._grain_elems = {
+                gid: ((vox.astype(np.int64) - 1)[:, None] * k + local).ravel()
+                for gid, vox in index.grain_elems.items()}
 
     # -----------------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------------
+    @property
+    def n_elements(self) -> int:
+        """Number of elements written (voxels x elements per voxel)."""
+        return self.nx * self.ny * self.nz * _ELEMS_PER_VOXEL[self.element_type]
+
     def write(self, out_dir: str = DEFAULT_ABQ_OUT_DIR) -> None:
         """
         Write all Abaqus input files to *out_dir*.
@@ -421,10 +463,18 @@ class AbaqusExporter3D:
     # -----------------------------------------------------------------------
     def _write_elements(self, f):
         """
-        Write C3D8 brick elements.  Each voxel (ix, iy, iz) in C-order maps to
-        element  ix*(ny*nz) + iy*nz + iz + 1  with 8 corner nodes ordered
-        per the Abaqus C3D8 convention.
+        Write the element connectivity.
+
+        C3D8: voxel (ix, iy, iz) in C-order is element
+        ix*(ny*nz) + iy*nz + iz + 1, with 8 corner nodes in the Abaqus C3D8
+        order.
+
+        C3D4: each voxel is split into 6 tetrahedra (``_KUHN_TETS``); voxel
+        v = ix*(ny*nz) + iy*nz + iz owns elements 6*v + 1 .. 6*v + 6.
         """
+        if self.element_type == 'C3D4':
+            self._write_elements_c3d4(f)
+            return
         nx, ny, nz = self.nx, self.ny, self.nz
         nn_y = ny + 1
         nn_z = nz + 1
@@ -448,6 +498,24 @@ class AbaqusExporter3D:
                     n7  = nid(ix+1, iy+1, iz+1)
                     n8  = nid(ix,   iy+1, iz+1)
                     f.write(f'{eid}, {n1},{n2},{n3},{n4},{n5},{n6},{n7},{n8}\n')
+
+    def _write_elements_c3d4(self, f):
+        nx, ny, nz = self.nx, self.ny, self.nz
+        nn_y, nn_z = ny + 1, nz + 1
+        ix, iy, iz = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz),
+                                 indexing='ij')
+        ix, iy, iz = ix.ravel(), iy.ravel(), iz.ravel()     # C-order = voxel order
+        n_vox = ix.size
+        conn = np.empty((n_vox, len(_KUHN_TETS), 4), dtype=np.int64)
+        for t, tet in enumerate(_KUHN_TETS):
+            for c, (di, dj, dk) in enumerate(tet):
+                conn[:, t, c] = (ix + di) * nn_y * nn_z + (iy + dj) * nn_z + (iz + dk) + 1
+        conn = conn.reshape(-1, 4)
+        eids = np.arange(1, conn.shape[0] + 1, dtype=np.int64)
+        f.write(f'** Element connectivity  type={self.element_type}  '
+                f'(6 tetrahedra per voxel)\n')
+        f.write(f'*Element, type={self.element_type}\n')
+        np.savetxt(f, np.column_stack([eids, conn]), fmt='%d', delimiter=', ')
 
     # -----------------------------------------------------------------------
     # 03a  per-grain feature ELSETs (material assignment, no overlap)
@@ -641,7 +709,7 @@ class AbaqusExporter3D:
     # -----------------------------------------------------------------------
     def _write_master(self, out_dir: str, steps) -> None:
         nx, ny, nz = self.nx, self.ny, self.nz
-        n_elem = nx * ny * nz
+        n_elem = self.n_elements
         path = os.path.join(out_dir, 'model_master.inp')
         with open(path, 'w') as f:
             f.write('** Made with UPXO -- twinned OFHC Cu 3D microstructure\n**\n')
