@@ -282,7 +282,7 @@ def export_abaqus_mesh(cleaner, tg, index, output_dir=DEFAULT_OUTPUT_DIR,
     file_sizes = {f.name: f.stat().st_size for f in sorted(Path(out_dir).glob("*.inp"))}
     return {
         "output_dir": str(out_dir),
-        "n_elements": exporter.nx * exporter.ny * exporter.nz,
+        "n_elements": exporter.n_elements,
         "n_elsets": len(exporter._grain_elems) + exporter.n_role_elsets_written,
         "n_nsets": exporter.n_nsets_written,
         "files": file_sizes,
