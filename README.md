@@ -34,7 +34,7 @@ Or select specific extras:
 | Extra | Adds | Command |
 |---|---|---|
 | `viz` | Interactive plots (Plotly) | `pip install upxo[viz]` |
-| `mesh` | FE meshing (pyvoro, tetgen, gmsh) | `pip install upxo[mesh]` |
+| `mesh` | FE meshing (tetgen, gmsh) | `pip install upxo[mesh]` |
 | `ebsd` | EBSD data import (DefDAP) | `pip install upxo[ebsd]` |
 
 Requires **Python >= 3.13**. See the [Getting Started wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Getting-started) for environment setup guides.

@@ -12,7 +12,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="upxo",
-    version="1.2.1",
+    version="1.3.0",
     author="Dr. Sunil Anandatheertha",
     author_email="vaasu.anandatheertha@ukaea.uk",
     description=(
@@ -47,7 +47,7 @@ setup(
     ],
     extras_require={
         "viz": ["plotly>=5.0.0"],
-        "mesh": ["pyvoro>=1.3.2", "tetgen>=0.8.2"],
+        "mesh": ["tetgen>=0.8.2", "gmsh>=4.13"],
         "ebsd": ["defdap==0.93.6"],
         "all": ["upxo[viz,mesh,ebsd]"],
     },

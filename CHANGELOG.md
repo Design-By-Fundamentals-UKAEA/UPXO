@@ -4,8 +4,17 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-03
+
 ### Added
 
+- **Twinned FCC 3D Abaqus export with the reference UMAT materials, mm units and a load step**: `twinned_simple_3d.abaqus_exporter_3d.AbaqusExporter3D` output now follows the reference model used to validate the target UMAT (`T25C.inp`).
+  - **C3D4 export**: `element_type='C3D4'` splits every voxel into 6 tetrahedra (Kuhn decomposition, same table as `fm_steel_3d.mesh_exporter_3d`); neighbouring voxels share the same body diagonal so the mesh is conforming. `element_type` is now validated against `SUPPORTED_ELEMENT_TYPES = ('C3D8', 'C3D4')` — previously any string was accepted and written above 8-node brick connectivity, producing an input file Abaqus rejects. New `n_elements` property.
+  - **Materials**: new default `material_format='reference_umat'` — `*Depvar 1` then `*User Material` with 6 constants (Bunge angles in degrees wrapped into `[0, 360)`, a sequential grain number, then two constants copied from the reference whose meaning is set by the UMAT). `n_depvar` defaults to `1`. `'bunge_euler'`/`'orientation'` remain available.
+  - **Units and loading**: new `length_scale` (default `1e-3`) multiplies every node coordinate to write mm. New uniaxial static step (`write_uniaxial_static_step`): the max face of `load_axis` (default `z`) displaced by `applied_strain` (default `0.2`) × the domain length, the min face of every axis held in its own direction; `step_time` (default `80`) configurable. Interactions are no longer written (matching the reference) and no longer warn about it.
+  - `export_abaqus_mesh` (the automation step) passes `length_scale`/`load_axis`/`applied_strain`/`step_time` through, with defaults matching the exporter.
+  - Fixed: the export step reported `nx*ny*nz` elements regardless of element type — six times too few for C3D4. Now reports `AbaqusExporter3D.n_elements`. Also fixed `write()` leaving a disabled element-set file's placeholder open.
+  - Tests: `tests/twinned_simple_3d/test_abaqus_exporter_3d_model.py`, element-type and export-step tests in the same suite.
 - **EBSD → smoothed mesh → Abaqus (2D)**: end-to-end pipeline from a real EBSD `.ctf` map to a conformal 2D mesh with per-grain, EBSD-measured Bunge-Euler orientations in the exported Abaqus `.inp`.
   - `interfaces/defdap/ebsd_reader.py`: `EBSDReader.split_disconnected_grains(connectivity=4)` — a grain id spread across spatially disconnected pixel regions (most commonly from `crop()` slicing an irregular grain in two) is relabelled so every id is one connected region; `euler_ebsd`/`quat_ebsd` untouched. `EBSDReader.grain_average_euler_deg()` — per-grain Bunge-Euler angles (degrees) from a mean of `quat_ebsd` over each grain's pixels (renormalised, positive-hemisphere), exposed as a standalone public method (the same averaging approach `rechar_lfi` already used internally).
   - `meshing/writer_ABQ.py`: `export_confmesh2d_inp` gains `material_format='bunge_euler'` — writes one `*Material` + `*User Material, constants=3` (the grain's Bunge-Euler angles) + `*Depvar` per grain, from a `grain_euler_deg` dict, mirroring the convention already used by the 3D exporter (`twinned_simple_3d.abaqus_exporter_3d.AbaqusExporter3D`). Default behaviour (`material_format='isotropic'`) unchanged; also gains an `elastic_constants` override for that path.
@@ -28,6 +37,12 @@ All notable changes to UPXO are documented in this file.
 ### Fixed
 
 - **`GrainManifold2D.smooth_interfaces`**: cells could extend past the label-image domain after smoothing. `_laplacian_step` holds only vertices lying exactly on the domain edge, and the negative-`mu` Taubin pass can move other boundary-adjacent vertices outward. `smooth_interfaces` now ends with `trim_to_rve(bounds=(0, 0, width, height))`. `trim_to_rve(bounds)` remains available for cropping to a sub-window. Tests: `tests/pxtal/test_grainmanifold2d_domain_clip.py`.
+
+### Removed
+
+- **`pyvoro` dropped from the `mesh` extra.** It had no real dependents in the library (only two demo scripts called it) and was a recurring install failure on Windows. `mesh` is now `tetgen` + `gmsh` only. Also fixes drift found while doing this: `setup.py`'s `mesh` extra was missing `gmsh` (unlike `pyproject.toml`'s); `requirements.txt` had `tetgen` active/uncommented unlike every other extras entry in that file.
+- **`src/upxo/scripts/` removed from the repository entirely.** Development-only scratch scripts, never meant to ship; moved (with history preserved via `git subtree split`) to a standalone, purely local repo (`upxo_scripts`) that is never pushed anywhere.
+- **`src/upxo/demos/` is no longer tracked by this repository.** Demo notebooks and their supporting files now live at [UPXO-demos](https://github.com/Design-By-Fundamentals-UKAEA/UPXO-demos) (MIT licensed), extracted with full history preserved. The folder itself still exists on disk in a working checkout of this repo for active local development (some of its contents currently support in-progress conformal-meshing work), but nothing under it is committed or pushed from here going forward, and it is not part of the installed package — it never shipped in the wheel/sdist in the first place.
 
 ## [1.2.1] — 2026-09-22
 

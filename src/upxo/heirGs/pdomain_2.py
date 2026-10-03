@@ -80,7 +80,7 @@ class pdomain_info():
     technique: str = field(default = 'vt') # or: 'mc'
     """
     vt_tool: Tool to be used in making Voronoi tessellation
-    OPTIONS: scipy,  shapely,  freud, vtess, pyvoro++
+    OPTIONS: scipy,  shapely,  freud, vtess
     """
     vt_tool: str = field(default = 'scipy')
     """
