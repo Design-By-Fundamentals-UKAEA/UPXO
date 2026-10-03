@@ -341,10 +341,6 @@ class vtpolyxtal2d():
         if vt_base_tool == 'freud':
             pass
         #.......................
-        if vt_base_tool == 'pyvoro':
-            # https://github.com/joe-jordan/pyvoro
-            pass
-        #.......................
         if vt_base_tool == 'pysal':
             # https://pysal.org/notebooks/lib/libpysal/voronoi.html
             # https://pysal.org/

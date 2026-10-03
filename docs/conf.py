@@ -39,7 +39,6 @@ autodoc_mock_imports = [
     'seaborn',
     'defdap',
     'colorama',
-    'pyvoro',
     'tetgen',
     'cc3d',
     'xlrd',

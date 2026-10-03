@@ -83,7 +83,7 @@ dependencies = [
 
 [project.optional-dependencies]
 viz  = ["plotly>=5.0.0"]
-mesh = ["pyvoro>=1.3.2", "tetgen>=0.8.2", "gmsh>=4.13"]
+mesh = ["tetgen>=0.8.2", "gmsh>=4.13"]
 ebsd = ["defdap==0.93.6"]
 all  = ["upxo[viz,mesh,ebsd]"]
 

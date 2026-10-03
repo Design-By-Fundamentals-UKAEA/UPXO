@@ -36,7 +36,7 @@ Install specific extras only:
 .. code-block:: bash
 
    pip install upxo[viz]    # Plotly interactive plots
-   pip install upxo[mesh]   # FE meshing (pyvoro, tetgen)
+   pip install upxo[mesh]   # FE meshing (tetgen, gmsh)
    pip install upxo[ebsd]   # EBSD data import (DefDAP)
 
 Developer install (editable, from source):
