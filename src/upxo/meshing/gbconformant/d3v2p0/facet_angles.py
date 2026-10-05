@@ -35,3 +35,48 @@ def small_facet_angles(points, triangles, minimum_degrees=.1):
             bad=(angle<minimum_degrees)&(norms[:,a]>0)&(norms[:,b]>0)&(length>0)
             hits.append(incidence[bad][:,[a,b]]//3);angles.append(angle[bad])
     return (np.vstack(hits),np.concatenate(angles)) if hits else (np.empty((0,2),int),np.empty(0))
+
+
+def edge_openings(points, triangles, edges, edge_triangles):
+    """Smallest pairwise opening (degrees) at each given edge.
+
+    edges: iterable of (a, b) node pairs; edge_triangles: mapping from the
+    sorted pair to the triangle rows sharing that edge. Edges with fewer
+    than two triangles give 180.
+    """
+    p = np.asarray(points)
+    f = np.asarray(triangles)
+    out = []
+    for a, b in edges:
+        key = (min(a, b), max(a, b))
+        rows = edge_triangles.get(key, [])
+        if len(rows) < 2:
+            out.append(180.)
+            continue
+        axis = p[key[1]] - p[key[0]]
+        length = np.linalg.norm(axis)
+        if length == 0:
+            out.append(0.)
+            continue
+        axis = axis / length
+        radial = []
+        for r in rows:
+            o = [n for n in f[r] if n not in key]
+            v = p[o[0]] - p[key[0]]
+            v = v - (v @ axis) * axis
+            n = np.linalg.norm(v)
+            radial.append(v / n if n > 0 else v)
+        best = 180.
+        for i in range(len(radial)):
+            for j in range(i + 1, len(radial)):
+                best = min(best, float(np.degrees(np.arctan2(np.linalg.norm(np.cross(radial[i], radial[j])),
+                                                              radial[i] @ radial[j]))))
+        out.append(best)
+    return np.asarray(out)
+
+
+def sharpens(before, after, limit, tolerance=1e-6):
+    """True where an opening breaks the no-sharpening rule: below ``limit`` it
+    may not decrease, at or above ``limit`` it may not fall below it."""
+    before, after = np.asarray(before, float), np.asarray(after, float)
+    return after < np.minimum(before, limit) - tolerance
