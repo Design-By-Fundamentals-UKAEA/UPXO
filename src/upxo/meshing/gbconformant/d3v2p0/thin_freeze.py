@@ -5,13 +5,25 @@ import numpy as np
 
 
 def detect_thin_grains(labels, *, enabled=True, automatic=True, thickness=1,
-                       explicit_ids=()):
-    """Flag IDs with any axial same-label run <= thickness voxels.
+                       explicit_ids=(), criterion='axial_run'):
+    """Flag thin grain IDs for whole-grain freezing.
 
-    Conservative: tips and staircase corners can flag an otherwise large grain.
-    This is an axial voxel criterion, not rotation-invariant medial thickness.
+    criterion='axial_run' (default): flag IDs with any axial same-label run
+    <= thickness voxels. Conservative: tips and staircase corners can flag an
+    otherwise large grain, so on real structures it flags most grains. This is
+    an axial voxel criterion, not rotation-invariant medial thickness.
+
+    criterion='inscribed': flag IDs that are thin everywhere. A grain's
+    inscribed thickness is 2*r - 1 voxels, where r is the largest Euclidean
+    distance (in voxels) from any of its voxel centres to the nearest voxel
+    centre outside it; voxels beyond the RVE count as outside. Slabs one or two
+    voxels thick give 1, three or four give 3. A grain is flagged when its
+    inscribed thickness <= thickness, so a large grain with a thin tip is not.
+
     All nonnegative IDs, including zero, are grains; the whole ID is frozen.
     """
+    if criterion not in ('axial_run', 'inscribed'):
+        raise ValueError("criterion must be 'axial_run' or 'inscribed'")
     a = np.asarray(labels)
     if a.ndim != 3 or not a.size or a.dtype.kind not in 'iu' or np.any(a < 0):
         raise ValueError('Expected nonnegative 3D integer labels')
@@ -23,7 +35,13 @@ def detect_thin_grains(labels, *, enabled=True, automatic=True, thickness=1,
     explicit = set(explicit_ids)
     if not explicit <= ids: raise ValueError('Unknown explicit grain IDs')
     reasons = {int(g): ['explicit'] for g in explicit} if enabled else {}
-    if enabled and automatic:
+    inscribed = {}
+    if enabled and automatic and criterion == 'inscribed':
+        inscribed = _inscribed_thickness(a)
+        for g, t in inscribed.items():
+            if t <= thickness:
+                reasons.setdefault(g, []).append(f'inscribed_thickness_{t:g}')
+    elif enabled and automatic:
         for axis in range(3):
             lines = np.moveaxis(a, axis, -1).reshape(-1, a.shape[axis])
             found = set()
@@ -31,8 +49,26 @@ def detect_thin_grains(labels, *, enabled=True, automatic=True, thickness=1,
                 cuts = np.r_[0, np.flatnonzero(line[1:] != line[:-1]) + 1, len(line)]
                 found.update(map(int, line[cuts[:-1][np.diff(cuts) <= thickness]]))
             for g in found: reasons.setdefault(g, []).append('thin_run_' + 'xyz'[axis])
-    return sorted(reasons), dict(enabled=bool(enabled), threshold_voxels=int(thickness),
-        frozen_ids=sorted(reasons), reasons=reasons, total_grains=len(ids))
+    report = dict(enabled=bool(enabled), threshold_voxels=int(thickness),
+                  frozen_ids=sorted(reasons), reasons=reasons, total_grains=len(ids))
+    if criterion != 'axial_run':
+        report['criterion'] = criterion
+        report['inscribed_thickness'] = inscribed
+    return sorted(reasons), report
+
+
+def _inscribed_thickness(a):
+    """{grain id: 2*r - 1}, r = largest distance (voxels) from a grain voxel
+    centre to the nearest voxel centre outside the grain or the RVE."""
+    from scipy.ndimage import distance_transform_edt, find_objects
+    shifted = a.astype(np.int64) + 1             # find_objects skips label 0
+    out = {}
+    for index, box in enumerate(find_objects(shifted), start=1):
+        if box is None:
+            continue
+        mask = np.pad(shifted[box] == index, 1, constant_values=False)
+        out[index - 1] = float(2.0 * distance_transform_edt(mask).max() - 1.0)
+    return out
 
 
 def _clip(poly, axis, bound, lower):
