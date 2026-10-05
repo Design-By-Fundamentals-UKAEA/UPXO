@@ -264,3 +264,47 @@ def test_master_includes_every_file_in_order(tmp_path):
                         '06_sections.inp', '07_interactions.inp', '08_steps_output.inp']
     assert all((tmp_path / name).exists() for name in includes)
     assert 'units: mm' in master
+
+
+# ------------------------------------------------------------------ step controls
+def test_step_controls_are_written(tmp_path):
+    _export(tmp_path, step_time=20.0, initial_inc=0.05, min_inc=1e-6, max_inc=0.5,
+            max_increments=500, output_interval=2.0,
+            element_outputs='S, SDV', node_outputs=['U', 'RF'])
+    lines = _read(tmp_path, '08_steps_output.inp').splitlines()
+    assert '*Step, name=Step-1, nlgeom=YES, inc=500' in lines
+    assert lines[lines.index('*Static') + 1] == '0.05, 20, 1e-06, 0.5'
+    assert '*Output, field, time interval=2' in lines
+    assert lines[lines.index('*Element Output, directions=YES') + 1] == 'S, SDV'
+    assert lines[lines.index('*Node Output') + 1] == 'U, RF,'
+
+
+def test_empty_element_outputs_drop_the_element_output_block(tmp_path):
+    _export(tmp_path, element_outputs='', node_outputs='U')
+    text = _read(tmp_path, '08_steps_output.inp')
+    assert '*Element Output' not in text and '*Node Output' in text
+
+
+@pytest.mark.parametrize('kwargs', [
+    dict(initial_inc=2.0),                       # initial > max
+    dict(min_inc=0.1),                           # min > initial
+    dict(max_inc=100.0),                         # max > step time
+    dict(max_increments=0),
+    dict(output_interval=0.0),
+    dict(output_interval=100.0),                 # longer than the step
+    dict(element_outputs='', node_outputs=''),   # nothing requested
+    dict(element_outputs='S; LE'),               # not a valid name
+])
+def test_bad_step_controls_are_rejected(kwargs):
+    lgi, role, parent, quats = _structure()
+    with pytest.raises(ValueError):
+        AbaqusExporter3D(lgi=lgi, twin_role=role, twin_parent_of=parent,
+                         all_quats=quats, **kwargs)
+
+
+def test_reference_step_defaults_are_the_reference_values():
+    from upxo.pxtal.twinned_simple_3d.abaqus_exporter_3d import REFERENCE_STEP
+    assert REFERENCE_STEP == dict(
+        step_time=80.0, initial_inc=0.01, min_inc=1e-8, max_inc=1.0,
+        max_increments=10000, output_interval=0.5,
+        element_outputs=('LE', 'NE', 'S', 'SDV'), node_outputs=('U',))

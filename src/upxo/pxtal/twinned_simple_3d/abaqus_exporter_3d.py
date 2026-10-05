@@ -83,6 +83,43 @@ LOAD_AXES = ('x', 'y', 'z')
 _FACE_NAMES = {'x': ('XMIN', 'XMAX'), 'y': ('YMIN', 'YMAX'), 'z': ('ZMIN', 'ZMAX')}
 _DOF = {'x': 1, 'y': 2, 'z': 3}
 
+# Step controls of the reference model; every one is an exporter setting.
+REFERENCE_STEP = dict(
+    step_time=80.0, initial_inc=0.01, min_inc=1e-8, max_inc=1.0,
+    max_increments=10000, output_interval=0.5,
+    element_outputs=('LE', 'NE', 'S', 'SDV'), node_outputs=('U',))
+
+
+def _as_output_list(value):
+    """'LE, S' or ['LE', 'S'] -> ('LE', 'S')."""
+    items = value.split(',') if isinstance(value, str) else list(value)
+    return tuple(str(v).strip().upper() for v in items if str(v).strip())
+
+
+def validate_step_controls(step_time, initial_inc, min_inc, max_inc,
+                           max_increments, output_interval, element_outputs,
+                           node_outputs):
+    """Raise ValueError for step controls Abaqus would reject or that cannot
+    produce output. Returns the output lists as tuples."""
+    if not step_time > 0:
+        raise ValueError('step_time must be > 0.')
+    if not 0 < min_inc <= initial_inc <= max_inc:
+        raise ValueError('increments must satisfy 0 < min_inc <= initial_inc <= max_inc.')
+    if max_inc > step_time:
+        raise ValueError('max_inc cannot exceed step_time.')
+    if int(max_increments) < 1:
+        raise ValueError('max_increments must be >= 1.')
+    if not 0 < output_interval <= step_time:
+        raise ValueError('output_interval must be > 0 and <= step_time.')
+    element_outputs = _as_output_list(element_outputs)
+    node_outputs = _as_output_list(node_outputs)
+    if not element_outputs and not node_outputs:
+        raise ValueError('request at least one element or node output.')
+    for v in element_outputs + node_outputs:
+        if not v.replace('_', '').isalnum():
+            raise ValueError(f'output variable {v!r} is not a valid Abaqus name.')
+    return element_outputs, node_outputs
+
 
 def required_bc_faces(load_axis):
     """Face node sets the uniaxial step needs: the loaded face (max face of
@@ -108,15 +145,26 @@ def write_reference_umat_material(f, name, euler_deg, grain_number,
 
 def write_uniaxial_static_step(f, nset_names, load_axis, displacement,
                                step_time=80.0, initial_inc=0.01, min_inc=1e-8,
-                               max_inc=1.0, max_increments=10000):
+                               max_inc=1.0, max_increments=10000,
+                               output_interval=0.5,
+                               element_outputs=('LE', 'NE', 'S', 'SDV'),
+                               node_outputs=('U',)):
     """The reference load step: static, nlgeom, the max face of ``load_axis``
     displaced by ``displacement`` along that axis, the min face of every axis
-    held in its own direction, and the reference output requests.
+    held in its own direction, and the output requests. The defaults are the
+    reference model's (``REFERENCE_STEP``).
+
+    Field output is written every ``output_interval`` of step time, so the
+    output database gets step_time / output_interval + 1 frames, and Abaqus
+    shortens increments to land on those times.
 
     ``nset_names`` maps 'XMIN'..'ZMAX' to the node-set names in the model.
     """
     if load_axis not in LOAD_AXES:
         raise ValueError(f'load_axis must be one of {LOAD_AXES}.')
+    element_outputs, node_outputs = validate_step_controls(
+        step_time, initial_inc, min_inc, max_inc, max_increments,
+        output_interval, element_outputs, node_outputs)
     top = nset_names[_FACE_NAMES[load_axis][1]]
     d = _DOF[load_axis]
     f.write('** STEP: Step-1\n**\n')
@@ -134,11 +182,13 @@ def write_uniaxial_static_step(f, nset_names, load_axis, displacement,
     f.write('**\n** OUTPUT REQUESTS\n**\n')
     f.write('*Restart, write, frequency=0\n')
     f.write('**\n** FIELD OUTPUT: F-Output-1\n**\n')
-    f.write('*Output, field, time interval=0.5\n')
-    f.write('*Element Output, directions=YES\n')
-    f.write('LE, NE, S, SDV\n')
-    f.write('**\n** FIELD OUTPUT: F-Output-2\n**\n')
-    f.write('*Node Output\nU,\n')
+    f.write(f'*Output, field, time interval={output_interval:g}\n')
+    if element_outputs:
+        f.write('*Element Output, directions=YES\n')
+        f.write(', '.join(element_outputs) + '\n')
+    if node_outputs:
+        f.write('**\n** FIELD OUTPUT: F-Output-2\n**\n')
+        f.write('*Node Output\n' + ', '.join(node_outputs) + ',\n')
     f.write('**\n** HISTORY OUTPUT: H-Output-1\n**\n')
     f.write('*Output, history, variable=PRESELECT\n')
     f.write('*End Step\n')
@@ -261,6 +311,15 @@ class AbaqusExporter3D:
     write_step : bool
         Write the step in 08 (default True). The face node sets the step
         needs are written even if disabled in ``nset_config``.
+    initial_inc, min_inc, max_inc, max_increments : float, float, float, int
+        *Static increment controls and the *Step inc= limit (defaults 0.01,
+        1e-8, 1.0, 10000, as in the reference).
+    output_interval : float
+        Field output every this much step time (default 0.5): the output
+        database gets step_time / output_interval + 1 frames.
+    element_outputs, node_outputs : str or sequence of str
+        Field output variables, e.g. 'LE, NE, S, SDV' and 'U' (the defaults).
+        The output database grows with the number of variables and frames.
     write_role_elsets : bool
         Write 03b_elsets_roles.inp (Option 2 grouping).
     write_family_elsets : bool
@@ -408,6 +467,13 @@ class AbaqusExporter3D:
             applied_strain:       float = 0.2,
             step_time:            float = 80.0,
             write_step:           bool  = True,
+            initial_inc:          float = 0.01,
+            min_inc:              float = 1e-8,
+            max_inc:              float = 1.0,
+            max_increments:       int   = 10000,
+            output_interval:      float = 0.5,
+            element_outputs              = ('LE', 'NE', 'S', 'SDV'),
+            node_outputs                 = ('U',),
             write_role_elsets:    bool  = True,
             write_family_elsets:  bool  = True,
             write_variant_elsets: bool  = True,
@@ -438,6 +504,9 @@ class AbaqusExporter3D:
             raise ValueError(f'load_axis must be one of {LOAD_AXES}.')
         if not length_scale > 0:
             raise ValueError('length_scale must be > 0.')
+        element_outputs, node_outputs = validate_step_controls(
+            step_time, initial_inc, min_inc, max_inc, max_increments,
+            output_interval, element_outputs, node_outputs)
 
         if index is None:
             if lgi is None:
@@ -466,6 +535,13 @@ class AbaqusExporter3D:
         self.load_axis        = load_axis
         self.applied_strain   = float(applied_strain)
         self.step_time        = float(step_time)
+        self.initial_inc      = float(initial_inc)
+        self.min_inc          = float(min_inc)
+        self.max_inc          = float(max_inc)
+        self.max_increments   = int(max_increments)
+        self.output_interval  = float(output_interval)
+        self.element_outputs  = element_outputs
+        self.node_outputs     = node_outputs
         self.write_step       = bool(write_step)
         if self.write_step:
             # the step's boundary conditions refer to these face node sets
@@ -850,8 +926,13 @@ class AbaqusExporter3D:
                 f'{self.applied_strain:g} x length {length:g} {self._units} '
                 f'= displacement {displacement:g} {self._units}.\n')
         f.write('** Step and output requests as in the reference model.\n**\n')
-        write_uniaxial_static_step(f, nset_names, self.load_axis, displacement,
-                                   step_time=self.step_time)
+        write_uniaxial_static_step(
+            f, nset_names, self.load_axis, displacement,
+            step_time=self.step_time, initial_inc=self.initial_inc,
+            min_inc=self.min_inc, max_inc=self.max_inc,
+            max_increments=self.max_increments,
+            output_interval=self.output_interval,
+            element_outputs=self.element_outputs, node_outputs=self.node_outputs)
 
     # -----------------------------------------------------------------------
     # master file
