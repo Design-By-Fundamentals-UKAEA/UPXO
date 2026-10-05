@@ -15,7 +15,9 @@ class GrainTetrahedra:
 
 
 def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
-                           optimize_netgen=True, minimum_quality=.05):
+                           optimize_netgen=True, minimum_quality=.05,
+                           netgen_all_volumes=False, optimize_threshold=None,
+                           minimum_dihedral=None):
     """Mesh all grains together; verify exact surface conformity and volumes.
 
     Disconnected grain pieces receive separate Gmsh volumes with the same
@@ -25,12 +27,25 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
     Readiness requires conformity, positive volumes, complete grain coverage,
     volume agreement and the requested quality threshold. This is a meshing
     verification, not a general surface-intersection certificate.
+    netgen_all_volumes=True runs the Netgen optimization on every volume, not
+    only those below minimum_quality (a volume whose minimum deteriorates still
+    keeps its baseline). optimize_threshold sets Gmsh Mesh.OptimizeThreshold
+    (elements below it are optimized); None keeps the Gmsh default.
+    The report always includes dihedral-angle statistics. minimum_dihedral
+    (degrees) adds a readiness condition: every tet's smallest dihedral angle
+    must reach it. None leaves readiness on minSICN alone.
     """
     import gmsh
     if not np.isfinite(mesh_size) or mesh_size <= 0:
         raise ValueError('mesh_size must be finite and positive')
     if not 0 <= minimum_quality <= 1:
         raise ValueError('minimum_quality must lie between 0 and 1')
+    if not isinstance(netgen_all_volumes, (bool, np.bool_)):
+        raise ValueError('netgen_all_volumes must be boolean')
+    if optimize_threshold is not None and (not np.isfinite(optimize_threshold) or not 0 < optimize_threshold <= 1):
+        raise ValueError('optimize_threshold must lie in (0, 1]')
+    if minimum_dihedral is not None and (not np.isfinite(minimum_dihedral) or not 0 <= minimum_dihedral < 70.5):
+        raise ValueError('minimum_dihedral must lie in [0, 70.5) degrees')
     validation = validate_tet_surfaces(surface, check_intersections=True)
     if validation['blockers']:
         raise ValueError('Repair surface blockers first: '+'; '.join(validation['blockers']))
@@ -45,6 +60,8 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
                'Mesh.Algorithm3D': 1, 'Mesh.ElementOrder': 1,
                'Mesh.Optimize': 1, 'Mesh.OptimizeNetgen': 0,
                'Mesh.Renumber': 0}
+    if optimize_threshold is not None:
+        options['Mesh.OptimizeThreshold'] = float(optimize_threshold)
     previous_options = {k: gmsh.option.getNumber(k) for k in options}
     name = 'CM02_tets_'+uuid.uuid4().hex
     gmsh.model.add(name)
@@ -127,7 +144,8 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
         chosen = baseline
         retained_volumes = []
         if optimize_netgen:
-            poor_volumes = [(3,v) for v,data in baseline.items() if data[2].min() < minimum_quality]
+            poor_volumes = [(3,v) for v,data in baseline.items()
+                            if netgen_all_volumes or data[2].min() < minimum_quality]
             if poor_volumes:
                 gmsh.model.mesh.optimize('Netgen',dimTags=poor_volumes)
                 chosen = snapshot()
@@ -176,7 +194,11 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
                                             minimum_quality=float(quality[selected].min()))
         if not np.isclose(volumes.sum(),validation['expected_rve_volume'],rtol=1e-8):
             raise RuntimeError('Tetrahedron volumes do not fill the RVE')
+        from .tet_angles import dihedral_summary
+        dihedral = dihedral_summary(points, tets)
         passed = bool(quality.min() >= minimum_quality)
+        if minimum_dihedral is not None:
+            passed = passed and dihedral['minimum'] >= minimum_dihedral
         report = dict(status='TET_MESH_VERIFIED' if passed else 'TET_QUALITY_BELOW_TARGET',
                       ready=passed, grains=len(per_grain), volume_entities=len(volume_grain),
                       tetrahedra=len(tets), nodes=len(points), per_grain=per_grain,
@@ -187,6 +209,10 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
                       quality_percentiles_1_5_50=np.percentile(quality,[1,5,50]).tolist(),
                       quality_metric='Gmsh minSICN', quality_threshold=float(minimum_quality),
                       baseline_retained_for_volumes=retained_volumes,
+                      netgen_all_volumes=bool(netgen_all_volumes),
+                      optimize_threshold=None if optimize_threshold is None else float(optimize_threshold),
+                      dihedral_angles=dihedral,
+                      minimum_dihedral_threshold=None if minimum_dihedral is None else float(minimum_dihedral),
                       below_quality_threshold=int(np.sum(quality < minimum_quality)))
         return GrainTetrahedra(points,tets,labels,quality,report)
     finally:
@@ -194,3 +220,19 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
         for key,value in previous_options.items():gmsh.option.setNumber(key,value)
         if owned:gmsh.finalize()
         elif previous_model in gmsh.model.list():gmsh.model.setCurrent(previous_model)
+
+
+def save_grain_tetrahedra(tets, path):
+    """Write tets as a VTU (cell data grain_id, minSICN) and the report as JSON beside it."""
+    import json
+    from pathlib import Path
+    import pyvista as pv
+    path = Path(path)
+    grid = pv.UnstructuredGrid(
+        np.column_stack((np.full(len(tets.tetrahedra), 4), tets.tetrahedra)).ravel(),
+        np.full(len(tets.tetrahedra), pv.CellType.TETRA, dtype=np.uint8), tets.points)
+    grid.cell_data['grain_id'] = tets.grain_ids
+    grid.cell_data['minSICN'] = tets.quality
+    grid.save(path)
+    path.with_suffix('.json').write_text(json.dumps(tets.report, indent=2))
+    return path
