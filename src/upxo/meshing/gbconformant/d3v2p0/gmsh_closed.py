@@ -8,13 +8,14 @@ from .rve_caps import ClosedRVE
 def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                          check_intersections=False, intersection_retries=2,
                          max_chart_triangles=None, minimum_facet_angle=.1,
-                         frozen_grain_ids=()):
+                         frozen_grain_ids=(), minimum_remesh_opening=None):
     """Regenerate every 2D patch in one Gmsh model, keeping shared curves.
 
     Input is a ClosedRVE with oriented internal triangles and outward caps.
     Grain/face keys keep perpendicular box faces separate. Cap interior nodes
     are free to remesh; common patch nodes (including point contacts) stay fixed.
-    Nonmanifold grain edges are reported, not repaired.
+    Nonmanifold grain edges are reported, not repaired. minimum_remesh_opening
+    is passed to remesh_interfaces_gmsh (remesh-created sharp openings).
     """
     if check_intersections:
         from .facet_angles import small_facet_angles
@@ -37,7 +38,8 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                                     minimum_facet_angle=minimum_facet_angle,
                                     rve_dimensions=surface.report['rve_dimensions'],
                                     _patch_keys=keys, _oriented=True,
-                                    frozen_grain_ids=frozen_grain_ids)
+                                    frozen_grain_ids=frozen_grain_ids,
+                                    minimum_remesh_opening=minimum_remesh_opening)
     pairs, face_ids = result.grain_pairs[:, :2], result.grain_pairs[:, 2]
     exterior = face_ids >= 0
     points, faces = result.points, result.triangles

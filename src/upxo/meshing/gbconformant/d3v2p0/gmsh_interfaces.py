@@ -55,7 +55,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                            *, check_intersections=False, intersection_retries=2,
                            rve_dimensions=None, max_chart_triangles=None, minimum_facet_angle=.1,
                            _patch_keys=None, _oriented=False, _retry_depth=0,
-                           frozen_grain_ids=()):
+                           frozen_grain_ids=(), minimum_remesh_opening=None):
     """Reparametrize and regenerate every interface, retaining shared curve mesh.
 
     Existing 1D mesh nodes and edges are kept, so junctions and RVE-face traces
@@ -70,6 +70,10 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
     rve_dimensions also rejects internal triangles flattened onto an RVE plane.
     algorithm selects a triangular surface mesher: 1 MeshAdapt, 2 Automatic,
     5 Delaunay, or 6 Frontal-Delaunay. Gmsh may fall back internally on failure.
+    minimum_remesh_opening (degrees, with check_intersections) also treats as
+    defects openings below that angle which are sharper than the sharpest
+    source opening within mesh_size (no-sharpening rule).
+    Their charts fall back to the source triangles like other defects.
     """
     import gmsh
     if len(frozen_grain_ids):
@@ -87,13 +91,15 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         result = remesh_interfaces_gmsh(interfaces, mesh_size, verbose, algorithm,
             check_intersections=check_intersections, intersection_retries=intersection_retries,
             rve_dimensions=rve_dimensions, max_chart_triangles=max_chart_triangles,
-            minimum_facet_angle=minimum_facet_angle, _patch_keys=np.column_stack((base,plane_ids)),
+            minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening, _patch_keys=np.column_stack((base,plane_ids)),
             _oriented=_oriented, _retry_depth=_retry_depth)
         result.grain_pairs = result.grain_pairs[:, :base.shape[1]]
         result.report['frozen_grain_ids'] = list(map(int, frozen_grain_ids))
         return result
     if not np.isfinite(minimum_facet_angle) or not 0 <= minimum_facet_angle < 180:
         raise ValueError('minimum_facet_angle must lie in [0, 180)')
+    if minimum_remesh_opening is not None and (not np.isfinite(minimum_remesh_opening) or not 0 < minimum_remesh_opening < 180):
+        raise ValueError('minimum_remesh_opening must lie in (0, 180)')
     if max_chart_triangles is not None and (isinstance(max_chart_triangles,bool) or not isinstance(max_chart_triangles,Integral) or max_chart_triangles<1):
         raise ValueError('max_chart_triangles must be a positive integer or None')
     if not isinstance(intersection_retries,Integral) or intersection_retries<0:
@@ -126,7 +132,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         base_keys=np.sort(interfaces.grain_pairs,axis=1) if _patch_keys is None else np.asarray(_patch_keys)
         source=SimpleNamespace(**vars(interfaces));source.triangles=triangles
         result=remesh_interfaces_gmsh(source,mesh_size,verbose,algorithm,
-            check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,
+            check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
             _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=max(1,_retry_depth))
         result.grain_pairs=result.grain_pairs[:,:base_keys.shape[1]]
         result.report['grain_pairs']=len(pairs)
@@ -238,7 +244,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             retry_source.triangles = triangles
             result = remesh_interfaces_gmsh(
                 retry_source,mesh_size,verbose,algorithm,
-                check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,
+                check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
                 _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,
                 _retry_depth=_retry_depth+1)
             result.grain_pairs = result.grain_pairs[:,:base_keys.shape[1]]
@@ -327,7 +333,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                     partitions[ids[group]] = partition;partition += 1
             retry_source = SimpleNamespace(**vars(interfaces));retry_source.triangles = triangles
             result = remesh_interfaces_gmsh(retry_source,mesh_size,verbose,algorithm,
-                check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,
+                check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
                 _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=_retry_depth+1)
             result.grain_pairs = result.grain_pairs[:,:base_keys.shape[1]]
             result.report.setdefault('parametrization_repairs',[]).insert(0,{
@@ -401,6 +407,24 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             from .facet_angles import small_facet_angles
             folds,angles=small_facet_angles(new_points,faces,minimum_facet_angle)
             if len(folds):bad_geometry[np.unique(folds)]=True
+            created_folds=0
+            if minimum_remesh_opening is not None:
+                # Sharp openings the remesh created (none in the source nearby).
+                # No sharpening: an opening below the limit must not be sharper
+                # than the sharpest source opening within mesh_size of it.
+                new_folds,new_angles=small_facet_angles(new_points,faces,minimum_remesh_opening)
+                if len(new_folds):
+                    centres=new_points[faces[new_folds]].mean(axis=(1,2))
+                    source_folds,source_angles=small_facet_angles(points,triangles,minimum_remesh_opening)
+                    reference=np.full(len(new_folds),float(minimum_remesh_opening))
+                    if len(source_folds):
+                        from scipy.spatial import cKDTree
+                        source_centres=points[triangles[source_folds]].mean(axis=(1,2))
+                        for i,near in enumerate(cKDTree(source_centres).query_ball_point(centres,mesh_size)):
+                            if near:reference[i]=min(reference[i],float(np.min(source_angles[near])))
+                    sharper=new_angles<reference-1e-6
+                    created=np.unique(new_folds[sharper])
+                    created_folds=int(sharper.sum());bad_geometry[created]=True
             tangencies=0
             if rve_dimensions is not None:
                 extent=np.asarray(rve_dimensions,dtype=float)
@@ -418,7 +442,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                 bad_geometry |= np.any((p < -tol)|(p > extent+tol),axis=(1,2))
             if np.any(bad_geometry):
                 if not intersection_retries:
-                    raise RuntimeError(f'{len(hits)} intersections, {len(folds)} small facet angles and {tangencies} cap tangencies remain after Gmsh chart repair')
+                    raise RuntimeError(f'{len(hits)} intersections, {len(folds)} small facet angles, {created_folds} remesh-created sharp openings and {tangencies} cap tangencies remain after Gmsh chart repair')
                 # Restore the exact piecewise-planar source on intersecting
                 # charts. Every triangle becomes a chart with shared edges;
                 # other charts retain their previous computational boundaries.
@@ -436,11 +460,11 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                 # the separate limit on geometric repair passes.
                 result=remesh_interfaces_gmsh(retry_source,mesh_size,verbose,algorithm,
                     check_intersections=True,intersection_retries=intersection_retries-1,
-                    rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,
+                    rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
                     _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=1)
                 result.grain_pairs=result.grain_pairs[:,:base_keys.shape[1]]
                 result.report.setdefault('geometric_repairs',[]).insert(0,dict(
-                    detected_intersections=len(hits),small_facet_angles=len(folds),cap_tangencies=tangencies,restored_source_charts=len(affected)))
+                    detected_intersections=len(hits),small_facet_angles=len(folds),remesh_created_openings=created_folds,cap_tangencies=tangencies,restored_source_charts=len(affected)))
                 result.report['grain_pairs']=len(np.unique(base_keys,axis=0))
                 return result
         report = {'input_triangles': len(triangles), 'output_triangles': len(faces),
@@ -449,6 +473,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                   'remaining_intersections': 0 if check_intersections else None,
                   'remaining_small_facet_angles': 0 if check_intersections else None,
                   'minimum_facet_angle': float(minimum_facet_angle),
+                  'minimum_remesh_opening': None if minimum_remesh_opening is None else float(minimum_remesh_opening),
                   'source_chart_orientation_verified': True,
                   'reoriented_surface_charts': reoriented_charts,
                   'grain_pairs': len(pairs), 'surface_charts': len(surface_pairs),
