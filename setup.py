@@ -47,7 +47,7 @@ setup(
     ],
     extras_require={
         "viz": ["plotly>=5.0.0"],
-        "mesh": ["tetgen>=0.8.2", "gmsh>=4.13"],
+        "mesh": ["tetgen>=0.8.2", "gmsh>=4.13", "trimesh>=4.0.0"],
         "ebsd": ["defdap==0.93.6"],
         "all": ["upxo[viz,mesh,ebsd]"],
     },
