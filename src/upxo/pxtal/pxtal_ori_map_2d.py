@@ -780,7 +780,7 @@ class polyxtal2d():
     def get_upto_nth_order_neighbors(self, grain_id, neigh_order,
                                      recalculate=False, include_parent=True,
                                      output_type='list', plot=False):
-        """
+        r"""
         Return all neighbours up to the nth order for a given grain.
 
         Parameters
@@ -846,7 +846,7 @@ class polyxtal2d():
     def get_nth_order_neighbors(self, grain_id, neigh_order,
                                 recalculate=False, include_parent=True,
                                 plot=False):
-        """
+        r"""
         Return exactly the nth-order neighbours for a given grain.
 
         Examples
@@ -893,7 +893,7 @@ class polyxtal2d():
                                                 recalculate=False,
                                                 include_parent=True,
                                                 output_type='list'):
-        """
+        r"""
         Return all neighbours up to the nth order for every grain.
 
         Parameters
@@ -937,7 +937,7 @@ class polyxtal2d():
     def get_nth_order_neighbors_all_grains(self, neigh_order,
                                            recalculate=False,
                                            include_parent=True):
-        """
+        r"""
         Return exactly the nth-order neighbours for every grain.
 
         Examples
@@ -1222,7 +1222,7 @@ class polyxtal2d():
                           gid_text_kwargs={'fontsize': 10},
                           title_kwargs={'fontsize': 10},
                           label_kwargs={'fontsize': 10}):
-        """
+        r"""
         Map to LGI, the gid keyed values in scalars_dict.
 
         Parameters
