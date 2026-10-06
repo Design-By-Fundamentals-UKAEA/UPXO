@@ -148,7 +148,8 @@ class StageFallbackTests(_Fresh):
         from upxo.meshing.gbconformant.d3v2p1 import tet_smoothing as fast
         p, t, inner = jittered_block(1, n=12)                # 8 blocks per colour: the pool is used
         kw = dict(target=30., max_angle=150., neighbour_floor=20., block_size=3.)
-        serial, rep_serial = fast.smooth_tet_dihedrals(p, t, inner, backend='numpy', **kw)
+        # serial reference with the same kernels as the fallback run ('auto')
+        serial, rep_serial = fast.smooth_tet_dihedrals(p, t, inner, n_workers=1, **kw)
         with mock.patch.object(backend, 'ProcessPoolExecutor', side_effect=OSError('blocked')), \
                 warnings.catch_warnings(record=True):
             warnings.simplefilter('always')
@@ -156,6 +157,7 @@ class StageFallbackTests(_Fresh):
         np.testing.assert_array_equal(serial, failed)
         self.assertGreater(rep_serial['moved_nodes'], 0)
         self.assertEqual(rep_serial['backend']['used'], 'numpy')
+        self.assertEqual(rep_serial['backend']['kernels'], rep_failed['backend']['kernels'])
         self.assertEqual(rep_failed['backend']['used'], 'numpy')
         self.assertIn('blocked', rep_failed['backend']['fallback'])
 
