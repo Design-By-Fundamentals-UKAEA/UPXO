@@ -177,7 +177,8 @@ class Plan:
                     fallback=self.fallback, cores=cores())
 
 
-def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1, numba_kernels=False):
+def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1, numba_kernels=False,
+         max_auto_workers=None):
     """Choose the tier and worker count for a stage call.
 
     backend: 'auto' (default), 'numpy', 'parallel' or 'numba'; 'auto' and
@@ -186,28 +187,34 @@ def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1, num
     worker count, so small inputs run serially (or on one numba thread).
     numba_kernels: the stage has numba kernels; 'auto' and 'numba' then use
     them when numba is available.
+    max_auto_workers: cap on the automatic worker count for stages that slow
+    down with many workers; an explicit n_workers or UPXO_N_WORKERS overrides it.
     """
     if backend not in BACKENDS:
         raise ValueError(f'backend must be one of {BACKENDS}')
     check_workers(n_workers)
     requested = backend
+    automatic = not n_workers and _env_workers() is None
+
+    def workers_for():
+        w = resolve_workers(n_workers)
+        if automatic and max_auto_workers:
+            w = min(w, int(max_auto_workers))
+        if items is not None:
+            w = min(w, max(1, int(items) // max(1, int(min_items_per_worker))))
+        return w
     if backend == 'auto':
         backend = _env_backend() or 'auto'
     fallback = None
     if backend in ('numba', 'auto') and numba_kernels and numba_available():
-        workers = resolve_workers(n_workers)
-        if items is not None:
-            workers = min(workers, max(1, int(items) // max(1, int(min_items_per_worker))))
-        return Plan(requested, 'numba', workers, None)
+        return Plan(requested, 'numba', workers_for(), None)
     if backend == 'numba':
         fallback = ('numba not available' if numba_kernels else 'no numba kernels in this stage') + \
             '; using parallel'
         backend = 'parallel'
     if backend == 'numpy':
         return Plan(requested, 'numpy', 1, fallback)
-    workers = resolve_workers(n_workers)
-    if items is not None:
-        workers = min(workers, max(1, int(items) // max(1, int(min_items_per_worker))))
+    workers = workers_for()
     if workers <= 1:
         return Plan(requested, 'numpy', 1, fallback)
     return Plan(requested, 'parallel', workers, fallback)
