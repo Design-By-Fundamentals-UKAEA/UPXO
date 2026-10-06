@@ -1,7 +1,7 @@
 """numba pair-test kernel: same pairs as d3v2p0 on every tier and thread count."""
 import unittest
 import numpy as np
-from tests.meshing.gbconformant.d3v2p0 import test_surface_intersections as base
+from ..d3v2p0 import test_surface_intersections as base
 from upxo.meshing.gbconformant.d3v2p0.surface_intersections import (find_surface_intersections as reference_find,
                                                                      _intersecting_pairs)
 from upxo.meshing.gbconformant.d3v2p1 import backend

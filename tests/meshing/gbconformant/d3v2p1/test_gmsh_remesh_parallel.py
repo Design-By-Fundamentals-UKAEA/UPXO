@@ -2,13 +2,13 @@
 byte-identical chart import and a valid joint remesh."""
 import unittest
 import numpy as np
-from tests.meshing.gbconformant.d3v2p0 import test_gmsh_interfaces as base_interfaces
-from tests.meshing.gbconformant.d3v2p0 import test_gmsh_closed as base_closed
+from ..d3v2p0 import test_gmsh_interfaces as base_interfaces
+from ..d3v2p0 import test_gmsh_closed as base_closed
 from upxo.meshing.gbconformant.d3v2p0 import discrete_topology as reference_topology
 from upxo.meshing.gbconformant.d3v2p1 import discrete_topology
 from upxo.meshing.gbconformant.d3v2p1.gmsh_interfaces import remesh_interfaces_gmsh
 from upxo.meshing.gbconformant.d3v2p1.gmsh_closed import remesh_closed_rve_gmsh
-from tests.meshing.gbconformant.d3v2p1.test_validation_parallel import closed_block_rve
+from .test_validation_parallel import closed_block_rve
 
 
 class _Swap:

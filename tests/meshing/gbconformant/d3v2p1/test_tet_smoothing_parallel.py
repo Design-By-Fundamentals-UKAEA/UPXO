@@ -81,7 +81,7 @@ class GrainTetrahedraBlockTests(unittest.TestCase):
 
 def _block_rve_tets():
     from upxo.meshing.gbconformant.d3v2p0.gmsh_tets import mesh_repaired_rve_gmsh
-    from tests.meshing.gbconformant.d3v2p1.test_validation_parallel import closed_block_rve
+    from .test_validation_parallel import closed_block_rve
     closed = closed_block_rve()
     return closed, mesh_repaired_rve_gmsh(closed, mesh_size=1.2, minimum_quality=0.)
 
