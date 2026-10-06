@@ -3,7 +3,7 @@ plus worker-count independence and the vectorised topology."""
 import functools
 import unittest
 import numpy as np
-from tests.meshing.gbconformant.d3v2p0 import test_surface_angles as base
+from ..d3v2p0 import test_surface_angles as base
 from upxo.meshing.gbconformant.d3v2p0.surface_angles import _Topology
 from upxo.meshing.gbconformant.d3v2p1 import surface_angles as fast
 
