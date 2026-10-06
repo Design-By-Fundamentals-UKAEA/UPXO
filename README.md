@@ -39,6 +39,24 @@ Or select specific extras:
 
 Requires **Python >= 3.13**. See the [Getting Started wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Getting-started) for environment setup guides.
 
+### Tested environments
+
+| | |
+|---|---|
+| Python | 3.13 (supported, full test suite). 3.14: `upxo[all]` installs, every module imports and the 3D conformal meshing checks pass; the test suite was not run on 3.14. 3.12 and older: pip refuses the install. |
+| Windows | Reference platform: install and full test suite. |
+| Linux x86_64 | CI runs the test suite on Ubuntu with Python 3.13. Every dependency has a wheel. |
+| **Linux aarch64 (ARM)** | **`gmsh` publishes no wheel for this platform, so `upxo[mesh]` and `upxo[all]` cannot be installed. `pip install upxo`, `upxo[viz]` and `upxo[ebsd]` can.** |
+| macOS (arm64, x86_64) | Every dependency has a wheel. UPXO was not run on macOS. |
+
+Dependency versions: the install and checks were run with every direct dependency at its declared minimum (numpy 2.2.6, scipy 1.16.2, numba 0.62.1, pandas 2.3.3, matplotlib 3.10.6, pyvista 0.46.3, scikit-image 0.25.2, scikit-learn 1.7.2, shapely 2.1.1, networkx 3.5) and with the newest releases available on 2026-10-06 (numpy 2.5.3, scipy 1.18.1, numba 0.68.0, pandas 3.0.6, matplotlib 3.11.2, pyvista 0.49.0, scikit-image 0.26.0, scikit-learn 1.9.1, shapely 2.1.2, networkx 3.7). The full table, the install routes tested and further notes are on the [Dependencies wiki page](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Dependencies).
+
+Notes:
+
+- `netlsd` is published as a source distribution only. pip builds it during the install, which needs `setuptools` if build isolation is turned off.
+- On Windows with long paths disabled, an environment whose `site-packages` path is about 150 characters or more fails to install, because of a long file name inside the `jedi` dependency. Create the environment in a shorter path.
+- A pip-installed UPXO writes pipeline output (reports, raw exports, Abaqus files) under `./data` in the working directory, not inside the Python environment. A source checkout writes to `<checkout>/data`.
+
 Canonical package metadata is in **`pyproject.toml`** (`pip install .` / `python -m build`). Optional `requirements.txt` mirrors **core** deps only; use extras (`upxo[all]`) for DefDAP, meshing backends, etc.
 
 ---
