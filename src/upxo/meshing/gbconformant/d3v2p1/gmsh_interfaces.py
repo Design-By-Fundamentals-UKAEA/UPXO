@@ -1,17 +1,9 @@
-"""Gmsh remeshing of shared, labelled discrete grain interfaces."""
-from dataclasses import dataclass
+"""d3v2p0.gmsh_interfaces with faster chart import (byte-identical .msh) and
+the parallel intersection search; results are the same as d3v2p0's."""
 from numbers import Integral
 import uuid
 import numpy as np
-
-
-@dataclass
-class RemeshedInterfaces:
-    points: np.ndarray
-    triangles: np.ndarray
-    grain_pairs: np.ndarray
-    curve_edges: np.ndarray
-    report: dict
+from ..d3v2p0.gmsh_interfaces import RemeshedInterfaces
 
 
 def _directed_boundary(triangles):
@@ -55,7 +47,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                            *, check_intersections=False, intersection_retries=2,
                            rve_dimensions=None, max_chart_triangles=None, minimum_facet_angle=.1,
                            _patch_keys=None, _oriented=False, _retry_depth=0,
-                           frozen_grain_ids=(), minimum_remesh_opening=None):
+                           frozen_grain_ids=(), minimum_remesh_opening=None, n_workers=None,
+                           backend='auto'):
     """Reparametrize and regenerate every interface, retaining shared curve mesh.
 
     Existing 1D mesh nodes and edges are kept, so junctions and RVE-face traces
@@ -123,7 +116,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         triangles[flip] = triangles[flip][:, [0, 2, 1]]
     if max_chart_triangles is not None:
         from types import SimpleNamespace
-        from .surface_charts import disk_charts
+        from ..d3v2p0.surface_charts import disk_charts
         partitions=np.empty(len(triangles),dtype=int);chart=0
         grouped=np.split(np.argsort(pair_id,kind='stable'),np.cumsum(np.bincount(pair_id))[:-1])
         for ids in grouped:
@@ -214,7 +207,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         curves = gmsh.model.getEntities(1)
         if curves:gmsh.model.mesh.createGeometry(curves)
         failed = []
-        from .surface_charts import is_disk_chart
+        from ..d3v2p0.surface_charts import is_disk_chart
         for tag in surface_pairs:
             if not is_disk_chart(source_charts[tag]):
                 failed.append((tag,'Source chart is not a manifold disk'))
@@ -227,7 +220,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             if _retry_depth >= 4:
                 raise RuntimeError(f'Parametrization failed after disk subdivision: {failed[:5]}')
             from types import SimpleNamespace
-            from .surface_charts import disk_charts
+            from ..d3v2p0.surface_charts import disk_charts
             base_keys = np.sort(interfaces.grain_pairs,axis=1) if _patch_keys is None else np.asarray(_patch_keys)
             partitions = np.zeros(len(triangles),dtype=int)
             for chart_index,ids in enumerate(source_chart_ids.values(),1):
@@ -286,7 +279,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             if _retry_depth >= 4:
                 raise RuntimeError(f'Surface meshing failed after chart subdivision: {error}') from error
             from types import SimpleNamespace
-            from .surface_charts import disk_charts
+            from ..d3v2p0.surface_charts import disk_charts
             base_keys = np.sort(interfaces.grain_pairs,axis=1) if _patch_keys is None else np.asarray(_patch_keys)
             partitions = np.zeros(len(triangles),dtype=int)
             for chart_index,ids in enumerate(source_chart_ids.values(),1):
@@ -401,10 +394,10 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             raise RuntimeError('Gmsh produced degenerate triangles')
         if check_intersections:
             from .surface_intersections import find_surface_intersections
-            hits=find_surface_intersections(new_points,faces)
+            hits=find_surface_intersections(new_points,faces,n_workers=n_workers,backend=backend)
             bad_geometry=np.zeros(len(faces),dtype=bool)
             bad_geometry[np.unique(hits)]=True
-            from .facet_angles import small_facet_angles
+            from ..d3v2p0.facet_angles import small_facet_angles
             folds,angles=small_facet_angles(new_points,faces,minimum_facet_angle)
             if len(folds):bad_geometry[np.unique(folds)]=True
             created_folds=0
@@ -461,7 +454,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                 result=remesh_interfaces_gmsh(retry_source,mesh_size,verbose,algorithm,
                     check_intersections=True,intersection_retries=intersection_retries-1,
                     rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
-                    _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=1)
+                    _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=1,n_workers=n_workers,
+                    backend=backend)
                 result.grain_pairs=result.grain_pairs[:,:base_keys.shape[1]]
                 result.report.setdefault('geometric_repairs',[]).insert(0,dict(
                     detected_intersections=len(hits),small_facet_angles=len(folds),remesh_created_openings=created_folds,cap_tangencies=tangencies,restored_source_charts=len(affected)))

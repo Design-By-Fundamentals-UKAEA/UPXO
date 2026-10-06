@@ -1,14 +1,15 @@
-"""Joint remeshing of labelled internal interfaces and planar RVE patches."""
+"""d3v2p0.gmsh_closed using the d3v2p1 interface remesher."""
 from types import SimpleNamespace
 import numpy as np
 from .gmsh_interfaces import remesh_interfaces_gmsh
-from .rve_caps import ClosedRVE
+from ..d3v2p0.rve_caps import ClosedRVE
 
 
 def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                          check_intersections=False, intersection_retries=2,
                          max_chart_triangles=None, minimum_facet_angle=.1,
-                         frozen_grain_ids=(), minimum_remesh_opening=None):
+                         frozen_grain_ids=(), minimum_remesh_opening=None, n_workers=None,
+                         backend='auto'):
     """Regenerate every 2D patch in one Gmsh model, keeping shared curves.
 
     Input is a ClosedRVE with oriented internal triangles and outward caps.
@@ -18,7 +19,7 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
     is passed to remesh_interfaces_gmsh (remesh-created sharp openings).
     """
     if check_intersections:
-        from .facet_angles import small_facet_angles
+        from ..d3v2p0.facet_angles import small_facet_angles
         folds,_=small_facet_angles(surface.points,surface.triangles,minimum_facet_angle)
         if len(folds):
             raise ValueError(f'Input closed surface has {len(folds)} openings below {minimum_facet_angle} degrees; repair its geometry before remeshing')
@@ -39,7 +40,8 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                                     rve_dimensions=surface.report['rve_dimensions'],
                                     _patch_keys=keys, _oriented=True,
                                     frozen_grain_ids=frozen_grain_ids,
-                                    minimum_remesh_opening=minimum_remesh_opening)
+                                    minimum_remesh_opening=minimum_remesh_opening, n_workers=n_workers,
+                                    backend=backend)
     pairs, face_ids = result.grain_pairs[:, :2], result.grain_pairs[:, 2]
     exterior = face_ids >= 0
     points, faces = result.points, result.triangles

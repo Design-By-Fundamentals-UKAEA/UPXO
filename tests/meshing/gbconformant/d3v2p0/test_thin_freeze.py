@@ -67,3 +67,63 @@ class FreezeTests(unittest.TestCase):
         volume = np.einsum('ij,ij->i', p[:,1]-p[:,0], np.cross(p[:,2]-p[:,0],p[:,3]-p[:,0])).sum()/6
         self.assertAlmostEqual(volume, 1., places=8)
         self.assertTrue(np.all(tets.quality > 0))
+
+
+class InscribedCriterionTests(unittest.TestCase):
+    """criterion='inscribed' flags grains that are thin everywhere, not
+    grains that merely have a thin tip or staircase corner."""
+
+    def _thickness(self, a, g):
+        report = detect_thin_grains(a, criterion='inscribed', thickness=99)[1]
+        return report['inscribed_thickness'][g]
+
+    def test_slab_thickness(self):
+        for n, expected in ((1, 1), (2, 1), (3, 3), (4, 3), (5, 5)):
+            a = np.ones((12, 12, 12), int)
+            a[3:3 + n, 2:10, 2:10] = 2
+            self.assertEqual(self._thickness(a, 2), expected, n)
+
+    def test_large_grain_with_thin_tip_is_not_flagged(self):
+        a = np.ones((14, 14, 14), int)
+        a[2:9, 2:9, 2:9] = 2            # 7-voxel cube
+        a[9:13, 5, 5] = 2               # one-voxel spike
+        self.assertIn(2, detect_thin_grains(a)[0])                       # axial rule flags it
+        ids, report = detect_thin_grains(a, criterion='inscribed', thickness=1)
+        self.assertNotIn(2, ids)
+        self.assertEqual(report['inscribed_thickness'][2], 7.0)
+
+    def test_small_and_thin_grains_are_flagged(self):
+        a = np.ones((10, 10, 10), int)
+        a[4, 4, 4] = 2                  # single voxel
+        a[1:3, 1:3, 1:3] = 3            # 2x2x2 cube
+        a[6, 1:9, 1:9] = 4              # one-voxel plate
+        ids, report = detect_thin_grains(a, criterion='inscribed', thickness=1)
+        self.assertEqual(sorted(set(ids) & {2, 3, 4}), [2, 3, 4])
+        self.assertTrue(all(r[0].startswith('inscribed_thickness_')
+                            for g, r in report['reasons'].items() if g in (2, 3, 4)))
+
+    def test_rve_boundary_counts_as_outside_and_label_zero_works(self):
+        a = np.zeros((6, 6, 6), int)    # grain 0 fills the RVE
+        self.assertEqual(self._thickness(a, 0), 5.0)
+        a = np.ones((8, 8, 8), int)
+        a[0, :, :] = 0                  # one-voxel layer on the RVE face
+        self.assertEqual(self._thickness(a, 0), 1.0)
+
+    def test_explicit_and_switches_still_apply(self):
+        a = np.ones((9, 9, 9), int)
+        a[2:7, 2:7, 2:7] = 2
+        self.assertEqual(detect_thin_grains(a, criterion='inscribed', enabled=False)[0], [])
+        self.assertEqual(detect_thin_grains(a, criterion='inscribed', automatic=False,
+                                            explicit_ids=[2])[0], [2])
+
+    def test_default_criterion_and_report_unchanged(self):
+        a = np.ones((9, 9, 9), int)
+        a[4, 4, 4] = 3
+        ids, report = detect_thin_grains(a)
+        self.assertNotIn('criterion', report)
+        self.assertNotIn('inscribed_thickness', report)
+        self.assertEqual(report['reasons'][3][0], 'thin_run_x')
+
+    def test_unknown_criterion_is_rejected(self):
+        with self.assertRaises(ValueError):
+            detect_thin_grains(np.ones((3, 3, 3), int), criterion='medial')

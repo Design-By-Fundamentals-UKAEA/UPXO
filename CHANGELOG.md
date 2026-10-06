@@ -28,6 +28,27 @@ All notable changes to UPXO are documented in this file.
   - `geoEntities/mulsline2d.py`: `ring2d.translate(dx, dy, seen=None)`.
   - Demos: `src/upxo/demos/geom/poly2d01.ipynb` to `poly2d06.ipynb` — `Polygon2d` basics, the Shapely converter, `subdivide_segment` with a hand-rolled boundary-roughening preview, and conversion of Voronoi, Monte Carlo (Technique B) and Technique A grain structures.
   - Tests: `tests/geoEntities/test_polygon2d*.py`, `tests/pxtal/test_geometrification_polygon2d.py`, `tests/pxtal/test_polygon2d_from_shapely_grainmanifold.py`.
+- **3D conformal tet meshing: element-quality controls** (`meshing/gbconformant/d3v2p0`). Every angle limit is a user input; tet limits are reported, not enforced.
+  - Thin grains: `thin_freeze.detect_thin_grains` (inscribed-thickness criterion) selects grains to freeze; `local_thickness.local_thickness` / `node_local_thickness` give local grain thickness from voxel labels.
+  - Interface smoothing: `interfaces.smooth_interfaces` gains `thickness_cap_fraction`, `minimum_wedge_angle`, `minimum_corner_angle` and `iterations_by_pair` (per grain pair). `guard_relaxation.relax_guarded_interfaces` re-smooths regions rolled back by the geometry guard.
+  - Facet openings: `facet_angles.edge_openings` and `facet_angles.sharpens` implement the no-sharpening rule (an opening below the limit may not get sharper; one at or above it may not fall below it). Gmsh remeshes (`gmsh_interfaces`, `gmsh_closed`) take `minimum_remesh_opening` and restore source charts where a remesh creates a sharper opening.
+  - Surface triangles: `surface_angles.improve_surface_angles` raises the smallest triangle angles by diagonal flips, node relocation on the surface or curve, and short-edge collapses, with `wedge_limit` for the no-sharpening rule. `surface_metrics.voxel_like_fraction` reports the share of grain-boundary area that is still voxel-like.
+  - Tetrahedra: `tet_angles.dihedral_angles` / `dihedral_summary`; `gmsh_tets.mesh_repaired_rve_gmsh` gains `netgen_all_volumes`, `optimize_threshold` and `minimum_dihedral` (reported); `gmsh_tets.save_grain_tetrahedra`. `tet_smoothing.smooth_grain_tetrahedra` moves interior and grain-surface nodes to raise the smallest dihedral angle (floors anchored to the starting angles, neighbour floor, maximum angle, surface triangle floors). `tet_swaps.swap_grain_tetrahedra` (2-3 and 3-2 swaps inside grains) and `tet_swaps.insert_grain_tetrahedra` (node insertion).
+  - Views: `grain_subset_view` (grains above a size percentile), `tet_quality_view` (clipped tets coloured by dihedral angle), `quality_plots.triangle_quality_distribution` / `tet_quality_distribution` (one histogram per measure, counting the elements within a fraction of the way from the worst value to the best possible) and `quality_plots.show_surface` (grain-boundary surface with or without edges).
+  - Tests: `tests/meshing/gbconformant/d3v2p0/`.
+- **3D conformal tet meshing: faster stages** (`meshing/gbconformant/d3v2p1`). Same function names and arguments as `d3v2p0`, plus `backend` and `n_workers`; stages without a faster version are imported from `d3v2p0`.
+  - Faster stages: grain-interface and joint Gmsh remesh, pre-tet surface validation, triangle intersection search, surface angle repair, tet meshing (one Gmsh model per grain, grains in parallel), tet dihedral smoothing (8-colour block phases in parallel) and tet swaps.
+  - Results: the remeshes, validation, intersection search and swaps give the same output as `d3v2p0`; angle repair and tet smoothing follow the same rules in a different order, so their meshes are equivalent, not identical.
+  - `backend.py`: CPU detection (physical and usable cores), automatic worker count (physical cores), tiers `'numpy'` (serial, pure numpy), `'parallel'` (worker processes) and `'numba'` (compiled kernels), chosen by argument, then `UPXO_BACKEND` / `UPXO_N_WORKERS`, then automatically. Without numba or worker processes every stage runs serially in numpy; if worker processes fail, the stage reruns serially. Each stage report records the tier and worker count used.
+  - numba kernels (`numba_intersections`, `numba_smoothing`, `numba_swaps`) for the intersection search, smoothing trial evaluation and surface checks, and swap acceptance.
+  - Tests: `tests/meshing/gbconformant/d3v2p1/`.
+- **Twinned FCC 3D: pole-figure sample symmetry and EBSD-against-synthetic comparison** (`twinned_simple_3d/steps/steps_visualization_export.py`).
+  - `sample_frame_quats` converts DefDAP passive quaternions to the sample frame and replicates them through the sample-symmetry group (180 deg rotations about the selected RD/TD/ND axes; default all three).
+  - `plot_pole_figure` gains `apply_sample_symmetry` / `use_rd` / `use_td` / `use_nd`, `projection` (`'stereographic'` or `'equal_area'`), `hemisphere` and `plot_mode` (`'density'`, `'scatter'`, `'hybrid'`).
+  - `plot_pole_figure_comparison` (EBSD, synthetic and overlay or density difference, on one shared colour scale) and `pretwin_pole_figure_populations` (EBSD parent grains against assigned twin hosts).
+  - Tests: `tests/twinned_simple_3d/test_pole_figure_steps.py`.
+- **Twinned FCC 3D Abaqus export: step increment and field-output controls**: `AbaqusExporter3D` and `export_abaqus_mesh` take `initial_inc`, `min_inc`, `max_inc`, `max_increments`, `output_interval` and `element_outputs` / `node_outputs` (defaults `('LE', 'NE', 'S', 'SDV')` / `('U',)`), validated by `validate_step_controls`. The output database gets `step_time / output_interval + 1` frames.
+- **Demonstration notebooks** (`src/upxo/demonstrations/`): 3D conformal meshing (`CM02`, `CM03`, `CM04`, `CM04_dev`) and 2D conformal meshing (`confMesh2d_*`).
 
 ### Changed
 
@@ -37,6 +58,8 @@ All notable changes to UPXO are documented in this file.
 ### Fixed
 
 - **`GrainManifold2D.smooth_interfaces`**: cells could extend past the label-image domain after smoothing. `_laplacian_step` holds only vertices lying exactly on the domain edge, and the negative-`mu` Taubin pass can move other boundary-adjacent vertices outward. `smooth_interfaces` now ends with `trim_to_rve(bounds=(0, 0, width, height))`. `trim_to_rve(bounds)` remains available for cropping to a sub-window. Tests: `tests/pxtal/test_grainmanifold2d_domain_clip.py`.
+
+- **Twinned FCC 3D texture comparison** (`twinned_simple_3d/steps/steps_distribution_viewer.py`): `compute_pole_figure_delta_mud_iqr` used the DefDAP quaternions without converting them to the sample frame, and neither it nor `plot_texture_residual` applied sample symmetry. Both now use `sample_frame_quats`, like every other pole figure, with `apply_sample_symmetry` / `use_rd` / `use_td` / `use_nd`.
 
 ### Removed
 

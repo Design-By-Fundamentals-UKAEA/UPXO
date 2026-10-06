@@ -217,7 +217,8 @@ def compute_texture_component_vf_comparison(rg, cleaner, n_peaks=4, bandwidth_de
 
 
 def compute_pole_figure_delta_mud_iqr(rg, cleaner, pole_family='100', grid_points='auto',
-                                       half_width_deg=7.5, unit_normalize=False):
+                                       half_width_deg=7.5, unit_normalize=False, apply_sample_symmetry=True,
+                                       use_rd=True, use_td=True, use_nd=True):
     """Texture representativeness, measure 2: builds a {pole_family}
     pole figure for each population (EBSD vs. the synthetic structure)
     and computes the interquartile range of their MUD (Multiples of
@@ -239,6 +240,13 @@ def compute_pole_figure_delta_mud_iqr(rg, cleaner, pole_family='100', grid_point
     ebsd_gids, ebsd_q = grain_avg_quats(rg.lfi_ebsd, rg.quat_ebsd)
     sgs_gids, sgs_q, _ = _sgs_quat_population(cleaner)
 
+    # Same crystal->sample conversion and sample symmetry as every other
+    # pole figure (sample_frame_quats); earlier versions skipped both.
+    from upxo.pxtal.twinned_simple_3d.steps.steps_visualization_export import sample_frame_quats
+    ebsd_q, ebsd_gids = sample_frame_quats({'gids': ebsd_gids, 'quats': ebsd_q},
+                                           apply_sample_symmetry, use_rd, use_td, use_nd)
+    sgs_q, sgs_gids = sample_frame_quats({'gids': sgs_gids, 'quats': sgs_q},
+                                         apply_sample_symmetry, use_rd, use_td, use_nd)
     pf_ebsd = PoleFigure(ebsd_q, convention='quaternion', gids=ebsd_gids)
     pf_sgs = PoleFigure(sgs_q, convention='quaternion', gids=sgs_gids)
 
@@ -249,7 +257,8 @@ def compute_pole_figure_delta_mud_iqr(rg, cleaner, pole_family='100', grid_point
 
 def plot_texture_residual(ebsd_stage, sgs_stage, pole_family='100', grid_points='auto',
                            half_width_deg=7.5, unit_normalize=False,
-                           title_ebsd='EBSD', title_sgs='SGS'):
+                           title_ebsd='EBSD', title_sgs='SGS', apply_sample_symmetry=True,
+                           use_rd=True, use_td=True, use_nd=True):
     """The three-panel EBSD | SGS | Difference pole-figure plot -- MUD
     density for each population side by side, then their difference,
     with its IQR shown in the difference panel's own title.
@@ -266,10 +275,11 @@ def plot_texture_residual(ebsd_stage, sgs_stage, pole_family='100', grid_points=
     import matplotlib.pyplot as plt
     from upxo.viz.xphy.pole_figure import PoleFigure
 
+    from upxo.pxtal.twinned_simple_3d.steps.steps_visualization_export import sample_frame_quats
+
     def _pf(stage):
-        quats = stage['quats'].copy()
-        quats[:, 1:] *= -1
-        return PoleFigure(quats, convention='quaternion', gids=stage['gids'])
+        quats, gids = sample_frame_quats(stage, apply_sample_symmetry, use_rd, use_td, use_nd)
+        return PoleFigure(quats, convention='quaternion', gids=gids)
 
     pf_ebsd = _pf(ebsd_stage)
     pf_sgs = _pf(sgs_stage)
