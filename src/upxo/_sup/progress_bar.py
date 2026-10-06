@@ -27,8 +27,9 @@ def my_computation(total=None):
     # Your computation here (you can remove time.sleep if needed)
     time.sleep(0.1)
 
-# Example 1: With total iterations
-my_computation(total=50)
+if __name__ == '__main__':
+    # Example 1: With total iterations
+    my_computation(total=50)
 
-# Example 2: Without total iterations
-my_computation()
+    # Example 2: Without total iterations
+    my_computation()
