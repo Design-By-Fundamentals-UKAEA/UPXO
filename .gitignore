@@ -145,13 +145,12 @@ src/upxo/Important links.md
 /src/upxo/meshing/gbconformant/README.md
 /src/upxo/meshing/gbconformant/d3v2p0/COMMIT_MESSAGES.txt
 
-# Legacy cleaving module, superseded by meshing/gbconformant/cleaving3dV1P0/
+# Local-only cleaving modules (discontinued; not part of UPXO)
 /src/upxo/meshing/cleaving/
 
 # Stray local duplicate of meshing/gbconformant/d3v2p0/
 /src/upxo/meshing/confMesh3D_01/
 
-# WIP: cleaving migration destination, not ready to commit yet
 /src/upxo/meshing/gbconformant/cleaving3dV1P0/
 /tests/meshing/gbconformant/cleaving3dV1P0/
 
@@ -159,3 +158,8 @@ src/upxo/Important links.md
 # path from the pre-rename project layout. Kept local-only.
 /src/upxo/interfaces/matlab/write_fcc_miso_lookup_table909090.m
 /src/upxo/interfaces/matlab/write_fcc_miso_lookup_table360180360.m
+
+# Unused files that do not compile; kept locally, not part of UPXO
+/src/upxo/algorithms/alg310_bu.py
+/src/upxo/interfaces/abaqus/upxo_aba.py
+/src/upxo/pxtalops/morphochar.py
