@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from scipy.spatial import Delaunay
 from upxo.meshing.gbconformant.d3v2p0.tet_angles import dihedral_angles
-from upxo.meshing.gbconformant.d3v2p1 import tet_smoothing as fast
+from upxo.meshing.gbconformant.d3v2p1 import backend, tet_smoothing as fast
 
 
 def jittered_block(seed, n=7):
@@ -77,6 +77,51 @@ class GrainTetrahedraBlockTests(unittest.TestCase):
             np.testing.assert_array_equal(one.points[nodes, axis], side * ext[axis])
         self.assertGreaterEqual(dihedral_angles(one.points, one.tetrahedra).min(),
                                 min(dihedral_angles(tets.points, tets.tetrahedra).min(), 30.) - 1e-6)
+
+
+def _block_rve_tets():
+    from upxo.meshing.gbconformant.d3v2p0.gmsh_tets import mesh_repaired_rve_gmsh
+    from tests.meshing.gbconformant.d3v2p1.test_validation_parallel import closed_block_rve
+    closed = closed_block_rve()
+    return closed, mesh_repaired_rve_gmsh(closed, mesh_size=1.2, minimum_quality=0.)
+
+
+@unittest.skipUnless(backend.numba_available(), 'numba not available')
+class KernelSmoothingTests(unittest.TestCase):
+    """numba kernels against the numpy path: same moved nodes, positions equal
+    to rounding, and the rule guarantees."""
+
+    def assert_same(self, a, b, tol=1e-9):
+        moved_a = np.flatnonzero(np.any(a[0] != a[1], axis=1))
+        moved_b = np.flatnonzero(np.any(b[0] != b[1], axis=1))
+        np.testing.assert_array_equal(moved_a, moved_b)
+        np.testing.assert_allclose(a[0], b[0], rtol=0, atol=tol)
+
+    def test_interior_nodes(self):
+        p, t, inner = jittered_block(2, n=9)
+        kw = dict(target=30., max_angle=150., neighbour_floor=20., block_size=3.)
+        ref, rep_ref = fast.smooth_tet_dihedrals(p, t, inner, backend='numpy', **kw)
+        got, rep = fast.smooth_tet_dihedrals(p, t, inner, n_workers=2, **kw)
+        self.assertEqual(rep['backend']['kernels'], 'numba')
+        self.assertEqual(rep_ref['backend']['kernels'], 'numpy')
+        self.assertGreater(rep['moved_nodes'], 0)
+        self.assert_same((got, p), (ref, p))
+        a0, a1 = dihedral_angles(p, t), dihedral_angles(got, t)
+        mn0, mn1 = a0.min(1), a1.min(1)
+        self.assertTrue(np.all(mn1 >= np.where(mn0 >= 30., 20., np.maximum(mn0, 20.)) - 1e-6)
+                        or np.all(mn1 >= np.where(mn0 >= 30., 20., mn0) - 1e-6))
+
+    def test_surface_nodes(self):
+        closed, tets = _block_rve_tets()
+        ns = len(closed.points)
+        kw = dict(surface=closed, target=40., neighbour_floor=30., triangle_target=35., triangle_floor=25.,
+                  wedge_limit=30., minimum_facet_angle=15., block_size=2.)
+        ref = fast.smooth_grain_tetrahedra(tets, ns, backend='numpy', **kw)
+        got = fast.smooth_grain_tetrahedra(tets, ns, n_workers=2, **kw)
+        self.assertEqual(got.report['dihedral_smoothing']['backend']['kernels'], 'numba')
+        self.assertGreater(got.report['dihedral_smoothing']['moved_surface_nodes'], 0)
+        self.assert_same((got.points, tets.points), (ref.points, tets.points))
+        self.assertAlmostEqual(got.report['total_volume'], 512.)
 
 
 if __name__ == '__main__':
