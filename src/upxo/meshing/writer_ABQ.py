@@ -3,7 +3,7 @@ Low-level Abaqus keyword writers for UPXO meshes.
 
 Helpers to write ``*Elset`` / ``*Nset`` blocks. 2D conformal INP export is
 ``export_confmesh2d_inp``. 3D partitioned export lives in
-``confMesh3d.export``, ``fm_steel_3d.mesh_exporter_3d``, and
+``gbconformant.d3v2p0.abaqus_export``, ``fm_steel_3d.mesh_exporter_3d``, and
 ``twinned_simple_3d.abaqus_exporter_3d``.
 """
 
