@@ -1,7 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from ellipsoid_fit import ellipsoid_fit, ellipsoid_plot, data_regularize
+try:
+    from .ellipsoid_fit import ellipsoid_fit, ellipsoid_plot, data_regularize
+except ImportError:                      # run as a script from this folder
+    from ellipsoid_fit import ellipsoid_fit, ellipsoid_plot, data_regularize
 
 
 def set_axes_equal(ax: plt.Axes):
