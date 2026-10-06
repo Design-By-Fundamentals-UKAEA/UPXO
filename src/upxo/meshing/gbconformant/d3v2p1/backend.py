@@ -296,3 +296,13 @@ class numba_threads:
         import numba
         numba.set_num_threads(self.previous)
         return False
+
+
+def single_thread_numba():
+    """In a worker process: numba kernels run on one thread (the processes
+    already use the cores)."""
+    try:
+        import numba
+        numba.set_num_threads(1)
+    except Exception:
+        pass
