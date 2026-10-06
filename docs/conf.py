@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath('../src'))
 project = 'UPXO: UKAEA Poly-XTAL Operations'
 copyright = '2026, UK Atomic Energy Authority (UKAEA)'
 author = 'Dr. Sunil Anandatheertha'
-version = '1.3.0'
-release = '1.3.0'
+version = '1.3.1'
+release = '1.3.1'
 
 extensions = [
     'sphinx_rtd_theme',
@@ -47,7 +47,6 @@ autodoc_mock_imports = [
     'openpyxl',
     'netlsd',
     'meshio',
-    'pygmsh',
     'gmsh',
     'statsmodels',
 ]

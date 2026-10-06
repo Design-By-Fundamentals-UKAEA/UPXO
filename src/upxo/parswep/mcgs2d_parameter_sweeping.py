@@ -306,7 +306,7 @@ class parameter_sweep():
         """Initialize."""
         if type(N) == int and N != 0 and N < 25:
             self.N = [n+1 for n in range(N)]
-            from mcgs import monte_carlo_grain_structure as mcgs
+            from upxo.ggrowth.mcgs import mcgs
             self.gsi = {}
             for n in range(N):
                 self.gsi[n+1] = mcgs(study='para_sweep')
@@ -775,10 +775,10 @@ class parameter_sweep():
             len(ps.N).
             The default is 'global'.
         mesher : STR, optional
-            Specify the mesher. Options are 'upxo', 'pygmsh', 'gmsh', 'abaqus'
+            Specify the mesher. Options are 'upxo', 'gmsh', 'abaqus'
             -'upxo': applies only to pizellated mesh (non-conformal) of the 2D,
             3D MCGS.
-            -'pygmsh', 'gmsh': Applies to geometrised 2D MCGS, 3D MCGS, 2D VTGS
+            -'gmsh': Applies to geometrised 2D MCGS, 3D MCGS, 2D VTGS
             and 3D VTGS
             -'abaqus': applies to 2D VTGS and geometrised 2D MCGS
             This will write data to disk. UPXO-ABAQUS python scripts are then

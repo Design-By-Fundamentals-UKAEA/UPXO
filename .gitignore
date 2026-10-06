@@ -170,3 +170,7 @@ src/upxo/Important links.md
 
 # Local-only planning notes for the general EBSD module
 /src/upxo/ebsd/admin/
+
+# Discontinued, unused meshing code; kept locally, not part of UPXO
+/src/upxo/meshing/confMesh3d/
+/src/upxo/meshing/pxtalmesh_01.py

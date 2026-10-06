@@ -538,7 +538,7 @@ def make_upxo_point2d_RANDU(n_points):
     '''
     from datatype_handlers import make_upxo_point2d_RANDU
     '''
-    from point2d import point2d
+    from upxo.geoEntities.point2d import Point2d as point2d
     from numpy.random import uniform as npru
     return [point2d(x=npru(), y=npru()) for _ in range(n_points)]
 
@@ -972,7 +972,9 @@ def coords_to_UpxoPointList(coords=None,
                                     coords_format = 'locx_and_locy',
                                     lean = 'no')
     """
-    from point2d import point2d
+    raise NotImplementedError(
+        'coords_to_UpxoPointList is not available: the point2d class with the lean option it built points '
+        'with no longer exists. Use upxo.geoEntities.point2d.Point2d.')
     if not isinstance(coords, np.ndarray):
         coords = np.array(coords)
 

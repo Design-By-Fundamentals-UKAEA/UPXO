@@ -207,13 +207,14 @@ twin_variants = [(k1 / np.sqrt(3), eta1 / np.sqrt(6))
                  for eta1 in eta1_directions]
 
 
-loading_axis_miller = [1, 0, 0]   # [100] loading direction
-euler_angles = (0, 0, 0)       # Example Euler angles for the grain
-activated_twins = calculate_activated_twins(
-    loading_axis_miller, euler_angles, twin_variants, stress=100  # MPa
-)
-print(activated_twins)
-activated_twins[0]
+if __name__ == '__main__':
+    loading_axis_miller = [1, 0, 0]   # [100] loading direction
+    euler_angles = (0, 0, 0)       # Example Euler angles for the grain
+    activated_twins = calculate_activated_twins(
+        loading_axis_miller, euler_angles, twin_variants, stress=100  # MPa
+    )
+    print(activated_twins)
+    activated_twins[0]
 
 
-calculate_twin_plane_normal(activated_twins[0]['K1'], euler_angles)
+    calculate_twin_plane_normal(activated_twins[0]['K1'], euler_angles)

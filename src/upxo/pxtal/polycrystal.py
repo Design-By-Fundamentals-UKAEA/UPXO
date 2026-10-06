@@ -521,7 +521,7 @@ class PolyXTAL():
         """
         CALL: px.make_PX_flags
         """
-        PolyXTAL.PX_flags = {'f01': None, # 1D NP array: specifies meshing tool to employ             : STR : abaqus OR gmsh OR pygmsh
+        PolyXTAL.PX_flags = {'f01': None, # 1D NP array: specifies meshing tool to employ             : STR : abaqus OR gmsh
                           }
     #--------------------------------------------------------------------------------------------------------------------------------
     @property

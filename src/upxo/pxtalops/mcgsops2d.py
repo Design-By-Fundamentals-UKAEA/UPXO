@@ -164,7 +164,7 @@ def find_gb_jp(gs=None,
     # --------------------------------------------------
     # Sort the grain boundary junction points CW or CCW
     if sortjp != 'ignore':
-        from upxo.gbops.mcgb2dops import sort_gb_junction_points
-        jp_sorted, jp_sorti = sort_gb_junction_points(jp_grainwise, sortjp)
+        raise NotImplementedError(
+            f"sortjp={sortjp!r} is not supported; only 'ignore' is available.")
     # --------------------------------------------------
     return grain_boundaries, jp_grainwise

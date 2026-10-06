@@ -9,7 +9,7 @@ class fmsgs():
     :mod:`upxo.pxtal.fm_steel_3d` pipeline for production work.
     Methods raise ``NotImplementedError`` until implemented.
     """
-    __slots__ = ('gs', 'tx', 'clset', 'lpaci', 'lpagi', '')
+    __slots__ = ('gs', 'tx', 'clset', 'lpaci', 'lpagi')
 
     @classmethod
     def from_mcgs(self):

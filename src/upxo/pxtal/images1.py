@@ -9,7 +9,7 @@ production until this stack is fully implemented.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple, Dict, Any, Optional, List, Set
 import numpy as np
 import networkx as nx
@@ -46,7 +46,7 @@ class VoxelConfig:
 @dataclass
 class ImageConfig:
     """Top-level config for :class:`IMAGE_3D_New` (voxel, connectivity, debug)."""
-    voxel: VoxelConfig = VoxelConfig()
+    voxel: VoxelConfig = field(default_factory=VoxelConfig)
     connectivity: int = 1
     debug_mode: bool = False
 

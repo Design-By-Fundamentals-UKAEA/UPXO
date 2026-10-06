@@ -602,42 +602,17 @@ Part 4: Meshing and Export
 Workflow 15 — Conformal Tetrahedral Meshing (3D)
 -------------------------------------------------
 
-Conformal (grain-boundary-aligned) tetrahedral meshing is a **5-stage functional
-pipeline** in ``upxo.meshing.confMesh3d`` — not a single mesher class. Each stage
-is a plain function taking the previous stage's result.
+Conformal (grain-boundary-aligned) tetrahedral meshing of a voxel grain structure is done by
+the stage functions in ``upxo.meshing.gbconformant.d3v2p0``, with faster versions of the slow
+stages in ``upxo.meshing.gbconformant.d3v2p1`` (same functions, plus ``backend`` and
+``n_workers``). Each stage takes the previous stage's result. The sequence is: voxel cleanup,
+smoothed grain-boundary surfaces, closed RVE surface, Gmsh remesh, surface angle repair,
+validation, one tet mesh per grain, tet smoothing and swaps, Abaqus export.
 
-.. code-block:: python
-
-   from upxo.meshing.confMesh3d import (
-       run_surface_nets, build_conformal_surface_complex,
-       validate_surface_complex, fix_winding,
-       generate_conformal_tet_mesh, export_conformal_mesh,
-   )
-
-   voxel_size = 1.0  # microns per voxel
-
-   # Stage 1 — Extract the multi-label grain-boundary surface (marching-cubes-like)
-   sn_result = run_surface_nets(lgi_3d, voxel_size)
-
-   # Stage 2 — Build the shared-vertex conformal surface complex
-   complex_ = build_conformal_surface_complex(sn_result)
-
-   # Stage 3 — Validate (watertight, volume, bounds) and fix triangle winding
-   report = validate_surface_complex(complex_, lgi_3d)
-   print(report)
-   complex_ = fix_winding(complex_)
-
-   # Stage 4 — Generate the conformal tet mesh via gmsh
-   # Must be called before gmsh.finalize()
-   gmsh_result = generate_conformal_tet_mesh(complex_)
-
-   # Stage 5 — Export to Abaqus .inp (+ optional meshio formats)
-   # all_quats: {grain_id: quaternion(4,)} — per-grain crystal orientation
-   export_conformal_mesh(gmsh_result, all_quats, voxel_size=voxel_size)
-
-See ``src/upxo/demos/confMesh/confMesh3d1.ipynb`` (and the numbered notebooks
-``confMesh3d2.ipynb`` through ``confMesh3d12.ipynb``, each covering a specific
-aspect of the pipeline) for complete, runnable references.
+See the wiki page `GB-conformant 3D <https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/GB-conformant-3D>`_
+and the notebook ``confMesh/tet_mesh_v2p1_A.ipynb`` in the
+`UPXO-demos <https://github.com/Design-By-Fundamentals-UKAEA/UPXO-demos>`_ repository for a complete,
+runnable reference.
 
 ----
 

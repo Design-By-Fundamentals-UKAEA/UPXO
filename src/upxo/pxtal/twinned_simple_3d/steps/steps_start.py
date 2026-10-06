@@ -9,11 +9,11 @@ report.html covering the whole run.
 from pathlib import Path
 
 import upxo
+from upxo._sup.data_dir import default_data_dir
 from upxo.reporting import ReportSession
 
-# <repo_root>/data, where <repo_root> is wherever this upxo install lives
-# (upxo/__init__.py -> upxo/ -> src/ -> repo root).
-DEFAULT_OUTPUT_DIR = Path(upxo.__file__).resolve().parents[2] / "data"
+# <checkout>/data in a source checkout, otherwise ./data under the working directory.
+DEFAULT_OUTPUT_DIR = default_data_dir()
 
 
 def open_pipeline_report(output_dir=DEFAULT_OUTPUT_DIR, researcher_name="",

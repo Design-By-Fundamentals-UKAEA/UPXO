@@ -108,7 +108,8 @@ def PROFILE_up2d_INST(n, lean):
     PROFILE_up2d_INST(10000, 'ignore')
     """
     import cProfile
-    from point2d import point2d
+    raise NotImplementedError(
+        'PROFILE_up2d_INST is not available: the point2d class with the lean option it profiled no longer exists.')
     profiler = cProfile.Profile()
     profiler.enable()
 

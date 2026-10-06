@@ -12,7 +12,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="upxo",
-    version="1.3.0",
+    version="1.3.1",
     author="Dr. Sunil Anandatheertha",
     author_email="vaasu.anandatheertha@ukaea.uk",
     description=(
@@ -44,6 +44,8 @@ setup(
         "openpyxl>=3.1.0",
         "ipywidgets>=8.0.0",
         "Pillow>=10.0.0",
+        "statsmodels>=0.14.0",
+        "netlsd>=1.0.2",
     ],
     extras_require={
         "viz": ["plotly>=5.0.0"],

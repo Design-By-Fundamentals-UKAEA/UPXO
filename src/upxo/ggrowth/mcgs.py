@@ -1668,16 +1668,14 @@ class grid():
         optput_string_02 = f' |||| No. of grains detected = {GrStruct.n}'
         print(optput_string_01 + optput_string_02)
 
-    @decorators.port_doc('upxo.viz.gsviz', 'see_mcgs2d_features')
     def plotgs(self, M=[0, 4, 8, 12, 16], cmap='jet', figsize=(5,5),
                cbtick_incr=2, mbar=True, mbar_length=10, mbar_loc='bot_left'):
         """
         Plot 2D grain structure features.
         """
-        from upxo.viz.gsviz import see_mcgs2d_features
-        see_mcgs2d_features(M=M, mcgs2d_upxo=self, cmap=cmap, figsize=figsize,
-                           cbtick_incr=cbtick_incr, mbar=mbar, mbar_length=mbar_length,
-                           mbar_loc=mbar_loc)
+        raise NotImplementedError(
+            'plotgs is not available on the grid object. Plot a temporal slice instead, '
+            'for example pxt.gs[tslice].plotgs(...).')
 
     @property
     def pxtal_length(self):

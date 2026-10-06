@@ -8,9 +8,10 @@ name/output folder swapped from "TwinnedFCC" to "FMSteel3D".
 from pathlib import Path
 
 import upxo
+from upxo._sup.data_dir import default_data_dir
 from upxo.reporting import ReportSession
 
-DEFAULT_OUTPUT_DIR = Path(upxo.__file__).resolve().parents[2] / "data"
+DEFAULT_OUTPUT_DIR = default_data_dir()
 
 
 def open_pipeline_report(output_dir=DEFAULT_OUTPUT_DIR, researcher_name="",

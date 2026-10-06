@@ -56,8 +56,7 @@ class vtpolyxtal2d():
     Builds a level-0 geometric polycrystal from seed multipoints or
     coordinate lists within ``xbound`` / ``ybound``. Used as the geometry
     source for conformal 2D meshing (``confMesh2dGMSH`` /
-    ``gsmesh2d.mesh_gs``; ``confMesh2d.from_geometric_pxtal`` is
-    deprecated) and VTGS-style workflows. Related higher-level multi-instance API:
+    ``gsmesh2d.mesh_gs``) and VTGS-style workflows. Related higher-level multi-instance API:
     :class:`~upxo.pxtal.vortess2d.gtess2d`.
 
     Parameters
@@ -245,9 +244,9 @@ class vtpolyxtal2d():
             print('I am in scipy')
             from scipy.spatial import Voronoi
             from shapely.geometry import Polygon
-            from vt import _finite_vtpols
-            from vt import _make_bounding_polygon
-            from vt import _clip_Voronoi_Tess_BoundBox
+            from upxo.pxtal.vt import _finite_vtpols
+            from upxo.pxtal.vt import _make_bounding_polygon
+            from upxo.pxtal.vt import _clip_Voronoi_Tess_BoundBox
             vo = Voronoi(np.c_[mulpoint_object.locx,
                                mulpoint_object.locy]
                          )
@@ -1164,7 +1163,7 @@ class vtpolyxtal2d():
         self.L0.xtal_ss_boundary.XBL_val = None
         self.L0.xtal_ss_boundary.XBP_val = None
         self.L0.xtal_ss_boundary.nBE = None
-        from distr_01 import distribution as dstr
+        from upxo.statops.distr_01 import distribution as dstr
         # APE_dis: areas_polygonal_exterior -- values
         self.L0.xtal_ss_boundary.APE_distr = dstr(data_name = 'L0_xtals_ape_val',
                                                   data = np.array(self.L0.xtal_ss_boundary.APE_val)
@@ -1254,7 +1253,7 @@ class vtpolyxtal2d():
         self.L0.xtal_ss_internal.XBL_val = None
         self.L0.xtal_ss_internal.XBP_val = None
         self.L0.xtal_ss_internal.nBE = None
-        from distr_01 import distribution as dstr
+        from upxo.statops.distr_01 import distribution as dstr
         # APE_dis: areas_polygonal_exterior -- values
         self.L0.xtal_ss_internal.APE_distr = dstr(data_name = 'L0_xtals_ape_val',
                                                   data = np.array(self.L0.xtal_ss_internal.APE_val)
@@ -1269,7 +1268,7 @@ class vtpolyxtal2d():
         #L0_xtals_internal.XBL_val = None
         #L0_xtals_internal.XBP_val = None
         #L0_xtals_internal.nBE = None
-        #from distr_01 import distribution as dstr
+        #from upxo.statops.distr_01 import distribution as dstr
         ## APE_dis: areas_polygonal_exterior -- values
         #L0_xtals_internal.APE_distr = dstr(data_name = 'areas_polygonal_internal',
         #                                   data = np.array(L0_xtals_internal.APE_val)
@@ -1376,7 +1375,7 @@ class vtpolyxtal2d():
 
         vgrainid_seedid = [0 for i in self.L0.xtals]
         upxo_seeds = [0 for i in self.L0.xtals]
-        from point2d_04 import point2d
+        from upxo.geoEntities.point2d import Point2d as point2d
         for _, grain in enumerate(self.L0.xtals_shapely_prepared):
             matched_points = list(filter(grain.contains, seeds_shapely_points))
             #matched_points_id = [__ for __ in matched_points]
@@ -1561,7 +1560,7 @@ class vtpolyxtal2d():
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     def calc_distributions(self, data_name = 'area', ):
         """Calculate and store statistical distributions for the given field."""
-        from distr_01 import distribution
+        from upxo.statops.distr_01 import distribution
         self.areas_polygonal_exterior_distribution = distribution(data_name = data_name,
                                                                   data = pxt.areas_polygonal_exterior,
                                                                   )

@@ -23,7 +23,7 @@ def apply_transform(fm_base, scale_factor=1.0, sf_x=1.0, sf_y=1.0, sf_z=1.0, cle
     FMSteel3DBase
     """
     from upxo.gsdataops.grid_ops import rescale_grid_3d, stretch_grid_3d
-    from upxo.pxtal.fm_steel_3d.gui.transform_shared import build_clean_structure
+    from upxo.pxtal.fm_steel_3d.transform_shared import build_clean_structure
 
     seed = fm_base._random_seed or 42
 
@@ -59,7 +59,7 @@ def sweep_clean(fm_base, factor=2.0, cleanup_threshold=0):
     FMSteel3DBase
     """
     from upxo.gsdataops.grid_ops import resample_grid_3d
-    from upxo.pxtal.fm_steel_3d.gui.transform_shared import build_clean_structure
+    from upxo.pxtal.fm_steel_3d.transform_shared import build_clean_structure
 
     seed = fm_base._random_seed or 42
     orig_shape = fm_base.lgi.shape

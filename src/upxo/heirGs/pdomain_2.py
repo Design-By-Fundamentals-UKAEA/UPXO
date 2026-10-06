@@ -469,7 +469,8 @@ def make_PDI():
     NPDI: number of physical domain instances needed
     '''
     #  .  .  .  .  .  .  .  .  .  .  .  .
-    import Material
+    raise NotImplementedError(
+        'make_PDI is not available: the Material module it used no longer exists (see upxo.material).')
     #  .  .  .  .  .  .  .  .  .  .  .  .
     pdoms = pdomInstances()
     #--------------------------------------------------
@@ -485,7 +486,7 @@ def make_PDI():
         #--------------------------------------------------
         # Instantiate material GS Stack data structure
         #  .  .  .  .  .  .  .  .  .  .  .  .
-        from pdomain_2 import gstack
+        from upxo.heirGs.pdomain_2 import gstack
         #  .  .  .  .  .  .  .  .  .  .  .  .
         gstack = gstack()
         gstack.build(pdo_info)
@@ -546,7 +547,7 @@ def print_UGSS(querry_PDI_IDs, LNI, Physical_Domains):
     vvl1b = 'Unique instance IDs are: '
     # Prepare the user input on query data
     #  .  .  .  .  .  .  .  .  .  .  .  .
-    from pdomain_2 import clean_querry_PDI_IDs
+    from upxo.heirGs.pdomain_2 import clean_querry_PDI_IDs
     #  .  .  .  .  .  .  .  .  .  .  .  .
     querry_PDI_IDs = clean_querry_PDI_IDs(querry_PDI_IDs, Physical_Domains)
     # Print user query information
@@ -572,7 +573,7 @@ def print_LGSS(querry_PDI_IDs, LNI, Physical_Domains):
     vvl1b = 'Unique instance IDs are: '
     # Prepare the user input on query data
     #  .  .  .  .  .  .  .  .  .  .  .  .
-    from pdomain_2 import clean_querry_PDI_IDs
+    from upxo.heirGs.pdomain_2 import clean_querry_PDI_IDs
     #  .  .  .  .  .  .  .  .  .  .  .  .
     querry_PDI_IDs = clean_querry_PDI_IDs(querry_PDI_IDs, Physical_Domains)
     # Print user query information
@@ -601,7 +602,7 @@ def make_pd_df_gstack(querry_PDI_IDs, Physical_Domains):
     vvl1b = 'Unique instance IDs are: '
     # Prepare the user input on query data
     #  .  .  .  .  .  .  .  .  .  .  .  .
-    from pdomain_2 import clean_querry_PDI_IDs
+    from upxo.heirGs.pdomain_2 import clean_querry_PDI_IDs
     #  .  .  .  .  .  .  .  .  .  .  .  .
     querry_PDI_IDs = clean_querry_PDI_IDs(querry_PDI_IDs, Physical_Domains)
     # Print user query information
@@ -626,18 +627,17 @@ def print_instances_table(querry_PDI_IDs, Physical_Domains, gstack_pd_df):
     vvl1b = 'Unique instance IDs are: '
     # Prepare the user input on query data
     #  .  .  .  .  .  .  .  .  .  .  .  .
-    from pdomain_2 import clean_querry_PDI_IDs
+    from upxo.heirGs.pdomain_2 import clean_querry_PDI_IDs
     #  .  .  .  .  .  .  .  .  .  .  .  .
     querry_PDI_IDs = clean_querry_PDI_IDs(querry_PDI_IDs, Physical_Domains)
     # Print user query information
     print(f'Pandas DF for -- {P} Instances in {querry_PDI_IDs} of the PD:')
-    from tabulate import tabulate
     print(vvl1a3)
     for gana_PD in querry_PDI_IDs:
         # LOOP: For each physical domain instance
         print(f'\n - - - - - PANDAS DATAFRAME "gstack_pd_df" for PD-{gana_PD} - - - - -\n ')
         gstack_pd_df[gana_PD].index.name = 'PD Chain #'
-        print(tabulate(gstack_pd_df[gana_PD], headers = 'keys', tablefmt = 'fancy_grid'))
+        print(gstack_pd_df[gana_PD].to_string())
     print(vvl1a3)
 ###############################################################################
 def get_level_instance_chains(gstack_pd_df,
@@ -661,11 +661,7 @@ def get_level_instance_chains(gstack_pd_df,
         elif NumberType == 'gs.relative':
             df_subset = df[''.join(['Level-',
                                     str(pullLink_lev)])][Instance_Number]
-        from tabulate import tabulate
-        # print(df_subset)
-        print(tabulate(df_subset,
-                       headers = 'keys',
-                       tablefmt = 'fancy_grid'))
+        print(df_subset.to_string())
         return df_subset
 ###############################################################################
 def write_instances(self):
@@ -1449,7 +1445,7 @@ def make_lattice(Physical_Domain_Object):
     Definition to build all instances of the lattice using lattice class and 
     the pdomInstances class
     '''
-    from pdomain_2 import lattice
+    from upxo.heirGs.pdomain_2 import lattice
     # Instanctiate the lattice class
     lat = lattice()
     # Make containers for metadatas
