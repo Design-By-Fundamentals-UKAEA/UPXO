@@ -18,6 +18,7 @@ the number of physical cores this process may use, so hyper-threads are
 not oversubscribed. Results of every d3v2p1 stage do not depend on the tier
 or the worker count unless that stage's documentation says otherwise.
 """
+import multiprocessing
 import os
 import warnings
 from concurrent.futures import ProcessPoolExecutor
@@ -262,8 +263,11 @@ class WorkerPool:
             return run_serial()
         if self._pool is None:
             try:
+                # spawn on every platform: fork after numba or BLAS threads have
+                # started can deadlock a worker (Linux defaults to fork)
                 self._pool = ProcessPoolExecutor(max_workers=self.plan.workers, initializer=self.initializer,
-                                                 initargs=self.initargs)
+                                                 initargs=self.initargs,
+                                                 mp_context=multiprocessing.get_context('spawn'))
             except _START_ERRORS as error:
                 return self._fall_back('could not start worker processes', error, run_serial)
         try:
