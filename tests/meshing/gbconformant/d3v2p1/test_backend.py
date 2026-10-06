@@ -144,7 +144,7 @@ class WorkerPoolTests(_Fresh):
 @unittest.skipIf(backend.usable_cores() < 2, 'needs two usable CPUs')
 class StageFallbackTests(_Fresh):
     def test_tet_smoothing_same_result_after_pool_failure(self):
-        from tests.meshing.gbconformant.d3v2p1.test_tet_smoothing_parallel import jittered_block
+        from .test_tet_smoothing_parallel import jittered_block
         from upxo.meshing.gbconformant.d3v2p1 import tet_smoothing as fast
         p, t, inner = jittered_block(1, n=12)                # 8 blocks per colour: the pool is used
         kw = dict(target=30., max_angle=150., neighbour_floor=20., block_size=3.)
@@ -160,7 +160,7 @@ class StageFallbackTests(_Fresh):
         self.assertIn('blocked', rep_failed['backend']['fallback'])
 
     def test_angle_repair_same_result_after_pool_failure(self):
-        from tests.meshing.gbconformant.d3v2p1.test_surface_angles_parallel import WorkerCountTests
+        from .test_surface_angles_parallel import WorkerCountTests
         from upxo.meshing.gbconformant.d3v2p1 import surface_angles as fast
         s = WorkerCountTests.rough_grid(None, 0)
         serial = fast.improve_surface_angles(s, backend='numpy', wedge_limit=30.)
