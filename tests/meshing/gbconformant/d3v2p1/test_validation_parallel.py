@@ -2,8 +2,8 @@
 worker-count independence on inputs large enough to use worker processes."""
 import unittest
 import numpy as np
-from tests.meshing.gbconformant.d3v2p0 import test_tet_validation as base_validation
-from tests.meshing.gbconformant.d3v2p0 import test_surface_intersections as base_intersections
+from ..d3v2p0 import test_tet_validation as base_validation
+from ..d3v2p0 import test_surface_intersections as base_intersections
 from upxo.meshing.gbconformant.d3v2p0.tet_validation import validate_tet_surfaces as reference_validate
 from upxo.meshing.gbconformant.d3v2p0.surface_intersections import find_surface_intersections as reference_find
 from upxo.meshing.gbconformant.d3v2p1.tet_validation import validate_tet_surfaces
