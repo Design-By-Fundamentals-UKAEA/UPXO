@@ -4,7 +4,7 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
-## [1.3.0] — 2026-10-03
+## [1.3.0] — 2026-10-06
 
 ### Added
 
