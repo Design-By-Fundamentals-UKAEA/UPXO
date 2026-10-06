@@ -163,3 +163,10 @@ src/upxo/Important links.md
 /src/upxo/algorithms/alg310_bu.py
 /src/upxo/interfaces/abaqus/upxo_aba.py
 /src/upxo/pxtalops/morphochar.py
+
+# Local-only admin notes for the FM Steel EBSD work
+/src/upxo/pxtal/fm_steel_3d/ebsd/admin/
+/src/upxo/demos/FMSteel3D/admin/
+
+# Local-only planning notes for the general EBSD module
+/src/upxo/ebsd/admin/
