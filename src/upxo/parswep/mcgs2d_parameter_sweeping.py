@@ -306,7 +306,7 @@ class parameter_sweep():
         """Initialize."""
         if type(N) == int and N != 0 and N < 25:
             self.N = [n+1 for n in range(N)]
-            from mcgs import monte_carlo_grain_structure as mcgs
+            from upxo.ggrowth.mcgs import mcgs
             self.gsi = {}
             for n in range(N):
                 self.gsi[n+1] = mcgs(study='para_sweep')
