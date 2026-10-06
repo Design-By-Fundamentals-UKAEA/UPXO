@@ -383,7 +383,7 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
                            backend='auto'):
     """d3v2p0.surface_angles.improve_surface_angles with parallel candidate
     evaluation in rounds. backend / n_workers: see d3v2p1.backend (None =
-    automatic, at most 8 workers); the result does not depend on them. max_rounds: evaluation rounds per pass;
+    automatic); the result does not depend on them. max_rounds: evaluation rounds per pass;
     triangles still stale after it are worked on again in the next pass."""
     if isinstance(max_rounds, bool) or not isinstance(max_rounds, (int, np.integer)) or max_rounds < 1:
         raise ValueError('max_rounds must be a positive integer')
@@ -399,8 +399,7 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
         raise ValueError('max_normal_change must lie in (0, 90) degrees')
     if not all(isinstance(v, (bool, np.bool_)) for v in (enabled, flips, relocation, collapses)):
         raise ValueError('Switches must be boolean')
-    # rounds of short tasks: more than 8 workers was slower on a 16-core hybrid CPU
-    chosen = plan(backend, n_workers, max_auto_workers=8)
+    chosen = plan(backend, n_workers)
     if not (enabled and max_passes):
         chosen = Plan(chosen.requested, 'numpy', 1)
     p = np.array(surface.points, dtype=float)
