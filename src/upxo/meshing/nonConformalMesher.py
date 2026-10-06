@@ -18,9 +18,9 @@ class nonConformalMesher():
     sets — grain boundaries are *not* geometrically conformal (edges do
     not follow GB curves). Prefer
     :class:`~upxo.meshing.conformal_mesher2d.confMesh2dGMSH` /
-    :func:`~upxo.meshing.gsmesh2d.mesh_gs` (2D) or ``confMesh3d`` (3D)
-    when conformal GB meshes are required. ``confMesh2d`` (pygmsh) is
-    deprecated.
+    :func:`~upxo.meshing.gsmesh2d.mesh_gs` (2D) or
+    ``gbconformant.d3v2p0`` / ``gbconformant.d3v2p1`` (3D)
+    when conformal GB meshes are required.
 
     Element types
     -------------
