@@ -45,13 +45,11 @@ import math
 import warnings
 import numpy as np
 from typing import Optional, Dict, Set
+from upxo._sup.data_dir import default_data_dir
 
 # ---------------------------------------------------------------------------
-# Default output directory — resolved relative to this file so the path is
-# portable across machines regardless of installation location.
-#
-# __file__ : .../upxo_library/src/upxo/pxtal/twinned_simple_3d/abaqus_exporter_3d.py
-#              ↑  up 4 levels  ↑                                  upxo_library/
+# Default output directory: <checkout>/data in a source checkout, otherwise
+# ./data under the working directory (see upxo._sup.data_dir).
 # ---------------------------------------------------------------------------
 SUPPORTED_ELEMENT_TYPES = ('C3D8', 'C3D4')
 
@@ -193,9 +191,7 @@ def write_uniaxial_static_step(f, nset_names, load_axis, displacement,
     f.write('*Output, history, variable=PRESELECT\n')
     f.write('*End Step\n')
 
-_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-_LIB_ROOT = os.path.normpath(os.path.join(_THIS_DIR, '..', '..', '..', '..'))
-DEFAULT_ABQ_OUT_DIR = os.path.join(_LIB_ROOT, 'data', 'ABQInputFiles', 'ofhcCu')
+DEFAULT_ABQ_OUT_DIR = os.path.join(default_data_dir(), 'ABQInputFiles', 'ofhcCu')
 
 
 # ---------------------------------------------------------------------------
@@ -597,8 +593,8 @@ class AbaqusExporter3D:
         ----------
         out_dir : str, optional
             Destination directory.  Defaults to
-            ``DEFAULT_ABQ_OUT_DIR`` (``upxo_library/data/ABQInputFiles/ofhcCu/``
-            resolved relative to the package root).
+            ``DEFAULT_ABQ_OUT_DIR`` (``data/ABQInputFiles/ofhcCu/`` in a source
+            checkout, otherwise under ``./data`` in the working directory).
             Pass any absolute or relative path to override.
         """
         os.makedirs(out_dir, exist_ok=True)
