@@ -57,6 +57,7 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
 
+from upxo._sup.data_dir import default_data_dir
 from .phases_3d import PHASE_MARTENSITE, PHASE_RETAINED_AUSTENITE, PHASE_NAMES
 
 
@@ -105,10 +106,8 @@ _BYTES_PER_ELEM: Dict[str, int] = {
 _BYTES_PER_NODE = 50
 _TETS_PER_VOX = 6
 
-# Package root: mesh_exporter_3d.py is at src/upxo/pxtal/fm_steel_3d/
-# Four parents up → src/  Five parents up → project root
-_PACKAGE_ROOT = Path(__file__).parents[4]
-_DEFAULT_OUTPUT_BASE = _PACKAGE_ROOT / 'data' / 'ABQInputFiles'
+# <checkout>/data in a source checkout, otherwise ./data under the working directory.
+_DEFAULT_OUTPUT_BASE = default_data_dir() / 'ABQInputFiles'
 
 _UPXO_HEADER = (
     "** Made with UPXO: UKAEA Poly-XTAL Operations.\n"
