@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath('../src'))
 project = 'UPXO: UKAEA Poly-XTAL Operations'
 copyright = '2026, UK Atomic Energy Authority (UKAEA)'
 author = 'Dr. Sunil Anandatheertha'
-version = '1.0.0'
-release = '1.0.0'
+version = '1.3.0'
+release = '1.3.0'
 
 extensions = [
     'sphinx_rtd_theme',
