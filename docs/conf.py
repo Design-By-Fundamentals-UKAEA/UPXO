@@ -47,7 +47,6 @@ autodoc_mock_imports = [
     'openpyxl',
     'netlsd',
     'meshio',
-    'pygmsh',
     'gmsh',
     'statsmodels',
 ]
