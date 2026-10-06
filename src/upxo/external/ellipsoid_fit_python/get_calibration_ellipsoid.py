@@ -1,5 +1,8 @@
 import numpy as np
-from ellipsoid_fit import ellipsoid_fit as ellipsoid_fit, data_regularize
+try:
+    from .ellipsoid_fit import ellipsoid_fit as ellipsoid_fit, data_regularize
+except ImportError:                      # run as a script from this folder
+    from ellipsoid_fit import ellipsoid_fit as ellipsoid_fit, data_regularize
 
 
 if __name__ == '__main__':
