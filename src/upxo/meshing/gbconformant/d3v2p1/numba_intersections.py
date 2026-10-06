@@ -1,13 +1,17 @@
-"""numba kernel for d3v2p0's triangle-pair intersection test.
+"""numba kernels for d3v2p0's triangle intersection search.
 
 pairs_intersect(points, triangles, pairs, tolerance) gives the same result
 as d3v2p0.surface_intersections._intersecting_pairs: the same predicates,
 tolerances and order of arithmetic, evaluated per pair in a compiled loop
 (threads over pairs) that stops at the first detected contact. Import this
 module only after backend.numba_available() is True.
+
+find_pairs() runs the whole search (candidate grid, d3v2p0's candidate
+rule and the pair test) in one parallel kernel, without candidate arrays.
 """
 import math
 import numpy as np
+import numba
 from numba import njit, prange
 
 
@@ -151,4 +155,140 @@ def pairs_intersect(points, triangles, pairs, tolerance):
                     fa[1] == fb[0] or fa[1] == fb[1] or fa[1] == fb[2],
                     fa[2] == fb[0] or fa[2] == fb[1] or fa[2] == fb[2])
         out[k] = _pair_hit(a, b, shared_a, tolerance)
+    return out
+
+
+# ---------------------------------------------------------------- candidate search
+# The candidate rule is d3v2p0's: bounding boxes overlap within the tolerance,
+# and the centres are no farther apart than the query triangle's radius plus
+# the largest radius in the other triangle's radius band plus the tolerance.
+
+@njit(cache=True)
+def _cell_range(lo, hi, pad, origin, h, dims):
+    i0 = min(max(int((lo[0] - pad - origin[0]) / h), 0), dims[0] - 1)
+    j0 = min(max(int((lo[1] - pad - origin[1]) / h), 0), dims[1] - 1)
+    k0 = min(max(int((lo[2] - pad - origin[2]) / h), 0), dims[2] - 1)
+    i1 = min(max(int((hi[0] + pad - origin[0]) / h), 0), dims[0] - 1)
+    j1 = min(max(int((hi[1] + pad - origin[1]) / h), 0), dims[1] - 1)
+    k1 = min(max(int((hi[2] + pad - origin[2]) / h), 0), dims[2] - 1)
+    return i0, j0, k0, i1, j1, k1
+
+
+@njit(cache=True)
+def _grid(lo, hi, origin, h, dims):
+    """Cell -> triangle CSR: every triangle is listed in each cell its box covers."""
+    nx, ny = dims[0], dims[1]
+    counts = np.zeros(dims[0] * dims[1] * dims[2] + 1, dtype=np.int64)
+    for t in range(len(lo)):
+        i0, j0, k0, i1, j1, k1 = _cell_range(lo[t], hi[t], 0., origin, h, dims)
+        for i in range(i0, i1 + 1):
+            for j in range(j0, j1 + 1):
+                for k in range(k0, k1 + 1):
+                    counts[1 + i + nx * (j + ny * k)] += 1
+    ptr = np.cumsum(counts)
+    fill = ptr[:-1].copy()
+    items = np.empty(ptr[-1], dtype=np.int64)
+    for t in range(len(lo)):
+        i0, j0, k0, i1, j1, k1 = _cell_range(lo[t], hi[t], 0., origin, h, dims)
+        for i in range(i0, i1 + 1):
+            for j in range(j0, j1 + 1):
+                for k in range(k0, k1 + 1):
+                    c = i + nx * (j + ny * k)
+                    items[fill[c]] = t
+                    fill[c] += 1
+    return ptr, items
+
+
+@njit(cache=True)
+def _vertices(points, f):
+    return ((points[f[0], 0], points[f[0], 1], points[f[0], 2]),
+            (points[f[1], 0], points[f[1], 1], points[f[1], 2]),
+            (points[f[2], 0], points[f[2], 1], points[f[2], 2]))
+
+
+@njit(cache=True)
+def _query(a, points, triangles, centres, radii, band_max, lo, hi, ptr, items, origin, h, dims, full, tol,
+           seen, out, start):
+    """Hits of query triangle a, written from out[start] when start >= 0.
+    Returns the number of hits. seen is this thread's marker array."""
+    nx, ny = dims[0], dims[1]
+    i0, j0, k0, i1, j1, k1 = _cell_range(lo[a], hi[a], tol, origin, h, dims)
+    hits = 0
+    for i in range(i0, i1 + 1):
+        for j in range(j0, j1 + 1):
+            for k in range(k0, k1 + 1):
+                c = i + nx * (j + ny * k)
+                for m in range(ptr[c], ptr[c + 1]):
+                    b = items[m]
+                    if b == a or (full and b < a) or seen[b] == a:
+                        continue
+                    seen[b] = a
+                    if not (lo[a, 0] <= hi[b, 0] + tol and lo[a, 1] <= hi[b, 1] + tol
+                            and lo[a, 2] <= hi[b, 2] + tol and lo[b, 0] <= hi[a, 0] + tol
+                            and lo[b, 1] <= hi[a, 1] + tol and lo[b, 2] <= hi[a, 2] + tol):
+                        continue
+                    dx = centres[a, 0] - centres[b, 0]
+                    dy = centres[a, 1] - centres[b, 1]
+                    dz = centres[a, 2] - centres[b, 2]
+                    if math.sqrt(dx * dx + dy * dy + dz * dz) > radii[a] + band_max[b] + tol:
+                        continue
+                    # d3v2p0 tests every candidate as (smaller id, larger id)
+                    s, t = (a, b) if a < b else (b, a)
+                    fs, ft = triangles[s], triangles[t]
+                    shared = (fs[0] == ft[0] or fs[0] == ft[1] or fs[0] == ft[2],
+                              fs[1] == ft[0] or fs[1] == ft[1] or fs[1] == ft[2],
+                              fs[2] == ft[0] or fs[2] == ft[1] or fs[2] == ft[2])
+                    if _pair_hit(_vertices(points, fs), _vertices(points, ft), shared, tol):
+                        if start >= 0:
+                            out[start + hits, 0] = s
+                            out[start + hits, 1] = t
+                        hits += 1
+    return hits
+
+
+@njit(cache=True, parallel=True)
+def _search_pass(query_ids, points, triangles, centres, radii, band_max, lo, hi, ptr, items, origin, h, dims,
+                 full, tol, offsets, out, n_threads):
+    """Per query: count hits (offsets[q] < 0) or write them from offsets[q]."""
+    counts = np.zeros(len(query_ids), dtype=np.int64)
+    seen = np.full((n_threads, len(triangles)), -1, dtype=np.int64)
+    for q in prange(len(query_ids)):
+        tid = numba.get_thread_id()
+        counts[q] = _query(query_ids[q], points, triangles, centres, radii, band_max, lo, hi, ptr, items, origin,
+                           h, dims, full, tol, seen[tid], out, offsets[q])
+    return counts
+
+
+def find_pairs(points, triangles, query_ids, full, tolerance, band_max):
+    """Intersecting pairs (smaller id, larger id), possibly repeated, for the
+    query triangles: d3v2p0's candidate rule and pair test, in numba.
+    band_max: per triangle, the largest radius in its radius band."""
+    points = np.ascontiguousarray(points, dtype=np.float64)
+    triangles = np.ascontiguousarray(triangles, dtype=np.int64)
+    query_ids = np.ascontiguousarray(query_ids, dtype=np.int64)
+    band_max = np.ascontiguousarray(band_max, dtype=np.float64)
+    xyz = points[triangles]
+    centres = xyz.mean(axis=1)
+    radii = np.linalg.norm(xyz - centres[:, None], axis=2).max(axis=1)
+    lo, hi = xyz.min(axis=1), xyz.max(axis=1)
+    h = float(np.median((hi - lo).max(axis=1)))
+    span = (hi.max(axis=0) - lo.min(axis=0)) + 2 * tolerance
+    if not np.isfinite(h) or h <= 0:
+        h = float(max(span.max(), 1.))
+    while np.prod(np.floor(span / h) + 1) > 4e7:           # bounded grid size
+        h *= 2
+    dims = (np.floor(span / h) + 1).astype(np.int64)
+    origin = lo.min(axis=0) - tolerance
+    ptr, items = _grid(lo, hi, origin, h, dims)
+    empty = np.empty((0, 2), dtype=np.int64)
+    n_threads = numba.config.NUMBA_NUM_THREADS
+    args = (query_ids, points, triangles, centres, radii, band_max, lo, hi, ptr, items, origin, h, dims,
+            bool(full), float(tolerance))
+    counts = _search_pass(*args, np.full(len(query_ids), -1, dtype=np.int64), empty, n_threads)
+    total = int(counts.sum())
+    if not total:
+        return empty
+    offsets = np.concatenate(([0], np.cumsum(counts)[:-1])).astype(np.int64)
+    out = np.empty((total, 2), dtype=np.int64)
+    _search_pass(*args, offsets, out, n_threads)
     return out
