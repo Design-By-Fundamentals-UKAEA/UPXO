@@ -822,8 +822,8 @@ class mcgs3_grain_structure():
                              f'Minimum needed: {norithresh} orientations.',
                              f'You provided: {bea.shape[0]}')
         # -----------------------------------------
-        from orix.quaternion import Orientation
-        from orix.symmetry import Cubic
+        raise NotImplementedError(
+            'Assigning orientations to a 3D grain structure is not implemented.')
 
     @staticmethod
     def reindex_array_by_cmp_old_new_images(old_image, new_image, old_arrays):
