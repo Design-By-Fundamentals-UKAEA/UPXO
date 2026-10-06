@@ -6,8 +6,10 @@ Tiers:
 - 'parallel': worker processes. Used when more than one worker is allowed
   and processes start; if they cannot start or a worker dies, the work is
   redone serially and the reason is recorded.
-- 'numba': compiled kernels. Detected here; no d3v2p1 stage has numba
-  kernels yet, so a request for it falls back to 'parallel'.
+- 'numba': compiled kernels with numba threads, for stages that have
+  kernels (numba_kernels=True in plan()). 'auto' prefers it when numba
+  compiles; a stage without kernels, or a machine without numba, falls back
+  to 'parallel' (and from there to 'numpy') and records why.
 
 Choice order: explicit function arguments, then the environment variables
 UPXO_BACKEND ('auto', 'numpy', 'parallel', 'numba') and UPXO_N_WORKERS (a
@@ -149,7 +151,7 @@ def resolve_workers(n_workers=None):
 class Plan:
     """Chosen tier and worker count for one stage call, plus what happened.
 
-    used: 'numpy' or 'parallel'. fallback: None, or the reason a requested
+    used: 'numpy', 'parallel' or 'numba'. fallback: None, or the reason a requested
     tier was not used (missing kernels, pool start or worker failure).
     """
 
@@ -159,6 +161,10 @@ class Plan:
     @property
     def parallel(self):
         return self.used == 'parallel'
+
+    @property
+    def numba(self):
+        return self.used == 'numba'
 
     def degrade(self, reason):
         """Switch to the serial numpy tier for the rest of the call."""
@@ -171,13 +177,15 @@ class Plan:
                     fallback=self.fallback, cores=cores())
 
 
-def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1):
+def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1, numba_kernels=False):
     """Choose the tier and worker count for a stage call.
 
     backend: 'auto' (default), 'numpy', 'parallel' or 'numba'; 'auto' and
     the default n_workers=None defer to UPXO_BACKEND / UPXO_N_WORKERS.
     items: amount of independent work; with min_items_per_worker it caps the
-    worker count, so small inputs run serially.
+    worker count, so small inputs run serially (or on one numba thread).
+    numba_kernels: the stage has numba kernels; 'auto' and 'numba' then use
+    them when numba is available.
     """
     if backend not in BACKENDS:
         raise ValueError(f'backend must be one of {BACKENDS}')
@@ -186,9 +194,14 @@ def plan(backend='auto', n_workers=None, items=None, min_items_per_worker=1):
     if backend == 'auto':
         backend = _env_backend() or 'auto'
     fallback = None
+    if backend in ('numba', 'auto') and numba_kernels and numba_available():
+        workers = resolve_workers(n_workers)
+        if items is not None:
+            workers = min(workers, max(1, int(items) // max(1, int(min_items_per_worker))))
+        return Plan(requested, 'numba', workers, None)
     if backend == 'numba':
-        fallback = 'no numba kernels in this stage; using parallel' if numba_available() \
-            else 'numba not available; using parallel'
+        fallback = ('numba not available' if numba_kernels else 'no numba kernels in this stage') + \
+            '; using parallel'
         backend = 'parallel'
     if backend == 'numpy':
         return Plan(requested, 'numpy', 1, fallback)
@@ -256,3 +269,23 @@ class WorkerPool:
         self.plan.degrade(f'{what} ({type(error).__name__}: {error}); ran serially')
         warnings.warn(f'd3v2p1: {self.plan.fallback}')
         return run_serial()
+
+
+class numba_threads:
+    """Context manager: run numba parallel kernels on n threads, restoring
+    the previous setting afterwards (n is capped at numba's thread pool)."""
+
+    def __init__(self, n):
+        self.n = n
+        self.previous = None
+
+    def __enter__(self):
+        import numba
+        self.previous = numba.get_num_threads()
+        numba.set_num_threads(max(1, min(int(self.n), numba.config.NUMBA_NUM_THREADS)))
+        return self
+
+    def __exit__(self, *exc):
+        import numba
+        numba.set_num_threads(self.previous)
+        return False
