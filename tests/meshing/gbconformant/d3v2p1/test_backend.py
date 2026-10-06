@@ -70,6 +70,14 @@ class PlanTests(_Fresh):
         self.assertEqual(n.requested, 'numba')
         self.assertEqual(set(n.report()), {'requested', 'used', 'n_workers', 'fallback', 'cores'})
 
+    def test_automatic_cap(self):
+        auto = backend.auto_workers()
+        self.assertEqual(backend.plan(max_auto_workers=2).workers, min(2, auto) if auto > 1 else 1)
+        explicit = min(3, backend.usable_cores())
+        self.assertEqual(backend.plan(n_workers=3, max_auto_workers=2).workers, explicit if explicit > 1 else 1)
+        os.environ['UPXO_N_WORKERS'] = '3'
+        self.assertEqual(backend.plan(max_auto_workers=2).workers, explicit if explicit > 1 else 1)
+
     def test_bad_arguments(self):
         for kwargs in (dict(backend='gpu'), dict(n_workers=-1), dict(n_workers=1.5), dict(n_workers=True)):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
