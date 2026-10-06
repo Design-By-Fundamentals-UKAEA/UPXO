@@ -15,6 +15,11 @@ All notable changes to UPXO are documented in this file.
 - **Functions with no working replacement now say so**: `gops.PROFILE_up2d_INST`, `dataTypeHandlers.coords_to_UpxoPointList`, `pdomain_2.make_PDI`, the `mulpoint2d` and edge branches of `pops.make_polygon`, the `sortjp` values other than `'ignore'` in `find_gb_jp`, and `grid.plotgs` raise `NotImplementedError` with a message, in place of failing on an import of a module that no longer exists. `initialize.py` raises it for its Voronoi paths.
 - `pdomain_2` prints tables with pandas, so `tabulate` is not needed.
 
+### Changed
+
+- **Default output folder**: the FM steel and twinned FCC pipeline reports and exports, the FM steel mesh exporter and the twinned Abaqus exporter wrote to a `data` folder two levels above the installed package, which is inside the Python environment for a pip install and fails on a read-only system installation. They now write to `<checkout>/data` in a source checkout and to `./data` under the working directory otherwise (`upxo._sup.data_dir.default_data_dir`). Tests: `tests/test_default_data_dir.py`.
+- **README and wiki**: tested Python versions (3.13, 3.14), platforms (no `gmsh` wheel on Linux aarch64, so no `[mesh]` or `[all]` there), dependency versions from the declared minimum to the newest, and install notes (`netlsd` built from source, Windows long paths).
+
 ### Removed
 
 - **`meshing/confMesh3d`** (the SurfaceNets pipeline: `complex_builder`, `surface_nets`, `surface_remesh`, `tetgen_mesh`, `volume_mesh`, `validation`, `export`, `config`) and **`meshing/pxtalmesh_01.py`** (the `confMesh2d` class built on `pygmsh`). 3D conformal meshing is in `meshing/gbconformant` (`d3v2p0`, `d3v2p1`), which uses neither of them.
