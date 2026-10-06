@@ -1,9 +1,11 @@
 """Parallel triangle-intersection search with the same result as d3v2p0.
 
-The candidate search and the pair test are d3v2p0's. Query triangles are
-split into chunks that worker processes search independently; every pair is
-decided by the same test, so the set of reported pairs does not depend on
-the chunking or the worker count.
+The candidate rule and the pair test are d3v2p0's. With numba the whole
+search runs as one compiled kernel on numba threads (numba_intersections);
+otherwise query triangles are split into chunks that worker processes search
+independently, or the search runs serially. Every pair is decided by the
+same test, so the reported pairs do not depend on the tier, the chunking or
+the worker count.
 """
 import numpy as np
 from scipy.spatial import cKDTree
@@ -12,12 +14,9 @@ from .backend import plan, numba_threads
 from .parallel import run_chunks
 
 
-def _search(task, pair_test=None):
-    """d3v2p0's batched search for the query ids of one chunk (in a worker,
-    or in this process with the numba pair test)."""
+def _search(task):
+    """Worker: d3v2p0's batched search for the query ids of one chunk."""
     points, triangles, tolerance, batch_size, query_ids, full = task
-    if pair_test is None:
-        pair_test = _intersecting_pairs
     xyz = points[triangles]
     centres = xyz.mean(axis=1)
     radii = np.linalg.norm(xyz - centres[:, None], axis=2).max(axis=1)
@@ -40,7 +39,7 @@ def _search(task, pair_test=None):
             keep = ((a < b) if full else (a != b)) & np.all(lo[a] <= hi[b] + tolerance, axis=1) \
                 & np.all(lo[b] <= hi[a] + tolerance, axis=1)
             candidates = np.unique(np.sort(np.column_stack((a[keep], b[keep])), axis=1), axis=0)
-            found.append(candidates[pair_test(points, triangles, candidates, tolerance)])
+            found.append(candidates[_intersecting_pairs(points, triangles, candidates, tolerance)])
     return np.vstack(found) if found else np.empty((0, 2), int)
 
 
@@ -49,7 +48,8 @@ def find_surface_intersections(points, triangles, tolerance=None, batch_size=102
     """d3v2p0.surface_intersections.find_surface_intersections searched in
     parallel. backend / n_workers: see d3v2p1.backend (None = automatic;
     searches under 4096 query triangles per worker run serially). The numba
-    tier runs the pair test as a compiled kernel on numba threads. Returns
+    tier runs the whole search (candidate grid and pair test) as a compiled
+    kernel on numba threads. Returns
     the same intersecting pairs as d3v2p0 for every tier and worker count."""
     points = np.asarray(points)
     triangles = np.asarray(triangles)
@@ -61,15 +61,17 @@ def find_surface_intersections(points, triangles, tolerance=None, batch_size=102
     # small searches are not worth starting processes (or many threads) for
     chosen = plan(backend, n_workers, items=len(query_ids), min_items_per_worker=4096, numba_kernels=True)
     if chosen.numba:
-        from .numba_intersections import pairs_intersect
-        p64 = np.ascontiguousarray(points, dtype=np.float64)
-        t64 = np.ascontiguousarray(triangles, dtype=np.int64)
-
-        def pair_test(p_, t_, candidates, tol):
-            return pairs_intersect(p64, t64, np.ascontiguousarray(candidates, dtype=np.int64), float(tol))
+        from .numba_intersections import find_pairs
+        # d3v2p0's radius bands: each triangle's band maximum enters the candidate rule
+        xyz = points[triangles]
+        radii = np.linalg.norm(xyz - xyz.mean(axis=1)[:, None], axis=2).max(axis=1)
+        bands = np.floor(np.log2(np.maximum(radii, max(tolerance, 1e-30)))).astype(int)
+        _, band_of = np.unique(bands, return_inverse=True)
+        band_max = np.zeros(band_of.max() + 1)
+        np.maximum.at(band_max, band_of, radii)
         with numba_threads(chosen.workers):
-            found = _search((points, triangles, tolerance, 16 * batch_size, query_ids, full), pair_test)
-        found = [found] if len(found) else []
+            pairs = find_pairs(points, triangles, query_ids, full, tolerance, band_max[band_of])
+        found = [pairs] if len(pairs) else []
     else:
         chunks = [query_ids[k::chosen.workers] for k in range(chosen.workers)]
         tasks = [(points, triangles, tolerance, batch_size, c, full) for c in chunks if len(c)]
