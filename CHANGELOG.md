@@ -4,6 +4,28 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-06
+
+### Fixed
+
+- **Modules that failed to import**: `FMSteels` (an empty `__slots__` entry), `ImageConfig` (a mutable dataclass default), and several modules that imported helpers from locations that do not exist in the installed package (`heirGs/pdomain_2.py`, `pxtal/polyxtal.py`, `geoEntities/edge2d.py`, `_sup/dataTypeHandlers.py`, `parswep/mcgs2d_parameter_sweeping.py`, `initialize.py`, and the two `external/ellipsoid_fit` scripts). Each now imports from the real package path.
+- **Modules that ran code on import**: `_sup/progress_bar.py`, `interfaces/package_check.py` and `mechanics/twins_calculations.py` executed demo code or printed output when imported. They now do so only when run as a script.
+- **`fm_steel_3d` transformation steps** (`apply_transform`, `sweep_clean`) imported their helpers from a package that is not shipped. The helpers are now in `pxtal/fm_steel_3d/transform_shared.py`.
+- **Dependency declarations**: `netlsd`, used by the `nlsd` graph-similarity measure of the representativeness assessment (`repqual`, `repgen`), is now a base dependency in `pyproject.toml`, `setup.py` and `requirements.txt`. `setup.py` also lacked `statsmodels`, which the other two listed.
+- **Functions with no working replacement now say so**: `gops.PROFILE_up2d_INST`, `dataTypeHandlers.coords_to_UpxoPointList`, `pdomain_2.make_PDI`, the `mulpoint2d` and edge branches of `pops.make_polygon`, the `sortjp` values other than `'ignore'` in `find_gb_jp`, and `grid.plotgs` raise `NotImplementedError` with a message, in place of failing on an import of a module that no longer exists. `initialize.py` raises it for its Voronoi paths.
+- `pdomain_2` prints tables with pandas, so `tabulate` is not needed.
+
+### Removed
+
+- **`meshing/confMesh3d`** (the SurfaceNets pipeline: `complex_builder`, `surface_nets`, `surface_remesh`, `tetgen_mesh`, `volume_mesh`, `validation`, `export`, `config`) and **`meshing/pxtalmesh_01.py`** (the `confMesh2d` class built on `pygmsh`). 3D conformal meshing is in `meshing/gbconformant` (`d3v2p0`, `d3v2p1`), which uses neither of them.
+- No code in the library uses `trimesh`, `pygmsh` or `orix`. The 3D branch of `set_pxtal` that imported `orix` raises `NotImplementedError`.
+- References to the removed modules in docstrings, `docs/conf.py`, `docs/workflows.rst` (Workflow 15 describes the `d3v2p0` / `d3v2p1` pipeline) and the `confMesh2d_*` demonstration notebooks.
+
+### Added
+
+- `tests/test_import_integrity.py`: every tracked module imports in a fresh interpreter and prints nothing; every import statement in the package and in the tracked notebooks resolves (module, imported name, declared dependency); `pyproject.toml`, `setup.py` and `requirements.txt` agree; entry points and Sphinx listings resolve.
+- `tests/test_repaired_legacy_paths.py`: the repaired import paths and the `NotImplementedError` messages above.
+
 ## [1.3.0] — 2026-10-06
 
 ### Added
