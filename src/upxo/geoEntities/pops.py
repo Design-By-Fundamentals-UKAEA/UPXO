@@ -2148,7 +2148,9 @@ def make_polygon(point,
     # plt.plot(xcoord, ycoord, '-k.')
     # ---------------------------------------
     if make_mpv:
-        from mulpoint2d import mulpoint2d
+        raise NotImplementedError(
+            'make_polygon(make_mpv=True) is not available: the mulpoint2d constructor it used no longer exists. '
+            'Use upxo.geoEntities.mulpoint2d.MPoint2d.')
         mp = mulpoint2d(method='xy_list',
                         coordxy=[xcoord, ycoord],
                         lean=mp_lean,
@@ -2167,7 +2169,8 @@ def make_polygon(point,
         cpairs_list.append([[xcoord[i+1], ycoord[i+1]],
                             [xcoord[0], ycoord[0]]]
                            )
-        from eops import make_edges
+        raise NotImplementedError(
+            'make_polygon edge construction is not available: the make_edges helper it used no longer exists.')
         polygon['e'] = make_edges(method='cpairs_list',
                                   cpairs_list=cpairs_list,
                                   points_lean=ep_lean,
