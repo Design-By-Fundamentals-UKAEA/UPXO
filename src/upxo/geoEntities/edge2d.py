@@ -3225,7 +3225,7 @@ class edge2d():
                             if abs(lx) <= EPS and abs(ly) <= EPS:
                                 print('Edge not suitable for sub-division')
                             if abs(lx) <= EPS and abs(ly) > EPS:
-                                from upxo_math import MATH_ruc as ruc
+                                from upxo._sup.upxo_math import MATH_ruc as ruc
                                 ny = ceil(ly/spacing_miny)
                                 if starty < endy:
                                     _y = np.array(sorted(islice(ruc(starty,
@@ -3270,7 +3270,7 @@ class edge2d():
                                 coords = (_x, _y)
 
                             if abs(ly) <= EPS and abs(lx) > EPS:
-                                from upxo_math import MATH_ruc as ruc
+                                from upxo._sup.upxo_math import MATH_ruc as ruc
                                 nx = ceil(lx/spacing_minx)
                                 if startx < endx:
                                     _x = np.array(sorted(islice(ruc(startx,
@@ -3315,7 +3315,7 @@ class edge2d():
                                 coords = (_x, _y)
 
                             if abs(lx) >= EPS and abs(ly) >= EPS:
-                                from upxo_math import MATH_ruc as ruc
+                                from upxo._sup.upxo_math import MATH_ruc as ruc
                                 nx = ceil(lx/spacing_minx)
                                 if startx < endx:
                                     # no problem here
