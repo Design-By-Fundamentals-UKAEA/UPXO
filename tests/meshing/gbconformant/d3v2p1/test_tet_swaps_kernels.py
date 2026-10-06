@@ -3,7 +3,7 @@ results to d3v2p0 on a real mesh."""
 import functools
 import unittest
 import numpy as np
-from tests.meshing.gbconformant.d3v2p0 import test_tet_swaps as base
+from ..d3v2p0 import test_tet_swaps as base
 from upxo.meshing.gbconformant.d3v2p0 import tet_swaps as reference
 from upxo.meshing.gbconformant.d3v2p1 import backend, tet_swaps as fast
 
@@ -39,7 +39,7 @@ class NumpySwapTests(_Swap, base.SwapTests):
 @unittest.skipUnless(HAVE_NUMBA, 'numba not available')
 class IdenticalToReferenceTests(unittest.TestCase):
     def test_jittered_mesh(self):
-        from tests.meshing.gbconformant.d3v2p1.test_tet_smoothing_parallel import jittered_block
+        from .test_tet_smoothing_parallel import jittered_block
         p, t, inner = jittered_block(4, n=8)
         grains = (p[t].mean(axis=1)[:, 0] > 3.5).astype(int) + 1
         tri = np.empty((0, 3), int)                                  # no protected faces
@@ -53,7 +53,7 @@ class IdenticalToReferenceTests(unittest.TestCase):
         self.assertEqual(fr['backend']['used'], 'numba')
 
     def test_numpy_tier_is_reference(self):
-        from tests.meshing.gbconformant.d3v2p1.test_tet_smoothing_parallel import jittered_block
+        from .test_tet_smoothing_parallel import jittered_block
         p, t, inner = jittered_block(5, n=6)
         grains = np.ones(len(t), int)
         tri = np.empty((0, 3), int)
