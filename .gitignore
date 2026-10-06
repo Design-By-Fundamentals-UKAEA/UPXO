@@ -112,13 +112,8 @@ src/upxo/Important links.md
 !/data/**/
 !/data/**/.gitkeep
 
-# Demos: default-ignore content so local/generated notebooks stay out of git.
-# Already-tracked curated demos remain tracked; force-add new official demos
-# (git add -f) when promoting them. See wiki: Demo Notebooks.
-/src/upxo/demos/**
-!/src/upxo/demos/
-!/src/upxo/demos/**/
-!/src/upxo/demos/**/.gitkeep
+# Demos are maintained in the UPXO-demos repository; the local folder is not tracked.
+/src/upxo/demos/
 
 # Scripts: same policy as demos
 /src/upxo/scripts/**
@@ -137,7 +132,6 @@ src/upxo/Important links.md
 
 # notebooks still outside ignored folders
 *.ipynb
-!/src/upxo/demos/confMesh/confMesh2d_compare_techniques.ipynb
 /src/upxo/ggrowth/Untitled-2.ipynb
 *.o
 *.c
