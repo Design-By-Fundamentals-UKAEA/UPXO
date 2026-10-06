@@ -60,7 +60,7 @@ print(f"Number of grains: {gs.n}")
 
 More end-to-end examples (2D/3D generation, hierarchical and twinned microstructures, meshing, visualisation) are in the [Workflows documentation](https://design-by-fundamentals-ukaea.github.io/UPXO/workflows.html).
 
-Demo notebooks are **not** in the pip wheel. Clone this repo and see `src/upxo/demos/` (a curated set is tracked in git; see the [Demo Notebooks wiki](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Demo-Notebooks)).
+Demo notebooks are **not** in the pip wheel. They are maintained in the separate [UPXO-demos](https://github.com/Design-By-Fundamentals-UKAEA/UPXO-demos) repository (MIT license); see the [Demo Notebooks wiki](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Demo-Notebooks).
 
 ---
 
