@@ -1161,7 +1161,7 @@ class KREPR():
             if kdeplot:
                 plt.figure(figsize=kdeplot_kwargs['figsize'],
                            dpi=kdeplot_kwargs['dpi'])
-                cmap = cm.get_cmap(kdeplot_kwargs['cmap'])
+                cmap = plt.get_cmap(kdeplot_kwargs['cmap'])
                 i, _neighn_max_ = 1, []
                 for _on_, neighn in neighn_values.items():
                     color = cmap(i / len(neighn_values.keys()))
@@ -2092,10 +2092,10 @@ class KREPR():
                 ang_dist_sparse = np.unique(ang_dist_sparse)
                 ang_dist_sparse_compact = ang_dist_sparse[np.nonzero(ang_dist_sparse)[0]]
                 if ang_dist_sparse_compact.size == 0:
-                    ang_dist_min[bm_i] = np.NaN
-                    ang_dist_mean[bm_i] = np.NaN
-                    ang_dist_max[bm_i] = np.NaN
-                    ang_dist_std[bm_i] = np.NaN
+                    ang_dist_min[bm_i] = np.nan
+                    ang_dist_mean[bm_i] = np.nan
+                    ang_dist_max[bm_i] = np.nan
+                    ang_dist_std[bm_i] = np.nan
                 else:
                     ang_dist_min[bm_i] = ang_dist_sparse_compact.min()
                     ang_dist_mean[bm_i] = ang_dist_sparse_compact.mean()
@@ -2124,7 +2124,7 @@ class KREPR():
                    dpi=dpi,
                    constrained_layout=True)
         # Choose a colormap (e.g., 'viridis', 'plasma', 'tab20')
-        cmap = cm.get_cmap(cmap)
+        cmap = plt.get_cmap(cmap)
         num_colors = len(neigh_orders)  # Number of colors needed
         legends, legend_names = [], []
         color_increment = 1.0 / (len(neigh_orders) + 1)  # Add 1 to avoid using the last color in the colormap, which is often too light
