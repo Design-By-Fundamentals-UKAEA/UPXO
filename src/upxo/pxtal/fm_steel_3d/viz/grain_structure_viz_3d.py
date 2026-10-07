@@ -47,7 +47,7 @@ class GrainStructureViz3D:
         """
         if n_ids <= 20:
             return 'tab20'
-        import matplotlib.cm as _mcm
+        import matplotlib.pyplot as _mcm
         import matplotlib.colors as _mcolors
         import numpy as _np
         base = _mcm.get_cmap('nipy_spectral', n_ids + 1)
