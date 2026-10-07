@@ -57,7 +57,8 @@ def _contains(points, shell_tri, point):
 
 def _mesh_grain_jobs(task):
     """Worker: mesh a list of grain jobs; returns per-volume results."""
-    import gmsh
+    from upxo._sup.optional_imports import import_gmsh
+    gmsh = import_gmsh()
     jobs, options, optimize_netgen, netgen_all_volumes, minimum_quality = task
     owned = not gmsh.isInitialized()
     if owned:
