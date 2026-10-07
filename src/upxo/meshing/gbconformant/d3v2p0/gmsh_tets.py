@@ -35,7 +35,8 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False,
     (degrees) adds a readiness condition: every tet's smallest dihedral angle
     must reach it. None leaves readiness on minSICN alone.
     """
-    import gmsh
+    from upxo._sup.optional_imports import import_gmsh
+    gmsh = import_gmsh()
     if not np.isfinite(mesh_size) or mesh_size <= 0:
         raise ValueError('mesh_size must be finite and positive')
     if not 0 <= minimum_quality <= 1:
