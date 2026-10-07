@@ -158,7 +158,7 @@ def see_femesh(points_2d, lines, triangles, quads, figsize=(8, 8), dpi=150,
     
     if colorby_quality is not None and quality_data is not None:
         import matplotlib.cm as cm
-        cmap_obj = cm.get_cmap(cmap)
+        cmap_obj = plt.get_cmap(cmap)
         
         if clim is None:
             vmin, vmax = np.min(quality_data), np.max(quality_data)
@@ -630,7 +630,7 @@ def plot_elements_geometric_grains(grain_names=None, grain_ids=None, prefix='gra
 
 def pick_contrasting_colours_from_cmap(n_colours, cmap_name='nipy_spectral'):
     """Pick contrasting colours from cmap."""
-    cmap = plt.cm.get_cmap(cmap_name)
+    cmap = plt.get_cmap(cmap_name)
     if n_colours <= 1:
         return [cmap(0.55)]
 
