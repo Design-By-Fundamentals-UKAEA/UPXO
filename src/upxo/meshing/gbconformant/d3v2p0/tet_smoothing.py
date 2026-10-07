@@ -450,7 +450,8 @@ def _improve_node(n, r, p, t, mn0, mx0, target, floor, max_angle, quality, max_h
 
 def minimum_sicn_gmsh(points, tetrahedra):
     """Gmsh minSICN of linear tetrahedra (same metric as the tet mesher)."""
-    import gmsh
+    from upxo._sup.optional_imports import import_gmsh
+    gmsh = import_gmsh()
     points = np.asarray(points, dtype=float)
     tetrahedra = np.asarray(tetrahedra)
     owned = not gmsh.isInitialized()
