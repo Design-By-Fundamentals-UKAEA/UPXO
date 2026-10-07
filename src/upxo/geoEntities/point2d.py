@@ -2006,7 +2006,7 @@ class Point2d():
         if n > len(plist):
             raise ValueError('n is greater than len(plist).')
         sd = self.squared_distance(plist)
-        return np.where(np.in1d(sd, np.sort(sd)[:n]))
+        return np.where(np.isin(sd, np.sort(sd)[:n]))
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
@@ -2265,7 +2265,8 @@ class Point2d():
             return [ShPnt(x, y) for x, y in xy.T]
         elif return_type in ('gmsh'):
             '''Returnsa list of gmsh piont tags'''
-            import gmsh
+            from upxo._sup.optional_imports import import_gmsh
+            gmsh = import_gmsh()
             if not gmsh.isInitialized():
                 gmsh.initialize()
             if not gmsh.model.getCurrent():
