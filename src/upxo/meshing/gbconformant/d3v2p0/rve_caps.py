@@ -26,7 +26,8 @@ def close_rve_faces(surface, labels, spacing=1., mesh_size=.75, verbose=False,
     This adds no tetrahedra and does not repair inherited nonmanifoldness.
     Source triangles must point from grain_pairs[:,0] toward grain_pairs[:,1].
     """
-    import gmsh
+    from upxo._sup.optional_imports import import_gmsh
+    gmsh = import_gmsh()
     edge_size = mesh_size if edge_size is None else edge_size
     if not np.isfinite(edge_size) or edge_size <= 0:
         raise ValueError('edge_size must be finite and positive')
