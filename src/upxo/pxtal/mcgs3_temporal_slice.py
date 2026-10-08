@@ -5632,8 +5632,6 @@ class mcgs3_grain_structure():
         print('Associating grain position string identifiers to grains.')
         from upxo._sup.data_ops import is_a_in_b_3d as is_a_in_b
         # -------------------------------------------
-        if verbose:
-            print('Calculating grain locations.')
         xmin, xmax = 0, self.lgi.shape[2]-1
         ymin, ymax = 0, self.lgi.shape[1]-1
         zmin, zmax = 0, self.lgi.shape[0]-1
