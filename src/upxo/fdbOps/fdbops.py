@@ -88,10 +88,10 @@ def parent_minus_child_coordinates(parent_ids, parent_coords_by_id,
             np.vstack(tuple(child_coords.values()))
         )
         ncols = parent_coords.shape[1]
-        mask = ~np.in1d(
+        mask = ~np.isin(
             parent_coords.view([('', parent_coords.dtype)]*ncols),
             child_coords_acc.view([('', child_coords_acc.dtype)]*ncols)
-        )
+        ).ravel()
         pc_rem[parent_id] = parent_coords[mask]
     return pc_rem
 

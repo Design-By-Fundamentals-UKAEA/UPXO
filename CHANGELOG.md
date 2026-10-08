@@ -4,6 +4,17 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **matplotlib 3.9 and later**: `matplotlib.cm.get_cmap` was removed, so plotting through `gsviz`, `meshviz`, `mcgs2Cont`, `mcgs2_temporal_slice`, `nonConformalMesher`, `fm_steel_3d` grain-structure plots and the representativeness assessment raised `AttributeError: module 'matplotlib.cm' has no attribute 'get_cmap'`. They use `plt.get_cmap`.
+- **NumPy 2**: `np.NaN` (removed) in the representativeness assessment is `np.nan`; `np.in1d` (deprecated) in `fdbops`, `point2d` and `point3d` is `np.isin`.
+- **gmsh on Linux**: a missing system library (`libGLU.so.1`) raised a bare `OSError` from `import gmsh`. `upxo._sup.optional_imports.import_gmsh` raises an `ImportError` that names the packages to install, and every gmsh import in the library uses it.
+
+### Added
+
+- `tests/test_removed_third_party_apis.py` (no tracked module uses a removed matplotlib, NumPy or SciPy API) and `tests/test_optional_imports.py`.
+- README and wiki: the Linux system libraries that `gmsh` needs.
+
 ## [1.3.1] — 2026-10-06
 
 ### Fixed

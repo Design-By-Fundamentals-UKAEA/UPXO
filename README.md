@@ -53,6 +53,7 @@ Dependency versions: the install and checks were run with every direct dependenc
 
 Notes:
 
+- On Linux, `gmsh` (extras `mesh` and `all`) needs system libraries that pip does not install. Without them `import gmsh` fails with `libGLU.so.1: cannot open shared object file`. On Debian or Ubuntu: `sudo apt-get install -y libglu1-mesa libxcursor1 libxinerama1 libxft2`.
 - `netlsd` is published as a source distribution only. pip builds it during the install, which needs `setuptools` if build isolation is turned off.
 - On Windows with long paths disabled, an environment whose `site-packages` path is about 150 characters or more fails to install, because of a long file name inside the `jedi` dependency. Create the environment in a shorter path.
 - A pip-installed UPXO writes pipeline output (reports, raw exports, Abaqus files) under `./data` in the working directory, not inside the Python environment. A source checkout writes to `<checkout>/data`.

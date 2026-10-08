@@ -351,7 +351,7 @@ class MC_GS_Container2d:
 
         tslices  = sorted(self.gsset.keys())
         norm     = mpl.colors.Normalize(vmin=tslices[0], vmax=tslices[-1])
-        cmap_obj = cm.get_cmap(cmap)
+        cmap_obj = plt.get_cmap(cmap)
         group_colors = {str(t): cmap_obj(norm(t)) for t in tslices}
         group_labels = {str(t): f't = {t}' for t in tslices}
 

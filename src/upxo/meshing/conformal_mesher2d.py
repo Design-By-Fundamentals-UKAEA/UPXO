@@ -202,7 +202,8 @@ class confMesh2dGMSH():
         """
         import os
         try:
-            import gmsh
+            from upxo._sup.optional_imports import import_gmsh
+            gmsh = import_gmsh()
         except ImportError as exc:
             raise ImportError(
                 "confMesh2dGMSH requires the gmsh Python package. "

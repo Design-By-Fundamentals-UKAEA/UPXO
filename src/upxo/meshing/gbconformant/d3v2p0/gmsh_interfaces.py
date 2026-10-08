@@ -75,7 +75,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
     source opening within mesh_size (no-sharpening rule).
     Their charts fall back to the source triangles like other defects.
     """
-    import gmsh
+    from upxo._sup.optional_imports import import_gmsh
+    gmsh = import_gmsh()
     if len(frozen_grain_ids):
         # Give each protected voxel plane its own patch so parametrization
         # cannot round a stair-step corner. Shared curve construction is unchanged.

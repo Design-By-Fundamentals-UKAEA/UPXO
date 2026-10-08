@@ -17,10 +17,10 @@ def run_mc_simulation(xmax=50.0, ymax=50.0, zmax=50.0, xinc=1.0, yinc=1.0, zinc=
 
     Returns
     -------
-    mcgsV1_1 : the simulated object -- pxt.m holds the list of saved
+    mcgs_v2 : the simulated object -- pxt.m holds the list of saved
     temporal-slice step indices, pxt.gs[t] the grain structure at step t.
     """
-    from upxo.ggrowth.mcgsV1_1 import mcgsV1_1, MCGSConfig
+    from upxo.ggrowth.mcgs_v2 import mcgs_v2, MCGSConfig
     config = MCGSConfig(
         xmin=0.0, xmax=xmax, xinc=xinc, ymin=0.0, ymax=ymax, yinc=yinc,
         zmin=0.0, zmax=zmax, zinc=zinc, Q=q_states, mcalg=mcalg,
@@ -29,7 +29,7 @@ def run_mc_simulation(xmax=50.0, ymax=50.0, zmax=50.0, xinc=1.0, yinc=1.0, zinc=
         boltzmann_temp_factor=boltzmann_temp_factor if consider_boltzmann else None,
         boltzmann_temp_factors=None, rng_seed=rng_seed or None,
     )
-    pxt = mcgsV1_1(config, verbose=verbose)
+    pxt = mcgs_v2(config, verbose=verbose)
     pxt.simulate(verbose=verbose)
     return pxt
 

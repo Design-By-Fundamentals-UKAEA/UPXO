@@ -323,7 +323,7 @@ def plot_multipolygon_geometric(gs_geometric, fig=None, ax=None, cmap='tab20', e
 
     # Get colormap
     if isinstance(cmap, str):
-        cmap = cm.get_cmap(cmap)
+        cmap = plt.get_cmap(cmap)
     
     num_polygons = len(gs_geometric.geoms)
     colors = [cmap(i / num_polygons) for i in range(num_polygons)]

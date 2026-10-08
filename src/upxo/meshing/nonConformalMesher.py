@@ -667,7 +667,7 @@ class nonConformalMesher():
             print("Element numbers plotting skipped for large meshes (>50 elements).")
         # ===============================
         if elementCentroids and self.NODES.shape[0] <= 1000:
-            cmap = plt.cm.get_cmap(cmap)
+            cmap = plt.get_cmap(cmap)
             for i, (elids_key, elids) in enumerate(self.elsets[elsetType].items()):
                 clr = cmap(self.gids[i]/len(self.gids))
                 for elid in elids:

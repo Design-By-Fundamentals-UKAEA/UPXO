@@ -5256,7 +5256,7 @@ class mcgs2_grain_structure():
         if hide_non_actors:
             lgi[lgi == 0] = -10
             import matplotlib.cm as mpltcm
-            cmap = mpltcm.get_cmap(default_cmap, 50)
+            cmap = plt.get_cmap(default_cmap, 50)
             cmap.set_under('white')
         # ---------------------------------
         plt.figure(figsize=figsize, dpi=dpi)

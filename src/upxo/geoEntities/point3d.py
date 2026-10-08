@@ -886,7 +886,7 @@ class Point3d(UPXO_Point):
         if n > len(plist):
             raise ValueError('n is greater than len(plist).')
         sd = self.squared_distance(plist)
-        return np.where(np.in1d(sd, np.sort(sd)[:n]))
+        return np.where(np.isin(sd, np.sort(sd)[:n]))
 
     def find_neigh_mulpoint_by_distance(self, *, mplist=None,
                                         plane='xy', r=0, tolf=-1):
