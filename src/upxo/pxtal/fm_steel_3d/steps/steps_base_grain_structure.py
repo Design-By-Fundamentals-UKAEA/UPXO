@@ -40,11 +40,11 @@ def run_mc_simulation(nx=50, ny=50, nz=50, q_states=10, mcsteps=100, save_interv
 
     Returns
     -------
-    pxt : the mcgsV1_1 simulation object. `pxt.m` lists saved temporal-slice
+    pxt : the mcgs_v2 simulation object. `pxt.m` lists saved temporal-slice
     indices; `pxt.gs[t].s` is the raw state array (shape (nz, ny, nx),
     z-first) for slice `t`.
     """
-    from upxo.ggrowth.mcgsV1_1 import mcgsV1_1, MCGSConfig
+    from upxo.ggrowth.mcgs_v2 import mcgs_v2, MCGSConfig
     config = MCGSConfig(
         xmin=0.0, xmax=float(nx - 1), xinc=1.0,
         ymin=0.0, ymax=float(ny - 1), yinc=1.0,
@@ -55,7 +55,7 @@ def run_mc_simulation(nx=50, ny=50, nz=50, q_states=10, mcsteps=100, save_interv
         boltzmann_temp_factor=boltzmann_temp_factor if consider_boltzmann else None,
         boltzmann_temp_factors=None, rng_seed=rng_seed,
     )
-    pxt = mcgsV1_1(config, verbose=verbose)
+    pxt = mcgs_v2(config, verbose=verbose)
     pxt.simulate(verbose=verbose)
     return pxt
 

@@ -94,7 +94,7 @@ class TwinnedSimple3DBase:
         if voxel_size is not None:
             vs = float(voxel_size)
         else:
-            # pxt.vox_size is always a (x, y, z) tuple in mcgsV1_1 (and
+            # pxt.vox_size is always a (x, y, z) tuple in mcgs_v2 (and
             # after MC Qualification's scale-factor calibration overwrites
             # it) -- never a bare scalar -- so float(pxt.vox_size) would
             # raise. This pipeline only ever produces isotropic voxels, so
@@ -1296,7 +1296,7 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        pxt : mcgsV1_1 (or mcgs)
+        pxt : mcgs_v2 (or mcgs)
             Simulated grain-growth object (after ``pxt.simulate()``).
         tslice_key : int
             Key into ``pxt.gs``.
@@ -1623,7 +1623,7 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        pxt : mcgsV1_1 (or mcgs)
+        pxt : mcgs_v2 (or mcgs)
             Simulated grain-growth object (after ``pxt.simulate()``).
         tslice_key : int
             Key into ``pxt.gs`` -- used to read the candidate's voxel grid
@@ -1680,7 +1680,7 @@ class TwinnedSimple3DBase:
                     cross_check_ok = cross_check_diff_pct <= cross_check_tolerance_pct
 
         s = pxt.gs[tslice_key].s
-        nz, ny, nx = s.shape  # axis0=Z, axis1=Y, axis2=X -- see mcgsV1_1.__init__
+        nz, ny, nx = s.shape  # axis0=Z, axis1=Y, axis2=X -- see mcgs_v2.__init__
         implied_rve_size_um = (nx * scale_factor, ny * scale_factor, nz * scale_factor)
 
         return {
@@ -1707,7 +1707,7 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        pxt : mcgsV1_1 (or mcgs)
+        pxt : mcgs_v2 (or mcgs)
             Simulated grain-growth object (after ``pxt.simulate()`` and
             ``calculate_lfi()``).
         tslice_key : int
@@ -1729,7 +1729,7 @@ class TwinnedSimple3DBase:
 
         # lgi_3d (like the raw .s it's derived from) has shape
         # (nz, ny, nx) -- axis0=Z, axis1=Y, axis2=X, matching
-        # alg300a/alg300b's P/R/C convention (mcgsV1_1.__init__);
+        # alg300a/alg300b's P/R/C convention (mcgs_v2.__init__);
         # find_grains() populates .lgi straight from .s with no
         # transpose, so this axis order carries over unchanged. PyVista's
         # ImageData.dimensions is always positionally (nx, ny, nz)
@@ -1771,7 +1771,7 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        pxt : mcgsV1_1 (or mcgs)
+        pxt : mcgs_v2 (or mcgs)
             Simulated grain-growth object (after ``pxt.simulate()``).
         tslice_keys : list of int or None
             Which ``pxt.m`` entries to compute LFI for. Defaults to all
@@ -1858,7 +1858,7 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
-        pxt : mcgsV1_1 (or mcgs)
+        pxt : mcgs_v2 (or mcgs)
             Simulated grain-growth object (after ``pxt.simulate()`` and
             ``calculate_lfi()``). ``pxt.gs[t].lgi`` and ``pxt.gs[t].s``
             are both overwritten in place for every cleaned slice.
