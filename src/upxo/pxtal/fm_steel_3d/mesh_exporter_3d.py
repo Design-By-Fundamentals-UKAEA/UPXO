@@ -1485,7 +1485,12 @@ class MeshExporter3D:
         min_face, max_face, dof = faces[self.load_axis]
         names = {k: (nset_config.get(k, {}).get('prefix') or FACE_NSET_NAMES[k])
                  for k in FACE_NSET_NAMES}
-        displacement = self.applied_displacement
+        # length_scale is baked into the node coordinates this displacement is
+        # applied against (see _export_core's `dx = voxel_size * unit_scale *
+        # length_scale`) -- fold it in here too so "Applied displacement"
+        # consistently means a physical distance in Output Units regardless
+        # of length_scale.
+        displacement = self.applied_displacement * self.length_scale
         f.write('** STEP: Step-1\n*Step, name=Step-1, nlgeom=YES, inc=%d\n' % self.max_increments)
         f.write('*Static\n%g, %g, %g, %g\n' %
                 (self.initial_inc, self.step_time, self.min_inc, self.max_inc))
@@ -1525,15 +1530,17 @@ class MeshExporter3D:
                 ]
                 if parts:
                     phase_line = f"** Phase breakdown: {', '.join(parts)}\n"
+            scale_note = (f" (length_scale={self.length_scale:g} applied)"
+                         if self.length_scale != 1.0 else "")
             f.write(
                 f"*Heading\n"
                 f"** FM steel microstructure — element type: {elem_type}\n"
                 f"** Grid: {NX} x {NY} x {NZ} voxels  "
                 f"|  Active elements: {n_active:,}\n"
                 f"{phase_line}"
-                f"** Voxel size: {dx:.6g} {dst_unit}  "
+                f"** Voxel size: {dx:.6g} {dst_unit}{scale_note}  "
                 f"(structure defined in {src_unit})\n"
-                f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}\n**\n"
+                f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}{scale_note}\n**\n"
                 f"*Part, name={ABAQUS_PART_NAME}\n"
                 f"*INCLUDE, INPUT=01_nodes.inp\n"
                 f"*INCLUDE, INPUT=02_elements.inp\n"
