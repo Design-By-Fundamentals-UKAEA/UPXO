@@ -421,7 +421,8 @@ class FMSteel3DBase:
         self._emit(1, f"clean_small_grains: done  {n_before}→{n_after} grains", 'CLEAN')
 
         new_inst = FMSteel3DBase(lgi=lgi_clean, physical_dimensions=self.physical_dimensions,
-                                 voxel_size=self.voxel_size, connectivity=self.connectivity,
+                                 voxel_size=self.voxel_size, units=self.units,
+                                 connectivity=self.connectivity,
                                  min_grain_nvoxels=self.min_grain_nvoxels, random_seed=self._random_seed,
                                  verbosity=self._verbosity, log_sink=self._log_sink)
         new_inst.grain_locs = new_inst.compute_grain_locations()
@@ -477,7 +478,8 @@ class FMSteel3DBase:
         self._emit(1, f"remove_spikes: done  {spike_count}/{len(spike_coords)} spikes repaired", 'CLEAN')
 
         new_inst = FMSteel3DBase(lgi=lgi, physical_dimensions=self.physical_dimensions,
-                                 voxel_size=self.voxel_size, connectivity=self.connectivity,
+                                 voxel_size=self.voxel_size, units=self.units,
+                                 connectivity=self.connectivity,
                                  min_grain_nvoxels=self.min_grain_nvoxels, random_seed=self._random_seed,
                                  verbosity=self._verbosity, log_sink=self._log_sink)
         new_inst.grain_locs = new_inst.compute_grain_locations()
