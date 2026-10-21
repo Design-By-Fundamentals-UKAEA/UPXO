@@ -23,6 +23,17 @@ def _raise_value_error(x):
     raise ValueError(f'bad task {x}')
 
 
+_MARKER = {}
+
+
+def _set_marker(value, other):
+    _MARKER['value'] = value + other
+
+
+def _read_marker(x):
+    return _MARKER['value'] + x
+
+
 class _Fresh(unittest.TestCase):
     """Clear detection caches and the UPXO environment for each test."""
 
@@ -103,6 +114,19 @@ class PlanTests(_Fresh):
             backend.plan()
         self.assertTrue(any('UPXO_BACKEND' in str(w.message) for w in caught))
 
+    def test_requested_backend(self):
+        self.assertEqual(backend.requested_backend(), 'auto')
+        self.assertEqual(backend.requested_backend('numba'), 'numba')
+        os.environ['UPXO_BACKEND'] = 'numba'
+        self.assertEqual(backend.requested_backend('auto'), 'numba')
+        self.assertEqual(backend.requested_backend('numpy'), 'numpy')          # an explicit argument wins
+        os.environ['UPXO_BACKEND'] = 'cuda'
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter('always')
+            self.assertEqual(backend.requested_backend('auto'), 'auto')       # an unknown value is ignored
+        with self.assertRaises(ValueError):
+            backend.requested_backend('gpu')
+
 
 @unittest.skipIf(backend.usable_cores() < 2, 'needs two usable CPUs')
 class WorkerPoolTests(_Fresh):
@@ -142,6 +166,43 @@ class WorkerPoolTests(_Fresh):
 
 
 @unittest.skipIf(backend.usable_cores() < 2, 'needs two usable CPUs')
+class InitializerTests(_Fresh):
+    """Workers start through d3v2p1._pool_init, so the parent never waits on a worker's heavy imports."""
+
+    def test_module_level_function_is_named_through_the_light_module(self):
+        from upxo.meshing.gbconformant.d3v2p1 import _pool_init
+        init, args = backend._light_initializer(_set_marker, (3, 4))
+        self.assertIs(init, _pool_init.initialize)
+        self.assertEqual(args, (_set_marker.__module__, '_set_marker', (3, 4)))
+
+    def test_other_callables_and_no_initializer_pass_through(self):
+        self.assertEqual(backend._light_initializer(None, ()), (None, ()))
+        local = lambda a: None                                    # noqa: E731
+        self.assertEqual(backend._light_initializer(local, (1,)), (local, (1,)))
+
+        def nested(a):
+            return a
+        self.assertEqual(backend._light_initializer(nested, (1,)), (nested, (1,)))
+        copy = type(_set_marker)(_set_marker.__code__, _set_marker.__globals__, '_set_marker')   # same name, not the module's
+        self.assertEqual(backend._light_initializer(copy, (1, 2)), (copy, (1, 2)))
+
+    def test_initializer_runs_in_every_worker_with_its_arguments(self):
+        plan = backend.Plan('parallel', 'parallel', 2)
+        with backend.WorkerPool(plan, initializer=_set_marker, initargs=(10, 5)) as pool:
+            self.assertEqual(pool.map(_read_marker, range(8)), [15 + x for x in range(8)])
+        self.assertTrue(plan.parallel)
+        self.assertIsNone(plan.fallback)
+
+    def test_light_module_imports_nothing_heavy(self):
+        import subprocess
+        code = ("import sys; import upxo.meshing.gbconformant.d3v2p1._pool_init; "
+                "heavy = [m for m in ('numpy', 'scipy', 'pyvista', 'gmsh', 'numba') if m in sys.modules]; "
+                "sys.exit(1 if heavy else 0)")
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
+        done = subprocess.run([sys.executable, '-c', code], env=env)
+        self.assertEqual(done.returncode, 0)
+
+
 class StageFallbackTests(_Fresh):
     def test_tet_smoothing_same_result_after_pool_failure(self):
         from .test_tet_smoothing_parallel import jittered_block

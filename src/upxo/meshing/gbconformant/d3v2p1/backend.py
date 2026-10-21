@@ -18,6 +18,7 @@ the number of physical cores this process may use, so hyper-threads are
 not oversubscribed. Results of every d3v2p1 stage do not depend on the tier
 or the worker count unless that stage's documentation says otherwise.
 """
+import importlib
 import multiprocessing
 import os
 import warnings
@@ -133,6 +134,19 @@ def _env_backend():
     return value
 
 
+def check_backend(backend):
+    """Raise ValueError unless backend is one of BACKENDS (so a stage fails before it starts work)."""
+    if backend not in BACKENDS:
+        raise ValueError(f'backend must be one of {BACKENDS}')
+
+
+def requested_backend(backend='auto'):
+    """The backend that was asked for: ``backend``, or UPXO_BACKEND when ``backend`` is 'auto' and the variable
+    is set. 'auto' when nothing was chosen. Lets a stage tell an explicit 'numba' from automatic selection."""
+    check_backend(backend)
+    return (_env_backend() or 'auto') if backend == 'auto' else backend
+
+
 def check_workers(n_workers):
     if n_workers is None:
         return
@@ -227,6 +241,27 @@ _START_ERRORS = (OSError, ValueError, NotImplementedError, ImportError, RuntimeE
 _RUN_ERRORS = (BrokenProcessPool, PicklingError)
 
 
+def _light_initializer(initializer, initargs):
+    """(initializer, initargs) to give the executor: a module-level function is named through
+    d3v2p1._pool_init so a worker's start-up message does not make the parent wait for the
+    worker to import the function's module. Anything else (a lambda, a nested function, a function
+    of __main__, one that does not resolve to itself) is passed unchanged."""
+    if initializer is None:
+        return None, ()
+    module, qualname = getattr(initializer, '__module__', None), getattr(initializer, '__qualname__', None)
+    if module and qualname and module != '__main__' and '<' not in qualname:
+        try:
+            target = importlib.import_module(module)
+            for part in qualname.split('.'):
+                target = getattr(target, part)
+        except (ImportError, AttributeError):
+            target = None
+        if target is initializer:
+            from ._pool_init import initialize
+            return initialize, (module, qualname, tuple(initargs))
+    return initializer, initargs
+
+
 class WorkerPool:
     """Process pool for one stage call that falls back to serial execution.
 
@@ -265,8 +300,9 @@ class WorkerPool:
             try:
                 # spawn on every platform: fork after numba or BLAS threads have
                 # started can deadlock a worker (Linux defaults to fork)
-                self._pool = ProcessPoolExecutor(max_workers=self.plan.workers, initializer=self.initializer,
-                                                 initargs=self.initargs,
+                initializer, initargs = _light_initializer(self.initializer, self.initargs)
+                self._pool = ProcessPoolExecutor(max_workers=self.plan.workers, initializer=initializer,
+                                                 initargs=initargs,
                                                  mp_context=multiprocessing.get_context('spawn'))
             except _START_ERRORS as error:
                 return self._fall_back('could not start worker processes', error, run_serial)
