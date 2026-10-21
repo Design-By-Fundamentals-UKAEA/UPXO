@@ -453,6 +453,98 @@ class DistrViz:
 
 # ── Multi-group overlaid distribution plot ─────────────────────────────────────
 
+def plot_slice_kde_curve_set(
+        ebsd_values,
+        sgs_values_by_slice,
+        xlabel='Value',
+        category_label='',
+        axis_label='',
+        bw_method='scott',
+        n_grid=400,
+        ebsd_color='#000000',
+        sgs_color='#4878CF',
+        figsize=(6, 4.5),
+        dpi=110,
+):
+    """One EBSD reference KDE curve plus a synthetic "curve set": one thin
+    KDE per 2D slice (pointwise-averaged into one thick mean curve), NOT a
+    single KDE fit to the slices' pooled data -- deliberately a different
+    statistic (see compute_category_grain_size_stats's module-level note).
+
+    No histograms (`show_hist` is not an option here, unlike
+    plot_grouped_distributions) and no per-slice legend entries -- only
+    the EBSD curve and the synthetic mean curve are labelled; the many
+    thin per-slice curves are drawn unlabelled so they don't clutter the
+    legend.
+
+    Parameters
+    ----------
+    ebsd_values : array-like
+        EBSD reference values (um) for this category -- one flat array,
+        not sliced (the EBSD map has no "slices").
+    sgs_values_by_slice : list of array-like
+        One array per sampled synthetic 2D slice along one axis, e.g.
+        the output of feature_props_3d.compute_sgs_category_ced_by_slice.
+    xlabel : str
+        X-axis label, e.g. "Circle-Equivalent Diameter (um)".
+    category_label, axis_label : str
+        Used to build the plot title, e.g. "Twin-to-Twin" / "X" ->
+        "Twin-to-Twin -- 2D Slice CED along X".
+    bw_method : str or float
+        Bandwidth selector passed to ``scipy.stats.gaussian_kde`` for
+        every curve (EBSD and every slice) -- user-adjustable.
+    n_grid : int
+        Number of evaluation points on the shared x-grid every KDE is
+        plotted on.
+
+    Returns
+    -------
+    fig, ax
+    """
+    from scipy.stats import gaussian_kde
+
+    ebsd_values = np.asarray(ebsd_values, dtype=float)
+    ebsd_values = ebsd_values[np.isfinite(ebsd_values)]
+    slice_arrays = [np.asarray(a, dtype=float) for a in sgs_values_by_slice]
+    slice_arrays = [a[np.isfinite(a)] for a in slice_arrays]
+
+    fittable = [a for a in ([ebsd_values] + slice_arrays) if a.size >= 2]
+    if not fittable:
+        raise ValueError(
+            "Not enough data to fit any KDE curve (every array has < 2 points).")
+
+    lo = min(a.min() for a in fittable)
+    hi = max(a.max() for a in fittable)
+    pad = 0.05 * (hi - lo) if hi > lo else max(1.0, abs(lo) * 0.1 or 1.0)
+    grid = np.linspace(lo - pad, hi + pad, n_grid)
+
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+
+    slice_curves = []
+    for arr in slice_arrays:
+        if arr.size < 2:
+            continue
+        curve = gaussian_kde(arr, bw_method=bw_method)(grid)
+        slice_curves.append(curve)
+        ax.plot(grid, curve, color=sgs_color, linewidth=1, alpha=0.45)
+
+    if slice_curves:
+        mean_curve = np.mean(slice_curves, axis=0)
+        ax.plot(grid, mean_curve, color=sgs_color, linewidth=2, label='Synthetic (mean of slices)')
+
+    if ebsd_values.size >= 2:
+        ebsd_curve = gaussian_kde(ebsd_values, bw_method=bw_method)(grid)
+        ax.plot(grid, ebsd_curve, color=ebsd_color, linewidth=2, linestyle='--', label='EBSD')
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('Probability Density')
+    title = f'{category_label} -- 2D Slice CED along {axis_label}'.strip(' -')
+    ax.set_title(title)
+    ax.legend(fontsize=9, loc='best')
+    fig.tight_layout()
+    return fig, ax
+
+
 def plot_grouped_distributions(
         data,
         prop_labels=None,
