@@ -89,6 +89,7 @@ src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
 /guiLaunchers/
 /upxo_conformal_meshing_launcher.py
 /upxo_gui_launcher.py
+/upxo_image_ops_3d_launcher.py
 /tests/gui/
 /tests/gui_root/
 /tests/fm_steel_3d/test_gui.py
