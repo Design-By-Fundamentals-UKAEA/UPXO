@@ -11,6 +11,7 @@ passes the same rules and the same verification as in d3v2p0; only the order
 differs, so the result is close to, not identical with, d3v2p0's. It does not
 depend on the worker count.
 """
+import importlib
 import math
 import time
 from dataclasses import replace
@@ -19,8 +20,9 @@ from multiprocessing import shared_memory
 from ..d3v2p0.surface_angles import (triangle_angles, _Topology, _apply, _undo, _angle_summary,
                                      _snap, _grain_fans_ok)
 from ..d3v2p0.surface_intersections import find_surface_intersections
-from ..d3v2p0.facet_angles import small_facet_angles
-from .backend import plan, Plan, WorkerPool
+from .facet_angles import small_facet_angles
+from .mesh_tables import unique_rows
+from .backend import plan, Plan, WorkerPool, requested_backend
 from .parallel import single_thread_worker
 
 
@@ -79,28 +81,31 @@ def _keeps_openings(op, p, f, topo, limit):
     d3v2p0's _keeps_openings, with scalar arithmetic and no array copies)."""
     rows = [int(r) for r in op['rows']]
     new = [tuple(int(v) for v in t) for t in op['new']]
-    cache = {}
+    moved = {}
     if op['kind'] == 'relocation':
-        cache[int(op['node'])] = tuple(float(v) for v in op['point'])
+        moved[int(op['node'])] = tuple(float(v) for v in op['point'])
 
-    def coord(n):
-        c = cache.get(n)
-        if c is None:
-            c = cache[n] = tuple(p[n].tolist())
-        return c
+    def reader(cache):
+        def coord(n):
+            c = cache.get(n)
+            if c is None:
+                c = cache[n] = tuple(p[n].tolist())
+            return c
+        return coord
+    coord_before, coord_after = reader({}), reader(moved)      # the openings before are measured at the old position
 
     def edges(tris):
         return {(min(a, b), max(a, b)) for t in tris for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0]))}
     old = [tuple(int(v) for v in f[r]) for r in rows]
     before_of = {}
     for e in edges(old):
-        before_of[e] = _opening(e, [tuple(int(v) for v in f[r]) for r in topo.edge_tri.get(e, [])], coord)
+        before_of[e] = _opening(e, [tuple(int(v) for v in f[r]) for r in topo.edge_tri.get(e, [])], coord_before)
     before = min(before_of.values())
     removed = set(rows)
     for e in sorted(edges(new)):
         tris = [tuple(int(v) for v in f[r]) for r in topo.edge_tri.get(e, []) if r not in removed]
         tris += [t for t in new if e[0] in t and e[1] in t]
-        after = _opening(e, tris, coord)
+        after = _opening(e, tris, coord_after)
         if after < min(before_of.get(e, before), limit) - 1e-6:
             return False
     return True
@@ -338,9 +343,15 @@ def _attach(spec):
     return arrays, handles
 
 
-def _init(spec, statics):
+STATICS = ('patch', 'frozen', 'exterior', 'rve_face', 'pairs')     # per-triangle arrays that never change in a call
+
+
+def _init(spec):
     _W['limits'] = single_thread_worker()
     arrays, handles = _attach(spec)
+    statics = tuple(arrays[name] for name in STATICS)
+    for a in statics:
+        a.flags.writeable = False
     _W.update(arrays, handles=handles, statics=statics, key=None)
 
 
@@ -376,15 +387,31 @@ def _shared(arrays):
     return views, handles, spec
 
 
+def _compiled_tier():
+    """(function, None) for the compiled tier, or (None, why not): numba missing, kernels that do not compile
+    here, or a failed self-test."""
+    try:
+        numba_surface_angles = importlib.import_module('.numba_surface_angles', __package__)
+    except Exception as error:
+        return None, f'{type(error).__name__}: {error}'
+    ready, reason = numba_surface_angles.compiled_ready()
+    return (numba_surface_angles.improve_surface_angles_compiled, None) if ready else (None, reason)
+
+
 def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=10,
                            max_deviation=None, minimum_facet_angle=.1, frozen_grain_ids=(),
                            flips=True, relocation=True, collapses=True,
                            max_normal_change=60., wedge_limit=None, n_workers=None, max_rounds=8,
-                           backend='auto'):
+                           backend='auto', progress=None):
     """d3v2p0.surface_angles.improve_surface_angles with parallel candidate
     evaluation in rounds. backend / n_workers: see d3v2p1.backend (None =
-    automatic); the result does not depend on them. max_rounds: evaluation rounds per pass;
-    triangles still stale after it are worked on again in the next pass."""
+    automatic); the result does not depend on n_workers. max_rounds: evaluation rounds per pass;
+    triangles still stale after it are worked on again in the next pass.
+
+    backend='numba' (also UPXO_BACKEND=numba) runs the compiled tier instead, d3v2p1.numba_surface_angles:
+    d3v2p0's order of work, so its result is d3v2p0's (coordinates to the last digits of a float) and not the
+    rounds' above; max_rounds does not apply to it. If numba is missing or the kernels cannot compile here,
+    the parallel / numpy tier runs and the report says why. 'auto' never selects the compiled tier."""
     if isinstance(max_rounds, bool) or not isinstance(max_rounds, (int, np.integer)) or max_rounds < 1:
         raise ValueError('max_rounds must be a positive integer')
     if not np.isfinite(minimum_angle) or not 0 < minimum_angle < 60:
@@ -399,9 +426,21 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
         raise ValueError('max_normal_change must lie in (0, 90) degrees')
     if not all(isinstance(v, (bool, np.bool_)) for v in (enabled, flips, relocation, collapses)):
         raise ValueError('Switches must be boolean')
-    chosen = plan(backend, n_workers)
-    if not (enabled and max_passes):
+    work_to_do = bool(enabled and max_passes)
+    chosen = plan(backend, n_workers, numba_kernels=work_to_do and requested_backend(backend) == 'numba')
+    if not work_to_do:
         chosen = Plan(chosen.requested, 'numpy', 1)
+    elif chosen.numba:
+        run, reason = _compiled_tier()
+        if run is not None:
+            return run(surface, enabled=enabled, minimum_angle=minimum_angle, max_passes=max_passes,
+                       max_deviation=max_deviation, minimum_facet_angle=minimum_facet_angle,
+                       frozen_grain_ids=frozen_grain_ids, flips=flips, relocation=relocation, collapses=collapses,
+                       max_normal_change=max_normal_change, wedge_limit=wedge_limit, backend=backend,
+                       n_workers=n_workers, progress=progress, plan_report=chosen.report())
+        chosen = plan('parallel', n_workers)
+        chosen.requested = backend
+        chosen.fallback = f'compiled angle repair not usable ({reason}); using {chosen.used}'
     p = np.array(surface.points, dtype=float)
     f = np.array(surface.triangles)
     pairs = np.asarray(surface.grain_pairs)
@@ -417,7 +456,7 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
     cos_normal = np.cos(np.radians(max_normal_change))
     frozen = np.isin(pairs, np.asarray(list(frozen_grain_ids), dtype=pairs.dtype)).any(axis=1) \
         if len(frozen_grain_ids) else np.zeros(len(f), bool)
-    _, patch = np.unique(np.column_stack((pairs, rve_face)), axis=0, return_inverse=True)
+    _, patch = unique_rows(np.column_stack((pairs, rve_face)), True)
     patch = patch.ravel()
     alive = np.ones(len(f), bool)
     settings = (flips, relocation, collapses, max_deviation, cos_normal, extent, wedge_limit)
@@ -429,9 +468,10 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
     handles, views = [], None
     pool = WorkerPool(chosen)
     if chosen.parallel:
-        views, handles, spec = _shared(dict(p=p, f=f, f0=f, alive0=alive, ang=np.zeros(len(f))))
+        views, handles, spec = _shared(dict(p=p, f=f, f0=f, alive0=alive, ang=np.zeros(len(f)), patch=patch,
+                                            frozen=frozen, exterior=exterior, rve_face=rve_face, pairs=pairs))
         p, f = views['p'], views['f']
-        pool = WorkerPool(chosen, initializer=_init, initargs=(spec, (patch, frozen, exterior, rve_face, pairs)))
+        pool = WorkerPool(chosen, initializer=_init, initargs=(spec,))
     # A triangle with no valid operation keeps that result while no node it read
     # changes (the evaluation depends only on those nodes and the rows around them).
     none_cache = {}                          # t -> (read nodes, version)
@@ -439,6 +479,12 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
     changed_at = np.zeros(len(p), np.int64)
     try:
         for iteration in range(max_passes if enabled else 0):
+            if progress is not None:
+                try:
+                    progress(f'Surface angle repair pass {iteration+1}/{max_passes}',
+                             iteration+1, max_passes)
+                except Exception:
+                    pass
             clock = dict(setup=-time.perf_counter(), evaluate=0., apply=0., verify=0.)
             ang = np.full(len(f), 180.)
             ang[alive] = triangle_angles(p, f[alive]).min(axis=1)
