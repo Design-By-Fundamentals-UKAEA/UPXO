@@ -18,13 +18,13 @@ SLICE_PLANES = ('xy', 'yz', 'xz')
 GROUPS = ('pag', 'packet')
 
 
-def pag_label_grid(lgi: np.ndarray, clusters_dict: dict) -> np.ndarray:
+def pag_label_grid(lgi: np.ndarray, clusters_dict: dict, dtype=np.int32) -> np.ndarray:
     """Grain label grid with every grain relabelled by the id of its PAG.
 
-    Grains in no cluster, and void, become 0.
+    Grains in no cluster, and void, become 0. The result has type ``dtype``.
     """
     max_gid = int(lgi.max())
-    lut = np.zeros(max_gid + 1, dtype=np.int32)
+    lut = np.zeros(max_gid + 1, dtype=dtype)
     for pag_id, gids in clusters_dict.items():
         for gid in gids:
             if 0 < gid <= max_gid:

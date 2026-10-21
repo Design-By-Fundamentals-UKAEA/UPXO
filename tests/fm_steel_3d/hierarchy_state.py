@@ -76,3 +76,40 @@ def build_hierarchy(seed=0, shape=(14, 14, 14), n_blocks=12):
         all_subblocks=all_subblocks, subblock_orientations=subblock_orientations,
         block_to_subblocks_map=block_to_subblocks, _parent=fm_blocks)
     return pag_id_map, fm_blocks, fm_subblocks
+
+
+def build_pipeline_states(seed=0):
+    """Return ``(fm_pag, fm_blocks, fm_subblocks)`` shaped like the pipeline states.
+
+    Every block is its own grain (grain id = position of the block), blocks are
+    named ``'<pag>_1_<grain id>'`` and grouped into PAGs; the sub-blocks are
+    renamed after their blocks. ``fm_pag._parent`` is the base structure with
+    the grain grid and a packet index for each grain.
+    """
+    pag_id_map, fm_blocks, fm_subblocks = build_hierarchy(seed)
+    grain = np.zeros(pag_id_map.shape, dtype=np.int32)
+    clusters, renamed_blocks, new_names = {}, {}, {}
+    for grain_id, (name, voxels) in enumerate(fm_blocks.all_blocks.items(), start=1):
+        pag = int(name.split('_')[0])
+        grain[tuple(voxels.T)] = grain_id
+        clusters.setdefault(pag, []).append(grain_id)
+        new_names[name] = f'{pag}_1_{grain_id}'
+        renamed_blocks[new_names[name]] = voxels
+    base = SimpleNamespace(lgi=grain, n_grains=len(renamed_blocks),
+                           grain_to_plane_idx={g: g % 3 for g in range(1, len(renamed_blocks) + 1)})
+    fm_pag = SimpleNamespace(_parent=base, clusters_dict=clusters, n_pags=len(clusters),
+                             isolated_grain_orientations={4: (1.0, 2.0, 3.0)})
+    fm_blocks.all_blocks = renamed_blocks
+    fm_blocks._parent = base
+
+    all_subblocks, block_to_subblocks = {}, {}
+    for old_name, sub_ids in fm_subblocks.block_to_subblocks_map.items():
+        block = new_names[old_name]
+        block_to_subblocks[block] = []
+        for local, sb in enumerate(sub_ids, start=1):
+            new_id = f'SB_{block}_{local}'
+            all_subblocks[new_id] = fm_subblocks.all_subblocks[sb]
+            block_to_subblocks[block].append(new_id)
+    fm_subblocks.all_subblocks = all_subblocks
+    fm_subblocks.block_to_subblocks_map = block_to_subblocks
+    return fm_pag, fm_blocks, fm_subblocks
