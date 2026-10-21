@@ -45,8 +45,7 @@ with code that already reads it.
 FMSteel3DBase.generate_pag_clusters itself is left completely unmodified --
 existing sessions/scripts that call it directly keep their original
 pre-filter retained-austenite behaviour and are unaffected by this module.
-This is the new, additive entry point used by the GUI's Technique/Lever
-selection page.
+This is the new, additive entry point for selecting a technique and a lever.
 """
 import copy
 from typing import Dict, Optional, Sequence

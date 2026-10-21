@@ -2,12 +2,12 @@
 
 Gathers whatever grain-structure / hierarchy data currently exists across
 the pipeline's stage objects -- fm_base, fm_with_pags, fm_with_blocks,
-fm_with_orientations, fm_with_subblocks (see gui/pipeline_state.py's
-STAGE_ORDER) -- and writes it out as plain files. fm_base's own data (the
+fm_with_orientations, fm_with_subblocks (in pipeline
+order) -- and writes it out as plain files. fm_base's own data (the
 grain-ID array and its immediate companions) is always included. On top
 of that, the caller selects which of the four hierarchy LEVELS to include
 -- PAG, Packet, Block, Sub-block (mirroring the PAG/PCK/BLK/SBLK elset
-levels on the Abaqus mesh-export page) -- each with its own filename
+levels of the Abaqus mesh export) -- each with its own filename
 prefix. Every selected level contributes its own 3D labeled array
 ("<prefix>_lgi", the same shape as the base structure, built via
 feature_props_3d's per-level LGI builders -- the same ones the
@@ -30,9 +30,8 @@ from pathlib import Path
 
 import numpy as np
 
-# (level key, display label) -- mirrors gui/pages_mesh.py's PAG/PCK/BLK/SBLK
-# elset levels exactly, so a user already familiar with that naming
-# recognizes these immediately.
+# (level key, display label) -- mirrors the PAG/PCK/BLK/SBLK elset levels of
+# the Abaqus mesh export exactly, so the same naming is used throughout.
 LEVELS = [
     ("pag",  "PAG"),
     ("pck",  "Packet"),

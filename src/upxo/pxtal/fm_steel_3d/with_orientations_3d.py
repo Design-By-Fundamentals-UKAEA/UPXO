@@ -413,7 +413,7 @@ class FMSteel3DWithOrientations:
 
     def available_phases(self) -> List[int]:
         """Phase ids actually present in this structure, for populating a
-        phase-selector dropdown (e.g. the Block-Level IPF Map panel).
+        phase selector (e.g. for the block-level IPF map).
 
         PHASE_MARTENSITE is present whenever any blocks exist; PHASE_
         RETAINED_AUSTENITE is present whenever isolated_grains is non-empty
@@ -431,7 +431,7 @@ class FMSteel3DWithOrientations:
         self, phase_id: int
     ) -> Tuple[Dict, Dict[int, Tuple[float, float, float]]]:
         """Feature voxels + orientations for one phase, for phase-filtered
-        IPF maps (see viz/orientation_viz_3d.py and gui/pages_viz.py).
+        IPF maps (see viz/orientation_viz_3d.py).
 
         PHASE_MARTENSITE -> block granularity: (all_blocks, block_orientations),
         exactly what the existing Block-Level IPF Map already renders (blocks
