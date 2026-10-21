@@ -65,7 +65,8 @@ def detect_voxel_topology(labels):
 
 def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
                          max_volume_fraction=.2, protect_grains_up_to=0,
-                         preserve_components=False, max_pair_trials=20000):
+                         preserve_components=False, max_pair_trials=20000,
+                         progress=None):
     """Greedily reduce vertex-link defects without deleting a grain ID.
 
     Only voxels adjacent to detected defects are considered. Every edit strictly
@@ -126,6 +127,12 @@ def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
                 p[pos]=donor
         return None
     for iteration in range(max_passes if enabled else 0):
+        if progress is not None:
+            try:
+                progress(f'Voxel topology pass {iteration+1}/{max_passes}',
+                         iteration+1, max_passes)
+            except Exception:
+                pass
         accepted=0
         positions=sorted({tuple(np.array(o)+c) for o in candidates for c in _CORNERS
                           if np.all(np.array(o)+c>=1) and np.all(np.array(o)+c<=a.shape)})

@@ -7,7 +7,7 @@ from .facet_angles import small_facet_angles
 
 def stabilize_interfaces(surface, dimensions, enabled=True, boundary_clearance=.025,
                          max_passes=12, relaxation=.5, max_correction=None,
-                         minimum_facet_angle=1.):
+                         minimum_facet_angle=1., progress=None):
     """Pull defective neighbourhoods toward their extracted voxel coordinates.
 
     Checks all triangle intersections, source-relative normal reversal/collapse,
@@ -35,6 +35,11 @@ def stabilize_interfaces(surface, dimensions, enabled=True, boundary_clearance=.
     upper=extent-np.minimum(extent-original,boundary_clearance)
     query_ids=None;hits=np.empty((0,2),dtype=int)
     for step in range(max_passes+1):
+        if progress is not None:
+            try:
+                progress(f'Geometry guard pass {step}/{max_passes}', step, max_passes)
+            except Exception:
+                pass
         retained=hits if query_ids is None else hits[~np.any(np.isin(hits,query_ids),axis=1)]
         new_hits=find_surface_intersections(p,f,triangle_ids=query_ids)
         hits=np.unique(np.vstack((retained,new_hits)),axis=0)
