@@ -79,20 +79,6 @@ src/upxo/meshing/nonConformalMesher - Copy.py
 src/upxo/ggrowth/mcgs_bu.py
 src/upxo/pxtal/mcgs3_temporal_slice - bu18102025.py
 src/upxo/pxtal/mcgs3_temporal_slice - Copy.py
-/src/upxo/gui/
-
-# Local-only GUI wizards -- deliberately not tracked/pushed to origin.
-/src/upxo/pxtal/fm_steel_3d/gui/
-/src/upxo/pxtal/fm_steel_3d/gui_launcher.py
-/src/upxo/pxtal/twinned_simple_3d/gui/
-/src/upxo/pxtal/twinned_simple_3d/gui_launcher.py
-/guiLaunchers/
-/upxo_conformal_meshing_launcher.py
-/upxo_gui_launcher.py
-/upxo_image_ops_3d_launcher.py
-/tests/gui/
-/tests/gui_root/
-/tests/fm_steel_3d/test_gui.py
 
 /admin/
 
