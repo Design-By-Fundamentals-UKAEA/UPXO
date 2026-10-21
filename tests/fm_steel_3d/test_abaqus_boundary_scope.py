@@ -5,7 +5,7 @@ from io import StringIO
 import numpy as np
 
 from upxo.pxtal.fm_steel_3d.mesh_exporter_3d import MeshExporter3D
-from upxo.pxtal.fm_steel_3d.gui.runner import CustomMeshExporter3D
+from upxo.pxtal.fm_steel_3d.deck_export import ConfigurableMeshExporter3D
 
 
 def _assert_named_boundary_deck(exporter, tmp_path, expected_zmax):
@@ -31,8 +31,8 @@ def test_library_boundary_sets_are_assembly_level(tmp_path):
     _assert_named_boundary_deck(MeshExporter3D(), tmp_path, 'ns_zplus')
 
 
-def test_gui_prefixes_are_used_by_sets_and_step(tmp_path):
-    exporter = CustomMeshExporter3D(gui_config={
+def test_configured_prefixes_are_used_by_sets_and_step(tmp_path):
+    exporter = ConfigurableMeshExporter3D({
         'prefix_z_max': 'my_loaded_face',
         'prefix_x_min': 'my_x_support',
         'nset_z_max': False,  # The analysis step still needs this set.

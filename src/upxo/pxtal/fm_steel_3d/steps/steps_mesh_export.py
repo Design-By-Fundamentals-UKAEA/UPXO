@@ -4,9 +4,9 @@ Thin wrapper around `mesh_exporter_3d.MeshExporter3D`. `fm_state` accepts
 any of FMSteel3DWithPAGs/WithBlocks/WithOrientations/WithSubBlocks --
 the exporter auto-detects the lowest hierarchy level present for
 element-set/material/section assignment. Default element-set naming
-prefixes from the base class are used as-is (per-elset prefix
-customization is a GUI-only convenience, wired up by a GUI-internal
-subclass in runner.py -- not needed here).
+prefixes from the base class are used as-is. For custom set names, optional
+grain-boundary/junction sets, extra node sets, a chosen hierarchy level or
+rescaling the grid, use `deck_export.export_deck`.
 """
 from pathlib import Path
 
