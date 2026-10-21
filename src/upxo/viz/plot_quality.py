@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional
 
 import matplotlib
-from cycler import cycler
+from matplotlib.rcsetup import cycler       # matplotlib's own validated wrapper; no separate cycler dependency
 
 __all__ = [
     "PRESETS", "DEFAULT_PRESET", "OKABE_ITO", "TAB10", "EBSD_COLOR", "SGS_COLOR",
