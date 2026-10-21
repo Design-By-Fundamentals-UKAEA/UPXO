@@ -211,3 +211,51 @@ def compute_slice_metrics(slice2d: np.ndarray, voxel_size: float = 1.0) -> Dict[
         "tjp_boundary_length": tjp_boundary_length,
         "aspect_ratio": aspect_ratio,
     }
+
+
+def slice_metric_values(slice2d: np.ndarray, voxel_size: float = 1.0,
+                        key: str = "circle_eq_dia") -> np.ndarray:
+    """One value of metric ``key`` (a key of ``compute_slice_metrics``) for
+    each label present in the slice, ordered by label; void is left out."""
+    metrics = compute_slice_metrics(slice2d.astype(np.int64), voxel_size=voxel_size)
+    present = np.unique(slice2d)
+    present = present[present != 0]
+    return metrics[key][present]
+
+
+def pooled_slice_metric(lgi: np.ndarray, voxel_size: float, key: str,
+                        axes, n_per_axis: int) -> np.ndarray:
+    """Metric ``key`` pooled over evenly spaced slices of a 3-D label grid.
+
+    Parameters
+    ----------
+    axes : iterable of 'X', 'Y', 'Z'
+        Axes the slices are normal to.
+    n_per_axis : int
+        Slices per axis (at most the number of voxels along it); repeated
+        indices are taken once.
+
+    Returns
+    -------
+    ndarray of the values of every label present on every slice, concatenated
+    in the order of ``axes``; empty if no slice was taken.
+    """
+    nx, ny, nz = lgi.shape
+    axis_sizes = {"X": nx, "Y": ny, "Z": nz}
+    pooled = []
+    for axis in axes:
+        size = axis_sizes[axis]
+        n = min(n_per_axis, size)
+        if n <= 0:
+            continue
+        for idx in np.unique(np.linspace(0, size - 1, n).astype(int)):
+            if axis == "X":
+                slice2d = lgi[idx, :, :]
+            elif axis == "Y":
+                slice2d = lgi[:, idx, :]
+            else:
+                slice2d = lgi[:, :, idx]
+            pooled.append(slice_metric_values(slice2d, voxel_size, key))
+    if not pooled:
+        return np.array([])
+    return np.concatenate(pooled)
