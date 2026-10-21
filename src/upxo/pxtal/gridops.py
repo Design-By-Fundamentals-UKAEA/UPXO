@@ -562,6 +562,130 @@ def directional_intercept_grain_size(lgi, voxel_size, direction, n_lines_target=
     }
 
 
+def _run_length_segments(mat):
+    """Contiguous same-label run lengths within each ROW of `mat`, rows never
+    merging into each other -- fully vectorized (cumsum/bincount), no Python
+    loop over rows or over label values. Returns (labels, lengths), one entry
+    per run across every row, flattened together.
+
+    This is the 2D counterpart's building block: an axis-aligned test line in
+    a 2D slice is just one row (or, via a transposed call, one column) of the
+    label array, so sampling N lines is just selecting N rows and running
+    this once over all of them together."""
+    mat = np.ascontiguousarray(mat)
+    n_lines, w = mat.shape
+    if n_lines == 0 or w == 0:
+        return np.empty(0, dtype=mat.dtype), np.empty(0, dtype=np.int64)
+    flat = mat.ravel()
+    boundary = np.empty(flat.size, dtype=bool)
+    boundary[0] = True
+    if flat.size > 1:
+        boundary[1:] = flat[1:] != flat[:-1]
+    boundary[0::w] = True  # force a fresh run at the start of every row
+    seg_id = np.cumsum(boundary) - 1
+    lengths = np.bincount(seg_id)
+    labels = flat[boundary]
+    return labels, lengths
+
+
+def planar_intercept_grain_size(lgi_2d, voxel_size, axis, n_lines,
+                                phase_array=None, valid_phase_ids=None):
+    """Mean linear-intercept grain size along one axis of a 2D labeled
+    slice, in physical units -- the 2D counterpart of
+    axis_intercept_grain_size, deliberately NOT extended to arbitrary/
+    angular directions the way directional_intercept_grain_size extends
+    the 3D axis-aligned case: a 2D slice only has two natural scan
+    directions, and sampling at an angle through it adds the same
+    foreshortening correction directional_intercept_grain_size needs for
+    no real benefit here.
+
+    Sampling method: for axis='x', a "line along x" is one full row
+    (travels along the x/column direction); `n_lines` such rows are
+    selected at evenly spaced y positions. For axis='y', a "line along y"
+    is one full column, `n_lines` of them at evenly spaced x positions.
+    Every sampled line is processed together in one vectorized pass
+    (_run_length_segments) rather than one Python-level call per line --
+    unlike the 3D functions above, no per-line loop is needed at all,
+    since axis-aligned 2D lines are already grid rows/columns with no
+    Bresenham approximation involved.
+
+    Parameters
+    ----------
+    lgi_2d : np.ndarray
+        2D labeled slice, shape (H, W). 0 (and negative) = background,
+        excluded from the pooled statistics.
+    voxel_size : float
+        Physical size of one (assumed isotropic) pixel edge. Every
+        returned length statistic is pixel_count * voxel_size.
+    axis : str
+        'x' or 'y' -- which direction the sampled lines travel along.
+        'x' lines are rows (shape[1]-long, varying position in shape[0]);
+        'y' lines are columns (shape[0]-long, varying position in
+        shape[1]).
+    n_lines : int
+        Exact number of lines to sample, evenly spaced across the
+        perpendicular extent -- unlike the 3D functions' `n_lines_target`
+        (an approximate target the grid resolves to the nearest integer
+        increment), this is used exactly. Callers derive this from
+        axis_length_um / mean_CED_um for whichever grain population is
+        being measured (see module-level callers in feature_props_3d.py)
+        -- not computed here, since the right CED to divide by depends
+        on context this function has no knowledge of.
+    phase_array, valid_phase_ids : optional
+        Same masking semantics as axis_intercept_grain_size: when both
+        given, any pixel whose phase_array value is not in
+        valid_phase_ids is treated as background, regardless of its
+        actual lgi_2d label -- lets a caller restrict intercept counting
+        to one grain-role category (e.g. only "twin" pixels) without
+        needing that category to already be label 0 in lgi_2d.
+
+    Returns
+    -------
+    dict
+        Same shape as axis_intercept_grain_size's return value: {'mean',
+        'median', 'std', 'min', 'max'} in physical units, plus
+        'n_segments', 'n_lines', 'raw_segments'.
+    """
+    axis = axis.lower()
+    if axis not in ('x', 'y'):
+        raise ValueError(f"axis must be 'x' or 'y', got {axis!r}")
+    lgi_2d = np.asarray(lgi_2d)
+    if lgi_2d.ndim != 2:
+        raise ValueError("lgi_2d must be a 2D array.")
+    n_lines = max(1, int(n_lines))
+
+    if axis == 'x':
+        n_perp = lgi_2d.shape[0]
+        positions = np.linspace(0, n_perp - 1, min(n_lines, n_perp), dtype=int)
+        sampled = lgi_2d[positions, :]
+        phase_sampled = phase_array[positions, :] if phase_array is not None else None
+    else:
+        n_perp = lgi_2d.shape[1]
+        positions = np.linspace(0, n_perp - 1, min(n_lines, n_perp), dtype=int)
+        sampled = lgi_2d[:, positions].T
+        phase_sampled = phase_array[:, positions].T if phase_array is not None else None
+
+    use_phase_filter = phase_sampled is not None and valid_phase_ids is not None
+    if use_phase_filter:
+        sampled = sampled.copy()
+        sampled[~np.isin(phase_sampled, valid_phase_ids)] = 0
+
+    labels, lengths = _run_length_segments(sampled)
+    keep = labels > 0
+    if not keep.any():
+        return {'mean': 0.0, 'median': 0.0, 'std': 0.0, 'min': 0.0, 'max': 0.0,
+               'n_segments': 0, 'n_lines': int(positions.size),
+               'raw_segments': np.empty(0, dtype=np.float64)}
+
+    seg = lengths[keep].astype(np.float64) * float(voxel_size)
+    return {
+        'mean': float(seg.mean()), 'median': float(np.median(seg)),
+        'std': float(seg.std()), 'min': float(seg.min()), 'max': float(seg.max()),
+        'n_segments': int(seg.size), 'n_lines': int(positions.size),
+        'raw_segments': seg,
+    }
+
+
 def _group_ids_by_direction(id_to_vector: dict, decimals: int = 4) -> dict:
     """{canonical-direction-tuple: [ids sharing it]} -- collapses near-identical
     directions (e.g. every block in one packet already shares one exact
