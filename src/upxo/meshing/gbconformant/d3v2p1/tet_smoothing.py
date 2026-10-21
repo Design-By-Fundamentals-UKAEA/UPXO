@@ -18,7 +18,43 @@ import math
 from dataclasses import replace
 import numpy as np
 from .backend import plan, WorkerPool
+from .mesh_tables import node_element_index
 from ..d3v2p0.tet_smoothing import surface_after_smoothing  # unchanged; re-exported for notebooks
+
+
+def _check_arguments(p, t, movable, *, enabled, target, max_angle, neighbour_floor, max_passes, node_iterations,
+                     max_halvings, initial_step, softness, max_deviation, minimum_facet_angle, triangle_target,
+                     triangle_floor, search_directions):
+    """The argument checks of d3v2p0.tet_smoothing.smooth_tet_dihedrals, copied from it in its order and with
+    its messages, without its setup (the caller does that once)."""
+    from ..d3v2p0.tet_smoothing import _check_int
+    if p.ndim != 2 or p.shape[1] != 3 or t.ndim != 2 or t.shape[1] != 4:
+        raise ValueError('Expected (n, 3) points and (m, 4) tetrahedra')
+    if movable.shape != (len(p),):
+        raise ValueError('movable must be a boolean mask over points')
+    if not np.isfinite(target) or not 0 < target < 70.5:
+        raise ValueError('target must lie in (0, 70.5) degrees')
+    if not np.isfinite(max_angle) or not 70.5 < max_angle < 180:
+        raise ValueError('max_angle must lie in (70.5, 180) degrees')
+    neighbour_floor = target if neighbour_floor is None else neighbour_floor
+    if not np.isfinite(neighbour_floor) or not 0 <= neighbour_floor <= target:
+        raise ValueError('neighbour_floor must lie in [0, target]')
+    if not np.isfinite(triangle_target) or not 0 < triangle_target < 60:
+        raise ValueError('triangle_target must lie in (0, 60) degrees')
+    triangle_floor = triangle_target if triangle_floor is None else triangle_floor
+    if not np.isfinite(triangle_floor) or not 0 <= triangle_floor <= triangle_target:
+        raise ValueError('triangle_floor must lie in [0, triangle_target]')
+    _check_int('max_passes', max_passes, 0)
+    _check_int('node_iterations', node_iterations, 1)
+    _check_int('max_halvings', max_halvings, 0)
+    if not np.isfinite(initial_step) or initial_step <= 0 or not np.isfinite(softness) or softness <= 0:
+        raise ValueError('initial_step and softness must be positive')
+    if max_deviation is not None and (not np.isfinite(max_deviation) or max_deviation < 0):
+        raise ValueError('max_deviation must be finite and nonnegative')
+    if not np.isfinite(minimum_facet_angle) or not 0 <= minimum_facet_angle < 180:
+        raise ValueError('minimum_facet_angle must lie in [0, 180)')
+    if not all(isinstance(v, (bool, np.bool_)) for v in (enabled, search_directions)):
+        raise ValueError('enabled and search_directions must be boolean')
 
 
 def _improve_node_kernels(n, r, p, t, mn0, mx0, target, floor, max_angle, quality, max_halvings, initial_step,
@@ -333,24 +369,32 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
     # process tier for the blocks; numba kernels inside each block when available
     kernels = 'numba' if plan(backend, n_workers, numba_kernels=True).numba else 'numpy'
     chosen = plan('parallel' if backend == 'numba' else backend, n_workers)
-    # Validate every shared argument exactly as d3v2p0 does (zero passes, no change).
-    ref.smooth_tet_dihedrals(p, t, movable, enabled=False, target=target, max_angle=max_angle,
-                             neighbour_floor=neighbour_floor, max_passes=max_passes, node_iterations=node_iterations,
-                             max_halvings=max_halvings, initial_step=initial_step, softness=softness, surface=surface,
-                             frozen_grain_ids=frozen_grain_ids, max_deviation=max_deviation,
-                             minimum_facet_angle=minimum_facet_angle, triangle_target=triangle_target,
-                             triangle_floor=triangle_floor, search_directions=search_directions,
-                             corner_max_deviation=corner_max_deviation, wedge_limit=wedge_limit)
+    # Validate every shared argument as d3v2p0 does and in its order, then set up once.
+    # enabled=False, as the validation call this replaces passed it: this function has never validated `enabled`
+    _check_arguments(p, t, movable, enabled=False, target=target, max_angle=max_angle,
+                     neighbour_floor=neighbour_floor, max_passes=max_passes, node_iterations=node_iterations,
+                     max_halvings=max_halvings, initial_step=initial_step, softness=softness,
+                     max_deviation=max_deviation, minimum_facet_angle=minimum_facet_angle,
+                     triangle_target=triangle_target, triangle_floor=triangle_floor,
+                     search_directions=search_directions)
+    moves = None
+    if surface is not None:
+        if corner_max_deviation is not None and (not np.isfinite(corner_max_deviation) or corner_max_deviation < 0):
+            raise ValueError('corner_max_deviation must be finite and nonnegative')
+        moves = ref._SurfaceMoves(surface, p, frozen_grain_ids, max_deviation, minimum_facet_angle,
+                                  triangle_target, triangle_floor, corner_max_deviation, wedge_limit)
+        if movable[:moves.count].any():
+            raise ValueError('Surface nodes must not be in the movable mask; they move under surface rules')
     a = dihedral_angles_xyz(p[t])
     mn, mx = a.min(axis=1), a.max(axis=1)
+    if np.any(ref._volumes(p[t]) <= 0):
+        raise ValueError('All tetrahedra must have positive volume')
     before = ref._summary(mn, mx, target, max_angle)
     base = np.where(mn >= target, neighbour_floor, np.maximum(mn, neighbour_floor))
     candidate = movable.copy()
     tri_base_global = None
     surf = None
     if surface is not None:
-        moves = ref._SurfaceMoves(surface, p, frozen_grain_ids, max_deviation, minimum_facet_angle,
-                                  triangle_target, triangle_floor, corner_max_deviation, wedge_limit)
         for n in range(moves.count):
             if moves.mode(n) is not None:
                 candidate[n] = True
@@ -359,15 +403,13 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
         surf = dict(count=moves.count, f=np.asarray(surface.triangles), pairs=np.asarray(surface.grain_pairs),
                     exterior=np.asarray(surface.exterior, bool), rve_face=np.asarray(surface.rve_face),
                     extent=surface.report.get('rve_dimensions'), frozen=tuple(frozen_grain_ids))
-        node_tris = np.argsort(surf['f'].ravel(), kind='stable')
-        tri_offsets = np.r_[0, np.cumsum(np.bincount(surf['f'].ravel(), minlength=len(p)))]
+        node_tris, tri_offsets = node_element_index(surf['f'], len(p))
     params = dict(target=target, max_angle=max_angle, node_iterations=node_iterations, max_halvings=max_halvings,
                   initial_step=initial_step, softness=softness, search_directions=search_directions,
                   max_deviation=max_deviation, minimum_facet_angle=minimum_facet_angle,
                   triangle_target=triangle_target, triangle_floor=triangle_floor,
                   corner_max_deviation=corner_max_deviation, wedge_limit=wedge_limit, kernels=kernels)
-    order = np.argsort(t.ravel(), kind='stable')
-    offsets = np.r_[0, np.cumsum(np.bincount(t.ravel(), minlength=len(p)))]
+    order, offsets = node_element_index(t, len(p))
     history = []
     moved_nodes, moved_surface = set(), set()
     pool = WorkerPool(chosen)
@@ -390,14 +432,14 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
                 groups = []
                 for b in np.unique(block[nodes]):
                     own_nodes = nodes[block[nodes] == b]
-                    star = np.unique(np.concatenate([order[offsets[n]:offsets[n + 1]] // 4 for n in own_nodes]))
+                    star = np.unique(np.concatenate([order[offsets[n]:offsets[n + 1]] for n in own_nodes]))
                     local_nodes = np.unique(t[star])
                     tri_rows = None
                     if surf is not None:
                         touching = local_nodes[local_nodes < surf['count']]
                         if len(touching):
                             tri_rows = np.unique(np.concatenate(
-                                [node_tris[tri_offsets[n]:tri_offsets[n + 1]] // 3 for n in touching]))
+                                [node_tris[tri_offsets[n]:tri_offsets[n + 1]] for n in touching]))
                             local_nodes = np.union1d(local_nodes, surf['f'][tri_rows].ravel())
                     groups.append([b, own_nodes, local_nodes])
                 # Blocks of one colour run together. A block's own node may not be
@@ -414,14 +456,14 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
                 for b, own_nodes, _ in groups:
                     if not len(own_nodes):
                         continue
-                    star = np.unique(np.concatenate([order[offsets[n]:offsets[n + 1]] // 4 for n in own_nodes]))
+                    star = np.unique(np.concatenate([order[offsets[n]:offsets[n + 1]] for n in own_nodes]))
                     local_nodes = np.unique(t[star])
                     tri_rows = None
                     if surf is not None:
                         touching = local_nodes[local_nodes < surf['count']]
                         if len(touching):
                             tri_rows = np.unique(np.concatenate(
-                                [node_tris[tri_offsets[n]:tri_offsets[n + 1]] // 3 for n in touching]))
+                                [node_tris[tri_offsets[n]:tri_offsets[n + 1]] for n in touching]))
                             local_nodes = np.union1d(local_nodes, surf['f'][tri_rows].ravel())
                     # surface nodes first, as d3v2p0's surface moves require
                     surface_nodes = local_nodes[local_nodes < (surf['count'] if surf else 0)]
@@ -457,7 +499,7 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
                             moved_surface.add(g)
                 accepted += len(changed)
                 if changed:
-                    rows = np.unique(np.concatenate([order[offsets[g]:offsets[g + 1]] // 4 for g in changed]))
+                    rows = np.unique(np.concatenate([order[offsets[g]:offsets[g + 1]] for g in changed]))
                     a = dihedral_angles_xyz(p[t[rows]])
                     mn[rows], mx[rows] = a.min(axis=1), a.max(axis=1)
             outside_after = int(np.sum((mn < target) | (mx > max_angle)))
@@ -486,13 +528,61 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
     return p, report
 
 
+def _verify_smoothed(moved):
+    """d3v2p0.tet_smoothing.smooth_grain_tetrahedra's verification of ``moved`` (the smoothed points with the
+    report of the unsmoothed mesh, whose per-grain volumes are the volumes the moved surface encloses).
+
+    The checks, their order, their messages and the report (its keys in the same order) are d3v2p0's. What is
+    left out is the zero-pass smoothing call d3v2p0 makes first, which repeats the setup of the smoothing that
+    has just run; its one visible effect, the positive-volume check, is made here first, as it is there.
+    The per-grain sums run over grain-sorted tet numbers, the same tets in the same order as d3v2p0's masks.
+    """
+    from ..d3v2p0 import tet_smoothing as ref
+    from ..d3v2p0.tet_angles import dihedral_summary
+    points = moved.points
+    volumes = ref._volumes(points[moved.tetrahedra])
+    if np.any(volumes <= 0):
+        raise ValueError('All tetrahedra must have positive volume')
+    if np.any(~np.isfinite(volumes)) or np.any(volumes <= 0):
+        raise RuntimeError('Smoothing produced a nonpositive tetrahedron volume')
+    if not np.isclose(volumes.sum(), moved.report['total_volume'], rtol=1e-8):
+        raise RuntimeError('Tetrahedron volumes no longer fill the RVE')
+    quality = ref.minimum_sicn_gmsh(points, moved.tetrahedra)
+    if np.any(~np.isfinite(quality)) or np.any(quality <= 0):
+        raise RuntimeError('Invalid tetrahedron quality after smoothing')
+    report = dict(moved.report)
+    report['dihedral_smoothing'] = None             # holds the key's place; the caller sets the report
+    per_grain = {}
+    by_grain = np.argsort(moved.grain_ids, kind='stable')
+    sorted_grain = moved.grain_ids[by_grain]
+    for gid, entry in moved.report['per_grain'].items():
+        first = np.searchsorted(sorted_grain, int(gid), side='left')
+        last = np.searchsorted(sorted_grain, int(gid), side='right')
+        selected = by_grain[first:last]
+        volume = float(volumes[selected].sum())
+        if not np.isclose(volume, entry['volume'], rtol=1e-8):
+            raise RuntimeError(f'Volume of grain {gid} does not match its surface after smoothing')
+        per_grain[gid] = dict(entry, volume=volume, minimum_quality=float(quality[selected].min()))
+    dihedral = dihedral_summary(points, moved.tetrahedra)
+    passed = bool(quality.min() >= report['quality_threshold'])
+    if report.get('minimum_dihedral_threshold') is not None:
+        passed = passed and dihedral['minimum'] >= report['minimum_dihedral_threshold']
+    report.update(status='TET_MESH_VERIFIED' if passed else 'TET_QUALITY_BELOW_TARGET', ready=passed,
+                  per_grain=per_grain, total_volume=float(volumes.sum()),
+                  minimum_quality=float(quality.min()),
+                  quality_percentiles_1_5_50=np.percentile(quality, [1, 5, 50]).tolist(),
+                  below_quality_threshold=int(np.sum(quality < report['quality_threshold'])),
+                  dihedral_angles=dihedral)
+    return replace(moved, quality=quality, report=report)
+
+
 def smooth_grain_tetrahedra(tets, surface_node_count, *, n_workers=None, block_size=12., minimum_gain=0.,
                             backend='auto', **kwargs):
     """Block-parallel version of d3v2p0.tet_smoothing.smooth_grain_tetrahedra.
 
     Smoothing runs in d3v2p1 blocks; verification (positive volumes, RVE and
     grain volumes against the moved surface, moved-surface intersections, Gmsh
-    minSICN, dihedral statistics, readiness) is d3v2p0's, run on the result.
+    minSICN, dihedral statistics, readiness) is d3v2p0's (see _verify_smoothed), run on the result.
     """
     from ..d3v2p0 import tet_smoothing as ref
     surface = kwargs.get('surface')
@@ -518,13 +608,7 @@ def smooth_grain_tetrahedra(tets, surface_node_count, *, n_workers=None, block_s
         reference['per_grain'] = {gid: dict(entry, volume=enclosed[int(gid)])
                                   for gid, entry in tets.report['per_grain'].items()}
     moved = replace(tets, points=points, report=reference)
-    verify_kwargs = {k: v for k, v in kwargs.items() if k not in ('progress',)}
-    verify_kwargs['max_passes'] = 0
-    if surface is not None:
-        # The reference verification compares the surface against tets.points[:n]; give
-        # it the moved surface so grain volumes are checked against what the tets enclose.
-        verify_kwargs['surface'] = ref.surface_after_smoothing(surface, moved)
-    out = ref.smooth_grain_tetrahedra(moved, surface_node_count, **verify_kwargs)
+    out = _verify_smoothed(moved)
     report = dict(out.report)
     if surface is not None:
         from .surface_intersections import find_surface_intersections

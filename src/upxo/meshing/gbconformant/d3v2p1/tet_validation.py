@@ -8,11 +8,12 @@ from scipy.spatial import cKDTree
 from .backend import plan
 from .parallel import run_chunks, balanced_chunks
 from .surface_intersections import find_surface_intersections
+from .mesh_tables import unique_rows
 
 
 def _topology(tri):
     edges = tri[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2)
-    unique, inverse, counts = np.unique(np.sort(edges, axis=1), axis=0, return_inverse=True, return_counts=True)
+    unique, inverse, counts = unique_rows(np.sort(edges, axis=1), True, True)
     direction = np.bincount(inverse, weights=np.where(edges[:, 0] < edges[:, 1], 1, -1))
     return unique, inverse, counts, direction
 
@@ -107,7 +108,7 @@ def validate_tet_surfaces(surface, expected_grains=None, min_triangle_quality=.0
     grains = np.unique(pairs)
     if expected_grains is not None and set(map(int, grains)) != set(map(int, expected_grains)):
         blockers.append('Grain IDs differ from the input voxel dataset')
-    _, inv, counts = np.unique(np.sort(f, axis=1), axis=0, return_inverse=True, return_counts=True)
+    _, inv, counts = unique_rows(np.sort(f, axis=1), True, True)
     duplicate = np.flatnonzero(counts[inv] > 1)
     if len(duplicate):
         blockers.append(f'{len(duplicate)} triangles have duplicate connectivity'); bad.update(map(int, duplicate))
@@ -183,7 +184,7 @@ def validate_tet_surfaces(surface, expected_grains=None, min_triangle_quality=.0
         blockers.append('Total grain signed volume differs from RVE volume')
     report['coordinate_tolerance'] = tol
     report['grains'] = len(grains)
-    from ..d3v2p0.facet_angles import small_facet_angles
+    from .facet_angles import small_facet_angles
     folds,angles=small_facet_angles(p,f,minimum_facet_angle)
     report['small_facet_angle_pairs']=folds.tolist()
     report['minimum_facet_angle_threshold']=float(minimum_facet_angle)

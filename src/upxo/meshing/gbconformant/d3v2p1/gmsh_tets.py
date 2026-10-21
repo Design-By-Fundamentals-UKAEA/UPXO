@@ -13,6 +13,7 @@ import uuid
 import numpy as np
 from ..d3v2p0.gmsh_tets import GrainTetrahedra, save_grain_tetrahedra  # noqa: F401  (re-exported)
 from .backend import plan, check_workers
+from .mesh_tables import unique_rows
 from .parallel import balanced_chunks, run_chunks
 
 
@@ -221,12 +222,12 @@ def mesh_repaired_rve_gmsh(surface, mesh_size=1.5, verbose=False, optimize_netge
     pattern = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
     faces = np.sort(tets[:, pattern].reshape(-1, 3), axis=1)
     key = np.column_stack((np.repeat(labels, 4), faces))
-    uniq, counts = np.unique(key, axis=0, return_counts=True)
+    uniq, counts = unique_rows(key, False, True)
     if np.any(counts > 2):
         raise RuntimeError('Nonmanifold tet faces')
     st = np.sort(f, axis=1)
-    expected = np.unique(np.vstack((np.column_stack((pairs[:, 0], st)),
-                                    np.column_stack((pairs[~exterior, 1], st[~exterior])))), axis=0)
+    expected = unique_rows(np.vstack((np.column_stack((pairs[:, 0], st)),
+                                      np.column_stack((pairs[~exterior, 1], st[~exterior])))))
     if not np.array_equal(uniq[counts == 1], expected):
         raise RuntimeError('Tet boundary differs from repaired surface')
     signed = np.einsum('ij,ij->i', p[f][:, 0], np.cross(p[f][:, 1], p[f][:, 2])) / 6
