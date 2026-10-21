@@ -56,6 +56,17 @@ def _table_html(columns, rows, css_class=""):
             f"<tbody>{''.join(body_rows)}</tbody></table>")
 
 
+def _caption_html(text):
+    """Escapes `text` for safety first, THEN turns its own newlines into
+    <br> -- the escape has to come first so none of the user's own text
+    can inject markup; the <br> substitution afterward only ever touches
+    plain '\\n' characters, never anything the escape step produced, so it
+    can't reopen that hole. Multi-paragraph captions would otherwise
+    collapse into one run-on line -- HTML does not treat a bare newline
+    as a line break."""
+    return html.escape(text).replace("\n", "<br>")
+
+
 def _render_entry(entry):
     kind = entry.kind
     meta_bits = [html.escape(entry.timestamp)]
@@ -64,7 +75,7 @@ def _render_entry(entry):
     time_html = f'<div class="entry-time">{" &middot; ".join(meta_bits)}</div>'
 
     if kind == "image":
-        caption = f": {html.escape(entry.caption)}" if entry.caption else ""
+        caption = f": {_caption_html(entry.caption)}" if entry.caption else ""
         params_html = ""
         if entry.params:
             rows = [[k, v] for k, v in entry.params.items()]
@@ -77,7 +88,7 @@ def _render_entry(entry):
         )
 
     if kind == "table":
-        caption = f"<p>{html.escape(entry.caption)}</p>" if entry.caption else ""
+        caption = f"<p>{_caption_html(entry.caption)}</p>" if entry.caption else ""
         return (
             f'<div class="table-entry">{time_html}'
             f'<h3>{html.escape(entry.title)}</h3>{caption}'
@@ -102,11 +113,15 @@ def _render_entry(entry):
     raise ValueError(f"Unknown entry kind: {kind!r}")
 
 
-def render_html(session, out_path=None):
+def render_html(session, out_path=None, live_refresh_s=None):
     """Render `session` to a single HTML file and return its Path.
 
     Defaults to session.reports_dir / "report.html" -- the location every
     ImageEntry's relative image_path assumes.
+
+    live_refresh_s : a positive number makes a browser showing the file reload
+    it every that many seconds, so a report that is being appended to can be
+    watched while it grows. None (default) writes a static page.
     """
     out_path = Path(out_path) if out_path is not None else session.reports_dir / "report.html"
 
@@ -140,8 +155,15 @@ def render_html(session, out_path=None):
         if rows:
             metadata_html = _table_html(["Field", "Value"], rows, css_class="run-metadata params-table")
 
+    refresh_html = ""
+    if live_refresh_s is not None:
+        if live_refresh_s <= 0:
+            raise ValueError("live_refresh_s must be positive")
+        refresh_html = f"<meta http-equiv='refresh' content='{int(round(live_refresh_s))}'>"
+
     html_doc = (
         "<!doctype html><html><head><meta charset='utf-8'>"
+        f"{refresh_html}"
         f"<title>{html.escape(session.run_title)}</title>"
         f"<style>{_CSS}</style></head><body>"
         f"<h1>{html.escape(session.run_title)}</h1>"

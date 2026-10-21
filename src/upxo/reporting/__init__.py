@@ -10,12 +10,12 @@ gui/ package and calls into ReportSession.
 See the project_reporting_module_plan memory for the phased design
 (Reporting-1..4) this module is part of.
 """
-from .session import ReportSession
+from .session import ReportSession, normalize_table_data
 from .entries import ImageEntry, TableEntry, TextEntry, ParamsEntry, SectionHeader
 from .render_html import render_html
 
 __all__ = [
     "ReportSession",
     "ImageEntry", "TableEntry", "TextEntry", "ParamsEntry", "SectionHeader",
-    "render_html",
+    "render_html", "normalize_table_data",
 ]

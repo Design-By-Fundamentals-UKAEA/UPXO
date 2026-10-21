@@ -37,10 +37,14 @@ def _slugify(text, max_len=40):
     return (slug or "entry")[:max_len]
 
 
-def _normalize_table(data):
+def normalize_table_data(data):
     """Accept a DataFrame-like object, a dict of equal-length lists (column
     name -> values), or a list of dict records; return (columns, rows) as
-    plain Python lists (ndarray.tolist() already downcasts numpy scalars)."""
+    plain Python lists (ndarray.tolist() already downcasts numpy scalars).
+
+    Public (not just ``add_table``'s own helper) so other callers that build
+    a table from the same shapes accept exactly the same input without
+    duplicating this logic."""
     if hasattr(data, "columns") and hasattr(data, "values"):
         return [str(c) for c in data.columns], [list(r) for r in data.values.tolist()]
     if isinstance(data, dict):
@@ -180,7 +184,7 @@ class ReportSession:
         object exposing .columns/.values), a dict of equal-length lists
         (column -> values), or a list of dict records."""
         self._maybe_open_section(section)
-        columns, rows = _normalize_table(data)
+        columns, rows = normalize_table_data(data)
         entry = TableEntry(
             id=self._new_id(), timestamp=self._timestamp(), title=title,
             columns=columns, rows=rows, caption=caption,
