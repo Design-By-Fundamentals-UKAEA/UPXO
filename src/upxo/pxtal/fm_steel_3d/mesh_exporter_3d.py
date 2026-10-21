@@ -113,6 +113,8 @@ ABAQUS_INSTANCE_NAME = 'FM_STEEL_RVE-1'
 FACE_NSET_NAMES = {'XMIN': 'ns_xminus', 'XMAX': 'ns_xplus',
                    'YMIN': 'ns_yminus', 'YMAX': 'ns_yplus',
                    'ZMIN': 'ns_zminus', 'ZMAX': 'ns_zplus'}
+DEFAULT_ELSET_PREFIXES = {'pag': 'es_pag_', 'pck': 'es_pck_', 'blk': 'es_blk_',
+                          'subblk': 'es_subblk_', 'iso': 'es_iso_'}
 REFERENCE_UMAT_TAIL = (15.0, 0.0)
 REFERENCE_N_DEPVAR = 1
 
@@ -376,12 +378,11 @@ class MeshExporter3D:
                               max_voxels_override: Optional[int] = None) -> Dict:
         """Pure (no I/O, no prompting) size/threshold check -- the computation
         `_preflight_check` uses internally, exposed as its own public method so
-        a caller that cannot answer an interactive `input()` prompt (this is
-        exactly the problem the GUI hit: `_preflight_check`'s hard-limit branch
-        blocks on `input()` with no attached stdin when run from a background
-        thread, permanently wedging the app-wide busy-lock) can decide up front
-        whether to ask its own confirmation dialog, then call export with
-        force=True to bypass `_preflight_check`'s interactive prompt entirely.
+        a caller that cannot answer an interactive `input()` prompt (the
+        hard-limit branch of `_preflight_check` blocks on `input()` when no
+        stdin is attached, e.g. when run from a background thread) can decide
+        up front whether to ask for confirmation by its own means, then call
+        export with force=True to bypass the interactive prompt entirely.
 
         Returns
         -------
@@ -1144,6 +1145,16 @@ class MeshExporter3D:
 
     # ── Elset writers ─────────────────────────────────────────────────────────
 
+    def _elset_prefix(self, kind: str) -> str:
+        """Name prefix of the element sets of one hierarchy level
+        ('pag', 'pck', 'blk', 'subblk' or 'iso'). Subclasses override this to
+        rename the sets; the sections written by `_write_sections` follow it."""
+        return DEFAULT_ELSET_PREFIXES[kind]
+
+    def _elset_enabled(self, kind: str) -> bool:
+        """Whether the element sets of one hierarchy level are written."""
+        return True
+
     @staticmethod
     def _write_elset_ids(f, name: str, hex_eids: np.ndarray,
                          elem_multiplier: int = 1) -> None:
@@ -1172,8 +1183,11 @@ class MeshExporter3D:
         singleton PAG whose sole grain is voided) -- callers must not emit a
         *Material*/*Solid Section* for any pag_id missing from this set, or
         Abaqus will reject the deck for referencing an undefined elset."""
-        f.write("** PAG elsets\n")
         written: set = set()
+        if not self._elset_enabled('pag'):
+            return written
+        prefix = self._elset_prefix('pag')
+        f.write("** PAG elsets\n")
         for pag_id, grain_ids in fm_state.clusters_dict.items():
             parts = []
             for gid in grain_ids:
@@ -1183,12 +1197,15 @@ class MeshExporter3D:
             if parts:
                 merged = np.concatenate(parts)
                 if merged.size:
-                    self._write_elset_ids(f, f"es_pag_{pag_id}", merged, em)
+                    self._write_elset_ids(f, f"{prefix}{pag_id}", merged, em)
                     written.add(pag_id)
         return written
 
     def _write_elsets_pck(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int) -> None:
+        if not self._elset_enabled('pck'):
+            return
+        prefix = self._elset_prefix('pck')
         f.write("** Packet elsets\n")
         g2pag = fm_state.grain_to_pag_id
         g2pkt = fm_state.grain_to_local_pkt_idx
@@ -1198,15 +1215,18 @@ class MeshExporter3D:
             pag_id = g2pag[gid]
             pkt_idx = g2pkt[gid]
             eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
-            self._write_elset_ids(f, f"es_pck_{pag_id}_{pkt_idx}", eids, em)
+            self._write_elset_ids(f, f"{prefix}{pag_id}_{pkt_idx}", eids, em)
 
     def _write_elsets_blk(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int,
                           block_id_map: Dict) -> set:
         """Write block elsets; return the set of block_ids that actually got
         a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
-        f.write("** Block elsets\n")
         written: set = set()
+        if not self._elset_enabled('blk'):
+            return written
+        prefix = self._elset_prefix('blk')
+        f.write("** Block elsets\n")
         for block_id, vox in fm_state.all_blocks.items():
             if block_id not in block_id_map or vox is None or len(vox) == 0:
                 continue
@@ -1215,7 +1235,7 @@ class MeshExporter3D:
             if eids.size == 0:
                 continue
             self._write_elset_ids(
-                f, f"es_blk_{pag_id}_{pkt_idx}_{blk_local}", eids, em
+                f, f"{prefix}{pag_id}_{pkt_idx}_{blk_local}", eids, em
             )
             written.add(block_id)
         return written
@@ -1225,8 +1245,11 @@ class MeshExporter3D:
                               subblock_id_map: Dict) -> set:
         """Write sub-block elsets; return the set of sb_ids that actually got
         a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
-        f.write("** Sub-block elsets\n")
         written: set = set()
+        if not self._elset_enabled('subblk'):
+            return written
+        prefix = self._elset_prefix('subblk')
+        f.write("** Sub-block elsets\n")
         for sb_id, vox in fm_state.all_subblocks.items():
             if sb_id not in subblock_id_map or vox is None or len(vox) == 0:
                 continue
@@ -1235,7 +1258,7 @@ class MeshExporter3D:
             if eids.size == 0:
                 continue
             self._write_elset_ids(
-                f, f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", eids, em
+                f, f"{prefix}{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", eids, em
             )
             written.add(sb_id)
         return written
@@ -1249,8 +1272,9 @@ class MeshExporter3D:
         PAG get a proper PAG-level elset from _write_elsets_pag instead."""
         isolated = self._leftover_isolated_grains(fm_state)
         written: set = set()
-        if not isolated:
+        if not isolated or not self._elset_enabled('iso'):
             return written
+        prefix = self._elset_prefix('iso')
         f.write("** Isolated grain elsets (legacy, no tracked retained-austenite PAG)\n")
         for gid in sorted(isolated):
             vox = fm_state.grain_locs.get(gid)
@@ -1258,7 +1282,7 @@ class MeshExporter3D:
                 eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
                 if eids.size == 0:
                     continue
-                self._write_elset_ids(f, f"es_iso_{gid}", eids, em)
+                self._write_elset_ids(f, f"{prefix}{gid}", eids, em)
                 written.add(gid)
         return written
 
@@ -1284,14 +1308,23 @@ class MeshExporter3D:
             return [iv * stride_i + j * (NZ+1) + k_fixed + 1
                     for iv, j in zip(is_.tolist(), js.tolist())]
 
-        for name, ids in [
-            ('ns_xminus', _ids_x(0)),  ('ns_xplus', _ids_x(NX)),
-            ('ns_yminus', _ids_y(0)),  ('ns_yplus', _ids_y(NY)),
-            ('ns_zminus', _ids_z(0)),  ('ns_zplus', _ids_z(NZ)),
-        ]:
+        faces = {'XMIN': _ids_x(0), 'XMAX': _ids_x(NX),
+                 'YMIN': _ids_y(0), 'YMAX': _ids_y(NY),
+                 'ZMIN': _ids_z(0), 'ZMAX': _ids_z(NZ)}
+        node_sets = [(cfg['prefix'], faces[face])
+                     for face, cfg in self._boundary_nset_config().items()
+                     if cfg['enabled']]
+        node_sets += self._extra_node_sets(NX, NY, NZ, node_mask)
+        for name, ids in node_sets:
             f.write(f"*Nset, nset={name}, instance={ABAQUS_INSTANCE_NAME}\n")
             for start in range(0, len(ids), 10):
                 f.write(', '.join(str(x) for x in ids[start:start + 10]) + '\n')
+
+    def _extra_node_sets(self, NX: int, NY: int, NZ: int,
+                         node_mask: np.ndarray) -> List[Tuple[str, List[int]]]:
+        """Node sets written after the six face sets, as (name, node ids)
+        pairs. None by default."""
+        return []
 
     # ── Material and section writers ──────────────────────────────────────────
 
@@ -1416,19 +1449,23 @@ class MeshExporter3D:
         f.write("** *Solid Section — lowest hierarchy level only.\n**\n")
 
         retained_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
+        p_pag = self._elset_prefix('pag')
+        p_blk = self._elset_prefix('blk')
+        p_sb = self._elset_prefix('subblk')
+        p_iso = self._elset_prefix('iso')
 
         if level == 'subblock':
             for sb_id, (pag_id, pkt_idx, blk_local, sb_local) in sb_id_map.items():
                 if sb_id not in written_subblocks:
                     continue
-                eset = f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
+                eset = f"{p_sb}{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 mat  = f"MAT_SUBBLK_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'block':
             for block_id, (pag_id, pkt_idx, blk_local) in block_id_map.items():
                 if block_id not in written_blocks:
                     continue
-                eset = f"es_blk_{pag_id}_{pkt_idx}_{blk_local}"
+                eset = f"{p_blk}{pag_id}_{pkt_idx}_{blk_local}"
                 mat  = f"MAT_BLK_{pag_id}_{pkt_idx}_{blk_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'pag':
@@ -1436,7 +1473,7 @@ class MeshExporter3D:
                 if pag_id not in written_pags:
                     continue
                 f.write(
-                    f"*Solid Section, elset=es_pag_{pag_id},"
+                    f"*Solid Section, elset={p_pag}{pag_id},"
                     f" material=MAT_PAG_{pag_id}\n,\n"
                 )
 
@@ -1448,14 +1485,14 @@ class MeshExporter3D:
                 if pag_id not in written_pags:
                     continue
                 f.write(
-                    f"*Solid Section, elset=es_pag_{pag_id},"
+                    f"*Solid Section, elset={p_pag}{pag_id},"
                     f" material=MAT_PAG_{pag_id}\n,\n"
                 )
 
         for gid in sorted(self._leftover_isolated_grains(fm_state)):
             if gid not in written_iso:
                 continue
-            f.write(f"*Solid Section, elset=es_iso_{gid}, material=MAT_ISO_{gid}\n,\n")
+            f.write(f"*Solid Section, elset={p_iso}{gid}, material=MAT_ISO_{gid}\n,\n")
 
     # ── Stub writers ──────────────────────────────────────────────────────────
 
@@ -1512,6 +1549,15 @@ class MeshExporter3D:
 
     # ── Master .inp writer ────────────────────────────────────────────────────
 
+    def _part_include_files(self, has_subblk: bool) -> List[str]:
+        """Files included inside the *Part block of the master file, in order."""
+        names = ['01_nodes.inp', '02_elements.inp', '03a_elsets_pag.inp',
+                 '03b_elsets_pck.inp', '03c_elsets_blk.inp']
+        if has_subblk:
+            names.append('03d_elsets_subblk.inp')
+        names.append('06_sections.inp')
+        return names
+
     def _write_master(self, out_dir: Path, elem_type: str, has_subblk: bool,
                       custom_message: str, src_unit: str, dst_unit: str,
                       dx: float, NX: int, NY: int, NZ: int, n_active: int,
@@ -1542,16 +1588,10 @@ class MeshExporter3D:
                 f"(structure defined in {src_unit})\n"
                 f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}{scale_note}\n**\n"
                 f"*Part, name={ABAQUS_PART_NAME}\n"
-                f"*INCLUDE, INPUT=01_nodes.inp\n"
-                f"*INCLUDE, INPUT=02_elements.inp\n"
-                f"*INCLUDE, INPUT=03a_elsets_pag.inp\n"
-                f"*INCLUDE, INPUT=03b_elsets_pck.inp\n"
-                f"*INCLUDE, INPUT=03c_elsets_blk.inp\n"
             )
-            if has_subblk:
-                f.write("*INCLUDE, INPUT=03d_elsets_subblk.inp\n")
+            for name in self._part_include_files(has_subblk):
+                f.write(f"*INCLUDE, INPUT={name}\n")
             f.write(
-                "*INCLUDE, INPUT=06_sections.inp\n"
                 "*End Part\n"
                 "*Assembly, name=Assembly\n"
                 f"*Instance, name={ABAQUS_INSTANCE_NAME}, part={ABAQUS_PART_NAME}\n"
