@@ -4,6 +4,8 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-21
+
 ### Fixed
 
 - **Units lost in `clean_small_grains` and `remove_spikes`** (`fm_steel_3d`): both build a new `FMSteel3DBase` from the cleaned label grid without passing `units`, so the class default (`'microns'`) replaced the unit the structure was generated in. PAGs, blocks, orientations and sub-blocks take their unit from that object, so every later stage inherited the wrong one. Both pass `units=self.units`.
