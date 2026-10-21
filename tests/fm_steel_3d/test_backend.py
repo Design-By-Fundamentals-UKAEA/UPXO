@@ -72,9 +72,7 @@ def fm_pag(fm_base):
         random_seed=42,
     )
     # generate_blocks() requires PAG orientations to already be assigned
-    # (assign_pag_orientations mutates fm in place; matches how the GUI's
-    # PagClusteringPage requires "Assign PAG Orientations" before "Generate
-    # Blocks" is enabled).
+    # (assign_pag_orientations mutates fm in place).
     fm.assign_pag_orientations(pag_ori_mode="random", random_seed=42)
     return fm
 

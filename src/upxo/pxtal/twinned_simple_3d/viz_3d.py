@@ -129,7 +129,7 @@ def plot_ipf_triangle_key(
     Parameters
     ----------
     ax : matplotlib Axes or None
-        Plots into an existing axes (e.g. for GUI embedding) if given;
+        Plots into an existing axes (e.g. one embedded in a larger figure) if given;
         otherwise creates its own standalone figure.
     n : int
         Grid resolution (n x n before triangular masking).
@@ -214,8 +214,7 @@ def render_lgi_3d(
 
     Shared by ``TwinnedSimple3DBase.plot_temporal_slice_3d`` (which builds
     ``lgi`` from a raw MC state array and must transpose it first -- see
-    that method) and the GUI's "View Grain Structure" button, which passes
-    ``TwinnedSimple3DBase.lgi`` directly.
+    that method) and callers that pass ``TwinnedSimple3DBase.lgi`` directly.
 
     Parameters
     ----------

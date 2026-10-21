@@ -1103,7 +1103,7 @@ def compute_grain_role_property_distributions(
     Extract per-grain-role-group property value arrays -- the pure data
     step of ``plot_grain_role_property_stats``, with no plotting. Split out
     so a caller can compute once and plot (or replot) separately, e.g. a
-    GUI's "Compute" vs "Plot" button pair.
+    separate compute step and plot step.
 
     Parameters
     ----------
@@ -1702,7 +1702,7 @@ def plot_twin_thickness_stats(
         own colour from a fixed cycle and its own legend entry.
     ax : matplotlib.axes.Axes or None
         Draw into this existing Axes instead of creating a new
-        Figure/Axes pair (for embedding into a GUI's own canvas). When
+        Figure/Axes pair (for embedding into a caller's own canvas). When
         given, the caller owns the Figure and must NOT call
         ``fig.tight_layout()``/redraw itself -- this function does not
         call ``plt.show()`` either way.

@@ -3035,7 +3035,7 @@ def apply_orientation_jitter(q, min_misori_deg, rng, max_retries=100):
 class AssignmentCancelled(Exception):
     """Raised (and expected to propagate all the way out of whichever
     assignment function is running) when a caller-supplied cancel_event
-    gets set mid-run -- e.g. the GUI's "Stop" button on a background-
+    gets set mid-run -- e.g. a stop request for a background-
     threaded orientation assignment. Not an error: callers should catch
     this distinctly from other exceptions and treat it as a clean,
     intentional abort rather than a failure."""

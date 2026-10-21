@@ -66,17 +66,16 @@ class TwinGenerator3D:
     # Human-readable identity of the twin type this class actually
     # generates -- always Sigma3 (Path A), regardless of which CSL label
     # was used upstream to select the host pool or measure the EBSD target
-    # (see the CSL-label-mismatch check in :meth:`diagnose`).  Read by the
-    # GUI's results block instead of re-deriving a label from GUI state, so
+    # (see the CSL-label-mismatch check in :meth:`diagnose`).  Read by result
+    # summaries instead of re-deriving a label from caller state, so
     # a future multi-CSL Path B implementation only needs to change this
-    # (or make it per-instance) rather than touching the GUI.
+    # (or make it per-instance).
     TWIN_TYPE_LABEL = 'Sigma3 -- FCC Annealing Twin (60 deg / <111>)'
 
     # Diagnostic thresholds (see `diagnose`) -- heuristic cutoffs for
     # flagging results worth a closer look, not correctness criteria.
-    # Deliberately not exposed as GUI-configurable settings: they gate
-    # advisory notes, not pass/fail, so there's no reason for a user to
-    # need to tune them to get past a screen.
+    # Deliberately not exposed as settings: they gate advisory notes, not
+    # pass/fail, so there's no reason for a user to need to tune them.
     DIAG_SHORTFALL_PCT_THRESHOLD = 70.0
     DIAG_ABRUPT_FRAC_THRESHOLD = 0.5
     DIAG_CLAMPED_FRAC_THRESHOLD = 0.3
@@ -972,7 +971,7 @@ class TwinGenerator3D:
         Return advisory notes explaining surprising values in :meth:`summary`,
         in a suggestive (not asserted) tone -- these are heuristic hypotheses
         about *why* a number looks the way it does, not a pass/fail verdict.
-        They never gate progression to the next GUI page.
+        They never block a later step.
 
         Parameters
         ----------
@@ -988,7 +987,7 @@ class TwinGenerator3D:
         list of dict
             Each entry: ``{'anchor_fields': [...], 'message': str}``.
             ``anchor_fields`` names the :meth:`summary` keys the note
-            explains (a GUI can attach "(Ref N)" to those fields, N = this
+            explains (a caller can attach "(Ref N)" to those fields, N = this
             note's 1-based position in the returned list).
         """
         s = self.summary()

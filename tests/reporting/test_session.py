@@ -8,7 +8,7 @@ Covers:
   Persistence                  -- save()/load()/open() round-trips, including
                                  numpy dtypes that plain json.dumps can't handle
 
-No tkinter/GUI dependency -- this module is exercised standalone.
+This module is exercised standalone.
 """
 import json
 

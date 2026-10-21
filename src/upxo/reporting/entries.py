@@ -1,6 +1,6 @@
 """Entry types held by a ReportSession, in append order.
 
-Each entry is a plain dataclass with no GUI/plotting dependency of its own --
+Each entry is a plain dataclass with no plotting dependency of its own --
 ReportSession does the matplotlib/file-copy/JSON work and stores just the
 resulting data here. `kind` is a plain class attribute (not an annotated
 field) so it is excluded from dataclasses.asdict() -- ReportSession.save()

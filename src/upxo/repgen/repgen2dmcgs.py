@@ -891,10 +891,8 @@ class repgen2d:
             of ``(parent_gid, twin_gid)`` tuples.
         plot : bool
             Render the automatic side-by-side original-vs-merged
-            comparison figure. Default ``True``; the GUI's compute step
-            calls this with ``False`` (matching its compute/plot
-            separation convention elsewhere on the same page) and shows
-            the comparison from a separate plot action instead.
+            comparison figure. Default ``True``; pass ``False`` to compute
+            without plotting and show the comparison separately.
 
         Populates
         ---------
@@ -1234,7 +1232,7 @@ class repgen2d:
             If True (default, matching prior unconditional behaviour),
             render the MDF histogram via ``ebsdviz.plot_mdf`` +
             ``plt.show()``. Callers that re-run this repeatedly while tuning
-            parameters (e.g. an interactive GUI) should pass ``plot=False``
+            parameters (e.g. an interactive session) should pass ``plot=False``
             to avoid a popup window on every call.
 
         Returns
@@ -2437,7 +2435,7 @@ class repgen2d:
 
         # Thickness Q1/Q3 -- previously computed only for the console print
         # (tq1/tq3 local vars) and never stored back, unlike the intercept
-        # quantiles above. Stored now so the GUI (or any other caller) can
+        # quantiles above. Stored now so any caller can
         # read the same numbers the console shows instead of recomputing
         # them, and so thick_q1/thick_q3 exist symmetrically with
         # intercept_q1/intercept_q3.

@@ -719,7 +719,7 @@ def plot_property_distribution_on_axes(
     Overlaid histogram + KDE + peak markers for ONE property, drawn onto
     a caller-supplied `ax` -- the single-axis unit `plot_grouped_distributions`
     builds a subplot grid of; extracted so a caller embedding a single
-    persistent, in-place-redrawn Axes (e.g. a live GUI plot) can reuse the
+    persistent, in-place-redrawn Axes (e.g. a live plot) can reuse the
     exact same drawing logic without going through `plt.subplots()` (which
     registers a new Figure with pyplot's global state on every call) and
     without a multi-panel grid it doesn't need.

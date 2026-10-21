@@ -2,7 +2,7 @@
 
 Covers: default output path, section wrapping, escaping of user-supplied
 text (titles/captions/table cells/free text), and correct relative image
-src references. No tkinter/GUI dependency.
+src references.
 """
 from upxo.reporting import ReportSession, render_html
 

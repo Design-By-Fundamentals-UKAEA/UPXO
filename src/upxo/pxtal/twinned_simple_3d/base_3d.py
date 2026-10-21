@@ -1565,8 +1565,7 @@ class TwinnedSimple3DBase:
         sanity-check it against an independently-derived perimeter-based
         scale factor.
 
-        Method (see the twinned_simple_3d GUI design discussion this
-        implements):
+        Method:
 
         1. Outlier-trim (IQR/Tukey) both the EBSD and synthetic Area
            distributions independently, take their means.
@@ -1585,8 +1584,7 @@ class TwinnedSimple3DBase:
            the real EBSD grains, so forcing an area match there would not
            be physically meaningful -- ``cross_check_ok`` is False.
 
-        Caveats callers/UI should surface to the user (see the GUI design
-        notes this implements):
+        Caveats callers should surface to the user:
 
         * The perimeter cross-check is measured on a voxel/pixel grid, so
           it is biased by discretisation ("staircase") error -- coarser
@@ -1751,7 +1749,7 @@ class TwinnedSimple3DBase:
         ``from_mcgs``, and anything else that reads ``gstslice.lgi``) a
         single, explicitly-computed source of truth instead of a
         lazily-cached value whose freshness relative to ``.s`` was
-        previously only guaranteed by GUI click ordering.
+        previously only guaranteed by the order the steps were called in.
 
         Parameters
         ----------
@@ -1857,8 +1855,8 @@ class TwinnedSimple3DBase:
         data) -- ``.lgi`` and ``.s`` are already in sync after the first
         pass, so a second pass with the same ``min_grain_size`` is
         normally a no-op; it only does something new if
-        ``min_grain_size`` changed since the first pass. The GUI
-        surfaces this explicitly before re-cleaning.
+        ``min_grain_size`` changed since the first pass. Callers
+        can report this before re-cleaning.
 
         Small-grain removal is a 3D generalisation of
         ``upxo.pxtalops.gssmooth2d._merge_small_grains`` (2D-only, Shapely
