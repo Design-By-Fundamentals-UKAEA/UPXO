@@ -5,7 +5,6 @@ filterwarnings = [
     "ignore::numba.core.errors.NumbaTypeSafetyWarning",
 ]
 markers = [
-    "gui: tests that require a live Tkinter display (use -m 'not gui' for headless CI)",
     "slow: tests over large domains, kept for on-demand stress verification (use -m 'not slow' for a quick run)",
 ]
 
