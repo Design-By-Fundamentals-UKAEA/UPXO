@@ -31,7 +31,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install sphinx sphinx-rtd-theme myst-parser
+          pip install sphinx sphinx-rtd-theme myst-parser numpy
 
       - name: Generate API RST files
         run: |

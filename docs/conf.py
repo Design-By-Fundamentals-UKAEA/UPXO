@@ -21,9 +21,11 @@ extensions = [
 ]
 
 # Mock heavy C-extension / optional dependencies so autodoc does not fail
-# when they are absent in the ReadTheDocs build environment.
+# when they are absent in the docs build environment.
+# NumPy is installed there and not mocked: many modules evaluate array
+# expressions and annotations such as ``np.ndarray | None`` when they are
+# imported, which a mocked NumPy cannot do.
 autodoc_mock_imports = [
-    'numpy',
     'scipy',
     'matplotlib',
     'mpl_toolkits',
