@@ -2298,6 +2298,76 @@ class GrainManifold2D(VoronoiMasking):
             # Merges all Voronoi cells into a single manifold entity
             self.cells[entity_id] = unary_union(poly_list)
 
+    def grain_boundary_ridges(self):
+        """Exact per-grain-pair boundary segments, built from the raw
+        Voronoi ridges between individual cells of DIFFERENT grain labels
+        -- before assemble_cells unions same-label cells together and any
+        shared-edge precision is lost.
+
+        Each returned segment is numerically exact: the two cells on
+        either side of a ridge share the same vertex coordinates from
+        vor.vertices, by construction of the Voronoi diagram itself, so
+        no coordinate comparison or intersection is needed to recover it
+        -- unlike reconstructing a shared edge from the already-unioned
+        self.cells polygons (fragile, see
+        ebsd_smoothing.disorientation_from_polygons's own docstring).
+
+        A raw Voronoi ridge's own endpoints can fall outside the RVE
+        domain even when both its cells are real, interior grains -- the
+        unbounded Voronoi construction has no notion of the domain box;
+        only ``_generate_clipped_polygons``'s own ``poly.intersection(
+        boundary_box)`` step confines the CELL polygons to it. Each ridge
+        is clipped to that same ``[0, width] x [0, height]`` box here, so
+        the returned segments stay consistent with ``self.cells`` instead
+        of occasionally reaching far outside the domain.
+
+        Returns
+        -------
+        dict {(gid_a, gid_b): list of (2, 2) float arrays}
+            gid_a < gid_b. Each array is one ridge's two endpoint
+            coordinates (already clipped to the domain) -- a single
+            straight segment; a grain-pair's full boundary is the union
+            of however many ridges lie between the individual cells on
+            either side of it. A ridge entirely outside the domain, or
+            touching it at only a single point, contributes nothing.
+            Empty if called before by_tessellation has run (no ridge data
+            yet).
+        """
+        ridge_data = getattr(self, '_ridge_data', None)
+        if ridge_data is None:
+            return {}
+        ridge_points, ridge_vertices, vertices, n_real = ridge_data
+
+        from shapely.geometry import box as _box, LineString as _LineString
+        height, width = self.lfi.shape[:2]
+        domain = _box(0, 0, width, height)
+
+        out = defaultdict(list)
+        for (i, j), (v0, v1) in zip(ridge_points, ridge_vertices):
+            # Only ridges between two REAL seeds (not a ghost/guard seed
+            # added purely to trap infinite rays / bound the tessellation)
+            # and only finite ridges (-1 marks an unbounded one, which
+            # cannot occur between two real, guarded seeds in practice,
+            # but is excluded defensively all the same).
+            if i >= n_real or j >= n_real or v0 < 0 or v1 < 0:
+                continue
+            gid_a, gid_b = self.cell_to_id.get(int(i)), self.cell_to_id.get(int(j))
+            if gid_a is None or gid_b is None or gid_a == gid_b:
+                continue
+            clipped = _LineString([vertices[v0], vertices[v1]]).intersection(domain)
+            # A straight segment against a convex box is always empty, a
+            # single touching Point, or one LineString -- never split
+            # into multiple pieces -- so this is exhaustive, not a
+            # "pick one piece and drop the rest" compromise.
+            if clipped.is_empty or clipped.geom_type != 'LineString':
+                continue
+            coords = np.asarray(clipped.coords, dtype=float)
+            if len(coords) < 2:
+                continue
+            key = (gid_a, gid_b) if gid_a < gid_b else (gid_b, gid_a)
+            out[key].append(coords)
+        return dict(out)
+
     def _generate_clipped_polygons(self, seeds):
         """
         Step 3: Internal helper to generate finite, clipped Voronoi polygons.
@@ -2350,7 +2420,20 @@ class GrainManifold2D(VoronoiMasking):
         
         # 3. Generate Voronoi
         vor = Voronoi(all_seeds)
-        
+
+        # Keep the raw ridge data (before assemble_cells unions same-label
+        # cells together and any shared-edge precision is lost): two
+        # individual Voronoi cells i and j that are adjacent share an
+        # EXACT edge -- the same vertex coordinates from vor.vertices, by
+        # construction of the Voronoi diagram itself -- so this is the
+        # numerically exact source for a grain-pair's boundary, with no
+        # coordinate comparison/intersection needed. See
+        # grain_boundary_ridges(), used by disorientation_from_polygons
+        # instead of the (fragile, see its own docstring) boundary-
+        # intersection reconstruction.
+        self._ridge_data = (vor.ridge_points, np.asarray(vor.ridge_vertices),
+                            vor.vertices, len(seeds))
+
         # 4. Extract and Clip Polygons
         polygons = []
         self.cell_vertices_raw = [] # Initialize storage for reconstruction
