@@ -67,7 +67,8 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
                       junction_iterations=None, junction_relaxation=.25,
                       junction_max_displacement=None, frozen_grain_ids=(),
                       iterations_by_pair=None, ramp_rings=2, thickness_cap_fraction=None,
-                      minimum_wedge_angle=None, minimum_corner_angle=None):
+                      minimum_wedge_angle=None, minimum_corner_angle=None,
+                      progress=None):
     """Return shared internal interface triangles; no tetrahedra or RVE caps.
 
     Voxel axes are x/y/z. Surface nodes average surface neighbors and junction
@@ -223,6 +224,12 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
             return np.bincount(corner_key, weights=np.degrees(np.arccos(np.clip(cos, -1, 1))), minlength=n_keys)
     accepted = 0
     for iteration in range(total):
+        if progress is not None:
+            try:
+                progress(f'Smooth interfaces iteration {iteration+1}/{total}',
+                         iteration+1, total)
+            except Exception:
+                pass
         average = np.column_stack([np.bincount(neighbors[:, 0], weights=points[neighbors[:, 1], j], minlength=len(points)) for j in range(3)])
         rate = np.zeros(len(points))
         if iteration < iterations:

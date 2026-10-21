@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from scipy import ndimage
 
-from upxo.interfaces.defdap.ebsd_reader import EBSDReader
+from upxo.interfaces.defdap.ebsd_reader import EBSDReader, write_subsampled_ctf
 
 
 def _bare_reader(lfi=None, quat=None):
@@ -185,3 +185,81 @@ def test_grain_average_euler_deg_rejects_non_positive_labels():
 
     with pytest.raises(ValueError):
         rdr.grain_average_euler_deg()
+
+
+# ---------------------------------------------------------------------------
+# write_subsampled_ctf -- a dst_path that collides with src_path would
+# silently truncate-and-overwrite the user's original EBSD data (it is
+# opened in 'w' mode); these cover the explicit guard against that.
+# Pure stdlib text parsing -- no DefDAP needed, same as the module's own
+# claim in write_subsampled_ctf's docstring.
+# ---------------------------------------------------------------------------
+
+_FAKE_CTF_HEADER = """Channel Text File
+Prj\t
+Author\t
+JobMode\tGrid
+XCells\t4
+YCells\t2
+XStep\t1.0000
+YStep\t1.0000
+AcqE1\t0.0000
+AcqE2\t0.0000
+AcqE3\t0.0000
+Euler angles refer to Sample Coordinate system (CS0)!\tMag\t100\tCoverage\t100\tDevice\t0\tKV\t20\tTiltAngle\t70\tTiltAxis\t0
+Phases\t1
+3.520;3.520;3.520\t90.000;90.000;90.000\tNickel\t11\t225
+Phase\tX\tY\tBands\tError\tEuler1\tEuler2\tEuler3\tMAD\tBC\tBS
+"""
+
+
+def _write_fake_ctf(path, n_rows=8):
+    """A minimal but structurally valid .ctf: the header
+    write_subsampled_ctf actually parses (XCells/YCells/XStep/YStep),
+    plus n_rows data rows (XCells=4 x YCells=2 = 8 by default)."""
+    lines = [_FAKE_CTF_HEADER]
+    for i in range(n_rows):
+        lines.append(f"1\t{i % 4}\t{i // 4}\t5\t0\t10.0\t20.0\t30.0\t1.0\t100\t50\n")
+    path.write_text("".join(lines), encoding="latin-1")
+
+
+def test_write_subsampled_ctf_rejects_dst_equal_to_src(tmp_path):
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf(ctf)
+    original_bytes = ctf.read_bytes()
+
+    with pytest.raises(ValueError, match="must not be the same file"):
+        write_subsampled_ctf(ctf, ctf, stride_x=2, stride_y=2)
+
+    # The whole point of the guard: the original must survive untouched,
+    # not just that an exception was raised.
+    assert ctf.read_bytes() == original_bytes
+
+
+def test_write_subsampled_ctf_rejects_dst_equal_to_src_via_different_spelling(tmp_path):
+    # Same real file, reached through a path with a redundant ".." segment
+    # -- exercises the .resolve()-based comparison, not just literal
+    # string equality between the two path arguments.
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf(ctf)
+    original_bytes = ctf.read_bytes()
+    roundabout = tmp_path / "sub" / ".." / "scan.ctf"
+
+    with pytest.raises(ValueError, match="must not be the same file"):
+        write_subsampled_ctf(ctf, roundabout, stride_x=2, stride_y=2)
+
+    assert ctf.read_bytes() == original_bytes
+
+
+def test_write_subsampled_ctf_still_works_for_a_genuinely_different_dst(tmp_path):
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf(ctf)
+    dst = tmp_path / "scan_s2.ctf"
+
+    out = write_subsampled_ctf(ctf, dst, stride_x=2, stride_y=2)
+
+    assert out == dst
+    assert dst.exists()
+    text = dst.read_text(encoding="latin-1")
+    assert "XCells\t2" in text
+    assert "YCells\t1" in text

@@ -1018,6 +1018,78 @@ def compute_pct_interior_grains(lfi: 'np.ndarray', grain_ids) -> Optional[float]
     return 100.0 * n_interior / len(grain_ids)
 
 
+def build_grain_role_sets(lfi: 'np.ndarray', parent_info: dict) -> dict:
+    """{'pure_parents', 'pure_twins', 'intermediates', 'non_role'} grain-ID
+    sets, merged across every CSL type in `parent_info` -- the role split
+    `compute_grain_role_property_distributions` plots, factored out so
+    other callers (e.g. the 4-category EBSD-vs-synthetic comparison in
+    feature_props_3d.py) can get the identical classification without
+    duplicating the cross-CSL-type reconciliation logic.
+
+    See `identify_parent_grains` for what pure_parents/pure_twins/
+    intermediates mean per CSL type; a grain pure for one CSL type but
+    intermediate for another is resolved to intermediate here (the
+    `only_pp_or_pt` step below), consistently with the single-CSL-type
+    case."""
+    all_pp: set[int] = set()
+    all_pt: set[int] = set()
+    all_im: set[int] = set()
+    for info in parent_info.values():
+        all_pp.update(info['pure_parents'].tolist())
+        all_pt.update(info['pure_twins'].tolist())
+        all_im.update(info['intermediates'].tolist())
+
+    only_pp_or_pt    = (all_pp | all_pt) - all_im
+    pure_parent_set  = only_pp_or_pt & all_pp
+    pure_twin_set    = (only_pp_or_pt & all_pt) - pure_parent_set
+    intermediate_set = all_im
+    all_role         = pure_parent_set | pure_twin_set | intermediate_set
+    indexed_gids     = set(int(g) for g in np.unique(lfi[lfi > 0]))
+    non_role_set     = indexed_gids - all_role
+
+    return {
+        'pure_parents':  pure_parent_set,
+        'pure_twins':    pure_twin_set,
+        'intermediates': intermediate_set,
+        'non_role':      non_role_set,
+    }
+
+
+def compute_four_category_grain_sets(lfi: 'np.ndarray', parent_info: dict) -> dict:
+    """{'parent', 'host', 'twin', 'complete'} grain-ID sets for the
+    4-category EBSD-vs-synthetic grain-size comparison (Summary Report):
+
+    - 'parent' -- genuinely twin-free grains: never a parent OR a twin in
+      ANY CSL pair, for any CSL type. NOT the same as `pure_parents`
+      (which IS the host-grain-with-twins role, see 'host' below) --
+      twin-free grains never appear in a CSL pair at all, so they are
+      absent from every CSL type's `all_parents`/`all_twins`.
+    - 'host' -- `pure_parents`: grains that host at least one twin and
+      are never themselves a twin of something else.
+    - 'twin' -- `pure_twins` UNION `intermediates`: every twin lamella,
+      whether or not it also hosts a further secondary twin within
+      itself (an 'intermediate' grain is a twin of its own host AND a
+      parent of a secondary twin -- counted here as a twin, not a host).
+    - 'complete' -- every indexed grain, no role filtering at all.
+    """
+    role_sets = build_grain_role_sets(lfi, parent_info)
+    indexed_gids = set(int(g) for g in np.unique(lfi[lfi > 0]))
+
+    all_parents: set[int] = set()
+    all_twins: set[int] = set()
+    for info in parent_info.values():
+        all_parents.update(int(g) for g in info['all_parents'])
+        all_twins.update(int(g) for g in info['all_twins'])
+    twin_free_set = indexed_gids - (all_parents | all_twins)
+
+    return {
+        'parent':   twin_free_set,
+        'host':     role_sets['pure_parents'],
+        'twin':     role_sets['pure_twins'] | role_sets['intermediates'],
+        'complete': indexed_gids,
+    }
+
+
 def compute_grain_role_property_distributions(
         lfi: 'np.ndarray',
         parent_info: dict,
@@ -1031,7 +1103,7 @@ def compute_grain_role_property_distributions(
     Extract per-grain-role-group property value arrays -- the pure data
     step of ``plot_grain_role_property_stats``, with no plotting. Split out
     so a caller can compute once and plot (or replot) separately, e.g. a
-    GUI's "Compute" vs "Plot" button pair.
+    separate compute step and plot step.
 
     Parameters
     ----------
@@ -1078,28 +1150,10 @@ def compute_grain_role_property_distributions(
     selected_props = list(selected_props)
 
     # Build grain-role sets (merged across all CSL types)
-    all_pp: set[int] = set()
-    all_pt: set[int] = set()
-    all_im: set[int] = set()
-    for info in parent_info.values():
-        all_pp.update(info['pure_parents'].tolist())
-        all_pt.update(info['pure_twins'].tolist())
-        all_im.update(info['intermediates'].tolist())
-
-    only_pp_or_pt    = (all_pp | all_pt) - all_im
-    pure_parent_set  = only_pp_or_pt & all_pp
-    pure_twin_set    = (only_pp_or_pt & all_pt) - pure_parent_set
-    intermediate_set = all_im
-    all_role         = pure_parent_set | pure_twin_set | intermediate_set
-    indexed_gids     = set(int(g) for g in np.unique(lfi[lfi > 0]))
-    non_role_set     = indexed_gids - all_role
-
-    grain_sets = {
-        'pure_parents':  pure_parent_set,
-        'pure_twins':    pure_twin_set,
-        'intermediates': intermediate_set,
-        'non_role':      non_role_set,
-    }
+    grain_sets = build_grain_role_sets(lfi, parent_info)
+    pure_parent_set  = grain_sets['pure_parents']
+    pure_twin_set    = grain_sets['pure_twins']
+    intermediate_set = grain_sets['intermediates']
     # gid -> its own role -- Tier 4's neighbour-composition properties
     # look THIS up for each of a grain's neighbours, not the grain itself.
     role_of = {gid: role for role, gids in grain_sets.items() for gid in gids}
@@ -1648,7 +1702,7 @@ def plot_twin_thickness_stats(
         own colour from a fixed cycle and its own legend entry.
     ax : matplotlib.axes.Axes or None
         Draw into this existing Axes instead of creating a new
-        Figure/Axes pair (for embedding into a GUI's own canvas). When
+        Figure/Axes pair (for embedding into a caller's own canvas). When
         given, the caller owns the Figure and must NOT call
         ``fig.tight_layout()``/redraw itself -- this function does not
         call ``plt.show()`` either way.

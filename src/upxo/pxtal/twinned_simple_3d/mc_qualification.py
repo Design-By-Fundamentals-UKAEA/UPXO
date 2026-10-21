@@ -6,10 +6,6 @@ Monte-Carlo temporal-slice qualification stage of the twinned simple 3D
 pipeline: derived per-candidate statistics (scale calibration, rescaled
 property stats, EBSD-distribution comparisons) and the star-count /
 aggregate-score / coupled shortlist ranking built from them.
-
-Ported from ``pxtal/twinned_simple_3d/gui/pages_mc.py`` (previously only
-reachable through MCCandidateSelectionPage/MCQualificationPage -- none of
-the logic here has any GUI/Tkinter dependency).
 """
 
 import numpy as np

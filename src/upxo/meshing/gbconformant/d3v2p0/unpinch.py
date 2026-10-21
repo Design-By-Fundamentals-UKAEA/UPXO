@@ -39,7 +39,8 @@ def _fans(triangles, npoints):
 
 
 def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.5,
-                        iterations=30, relaxation=.25, min_separation=.02):
+                        iterations=30, relaxation=.25, min_separation=.02,
+                        progress=None):
     """Return (new Interfaces, report, node audit) without changing the input.
 
     Split vertices whose full triangle stars have disconnected fans. This
@@ -140,7 +141,13 @@ def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.
         return np.cross(tri[:, 1]-tri[:, 0], tri[:, 2]-tri[:, 0])
     area_floor = .1*np.linalg.norm(normals(anchor), axis=1)
     accepted = 0
-    for _ in range(iterations):
+    for iteration in range(iterations):
+        if progress is not None:
+            try:
+                progress(f'Separate point contacts iteration {iteration+1}/{iterations}',
+                         iteration+1, iterations)
+            except Exception:
+                pass
         mean = np.column_stack([np.bincount(neighbors[:, 0], weights=result.points[neighbors[:, 1], axis], minlength=len(anchor))
                                 for axis in range(3)])/np.maximum(degree[:, None], 1)
         delta = relaxation*weight[:, None]*(mean-result.points)

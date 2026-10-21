@@ -15,6 +15,8 @@ import time
 import numpy as np
 from typing import Optional, Dict, List
 
+from upxo._sup import progress
+
 _SUPPORTED_CSL = 'S3  (twin)'
 _VALID_NUCLEATION_SITES = ('centroid', 'gb_centroid', 'random_gb')
 
@@ -64,17 +66,16 @@ class TwinGenerator3D:
     # Human-readable identity of the twin type this class actually
     # generates -- always Sigma3 (Path A), regardless of which CSL label
     # was used upstream to select the host pool or measure the EBSD target
-    # (see the CSL-label-mismatch check in :meth:`diagnose`).  Read by the
-    # GUI's results block instead of re-deriving a label from GUI state, so
+    # (see the CSL-label-mismatch check in :meth:`diagnose`).  Read by result
+    # summaries instead of re-deriving a label from caller state, so
     # a future multi-CSL Path B implementation only needs to change this
-    # (or make it per-instance) rather than touching the GUI.
+    # (or make it per-instance).
     TWIN_TYPE_LABEL = 'Sigma3 -- FCC Annealing Twin (60 deg / <111>)'
 
     # Diagnostic thresholds (see `diagnose`) -- heuristic cutoffs for
     # flagging results worth a closer look, not correctness criteria.
-    # Deliberately not exposed as GUI-configurable settings: they gate
-    # advisory notes, not pass/fail, so there's no reason for a user to
-    # need to tune them to get past a screen.
+    # Deliberately not exposed as settings: they gate advisory notes, not
+    # pass/fail, so there's no reason for a user to need to tune them.
     DIAG_SHORTFALL_PCT_THRESHOLD = 70.0
     DIAG_ABRUPT_FRAC_THRESHOLD = 0.5
     DIAG_CLAMPED_FRAC_THRESHOLD = 0.3
@@ -90,6 +91,7 @@ class TwinGenerator3D:
         'meshing_route',
         'min_lamella_thickness_conformal',
         'min_lamella_thickness_non_conformal',
+        'min_lamella_thickness_um',
         'min_host_vox_for_lamella',
         'prob_lamella_separated',
         'prob_lamella_contacting',
@@ -137,6 +139,7 @@ class TwinGenerator3D:
             prob_secondary_inward_twinNucleation: float = 0.7,
             twin_thick_scale_factor: float = 1.0,
             tvf_2d_to_3d_scale_factor: float = 1.0,
+            min_lamella_thickness_um: Optional[float] = None,
             max_lamella_thickness_um: Optional[float] = None,
             max_lamella_vf_per_host: float = 0.4,
             schmid_loading_direction: tuple = (0., 0., 1.),
@@ -171,6 +174,8 @@ class TwinGenerator3D:
         self.twin_halfwidths_vox: Dict = {}
         self.twin_thick_scale_factor: float     = float(twin_thick_scale_factor)
         self.tvf_2d_to_3d_scale_factor: float   = float(tvf_2d_to_3d_scale_factor)
+        self.min_lamella_thickness_um: Optional[float] = (
+            float(min_lamella_thickness_um) if min_lamella_thickness_um is not None else None)
         self.max_lamella_thickness_um: Optional[float] = (
             float(max_lamella_thickness_um) if max_lamella_thickness_um is not None else None)
         self.max_lamella_vf_per_host: float = float(np.clip(max_lamella_vf_per_host, 0.01, 1.0))
@@ -332,10 +337,19 @@ class TwinGenerator3D:
             return self._snap_to_grain(origin, gid, coords, lgi)
 
     def _min_hw(self) -> float:
-        """Effective minimum lamella half-width for current meshing route."""
+        """Effective minimum lamella half-width -- the larger of the
+        meshing-route floor (voxels, protects mesh validity) and the
+        optional physical-units floor (min_lamella_thickness_um, lets
+        the user push the realized thickness distribution toward an
+        EBSD target in physical units). Neither is allowed to undercut
+        the other."""
         if self.meshing_route == 'conformal':
-            return self.min_lamella_thickness_conformal / 2.0
-        return self.min_lamella_thickness_non_conformal / 2.0
+            hw = self.min_lamella_thickness_conformal / 2.0
+        else:
+            hw = self.min_lamella_thickness_non_conformal / 2.0
+        if self.min_lamella_thickness_um is not None:
+            hw = max(hw, self.min_lamella_thickness_um / self.base.voxel_size / 2.0)
+        return hw
 
     def _apply_sigma3_variant(self,
                                q_parent: np.ndarray,
@@ -463,7 +477,7 @@ class TwinGenerator3D:
         _shp = self.lgi_twinned.shape
         print(f' done  {len(_gc)} grains  ({time.perf_counter()-_t_idx:.1f}s)')
 
-        for gid in _host_list:
+        for gid in progress.track(_host_list, message="Introducing primary twins"):
             self.twin_role[gid] = 'host'
             q_par = host_orientations.get(gid)
             if q_par is None:
@@ -690,7 +704,7 @@ class TwinGenerator3D:
         n_outward = 0
         n_inward  = 0
 
-        for tgid in sec_hosts:
+        for tgid in progress.track(sec_hosts, message="Introducing secondary twins"):
             # Shared VF check (same counter as primary)
             if (total_vox > 0
                     and self.cumulative_twin_vox / total_vox >= tvf_stop):
@@ -957,7 +971,7 @@ class TwinGenerator3D:
         Return advisory notes explaining surprising values in :meth:`summary`,
         in a suggestive (not asserted) tone -- these are heuristic hypotheses
         about *why* a number looks the way it does, not a pass/fail verdict.
-        They never gate progression to the next GUI page.
+        They never block a later step.
 
         Parameters
         ----------
@@ -973,7 +987,7 @@ class TwinGenerator3D:
         list of dict
             Each entry: ``{'anchor_fields': [...], 'message': str}``.
             ``anchor_fields`` names the :meth:`summary` keys the note
-            explains (a GUI can attach "(Ref N)" to those fields, N = this
+            explains (a caller can attach "(Ref N)" to those fields, N = this
             note's 1-based position in the returned list).
         """
         s = self.summary()
@@ -1167,6 +1181,10 @@ class TwinGenerator3D:
         mt = (self.min_lamella_thickness_conformal if mc == 'conformal'
               else self.min_lamella_thickness_non_conformal)
         print(f'  min_lamella_thickness            : {mt} vox  ({mc})')
+        mum = self.min_lamella_thickness_um
+        print(f'  min_lamella_thickness_um         : '
+              f'{mum:.2f} um' if mum is not None else
+              f'  min_lamella_thickness_um         : None  (voxel floor only)')
         print('\nHOST ALLOCATION')
         _sf = self.base.host_fraction_2d_to_3d_scale_factor
         _eff = min(getattr(self.base, 'target_hosting_fraction', 0) * _sf, 1.0)

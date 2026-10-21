@@ -30,7 +30,6 @@ Core Capabilities
 - **Characterisation and Analysis** — morphology, texture, and topological properties.
 - **Manipulation Tools** — feature removal, introduction, modification, and replacement.
 - **Representativeness Assessment** — morphological, textural, and topological assessment.
-- **GUI Applications** — interactive wizards for FM Steel hierarchical generation and FCC twinned microstructure design.
 - **FE Meshing** — grain boundary geometry conformant and non-conformant Finite Element meshes.
 - **Data Interface** — import, export, and management of grain structure data; EBSD integration.
 - **Visualisation** — tools for plotting 2D and 3D microstructures.

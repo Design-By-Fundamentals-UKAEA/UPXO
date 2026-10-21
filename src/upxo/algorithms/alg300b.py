@@ -8,6 +8,7 @@ Writes temporal ``mcgs3_grain_structure`` slices for 3D MCGS runs.
 """
 
 from copy import deepcopy
+from upxo._sup import progress
 from random import sample as sample_rand
 import numpy.random as rand
 from upxo.pxtal.mcgs3_temporal_slice import mcgs3_grain_structure as GS3d
@@ -157,6 +158,7 @@ def mc_iterations_3d_alg300b(S=None,
     print('Initiating grain growth')
     print(40*'-')
     for m in range(uisim.mcsteps):
+        progress.report(m, uisim.mcsteps, "Monte-Carlo step")
         if S.min() == S.max():
             print(30*'.')
             print(f'Single crystal achieved at iteration {m}.')

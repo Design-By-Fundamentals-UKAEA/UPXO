@@ -875,7 +875,8 @@ class mcgs3_grain_structure():
                                                  'sanv_N': 26,
                                                  'rat_sanv_volnv': False,
                                                  'sanv_verbosity': 1E2,
-                                                 'disp_msg': ''}
+                                                 'disp_msg': ''},
+                                  verbose=True,
                                   ):
         """
         Characterize the 3D morphology of the grain structure.
@@ -896,6 +897,11 @@ class mcgs3_grain_structure():
 
         make_pvgrid : bool, optional
             Flag to create PyVista grid. Defaults to True.
+
+        verbose : bool, optional
+            Print find_grains()'s "Finding grains." / "No. of grains
+            detected = N" lines. Defaults to True; a caller that prints
+            its own per-slice summary sets this False.
 
         find_neigh : list, optional
             List containing flag and a list of niehghbour orders needed. Its
@@ -977,7 +983,7 @@ class mcgs3_grain_structure():
         # -----------------------------
         if sf_name.lower() in ('s'):
             self.find_grains(label_str_order=label_str_order,
-                             pck=self.ndimg_label_pck)
+                             pck=self.ndimg_label_pck, print_msg=verbose)
         elif sf_name.lower() in ('lgi'):
             self.find_grains_lgi()
         elif sf_name.lower() in ('fdb'):
@@ -1205,7 +1211,7 @@ class mcgs3_grain_structure():
         tgt_nneigh_field_fit = polynomial(tgt_npixels_limited)
         plt.plot(tgt_npixels_limited, tgt_nneigh_field_fit, 'k')
 
-    def find_grains(self, label_str_order=1, pck=None):
+    def find_grains(self, label_str_order=1, pck=None, print_msg=True):
         """
         Detect grains in ``self.s`` and populate ``self.lgi``.
 
@@ -1215,6 +1221,11 @@ class mcgs3_grain_structure():
             Voxel connectivity order used for grain identification.
         pck : callable, optional
             Connected-component labelling function.
+        print_msg : bool, optional
+            Print "Finding grains." / "No. of grains detected = N". A
+            caller that reports its own per-slice summary line (e.g.
+            TwinnedSimple3DBase.calculate_lfi) sets this False to avoid a
+            redundant multi-line block per slice.
 
         Returns
         -------
@@ -1222,7 +1233,8 @@ class mcgs3_grain_structure():
         """
         # VALIDATIONS
         # -----------------------------
-        print(40*'-', '\nFinding grains.')
+        if print_msg:
+            print(40*'-', '\nFinding grains.')
         states = np.unique(self.s)
         self.lgi, s_gid, _, self.gid_s = labelops.label_multistate_components(
             self.s, states=states, connectivity=label_str_order, labeler=pck
@@ -1245,7 +1257,8 @@ class mcgs3_grain_structure():
                 pass
                 # _gid_s_.append(0)  # Splcing this temporarily. Retain if fully successfull.
         self.gid_s = _gid_s_
-        print(f'No. of grains detected = {self.n}')
+        if print_msg:
+            print(f'No. of grains detected = {self.n}')
 
     def find_grains_lgi(self):
         """Find grains from the current labelled grain image."""

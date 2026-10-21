@@ -2,7 +2,7 @@
 
 Covers: default output path, section wrapping, escaping of user-supplied
 text (titles/captions/table cells/free text), and correct relative image
-src references. No tkinter/GUI dependency.
+src references.
 """
 from upxo.reporting import ReportSession, render_html
 
@@ -22,6 +22,23 @@ class TestRenderHtml:
         out = render_html(session, out_path=out_path)
         assert out == out_path
         assert out.exists()
+
+    def test_static_page_has_no_refresh_tag(self, tmp_path):
+        session = ReportSession(tmp_path)
+        html_text = render_html(session).read_text(encoding="utf-8")
+        assert "http-equiv='refresh'" not in html_text
+
+    def test_live_refresh_adds_reload_tag(self, tmp_path):
+        session = ReportSession(tmp_path)
+        html_text = render_html(session, live_refresh_s=4).read_text(encoding="utf-8")
+        assert "<meta http-equiv='refresh' content='4'>" in html_text
+        assert html_text.index("http-equiv='refresh'") < html_text.index("<title>")
+
+    def test_live_refresh_must_be_positive(self, tmp_path):
+        import pytest
+        session = ReportSession(tmp_path)
+        with pytest.raises(ValueError):
+            render_html(session, live_refresh_s=0)
 
     def test_sections_wrapped_and_closed(self, tmp_path):
         session = ReportSession(tmp_path)
@@ -48,6 +65,36 @@ class TestRenderHtml:
         html_text = render_html(session).read_text(encoding="utf-8")
         assert "<b>x</b>" not in html_text
         assert "&lt;b&gt;x&lt;/b&gt;" in html_text
+
+    def test_table_caption_newlines_become_br_not_collapsed(self, tmp_path):
+        # Multi-paragraph captions must not collapse into one run-on
+        # line -- HTML does not treat a bare '\n' as a line break.
+        session = ReportSession(tmp_path)
+        session.add_table({"col": [1]}, "T", caption="first note\n\nsecond note")
+        html_text = render_html(session).read_text(encoding="utf-8")
+        assert "first note<br><br>second note" in html_text
+
+    def test_image_caption_newlines_become_br_too(self, tmp_path):
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        session = ReportSession(tmp_path)
+        fig, ax = plt.subplots()
+        ax.plot([0, 1], [1, 0])
+        session.add_image(fig, "Plot", caption="first note\n\nsecond note")
+        html_text = render_html(session).read_text(encoding="utf-8")
+        assert "first note<br><br>second note" in html_text
+
+    def test_caption_html_is_still_escaped_before_newline_substitution(self, tmp_path):
+        # The escape must run BEFORE the \n -> <br> substitution, so a
+        # caption cannot smuggle in its own markup via a literal "<br>"
+        # or similar in the user-typed text itself.
+        session = ReportSession(tmp_path)
+        session.add_table({"col": [1]}, "T", caption="<script>alert(1)</script>\nline2")
+        html_text = render_html(session).read_text(encoding="utf-8")
+        assert "<script>alert(1)</script>" not in html_text
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;<br>line2" in html_text
 
     def test_image_src_is_relative_and_asset_exists(self, tmp_path):
         import matplotlib

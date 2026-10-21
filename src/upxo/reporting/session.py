@@ -9,10 +9,8 @@ pipeline run:
         report_data.json      -- this session's own save()/load() sidecar
         assets/                -- copied/rendered images, referenced by report.html
 
-No GUI-toolkit import here -- GUI pages call these methods and are
-responsible only for handing over the current matplotlib Figure / a
-shared_state dict; see the upxo.reporting package docstring and the
-project_reporting_module_plan memory for the wider design (Reporting-1..4).
+Callers only hand over the current matplotlib Figure / a shared_state
+dict; this module does the rendering and the file work.
 """
 import json
 import re
@@ -37,10 +35,14 @@ def _slugify(text, max_len=40):
     return (slug or "entry")[:max_len]
 
 
-def _normalize_table(data):
+def normalize_table_data(data):
     """Accept a DataFrame-like object, a dict of equal-length lists (column
     name -> values), or a list of dict records; return (columns, rows) as
-    plain Python lists (ndarray.tolist() already downcasts numpy scalars)."""
+    plain Python lists (ndarray.tolist() already downcasts numpy scalars).
+
+    Public (not just ``add_table``'s own helper) so other callers that build
+    a table from the same shapes accept exactly the same input without
+    duplicating this logic."""
     if hasattr(data, "columns") and hasattr(data, "values"):
         return [str(c) for c in data.columns], [list(r) for r in data.values.tolist()]
     if isinstance(data, dict):
@@ -77,7 +79,7 @@ class ReportSession:
                  run_metadata=None):
         # No mkdir here -- matches this codebase's convention for the other
         # per-run output folders (images_dir/raw_dir/...), which are created
-        # lazily on first actual write, not just because a GUI session opened.
+        # lazily on first actual write, not just because a session opened.
         self.reports_dir = Path(reports_dir)
         self.assets_dir = self.reports_dir / "assets"
 
@@ -88,7 +90,7 @@ class ReportSession:
         # Free-form run-level metadata (e.g. researcher/organisation/
         # material/processing-condition) shown once at the top of the
         # rendered report, distinct from the appendable entries list --
-        # set via update_run_metadata() so a GUI page can call it on every
+        # set via update_run_metadata() so a caller can call it on every
         # save_state() without ever duplicating anything (a plain dict
         # merge, not an appended entry).
         self.run_metadata = dict(run_metadata) if run_metadata else {}
@@ -180,7 +182,7 @@ class ReportSession:
         object exposing .columns/.values), a dict of equal-length lists
         (column -> values), or a list of dict records."""
         self._maybe_open_section(section)
-        columns, rows = _normalize_table(data)
+        columns, rows = normalize_table_data(data)
         entry = TableEntry(
             id=self._new_id(), timestamp=self._timestamp(), title=title,
             columns=columns, rows=rows, caption=caption,
@@ -219,7 +221,7 @@ class ReportSession:
 
     def save(self, path=None):
         """Write this session's entries + metadata as JSON so it can be
-        reloaded later (e.g. across a GUI restart within the same run
+        reloaded later (e.g. across a restart within the same run
         directory) via load()/open()."""
         path = Path(path) if path is not None else self._json_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,8 +266,8 @@ class ReportSession:
     @classmethod
     def open(cls, reports_dir, run_title="UPXO Report", pipeline_name=None):
         """Load an existing report_data.json in `reports_dir` if one exists,
-        otherwise start a fresh session there. This is the usual GUI entry
-        point -- it makes "Append to Report" survive a GUI restart within
+        otherwise start a fresh session there. This is the usual entry
+        point -- it makes appended entries survive a restart within
         the same pipeline run without callers needing to check first."""
         reports_dir = Path(reports_dir)
         if (reports_dir / "report_data.json").exists():

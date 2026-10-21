@@ -10,8 +10,60 @@ from collections import defaultdict
 from dataclasses import replace
 import numpy as np
 from ..d3v2p0 import tet_swaps as ref
-from ..d3v2p0.tet_swaps import _Mesh, _reverify, insert_nodes, insert_grain_tetrahedra  # noqa: F401 (re-exported)
+from ..d3v2p0.tet_swaps import _Mesh, insert_nodes  # noqa: F401 (re-exported)
 from .backend import plan, numba_threads
+from .mesh_tables import unique_rows, node_element_index
+
+
+class _Tets:
+    """Read-only sequence of the tets of an _ArrayMesh: row k as a list of Python ints."""
+
+    def __init__(self, mesh):
+        self.mesh = mesh
+
+    def __len__(self):
+        return len(self.mesh.base) + len(self.mesh.added)
+
+    def __getitem__(self, k):
+        n = len(self.mesh.base)
+        return self.mesh.base[k].tolist() if k < n else self.mesh.added[k - n]
+
+
+class _ArrayMesh:
+    """d3v2p0's _Mesh with the tets kept in an array.
+
+    The same interface for the swap loop (t, g, alive, star, add), the same values and the same order;
+    a tet becomes a Python list only when the loop reads it, instead of every tet at the start.
+    """
+
+    def __init__(self, tetrahedra, grain_ids, n_points):
+        self.base = np.asarray(tetrahedra)
+        self.added = []
+        self.t = _Tets(self)
+        self.g = list(map(int, grain_ids))
+        self.alive = [True] * len(self.base)
+        self.order, self.offsets = node_element_index(self.base, n_points)
+        self.extra = defaultdict(list)
+
+    def star(self, n):
+        base = self.order[self.offsets[n]:self.offsets[n + 1]].tolist()
+        return [k for k in base + self.extra.get(n, []) if self.alive[k]]
+
+    def add(self, tet, grain):
+        k = len(self.t)
+        self.added.append(list(map(int, tet)))
+        self.g.append(int(grain))
+        self.alive.append(True)
+        for n in tet:
+            self.extra[int(n)].append(k)
+        return k
+
+    def array(self, dtype=np.int64):
+        """All tets, original ones first, then the added ones in order, as an (n, 4) array."""
+        base = self.base.astype(dtype, copy=False)
+        if not self.added:
+            return base
+        return np.vstack((base, np.asarray(self.added, dtype=dtype)))
 
 
 def swap_tets(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True, target=30., max_angle=150.,
@@ -61,7 +113,7 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
                     above_max_angle=int(np.sum(mx > max_angle)), below_10=int(np.sum(mn < 10)),
                     below_15=int(np.sum(mn < 15)), below_20=int(np.sum(mn < 20)))
 
-    mesh = _Mesh(t0, grain_ids, len(p))
+    mesh = _ArrayMesh(t0, grain_ids, len(p))
     mn, mx, q = measure(t0)
     before = summary(mn, mx)
     quality = q.tolist()
@@ -129,7 +181,7 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
         counts['swaps_2_3'] += done['2-3']
         counts['swaps_3_2'] += done['3-2']
         alive = np.flatnonzero(mesh.alive)
-        amn, amx, _ = measure(np.asarray(mesh.t)[alive])
+        amn, amx, _ = measure(mesh.array()[alive])
         entry = dict(pass_number=pass_number + 1, swaps_2_3=done['2-3'], swaps_3_2=done['3-2'],
                      below_target=int(np.sum(amn < target)), below_15=int(np.sum(amn < 15)),
                      below_10=int(np.sum(amn < 10)), minimum_dihedral=float(amn.min()))
@@ -139,7 +191,7 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
         if not done['2-3'] and not done['3-2']:
             break
     alive = np.flatnonzero(mesh.alive)
-    tets = np.asarray(mesh.t, dtype=t0.dtype)[alive]
+    tets = mesh.array(t0.dtype)[alive]
     grains = np.asarray(mesh.g, dtype=np.asarray(grain_ids).dtype)[alive]
     mn, mx, _ = measure(tets)
     report = dict(enabled=bool(enabled), target_min_dihedral=float(target), max_dihedral=float(max_angle),
@@ -150,7 +202,7 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
 def swap_grain_tetrahedra(tets, surface, *, enabled=True, target=30., max_angle=150., max_passes=5,
                           progress=None, backend='auto', n_workers=None):
     """d3v2p0.tet_swaps.swap_grain_tetrahedra on the d3v2p1 swap_tets
-    (backend / n_workers: see swap_tets); re-verification is d3v2p0's."""
+    (backend / n_workers: see swap_tets); re-verification is _reverify below."""
     new_t, new_g, swaps = swap_tets(tets.points, tets.tetrahedra, tets.grain_ids, surface.triangles,
                                     enabled=enabled, target=target, max_angle=max_angle,
                                     max_passes=max_passes, progress=progress, backend=backend, n_workers=n_workers)
@@ -159,3 +211,70 @@ def swap_grain_tetrahedra(tets, surface, *, enabled=True, target=30., max_angle=
     if not enabled:
         return replace(tets, report=report)
     return _reverify(tets, tets.points, new_t, new_g, surface, report, 'swaps')
+
+
+def _reverify(tets, points, new_t, new_g, surface, report, what):
+    """d3v2p0.tet_swaps._reverify: the same checks, report and errors.
+
+    The face tables come from integer keys and the per-grain sums run over grain-sorted tet numbers,
+    which are the same tets in the same order as d3v2p0's masks, so every sum is the same number.
+    """
+    from ..d3v2p0.tet_smoothing import minimum_sicn_gmsh, _volumes
+    from ..d3v2p0.tet_angles import dihedral_summary
+    volumes = _volumes(points[new_t])
+    if np.any(~np.isfinite(volumes)) or np.any(volumes <= 0):
+        raise RuntimeError(f'{what} produced a nonpositive tetrahedron volume')
+    # conformity: each grain's single-use tet faces must be exactly its surface triangles
+    pairs = np.asarray(surface.grain_pairs)
+    exterior = np.asarray(surface.exterior, bool)
+    pattern = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
+    faces = np.sort(new_t[:, pattern].reshape(-1, 3), axis=1)
+    key = np.column_stack((np.repeat(new_g, 4), faces))
+    uniq, counts = unique_rows(key, False, True)
+    if np.any(counts > 2):
+        raise RuntimeError(f'Nonmanifold tet faces after {what}')
+    boundary = uniq[counts == 1]
+    st = np.sort(np.asarray(surface.triangles), axis=1)
+    expected = unique_rows(np.vstack((np.column_stack((pairs[:, 0], st)),
+                                      np.column_stack((pairs[~exterior, 1], st[~exterior])))))
+    if not np.array_equal(boundary, expected):
+        raise RuntimeError(f'Tet boundary differs from the grain surfaces after {what}')
+    quality = minimum_sicn_gmsh(points, new_t)
+    if np.any(~np.isfinite(quality)) or np.any(quality <= 0):
+        raise RuntimeError(f'Invalid tetrahedron quality after {what}')
+    per_grain = {}
+    by_grain = np.argsort(new_g, kind='stable')                 # tet numbers of a grain, ascending, as a mask gives
+    sorted_grain = new_g[by_grain]
+    for gid, entry in tets.report['per_grain'].items():
+        first = np.searchsorted(sorted_grain, int(gid), side='left')
+        last = np.searchsorted(sorted_grain, int(gid), side='right')
+        selected = by_grain[first:last]
+        volume = float(volumes[selected].sum())
+        if not np.isclose(volume, entry['volume'], rtol=1e-8):
+            raise RuntimeError(f'Volume of grain {gid} changed during {what}')
+        per_grain[gid] = dict(entry, tetrahedra=int(len(selected)), volume=volume,
+                              minimum_quality=float(quality[selected].min()))
+    dihedral = dihedral_summary(points, new_t)
+    passed = bool(quality.min() >= report['quality_threshold'])
+    if report.get('minimum_dihedral_threshold') is not None:
+        passed = passed and dihedral['minimum'] >= report['minimum_dihedral_threshold']
+    report.update(status='TET_MESH_VERIFIED' if passed else 'TET_QUALITY_BELOW_TARGET', ready=passed,
+                  per_grain=per_grain, tetrahedra=int(len(new_t)), nodes=int(len(points)),
+                  total_volume=float(volumes.sum()), minimum_quality=float(quality.min()),
+                  quality_percentiles_1_5_50=np.percentile(quality, [1, 5, 50]).tolist(),
+                  below_quality_threshold=int(np.sum(quality < report['quality_threshold'])),
+                  dihedral_angles=dihedral)
+    return replace(tets, points=points, tetrahedra=new_t, grain_ids=new_g, quality=quality, report=report)
+
+
+def insert_grain_tetrahedra(tets, surface, *, enabled=True, target=30., max_angle=150., cavity_rings=(1, 2, 3),
+                            max_passes=3, progress=None):
+    """d3v2p0.tet_swaps.insert_grain_tetrahedra: d3v2p0's insertion, re-verified by _reverify above."""
+    points, new_t, new_g, insertion = insert_nodes(
+        tets.points, tets.tetrahedra, tets.grain_ids, surface.triangles, enabled=enabled, target=target,
+        max_angle=max_angle, cavity_rings=cavity_rings, max_passes=max_passes, progress=progress)
+    report = dict(tets.report)
+    report['node_insertion'] = insertion
+    if not enabled or not insertion['inserted_nodes']:
+        return replace(tets, report=report)
+    return _reverify(tets, points, new_t, new_g, surface, report, 'node insertion')

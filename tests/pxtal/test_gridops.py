@@ -8,7 +8,7 @@ Run from repo root:
 import numpy as np
 import pytest
 
-from upxo.pxtal.gridops import axis_intercept_grain_size
+from upxo.pxtal.gridops import axis_intercept_grain_size, planar_intercept_grain_size
 
 
 def _slab_lgi(nx=40, ny=40, nz=40, slab_thickness=4):
@@ -79,3 +79,92 @@ def test_n_lines_respects_target_ballpark():
     # incr is chosen so n_lines is roughly on the order of n_lines_target
     # (exact count depends on integer rounding of the grid increment).
     assert 20 <= stats['n_lines'] <= 2000
+
+
+# ── planar_intercept_grain_size (2D, axis-aligned only) ──────────────────
+
+def _stripe_lgi_2d(h=10, w=20, stripe_width=5):
+    """Grains as vertical stripes (label depends only on column): a line
+    along x (a row) crosses one boundary every stripe_width columns; a
+    line along y (a column) never crosses a boundary at all."""
+    col_idx = np.arange(w)
+    labels_1d = (col_idx // stripe_width) + 1
+    return np.broadcast_to(labels_1d[None, :], (h, w)).astype(np.int32).copy()
+
+
+def test_planar_axis_x_matches_hand_computed_segments():
+    lgi = np.array([
+        [1, 1, 1, 2, 2, 3, 3, 3, 3],
+        [1, 1, 2, 2, 2, 3, 3, 3, 3],
+        [4, 4, 4, 4, 5, 5, 5, 5, 5],
+    ], dtype=np.int32)
+    res = planar_intercept_grain_size(lgi, voxel_size=2.0, axis='x', n_lines=3)
+    expected = np.array([3, 2, 4, 2, 3, 4, 4, 5], dtype=float) * 2.0
+    assert res['n_segments'] == 8
+    assert res['n_lines'] == 3
+    assert np.isclose(res['mean'], expected.mean())
+    assert np.allclose(np.sort(res['raw_segments']), np.sort(expected))
+
+
+def test_planar_axis_y_never_crosses_vertical_stripes():
+    lgi = _stripe_lgi_2d(h=10, w=20, stripe_width=5)
+    res = planar_intercept_grain_size(lgi, voxel_size=1.0, axis='y', n_lines=20)
+    # every column is a single uninformative label end-to-end -> one segment
+    # per sampled column, each exactly h voxels long.
+    assert res['n_segments'] == 20
+    assert res['mean'] == pytest.approx(10.0)
+
+
+def test_planar_axis_x_crosses_every_stripe_boundary():
+    lgi = _stripe_lgi_2d(h=4, w=20, stripe_width=5)
+    res = planar_intercept_grain_size(lgi, voxel_size=1.0, axis='x', n_lines=4)
+    assert res['mean'] == pytest.approx(5.0)
+    assert res['n_segments'] == 4 * 4  # 4 stripes x 4 sampled rows
+
+
+def test_planar_invalid_axis_raises():
+    lgi = np.ones((5, 5), dtype=np.int32)
+    with pytest.raises(ValueError):
+        planar_intercept_grain_size(lgi, 1.0, 'z', n_lines=5)
+
+
+def test_planar_requires_2d_input():
+    lgi_3d = np.ones((5, 5, 5), dtype=np.int32)
+    with pytest.raises(ValueError):
+        planar_intercept_grain_size(lgi_3d, 1.0, 'x', n_lines=5)
+
+
+def test_planar_all_background_gives_zero_stats():
+    bg = np.zeros((5, 5), dtype=np.int32)
+    res = planar_intercept_grain_size(bg, 1.0, 'x', n_lines=5)
+    assert res['n_segments'] == 0
+    assert res['mean'] == 0.0
+    assert res['raw_segments'].size == 0
+
+
+def test_planar_background_excluded_but_grains_counted():
+    lgi = np.array([[0, 0, 1, 1, 1, 0, 0, 2, 2, 2]], dtype=np.int32)
+    res = planar_intercept_grain_size(lgi, 1.0, 'x', n_lines=1)
+    assert res['n_segments'] == 2
+    assert sorted(res['raw_segments'].tolist()) == [3.0, 3.0]
+
+
+def test_planar_n_lines_clips_to_available_rows():
+    lgi = np.ones((3, 10), dtype=np.int32)
+    res = planar_intercept_grain_size(lgi, 1.0, 'x', n_lines=1000)
+    assert res['n_lines'] == 3
+
+
+def test_planar_phase_filter_masks_non_target_phase():
+    lgi = np.array([[1, 1, 1, 2, 2, 2, 3, 3, 3]], dtype=np.int32)
+    phase = np.where(lgi == 2, 1, 0)
+    res = planar_intercept_grain_size(lgi, 1.0, 'x', n_lines=1,
+                                      phase_array=phase, valid_phase_ids=[1])
+    assert res['n_segments'] == 1
+    assert res['raw_segments'][0] == pytest.approx(3.0)
+
+
+def test_planar_voxel_size_scales_physical_length():
+    lgi = np.array([[1, 1, 1, 1, 1]], dtype=np.int32)
+    res = planar_intercept_grain_size(lgi, voxel_size=0.5, axis='x', n_lines=1)
+    assert res['mean'] == pytest.approx(2.5)

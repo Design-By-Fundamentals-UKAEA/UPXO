@@ -5,11 +5,6 @@ EBSD step-size (stride) sensitivity study for the twinned simple 3D
 pipeline: how grain-morphology statistics respond to subsampling the
 raw EBSD map at increasing strides, all other detection/crop/clean
 settings held fixed.
-
-Ported from ``pxtal/twinned_simple_3d/gui/pages_ebsd.py`` (previously
-only reachable through the GUI's ``EBSDInputPage.on_run_stride_study``
--- the module-level ``_run_stride_study``/``_area_fraction_below``
-functions themselves had no GUI dependency and are unchanged here).
 """
 
 import numpy as np

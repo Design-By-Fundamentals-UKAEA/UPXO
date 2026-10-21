@@ -53,12 +53,11 @@ class OrientationAssigner3D:
             Verbosity level. Default 0.
         log_sink : callable, optional
             callable(str) -> None. If given, progress/diagnostic messages are
-            routed through it instead of bare print() -- lets a GUI page
-            capture them into its own console widget the same way every
-            other stage of this pipeline does (see _emit below). Without
-            this, messages went straight to the real process stdout, which
-            is invisible from inside a GUI console (they'd only show up in
-            whatever terminal launched the GUI, not the app itself).
+            routed through it instead of bare print() -- lets a caller
+            capture them into its own log the same way every other stage
+            of this pipeline does (see _emit below). Without this,
+            messages went straight to the real process stdout, which a
+            host that shows its own log instead of the terminal never sees.
         """
         self._verbosity = int(verbosity)
         self._log_sink = log_sink

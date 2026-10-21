@@ -48,7 +48,8 @@ def check_nodes_outside(p, triangles, lower, upper):
 def relax_guarded_interfaces(surface, smoothed, dimensions, enabled=True, iterations=20,
                              relaxation=.35, junction_relaxation=.25, margin_rings=2,
                              minimum_facet_angle=1., boundary_clearance=.025,
-                             junction_max_displacement=None, exclude_grain_ids=()):
+                             junction_max_displacement=None, exclude_grain_ids=(),
+                             progress=None):
     """Return (Interfaces, report) after relaxing the guard's rollback regions.
 
     surface is the geometry-guard output and smoothed its input; both share
@@ -104,6 +105,12 @@ def relax_guarded_interfaces(surface, smoothed, dimensions, enabled=True, iterat
     upper = extent - np.minimum(extent - original, boundary_clearance)
     history = []
     for iteration in range(iterations):
+        if progress is not None:
+            try:
+                progress(f'Guard relaxation iteration {iteration+1}/{iterations}',
+                         iteration+1, iterations)
+            except Exception:
+                pass
         average = np.column_stack([np.bincount(neighbours[:, 0], weights=p[neighbours[:, 1], j],
                                                minlength=len(p)) for j in range(3)]) / np.maximum(degree, 1)[:, None]
         delta = np.where(movable[:, None], rate[:, None] * (average - p), 0.)

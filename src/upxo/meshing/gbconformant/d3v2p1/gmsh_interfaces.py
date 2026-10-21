@@ -4,12 +4,12 @@ from numbers import Integral
 import uuid
 import numpy as np
 from ..d3v2p0.gmsh_interfaces import RemeshedInterfaces
+from .mesh_tables import unique_rows
 
 
 def _directed_boundary(triangles):
     edges = triangles[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2)
-    unique, inverse, counts = np.unique(np.sort(edges, axis=1), axis=0,
-                                       return_inverse=True, return_counts=True)
+    unique, inverse, counts = unique_rows(np.sort(edges, axis=1), True, True)
     direction = np.bincount(inverse, weights=np.where(edges[:, 0] < edges[:, 1], 1, -1))
     if np.any(counts > 2) or np.any(direction[counts == 2] != 0):
         raise RuntimeError('Inconsistent triangle winding within a surface chart')
@@ -48,7 +48,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                            rve_dimensions=None, max_chart_triangles=None, minimum_facet_angle=.1,
                            _patch_keys=None, _oriented=False, _retry_depth=0,
                            frozen_grain_ids=(), minimum_remesh_opening=None, n_workers=None,
-                           backend='auto'):
+                           backend='auto', retry_failed_only=False, _chart_cache=None):
     """Reparametrize and regenerate every interface, retaining shared curve mesh.
 
     Existing 1D mesh nodes and edges are kept, so junctions and RVE-face traces
@@ -67,9 +67,19 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
     defects openings below that angle which are sharper than the sharpest
     source opening within mesh_size (no-sharpening rule).
     Their charts fall back to the source triangles like other defects.
+    retry_failed_only (default False) keeps the mesh of every chart that came out of a pass without a Gmsh
+    warning and puts it back into the retry passes, so that only the charts that failed or changed are
+    parametrized and meshed again (d3v2p1.chart_reuse). Each chart's triangles are what a full re-mesh gives;
+    node numbering differs, so the result is equivalent, not identical, to the default's. The report gains
+    'chart_reuse'.
     """
     from upxo._sup.optional_imports import import_gmsh
     gmsh = import_gmsh()
+    if not isinstance(retry_failed_only, (bool, np.bool_)):
+        raise ValueError('retry_failed_only must be boolean')
+    if retry_failed_only and _chart_cache is None:
+        from .chart_reuse import ChartCache
+        _chart_cache = ChartCache()
     if len(frozen_grain_ids):
         # Give each protected voxel plane its own patch so parametrization
         # cannot round a stair-step corner. Shared curve construction is unchanged.
@@ -86,7 +96,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             check_intersections=check_intersections, intersection_retries=intersection_retries,
             rve_dimensions=rve_dimensions, max_chart_triangles=max_chart_triangles,
             minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening, _patch_keys=np.column_stack((base,plane_ids)),
-            _oriented=_oriented, _retry_depth=_retry_depth)
+            _oriented=_oriented, _retry_depth=_retry_depth, retry_failed_only=retry_failed_only, _chart_cache=_chart_cache)
         result.grain_pairs = result.grain_pairs[:, :base.shape[1]]
         result.report['frozen_grain_ids'] = list(map(int, frozen_grain_ids))
         return result
@@ -106,8 +116,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         raise ValueError('No internal grain interfaces to remesh')
     points = np.asarray(interfaces.points)
     triangles = interfaces.triangles.copy()
-    pairs, pair_id = np.unique(np.sort(interfaces.grain_pairs, axis=1) if _patch_keys is None
-                               else _patch_keys, axis=0, return_inverse=True)
+    pairs, pair_id = unique_rows(np.sort(interfaces.grain_pairs, axis=1) if _patch_keys is None
+                                 else _patch_keys, True)
     # Extraction winds x/z faces positively and y faces negatively. Orient
     # consistently from the lower grain ID toward the higher grain ID.
     if not _oriented:
@@ -127,7 +137,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         source=SimpleNamespace(**vars(interfaces));source.triangles=triangles
         result=remesh_interfaces_gmsh(source,mesh_size,verbose,algorithm,
             check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
-            _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=max(1,_retry_depth))
+            _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=max(1,_retry_depth),
+            retry_failed_only=retry_failed_only,_chart_cache=_chart_cache)
         result.grain_pairs=result.grain_pairs[:,:base_keys.shape[1]]
         result.report['grain_pairs']=len(pairs)
         result.report['explicit_input_charts']=chart
@@ -208,8 +219,12 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         curves = gmsh.model.getEntities(1)
         if curves:gmsh.model.mesh.createGeometry(curves)
         failed = []
-        from ..d3v2p0.surface_charts import is_disk_chart
+        from .surface_charts import is_disk_chart
+        # Charts meshed in an earlier pass of this call keep that mesh: they are neither parametrized nor meshed again.
+        reused_tags = _chart_cache.tags_with_meshes(source_chart_ids) if _chart_cache is not None else set()
         for tag in surface_pairs:
+            if tag in reused_tags:
+                continue
             if not is_disk_chart(source_charts[tag]):
                 failed.append((tag,'Source chart is not a manifold disk'))
                 continue
@@ -240,13 +255,13 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                 retry_source,mesh_size,verbose,algorithm,
                 check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
                 _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,
-                _retry_depth=_retry_depth+1)
+                _retry_depth=_retry_depth+1,retry_failed_only=retry_failed_only,_chart_cache=_chart_cache)
             result.grain_pairs = result.grain_pairs[:,:base_keys.shape[1]]
             result.report.setdefault('parametrization_repairs',[]).insert(0,{
                 'failed_charts':len(failed),'replacement_disk_charts':next_partition-first_replacement,
                 'source_triangles':int(repaired_triangles),
                 'errors':[message for _,message in failed[:5]]})
-            result.report['grain_pairs'] = len(np.unique(base_keys,axis=0))
+            result.report['grain_pairs'] = len(unique_rows(base_keys))
             return result
         # Snapshot every curve and point node, including RVE traces. Their
         # identities and coordinates must survive clearing/remeshing 2D only.
@@ -264,7 +279,11 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             raise RuntimeError(f'Gmsh did not classify {len(missing)} frozen/RVE nodes on preserved boundaries; '
                                f'RVE={np.sum(np.any(interfaces.fixed_axes[missing-1], axis=1))}, examples={missing[:10].tolist()}')
         gmsh.model.mesh.clear(gmsh.model.getEntities(2))
-        log_start = len(gmsh.logger.get())
+        if reused_tags:
+            # Hidden charts are left alone by generate(2); their kept meshes are put back once it is done.
+            gmsh.model.setVisibility([(2, tag) for tag in sorted(reused_tags)], 0)
+            gmsh.option.setNumber('Mesh.MeshOnlyVisible', 1)
+        log_start = first_log_start = len(gmsh.logger.get())
         invalid_charts = []
         meshing_warnings = []
         try:
@@ -299,7 +318,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                           if (m:=re.search(r'Meshing surface (\d+)',message))]
                     tag=next((t for t in reversed(tags) if t in source_chart_ids and t not in retry_tags),None)
                     if tag is None:
-                        empty=[t for t in source_chart_ids if t not in retry_tags and
+                        empty=[t for t in source_chart_ids if t not in retry_tags and t not in reused_tags and
                                not len(gmsh.model.mesh.getElementsByType(2,t)[0])]
                         if not empty:raise
                         tag=min(empty)
@@ -317,6 +336,12 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                     except Exception:
                         if len(retry_tags)>=len(source_chart_ids):break
                 limit=32 if _retry_depth<=1 else 1
+            if _chart_cache is not None:
+                # Keep what this pass meshed without a warning: the retry meshes only the charts split below.
+                from .chart_reuse import warned_surfaces
+                _chart_cache.harvest(gmsh, source_chart_ids,
+                                     set(retry_tags) | warned_surfaces(gmsh.logger.get()[first_log_start:]))
+                _chart_cache.note_pass(_retry_depth, len(source_chart_ids), len(reused_tags), len(_chart_cache))
             partition = len(source_chart_ids)+1
             first_replacement = partition
             repaired_triangles = 0
@@ -328,23 +353,41 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             retry_source = SimpleNamespace(**vars(interfaces));retry_source.triangles = triangles
             result = remesh_interfaces_gmsh(retry_source,mesh_size,verbose,algorithm,
                 check_intersections=check_intersections,intersection_retries=intersection_retries,rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
-                _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=_retry_depth+1)
+                _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=_retry_depth+1,
+                retry_failed_only=retry_failed_only,_chart_cache=_chart_cache)
             result.grain_pairs = result.grain_pairs[:,:base_keys.shape[1]]
             result.report.setdefault('parametrization_repairs',[]).insert(0,{
                 'stage':'surface_generation','replacement_disk_charts':partition-first_replacement,
                 'source_triangles':int(repaired_triangles),'error':str(error)})
-            result.report['grain_pairs'] = len(np.unique(base_keys,axis=0))
+            result.report['grain_pairs'] = len(unique_rows(base_keys))
             return result
+        if _chart_cache is not None:
+            if check_intersections and intersection_retries:         # a geometric retry may follow: keep these meshes
+                from .chart_reuse import warned_surfaces
+                _chart_cache.harvest(gmsh, source_chart_ids, warned_surfaces(gmsh.logger.get()[first_log_start:]))
+            _chart_cache.note_pass(_retry_depth, len(source_chart_ids), len(reused_tags), len(_chart_cache))
         node_tags, coords, _ = gmsh.model.mesh.getNodes()
         node_tags = np.asarray(node_tags, dtype=int)
+        coords = np.asarray(coords, dtype=float).reshape(-1, 3)
+        kept_meshes = {}
+        if reused_tags:
+            # The hidden charts have no mesh in Gmsh: their kept meshes join the node table and the chart queries below.
+            kept_meshes, kept_tags, kept_coords = _chart_cache.meshes(
+                source_chart_ids, reused_tags, int(gmsh.model.mesh.getMaxNodeTag()) + 1)
+            node_tags = np.concatenate((node_tags, kept_tags))
+            coords = np.vstack((coords, kept_coords))
+
+        def chart_triangles(tag):
+            if tag in kept_meshes:
+                return kept_meshes[tag]
+            return np.asarray(gmsh.model.mesh.getElementsByType(2, tag)[1], dtype=int).reshape(-1, 3)
         sort = np.argsort(node_tags)
-        node_tags, new_points = node_tags[sort], np.asarray(coords).reshape(-1, 3)[sort]
+        node_tags, new_points = node_tags[sort], coords[sort]
         faces, labels, face_charts = [], [], []
         reoriented_charts = []
         source_node_tags = np.arange(1, len(points)+1)
         for tag, i in surface_pairs.items():
-            _, conn = gmsh.model.mesh.getElementsByType(2, tag)
-            conn = np.asarray(conn, dtype=int).reshape(-1, 3)
+            conn = chart_triangles(tag)
             if not len(conn):
                 raise RuntimeError(f'Gmsh produced no triangles on interface {pairs[i].tolist()}')
             new_faces = np.searchsorted(node_tags, conn)
@@ -373,9 +416,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
         new_curves = np.searchsorted(node_tags, curve_edges)
         # Verify each chart boundary uses exactly the retained shared curve mesh.
         for tag in surface_pairs:
-            _, conn = gmsh.model.mesh.getElementsByType(2, tag)
-            f = np.asarray(conn, dtype=int).reshape(-1, 3)
-            e, counts = np.unique(np.sort(f[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1), axis=0, return_counts=True)
+            f = chart_triangles(tag)
+            e, counts = unique_rows(np.sort(f[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1), False, True)
             actual = {tuple(edge) for edge in e[counts == 1]}
             expected = set()
             for dim, curve_tag in gmsh.model.getBoundary([(2, tag)], oriented=False):
@@ -398,7 +440,7 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
             hits=find_surface_intersections(new_points,faces,n_workers=n_workers,backend=backend)
             bad_geometry=np.zeros(len(faces),dtype=bool)
             bad_geometry[np.unique(hits)]=True
-            from ..d3v2p0.facet_angles import small_facet_angles
+            from .facet_angles import small_facet_angles
             folds,angles=small_facet_angles(new_points,faces,minimum_facet_angle)
             if len(folds):bad_geometry[np.unique(folds)]=True
             created_folds=0
@@ -456,11 +498,11 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                     check_intersections=True,intersection_retries=intersection_retries-1,
                     rve_dimensions=rve_dimensions,minimum_facet_angle=minimum_facet_angle,minimum_remesh_opening=minimum_remesh_opening,
                     _patch_keys=np.column_stack((base_keys,partitions)),_oriented=True,_retry_depth=1,n_workers=n_workers,
-                    backend=backend)
+                    backend=backend,retry_failed_only=retry_failed_only,_chart_cache=_chart_cache)
                 result.grain_pairs=result.grain_pairs[:,:base_keys.shape[1]]
                 result.report.setdefault('geometric_repairs',[]).insert(0,dict(
                     detected_intersections=len(hits),small_facet_angles=len(folds),remesh_created_openings=created_folds,cap_tangencies=tangencies,restored_source_charts=len(affected)))
-                result.report['grain_pairs']=len(np.unique(base_keys,axis=0))
+                result.report['grain_pairs']=len(unique_rows(base_keys))
                 return result
         report = {'input_triangles': len(triangles), 'output_triangles': len(faces),
                   'requested_algorithm': int(algorithm),
@@ -479,6 +521,8 @@ def remesh_interfaces_gmsh(interfaces, mesh_size=1., verbose=False, algorithm=6,
                   'surface_meshing_warnings': meshing_warnings,
                   'surface_warning_capture_available': bool(messages),
                   'maximum_curve_coordinate_error': maximum_curve_error}
+        if _chart_cache is not None:
+            report['chart_reuse'] = _chart_cache.summary()
         return RemeshedInterfaces(new_points, faces, labels, new_curves, report)
     finally:
         gmsh.model.setCurrent(name)

@@ -12,6 +12,7 @@ from scipy.spatial import cKDTree
 from ..d3v2p0.surface_intersections import _intersecting_pairs
 from .backend import plan, numba_threads
 from .parallel import run_chunks
+from .mesh_tables import unique_rows
 
 
 def _search(task):
@@ -38,7 +39,7 @@ def _search(task):
             b = members[np.concatenate(neighbours).astype(int)]
             keep = ((a < b) if full else (a != b)) & np.all(lo[a] <= hi[b] + tolerance, axis=1) \
                 & np.all(lo[b] <= hi[a] + tolerance, axis=1)
-            candidates = np.unique(np.sort(np.column_stack((a[keep], b[keep])), axis=1), axis=0)
+            candidates = unique_rows(np.sort(np.column_stack((a[keep], b[keep])), axis=1))
             found.append(candidates[_intersecting_pairs(points, triangles, candidates, tolerance)])
     return np.vstack(found) if found else np.empty((0, 2), int)
 
@@ -76,4 +77,4 @@ def find_surface_intersections(points, triangles, tolerance=None, batch_size=102
         chunks = [query_ids[k::chosen.workers] for k in range(chosen.workers)]
         tasks = [(points, triangles, tolerance, batch_size, c, full) for c in chunks if len(c)]
         found = [r for r in run_chunks(_search, tasks, chosen) if len(r)]
-    return np.unique(np.vstack(found), axis=0) if found else np.empty((0, 2), int)
+    return unique_rows(np.vstack(found)) if found else np.empty((0, 2), int)

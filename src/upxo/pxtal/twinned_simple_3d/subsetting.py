@@ -4,10 +4,6 @@ subsetting.py
 Cuboidal sub-volume extraction from a cleaned twinned 3D structure:
 tile generation, cropping, and descriptive statistics for a selected
 subset.
-
-Ported from ``pxtal/twinned_simple_3d/gui/pages_subset.py`` (previously
-only reachable through ``SubsetExtractionPage`` -- none of the logic
-here has any GUI/Tkinter dependency).
 """
 
 import numpy as np

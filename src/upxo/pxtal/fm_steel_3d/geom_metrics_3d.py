@@ -485,3 +485,74 @@ def all_metrics(lgi: np.ndarray) -> Dict[str, object]:
         'jp':     feature_junction_points(lgi),
         'nb_ids': feature_neighbours(lgi),
     }
+
+
+# ---------------------------------------------------------------------------
+# Per-feature values in physical units
+# ---------------------------------------------------------------------------
+
+FEATURE_DISTRIBUTION_KEYS = ('vol', 'surf', 'eqdia', 'sphericity', 'nnb', 'jl', 'jp',
+                             'aspect_ratio')
+
+
+def feature_distribution(lgi: np.ndarray, voxel_size: float = 1.0, key: str = 'vol',
+                         metrics: Dict[str, object] = None) -> np.ndarray:
+    """
+    One morphology value per feature present in ``lgi``, in physical units.
+
+    Keys
+    ----
+    'vol'          volume, voxel_size^3
+    'surf'         surface area, voxel_size^2
+    'eqdia'        diameter of the sphere of equal volume
+    'sphericity'   surface area of the equal-volume sphere / surface area
+    'nnb'          number of neighbouring features (void not counted)
+    'jl'           triple-line length, voxel_size
+    'jp'           number of junction points
+    'aspect_ratio' bounding-box aspect ratio (dimensionless)
+
+    Parameters
+    ----------
+    metrics : dict, optional
+        ``all_metrics(lgi)`` computed earlier; avoids recomputing the counts.
+
+    Returns
+    -------
+    ndarray (n_present,) float64, ordered by label. Labels that do not occur
+    in ``lgi`` are left out.
+    """
+    if key not in FEATURE_DISTRIBUTION_KEYS:
+        raise ValueError(f"key must be one of {FEATURE_DISTRIBUTION_KEYS}, got {key!r}.")
+
+    def counts(name, compute):
+        return metrics[name] if metrics is not None else compute(lgi)
+
+    vol = counts('vol', feature_volumes)[1:].astype(np.float64) * (voxel_size ** 3)
+    present = vol > 0
+
+    if key == 'vol':
+        values = vol
+    elif key == 'surf':
+        values = counts('surf', feature_surface_faces)[1:].astype(np.float64) * (voxel_size ** 2)
+    elif key == 'eqdia':
+        with np.errstate(divide='ignore', invalid='ignore'):
+            values = np.where(vol > 0, (6.0 * vol / np.pi) ** (1.0 / 3.0), 0.0)
+    elif key == 'sphericity':
+        surf = counts('surf', feature_surface_faces)[1:].astype(np.float64) * (voxel_size ** 2)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            values = np.where(
+                surf > 0, (np.pi ** (1.0 / 3.0)) * ((6.0 * vol) ** (2.0 / 3.0)) / surf, 0.0)
+    elif key == 'nnb':
+        neighbours = counts('nb_ids', feature_neighbours)
+        values = np.array(
+            [len({n for n in neighbours.get(int(label), ()) if n != 0})
+             for label in range(1, len(vol) + 1)],
+            dtype=np.float64)
+    elif key == 'jl':
+        values = counts('jl', feature_junction_line_edges)[1:].astype(np.float64) * voxel_size
+    elif key == 'jp':
+        values = counts('jp', feature_junction_points)[1:].astype(np.float64)
+    else:
+        values = feature_aspect_ratio_bbox(lgi)[1:]
+
+    return values[present]

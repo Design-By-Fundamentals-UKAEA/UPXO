@@ -53,7 +53,8 @@ def detect_pinch_candidates(labels):
 
 
 def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
-                         max_volume_fraction=.03, protect_grains_up_to=8):
+                         max_volume_fraction=.03, protect_grains_up_to=8,
+                         progress=None):
     """Greedily repair detected contacts, returning (copy, report, change_log).
 
     Each accepted single-voxel reassignment must strictly reduce candidate
@@ -88,6 +89,12 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
     changes, pass_history = [], []
     reason = 'maximum passes reached'
     for pass_number in range(1, max_passes+1):
+        if progress is not None:
+            try:
+                progress(f'Pinch cleaning pass {pass_number}/{max_passes}',
+                         pass_number, max_passes)
+            except Exception:
+                pass
         # Candidate locations, not grain IDs, determine traversal order.
         positions = sorted({tuple(np.array(origin)+corner) for origin in candidates for corner in _CORNERS})
         accepted = 0

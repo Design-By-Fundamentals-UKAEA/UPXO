@@ -12,7 +12,7 @@ def triangle_quality(points, triangles):
 
 
 def improve_surface_quality(surface, enabled=True, minimum_quality=.05, max_passes=10,
-                            minimum_facet_angle=.1):
+                            minimum_facet_angle=.1, progress=None):
     """Flip interior diagonals without moving nodes or changing patch ownership.
 
     Every accepted pair improves its minimum triangle quality. Shared grain
@@ -34,6 +34,12 @@ def improve_surface_quality(surface, enabled=True, minimum_quality=.05, max_pass
     before = dict(minimum=float(q.min()), poor_count=int(np.sum(q < minimum_quality)))
     history = []
     for iteration in range(max_passes if enabled else 0):
+        if progress is not None:
+            try:
+                progress(f'Surface quality pass {iteration+1}/{max_passes}',
+                         iteration+1, max_passes)
+            except Exception:
+                pass
         poor = np.flatnonzero(q < minimum_quality)
         if not len(poor): break
         edges = np.sort(f[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1)

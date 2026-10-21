@@ -106,6 +106,43 @@ _BYTES_PER_ELEM: Dict[str, int] = {
 _BYTES_PER_NODE = 50
 _TETS_PER_VOX = 6
 
+MATERIAL_FORMATS = ('reference_umat', 'bunge_euler', 'orientation')
+LOAD_AXES = ('x', 'y', 'z')
+ABAQUS_PART_NAME = 'FM_STEEL_RVE'
+ABAQUS_INSTANCE_NAME = 'FM_STEEL_RVE-1'
+FACE_NSET_NAMES = {'XMIN': 'ns_xminus', 'XMAX': 'ns_xplus',
+                   'YMIN': 'ns_yminus', 'YMAX': 'ns_yplus',
+                   'ZMIN': 'ns_zminus', 'ZMAX': 'ns_zplus'}
+DEFAULT_ELSET_PREFIXES = {'pag': 'es_pag_', 'pck': 'es_pck_', 'blk': 'es_blk_',
+                          'subblk': 'es_subblk_', 'iso': 'es_iso_'}
+REFERENCE_UMAT_TAIL = (15.0, 0.0)
+REFERENCE_N_DEPVAR = 1
+
+
+def _as_output_list(value):
+    items = value.split(',') if isinstance(value, str) else list(value)
+    return tuple(str(v).strip().upper() for v in items if str(v).strip())
+
+
+def _validate_step_controls(step_time, initial_inc, min_inc, max_inc,
+                            max_increments, output_interval,
+                            element_outputs, node_outputs):
+    if not step_time > 0:
+        raise ValueError('step_time must be > 0.')
+    if not 0 < min_inc <= initial_inc <= max_inc:
+        raise ValueError('increments must satisfy 0 < min_inc <= initial_inc <= max_inc.')
+    if max_inc > step_time:
+        raise ValueError('max_inc cannot exceed step_time.')
+    if int(max_increments) < 1:
+        raise ValueError('max_increments must be >= 1.')
+    if not 0 < output_interval <= step_time:
+        raise ValueError('output_interval must be > 0 and <= step_time.')
+    element_outputs = _as_output_list(element_outputs)
+    node_outputs = _as_output_list(node_outputs)
+    if not element_outputs and not node_outputs:
+        raise ValueError('request at least one element or node output.')
+    return element_outputs, node_outputs
+
 # <checkout>/data in a source checkout, otherwise ./data under the working directory.
 _DEFAULT_OUTPUT_BASE = default_data_dir() / 'ABQInputFiles'
 
@@ -145,7 +182,11 @@ class MeshExporter3D:
     """
 
     __slots__ = ('_verbosity', '_limits', '_output_unit', '_output_base',
-                 '_ignore_ids', '_phase_id', '_mat_data_flag')
+                 '_ignore_ids', '_phase_id', '_mat_data_flag',
+                 'material_format', 'n_depvar', 'load_axis', 'applied_displacement',
+                 'step_time', 'write_step', 'initial_inc', 'min_inc',
+                 'max_inc', 'max_increments', 'output_interval',
+                 'element_outputs', 'node_outputs', 'length_scale')
 
     def __init__(self, verbosity: int = 0,
                  phase_id: int = PHASE_MARTENSITE, mat_data_flag: int = 0):
@@ -171,6 +212,55 @@ class MeshExporter3D:
                 f"mat_data_flag={mat_data_flag} is invalid. Must be 0 or 1."
             )
         self._mat_data_flag: int = int(mat_data_flag)
+        self.material_format = 'reference_umat'
+        self.n_depvar = REFERENCE_N_DEPVAR
+        self.load_axis = 'z'
+        self.applied_displacement = 0.2
+        self.step_time = 80.0
+        self.write_step = True
+        self.initial_inc = 0.01
+        self.min_inc = 1e-8
+        self.max_inc = 1.0
+        self.max_increments = 10000
+        self.output_interval = 0.5
+        self.element_outputs = ('LE', 'NE', 'S', 'SDV')
+        self.node_outputs = ('U',)
+        self.length_scale = 1.0
+
+    def configure_analysis(self, *, material_format='reference_umat',
+                           n_depvar=REFERENCE_N_DEPVAR, load_axis='z',
+                           applied_displacement=0.2, step_time=80.0,
+                           write_step=True, initial_inc=0.01,
+                           min_inc=1e-8, max_inc=1.0, max_increments=10000,
+                           output_interval=0.5,
+                           element_outputs=('LE', 'NE', 'S', 'SDV'),
+                           node_outputs=('U',), length_scale=1.0):
+        if material_format not in MATERIAL_FORMATS:
+            raise ValueError(f"material_format must be one of {MATERIAL_FORMATS}.")
+        if load_axis not in LOAD_AXES:
+            raise ValueError(f"load_axis must be one of {LOAD_AXES}.")
+        if int(n_depvar) < 1:
+            raise ValueError('n_depvar must be >= 1.')
+        element_outputs, node_outputs = _validate_step_controls(
+            float(step_time), float(initial_inc), float(min_inc), float(max_inc),
+            int(max_increments), float(output_interval), element_outputs,
+            node_outputs)
+        if float(length_scale) <= 0:
+            raise ValueError('length_scale must be > 0.')
+        self.material_format = material_format
+        self.n_depvar = int(n_depvar)
+        self.load_axis = load_axis
+        self.applied_displacement = float(applied_displacement)
+        self.step_time = float(step_time)
+        self.write_step = bool(write_step)
+        self.initial_inc = float(initial_inc)
+        self.min_inc = float(min_inc)
+        self.max_inc = float(max_inc)
+        self.max_increments = int(max_increments)
+        self.output_interval = float(output_interval)
+        self.element_outputs = element_outputs
+        self.node_outputs = node_outputs
+        self.length_scale = float(length_scale)
 
     # ── Configuration ─────────────────────────────────────────────────────────
 
@@ -288,12 +378,11 @@ class MeshExporter3D:
                               max_voxels_override: Optional[int] = None) -> Dict:
         """Pure (no I/O, no prompting) size/threshold check -- the computation
         `_preflight_check` uses internally, exposed as its own public method so
-        a caller that cannot answer an interactive `input()` prompt (this is
-        exactly the problem the GUI hit: `_preflight_check`'s hard-limit branch
-        blocks on `input()` with no attached stdin when run from a background
-        thread, permanently wedging the app-wide busy-lock) can decide up front
-        whether to ask its own confirmation dialog, then call export with
-        force=True to bypass `_preflight_check`'s interactive prompt entirely.
+        a caller that cannot answer an interactive `input()` prompt (the
+        hard-limit branch of `_preflight_check` blocks on `input()` when no
+        stdin is attached, e.g. when run from a background thread) can decide
+        up front whether to ask for confirmation by its own means, then call
+        export with force=True to bypass the interactive prompt entirely.
 
         Returns
         -------
@@ -1056,6 +1145,16 @@ class MeshExporter3D:
 
     # ── Elset writers ─────────────────────────────────────────────────────────
 
+    def _elset_prefix(self, kind: str) -> str:
+        """Name prefix of the element sets of one hierarchy level
+        ('pag', 'pck', 'blk', 'subblk' or 'iso'). Subclasses override this to
+        rename the sets; the sections written by `_write_sections` follow it."""
+        return DEFAULT_ELSET_PREFIXES[kind]
+
+    def _elset_enabled(self, kind: str) -> bool:
+        """Whether the element sets of one hierarchy level are written."""
+        return True
+
     @staticmethod
     def _write_elset_ids(f, name: str, hex_eids: np.ndarray,
                          elem_multiplier: int = 1) -> None:
@@ -1084,8 +1183,11 @@ class MeshExporter3D:
         singleton PAG whose sole grain is voided) -- callers must not emit a
         *Material*/*Solid Section* for any pag_id missing from this set, or
         Abaqus will reject the deck for referencing an undefined elset."""
-        f.write("** PAG elsets\n")
         written: set = set()
+        if not self._elset_enabled('pag'):
+            return written
+        prefix = self._elset_prefix('pag')
+        f.write("** PAG elsets\n")
         for pag_id, grain_ids in fm_state.clusters_dict.items():
             parts = []
             for gid in grain_ids:
@@ -1095,12 +1197,15 @@ class MeshExporter3D:
             if parts:
                 merged = np.concatenate(parts)
                 if merged.size:
-                    self._write_elset_ids(f, f"es_pag_{pag_id}", merged, em)
+                    self._write_elset_ids(f, f"{prefix}{pag_id}", merged, em)
                     written.add(pag_id)
         return written
 
     def _write_elsets_pck(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int) -> None:
+        if not self._elset_enabled('pck'):
+            return
+        prefix = self._elset_prefix('pck')
         f.write("** Packet elsets\n")
         g2pag = fm_state.grain_to_pag_id
         g2pkt = fm_state.grain_to_local_pkt_idx
@@ -1110,15 +1215,18 @@ class MeshExporter3D:
             pag_id = g2pag[gid]
             pkt_idx = g2pkt[gid]
             eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
-            self._write_elset_ids(f, f"es_pck_{pag_id}_{pkt_idx}", eids, em)
+            self._write_elset_ids(f, f"{prefix}{pag_id}_{pkt_idx}", eids, em)
 
     def _write_elsets_blk(self, f, fm_state, NY: int, NZ: int,
                           active_mask: np.ndarray, em: int,
                           block_id_map: Dict) -> set:
         """Write block elsets; return the set of block_ids that actually got
         a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
-        f.write("** Block elsets\n")
         written: set = set()
+        if not self._elset_enabled('blk'):
+            return written
+        prefix = self._elset_prefix('blk')
+        f.write("** Block elsets\n")
         for block_id, vox in fm_state.all_blocks.items():
             if block_id not in block_id_map or vox is None or len(vox) == 0:
                 continue
@@ -1127,7 +1235,7 @@ class MeshExporter3D:
             if eids.size == 0:
                 continue
             self._write_elset_ids(
-                f, f"es_blk_{pag_id}_{pkt_idx}_{blk_local}", eids, em
+                f, f"{prefix}{pag_id}_{pkt_idx}_{blk_local}", eids, em
             )
             written.add(block_id)
         return written
@@ -1137,8 +1245,11 @@ class MeshExporter3D:
                               subblock_id_map: Dict) -> set:
         """Write sub-block elsets; return the set of sb_ids that actually got
         a non-empty *Elset* (see _write_elsets_pag for why this matters)."""
-        f.write("** Sub-block elsets\n")
         written: set = set()
+        if not self._elset_enabled('subblk'):
+            return written
+        prefix = self._elset_prefix('subblk')
+        f.write("** Sub-block elsets\n")
         for sb_id, vox in fm_state.all_subblocks.items():
             if sb_id not in subblock_id_map or vox is None or len(vox) == 0:
                 continue
@@ -1147,7 +1258,7 @@ class MeshExporter3D:
             if eids.size == 0:
                 continue
             self._write_elset_ids(
-                f, f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", eids, em
+                f, f"{prefix}{pag_id}_{pkt_idx}_{blk_local}_{sb_local}", eids, em
             )
             written.add(sb_id)
         return written
@@ -1161,8 +1272,9 @@ class MeshExporter3D:
         PAG get a proper PAG-level elset from _write_elsets_pag instead."""
         isolated = self._leftover_isolated_grains(fm_state)
         written: set = set()
-        if not isolated:
+        if not isolated or not self._elset_enabled('iso'):
             return written
+        prefix = self._elset_prefix('iso')
         f.write("** Isolated grain elsets (legacy, no tracked retained-austenite PAG)\n")
         for gid in sorted(isolated):
             vox = fm_state.grain_locs.get(gid)
@@ -1170,7 +1282,7 @@ class MeshExporter3D:
                 eids = self._vox_to_hex_eids(vox, NY, NZ, active_mask)
                 if eids.size == 0:
                     continue
-                self._write_elset_ids(f, f"es_iso_{gid}", eids, em)
+                self._write_elset_ids(f, f"{prefix}{gid}", eids, em)
                 written.add(gid)
         return written
 
@@ -1178,7 +1290,7 @@ class MeshExporter3D:
 
     def _write_nsets_bc(self, f, NX: int, NY: int, NZ: int,
                         node_mask: np.ndarray) -> None:
-        """Write ns.x-, ns.x+, ns.y-, ns.y+, ns.z-, ns.z+ node sets."""
+        """Write assembly-level face sets for the single RVE instance."""
         stride_i = (NY + 1) * (NZ + 1)
 
         def _ids_x(i_fixed: int) -> List[int]:
@@ -1196,14 +1308,23 @@ class MeshExporter3D:
             return [iv * stride_i + j * (NZ+1) + k_fixed + 1
                     for iv, j in zip(is_.tolist(), js.tolist())]
 
-        for name, ids in [
-            ('ns_x-', _ids_x(0)),  ('ns_x+', _ids_x(NX)),
-            ('ns_y-', _ids_y(0)),  ('ns_y+', _ids_y(NY)),
-            ('ns_z-', _ids_z(0)),  ('ns_z+', _ids_z(NZ)),
-        ]:
-            f.write(f"*Nset, nset={name}\n")
+        faces = {'XMIN': _ids_x(0), 'XMAX': _ids_x(NX),
+                 'YMIN': _ids_y(0), 'YMAX': _ids_y(NY),
+                 'ZMIN': _ids_z(0), 'ZMAX': _ids_z(NZ)}
+        node_sets = [(cfg['prefix'], faces[face])
+                     for face, cfg in self._boundary_nset_config().items()
+                     if cfg['enabled']]
+        node_sets += self._extra_node_sets(NX, NY, NZ, node_mask)
+        for name, ids in node_sets:
+            f.write(f"*Nset, nset={name}, instance={ABAQUS_INSTANCE_NAME}\n")
             for start in range(0, len(ids), 10):
                 f.write(', '.join(str(x) for x in ids[start:start + 10]) + '\n')
+
+    def _extra_node_sets(self, NX: int, NY: int, NZ: int,
+                         node_mask: np.ndarray) -> List[Tuple[str, List[int]]]:
+        """Node sets written after the six face sets, as (name, node ids)
+        pairs. None by default."""
+        return []
 
     # ── Material and section writers ──────────────────────────────────────────
 
@@ -1247,13 +1368,18 @@ class MeshExporter3D:
             f.write(f"*Material, name={mat_name}\n")
             if extra_comment:
                 f.write(f"** {extra_comment}\n")
-            f.write(
-                f"** Bunge-Euler (deg): phi1={phi1:.4f}, Phi={PHI:.4f}, phi2={phi2:.4f}\n"
-                f"*User Material, constants=6\n"
-                f"{phi1:.6f}, {PHI:.6f}, {phi2:.6f},"
-                f" {grain_id}, {eff_phase}, {mat_data_flag}\n"
-                f"*Depvar\n100\n**\n"
-            )
+            f.write(f"** Bunge-Euler (deg): phi1={phi1:.4f}, Phi={PHI:.4f}, phi2={phi2:.4f}\n")
+            if self.material_format == 'reference_umat':
+                f.write("*Depvar\n%d,\n*User Material, constants=6\n" % self.n_depvar)
+                f.write(f"{phi1:.6f}, {PHI:.6f}, {phi2:.6f}, {grain_id}., "
+                        f"{REFERENCE_UMAT_TAIL[0]:g}, {REFERENCE_UMAT_TAIL[1]:g}\n")
+            elif self.material_format == 'bunge_euler':
+                f.write("*User Material, constants=3\n")
+                f.write(f"{phi1:.6f}, {PHI:.6f}, {phi2:.6f}\n")
+                f.write(f"*Depvar\n{self.n_depvar}\n")
+            else:
+                f.write("*Elastic\n210000., 0.3\n")
+            f.write("**\n")
 
         if level == 'subblock':
             for sb_id, (pag_id, pkt_idx, blk_local, sb_local) in sb_id_map.items():
@@ -1323,19 +1449,23 @@ class MeshExporter3D:
         f.write("** *Solid Section — lowest hierarchy level only.\n**\n")
 
         retained_ids = getattr(fm_state, 'retained_austenite_pag_ids', set())
+        p_pag = self._elset_prefix('pag')
+        p_blk = self._elset_prefix('blk')
+        p_sb = self._elset_prefix('subblk')
+        p_iso = self._elset_prefix('iso')
 
         if level == 'subblock':
             for sb_id, (pag_id, pkt_idx, blk_local, sb_local) in sb_id_map.items():
                 if sb_id not in written_subblocks:
                     continue
-                eset = f"es_subblk_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
+                eset = f"{p_sb}{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 mat  = f"MAT_SUBBLK_{pag_id}_{pkt_idx}_{blk_local}_{sb_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'block':
             for block_id, (pag_id, pkt_idx, blk_local) in block_id_map.items():
                 if block_id not in written_blocks:
                     continue
-                eset = f"es_blk_{pag_id}_{pkt_idx}_{blk_local}"
+                eset = f"{p_blk}{pag_id}_{pkt_idx}_{blk_local}"
                 mat  = f"MAT_BLK_{pag_id}_{pkt_idx}_{blk_local}"
                 f.write(f"*Solid Section, elset={eset}, material={mat}\n,\n")
         elif level == 'pag':
@@ -1343,7 +1473,7 @@ class MeshExporter3D:
                 if pag_id not in written_pags:
                     continue
                 f.write(
-                    f"*Solid Section, elset=es_pag_{pag_id},"
+                    f"*Solid Section, elset={p_pag}{pag_id},"
                     f" material=MAT_PAG_{pag_id}\n,\n"
                 )
 
@@ -1355,14 +1485,14 @@ class MeshExporter3D:
                 if pag_id not in written_pags:
                     continue
                 f.write(
-                    f"*Solid Section, elset=es_pag_{pag_id},"
+                    f"*Solid Section, elset={p_pag}{pag_id},"
                     f" material=MAT_PAG_{pag_id}\n,\n"
                 )
 
         for gid in sorted(self._leftover_isolated_grains(fm_state)):
             if gid not in written_iso:
                 continue
-            f.write(f"*Solid Section, elset=es_iso_{gid}, material=MAT_ISO_{gid}\n,\n")
+            f.write(f"*Solid Section, elset={p_iso}{gid}, material=MAT_ISO_{gid}\n,\n")
 
     # ── Stub writers ──────────────────────────────────────────────────────────
 
@@ -1379,20 +1509,54 @@ class MeshExporter3D:
             "** TODO: Add periodic BCs, tie constraints, or contact definitions.\n"
         )
 
-    @staticmethod
-    def _write_steps_stub(f) -> None:
-        warnings.warn(
-            "08_steps_output.inp contains no *Step/boundary-condition/*Output "
-            "definitions -- this .inp is not simulation-ready as exported and "
-            "must be edited before submission.",
-            stacklevel=3,
-        )
-        f.write(
-            "** Step definition\n"
-            "** TODO: Define *Step, boundary conditions, and *Output requests.\n"
-        )
+    def _write_steps(self, f, nset_config):
+        if not self.write_step:
+            f.write("** No step written (write_step=False).\n")
+            return
+        elems, nodes = _validate_step_controls(
+            self.step_time, self.initial_inc, self.min_inc, self.max_inc,
+            self.max_increments, self.output_interval,
+            self.element_outputs, self.node_outputs)
+        faces = {'x': ('XMIN', 'XMAX', 1), 'y': ('YMIN', 'YMAX', 2),
+                 'z': ('ZMIN', 'ZMAX', 3)}
+        min_face, max_face, dof = faces[self.load_axis]
+        names = {k: (nset_config.get(k, {}).get('prefix') or FACE_NSET_NAMES[k])
+                 for k in FACE_NSET_NAMES}
+        # length_scale is baked into the node coordinates this displacement is
+        # applied against (see _export_core's `dx = voxel_size * unit_scale *
+        # length_scale`) -- fold it in here too so "Applied displacement"
+        # consistently means a physical distance in Output Units regardless
+        # of length_scale.
+        displacement = self.applied_displacement * self.length_scale
+        f.write('** STEP: Step-1\n*Step, name=Step-1, nlgeom=YES, inc=%d\n' % self.max_increments)
+        f.write('*Static\n%g, %g, %g, %g\n' %
+                (self.initial_inc, self.step_time, self.min_inc, self.max_inc))
+        f.write('*Boundary\n%s, %d, %d, %.10g\n' %
+                (names[max_face], dof, dof, displacement))
+        for axis, (lo, _hi, axis_dof) in faces.items():
+            f.write('*Boundary\n%s, %d, %d\n' % (names[lo], axis_dof, axis_dof))
+        f.write('*Restart, write, frequency=0\n*Output, field, time interval=%g\n' % self.output_interval)
+        if elems:
+            f.write('*Element Output, directions=YES\n' + ', '.join(elems) + '\n')
+        if nodes:
+            f.write('*Node Output\n' + ', '.join(nodes) + ',\n')
+        f.write('*Output, history, variable=PRESELECT\n*End Step\n')
+
+    def _boundary_nset_config(self):
+        """Names used by both assembly node sets and step conditions."""
+        return {face: {'prefix': name, 'enabled': True}
+                for face, name in FACE_NSET_NAMES.items()}
 
     # ── Master .inp writer ────────────────────────────────────────────────────
+
+    def _part_include_files(self, has_subblk: bool) -> List[str]:
+        """Files included inside the *Part block of the master file, in order."""
+        names = ['01_nodes.inp', '02_elements.inp', '03a_elsets_pag.inp',
+                 '03b_elsets_pck.inp', '03c_elsets_blk.inp']
+        if has_subblk:
+            names.append('03d_elsets_subblk.inp')
+        names.append('06_sections.inp')
+        return names
 
     def _write_master(self, out_dir: Path, elem_type: str, has_subblk: bool,
                       custom_message: str, src_unit: str, dst_unit: str,
@@ -1412,28 +1576,29 @@ class MeshExporter3D:
                 ]
                 if parts:
                     phase_line = f"** Phase breakdown: {', '.join(parts)}\n"
+            scale_note = (f" (length_scale={self.length_scale:g} applied)"
+                         if self.length_scale != 1.0 else "")
             f.write(
                 f"*Heading\n"
                 f"** FM steel microstructure — element type: {elem_type}\n"
                 f"** Grid: {NX} x {NY} x {NZ} voxels  "
                 f"|  Active elements: {n_active:,}\n"
                 f"{phase_line}"
-                f"** Voxel size: {dx:.6g} {dst_unit}  "
+                f"** Voxel size: {dx:.6g} {dst_unit}{scale_note}  "
                 f"(structure defined in {src_unit})\n"
-                f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}\n**\n"
-                f"*PREPRINT, ECHO=NO, MODEL=NO, HISTORY=NO, CONTACT=NO\n**\n"
-                f"*INCLUDE, INPUT=01_nodes.inp\n"
-                f"*INCLUDE, INPUT=02_elements.inp\n"
-                f"*INCLUDE, INPUT=03a_elsets_pag.inp\n"
-                f"*INCLUDE, INPUT=03b_elsets_pck.inp\n"
-                f"*INCLUDE, INPUT=03c_elsets_blk.inp\n"
+                f"** Domain: {NX*dx:.4g} x {NY*dx:.4g} x {NZ*dx:.4g} {dst_unit}{scale_note}\n**\n"
+                f"*Part, name={ABAQUS_PART_NAME}\n"
             )
-            if has_subblk:
-                f.write("*INCLUDE, INPUT=03d_elsets_subblk.inp\n")
+            for name in self._part_include_files(has_subblk):
+                f.write(f"*INCLUDE, INPUT={name}\n")
             f.write(
+                "*End Part\n"
+                "*Assembly, name=Assembly\n"
+                f"*Instance, name={ABAQUS_INSTANCE_NAME}, part={ABAQUS_PART_NAME}\n"
+                "*End Instance\n"
                 "*INCLUDE, INPUT=04_nsets_bc.inp\n"
+                "*End Assembly\n"
                 "*INCLUDE, INPUT=05_materials.inp\n"
-                "*INCLUDE, INPUT=06_sections.inp\n"
                 "*INCLUDE, INPUT=07_interactions.inp\n"
                 "*INCLUDE, INPUT=08_steps_output.inp\n"
             )
@@ -1474,7 +1639,7 @@ class MeshExporter3D:
 
         src_unit = getattr(fm_state, 'units', 'microns')
         dst_unit = output_unit or self._output_unit or src_unit
-        dx = fm_state.voxel_size * self._unit_scale(src_unit, dst_unit)
+        dx = fm_state.voxel_size * self._unit_scale(src_unit, dst_unit) * self.length_scale
 
         level         = self._detect_lowest_level(fm_state)
         blk_map       = self._build_block_id_map(fm_state)
@@ -1594,7 +1759,7 @@ class MeshExporter3D:
 
         # 08 steps
         with open(out_dir / '08_steps_output.inp', 'w') as f:
-            self._write_steps_stub(f)
+            self._write_steps(f, self._boundary_nset_config())
         _done('08_steps_output.inp')
 
         # master

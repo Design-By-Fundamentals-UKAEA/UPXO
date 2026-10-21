@@ -3,6 +3,8 @@ formatting calls; the file content is byte-identical to d3v2p0's."""
 import io
 from collections import defaultdict
 import numpy as np
+from upxo._sup.text_rows import write_rows
+from .mesh_tables import unique_rows
 
 
 
@@ -11,7 +13,7 @@ def _lines(values, fmt):
     if not len(values):
         return []
     buffer = io.StringIO()
-    np.savetxt(buffer, values, fmt=fmt)
+    write_rows(buffer, values, fmt)
     return buffer.getvalue().splitlines(keepends=True)
 
 
@@ -24,8 +26,8 @@ def add_chart_topology(gmsh, points, triangles, groups):
     """
     owners = defaultdict(list)
     for chart, ids in enumerate(groups):
-        edges, counts = np.unique(np.sort(triangles[ids][:, [[0,1],[1,2],[2,0]]]
-                                         .reshape(-1,2),axis=1),axis=0,return_counts=True)
+        edges, counts = unique_rows(np.sort(triangles[ids][:, [[0,1],[1,2],[2,0]]]
+                                            .reshape(-1,2),axis=1), False, True)
         if np.any(counts>2):
             raise ValueError('Nonmanifold edge inside a discrete chart')
         for a,b in edges[counts==1]:

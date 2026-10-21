@@ -3,30 +3,32 @@ from types import SimpleNamespace
 import numpy as np
 from .gmsh_interfaces import remesh_interfaces_gmsh
 from ..d3v2p0.rve_caps import ClosedRVE
+from .mesh_tables import unique_rows
 
 
 def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                          check_intersections=False, intersection_retries=2,
                          max_chart_triangles=None, minimum_facet_angle=.1,
                          frozen_grain_ids=(), minimum_remesh_opening=None, n_workers=None,
-                         backend='auto'):
+                         backend='auto', retry_failed_only=False):
     """Regenerate every 2D patch in one Gmsh model, keeping shared curves.
 
     Input is a ClosedRVE with oriented internal triangles and outward caps.
     Grain/face keys keep perpendicular box faces separate. Cap interior nodes
     are free to remesh; common patch nodes (including point contacts) stay fixed.
     Nonmanifold grain edges are reported, not repaired. minimum_remesh_opening
-    is passed to remesh_interfaces_gmsh (remesh-created sharp openings).
+    is passed to remesh_interfaces_gmsh (remesh-created sharp openings), as is
+    retry_failed_only (retry passes mesh only the charts that failed or changed).
     """
     if check_intersections:
-        from ..d3v2p0.facet_angles import small_facet_angles
+        from .facet_angles import small_facet_angles
         folds,_=small_facet_angles(surface.points,surface.triangles,minimum_facet_angle)
         if len(folds):
             raise ValueError(f'Input closed surface has {len(folds)} openings below {minimum_facet_angle} degrees; repair its geometry before remeshing')
     keys = np.column_stack((surface.grain_pairs, surface.rve_face))
-    _, patch = np.unique(keys, axis=0, return_inverse=True)
-    memberships = np.unique(np.column_stack((surface.triangles.ravel(),
-                                            np.repeat(patch, 3))), axis=0)
+    _, patch = unique_rows(keys, True)
+    memberships = unique_rows(np.column_stack((surface.triangles.ravel(),
+                                               np.repeat(patch, 3))))
     counts = np.bincount(memberships[:, 0], minlength=len(surface.points))
     source = SimpleNamespace(points=surface.points, triangles=surface.triangles,
                              grain_pairs=surface.grain_pairs,
@@ -41,7 +43,7 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                                     _patch_keys=keys, _oriented=True,
                                     frozen_grain_ids=frozen_grain_ids,
                                     minimum_remesh_opening=minimum_remesh_opening, n_workers=n_workers,
-                                    backend=backend)
+                                    backend=backend, retry_failed_only=retry_failed_only)
     pairs, face_ids = result.grain_pairs[:, :2], result.grain_pairs[:, 2]
     exterior = face_ids >= 0
     points, faces = result.points, result.triangles
@@ -62,8 +64,7 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                           np.prod(np.delete(extent, axis)), rtol=1e-8):
             raise RuntimeError('Remeshed caps do not cover an RVE face')
     def edge_counts(f):
-        return np.unique(np.sort(f[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1),
-                         axis=0, return_counts=True)[1]
+        return unique_rows(np.sort(f[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1), False, True)[1]
     if np.any(edge_counts(faces[exterior]) != 2):
         raise RuntimeError('Remeshing opened the exterior shell')
     volumes, nonmanifold = {}, []
@@ -90,7 +91,7 @@ def remesh_closed_rve_gmsh(surface, mesh_size=.75, algorithm=6, verbose=False,
                   grains_with_nonmanifold_edges=nonmanifold, enclosed_grain_volumes=volumes,
                   rve_dimensions=extent.tolist(), rve_volume=float(np.prod(extent)))
     report['surface_patch_groups'] = report.pop('grain_pairs')
-    report['grain_pairs'] = len(np.unique(pairs[~exterior], axis=0))
+    report['grain_pairs'] = len(unique_rows(pairs[~exterior]))
     on_box = np.any((np.abs(surface.points) <= tol) |
                     (np.abs(surface.points-extent) <= tol), axis=1)
     report['rve_trace_nodes_preserved'] = int(np.sum(on_box & (source.node_kind == 3)))

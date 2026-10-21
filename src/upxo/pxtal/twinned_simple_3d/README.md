@@ -4,8 +4,7 @@
 
 Canonical public docs:  
 [Use Cases: CuCrZr & OFHC-Cu](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Use-Cases-CuCrZr-OFHC-Cu) ·  
-[3D Grain Structure Generation](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/3D-Grain-Structure-Generation) ·  
-[GUI Applications](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/GUI-Applications)
+[3D Grain Structure Generation](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/3D-Grain-Structure-Generation)
 
 ---
 
@@ -44,11 +43,6 @@ twin_gen = TwinGenerator3D(
 # — see demos under demos/Twinned3D/; do not invent placeholders for production studies.
 ```
 
-### Launch GUI
-
-- **Windows:** double-click `guiLaunchers/Launch_Twinned_FCC_GUI.bat` (repo root)  
-- **Python:** `from upxo.pxtal.twinned_simple_3d.gui_launcher import launch_gui; launch_gui()`
-
 ---
 
 ## Layout (this package)
@@ -62,7 +56,6 @@ twin_gen = TwinGenerator3D(
 | `repr_validator_3d.py` | Representativeness |
 | `abaqus_exporter_3d.py` | Partitioned Abaqus `.inp` |
 | `viz_3d.py` | IPF slices / role colours |
-| `gui/`, `gui_launcher.py` | Tkinter wizard |
 
 ---
 
