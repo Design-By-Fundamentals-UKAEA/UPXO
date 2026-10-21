@@ -7,6 +7,8 @@ Foundation class for the twinned simple 3D grain structure pipeline.
 import numpy as np
 from typing import Optional, Dict, Union, Tuple
 
+from upxo._sup import progress
+
 
 class TwinnedSimple3DBase:
     """
@@ -89,6 +91,16 @@ class TwinnedSimple3DBase:
                 find_grain_voxel_locs=True,
                 find_spatial_bounds_of_grains=True,
                 force_compute=True,
+                # make_pvgrid/set_mprops stay off, same as calculate_lfi's own
+                # call: nothing ever reads gstslice.pvgrid (every plotting
+                # helper builds its own fresh PyVista grid on demand) or
+                # gstslice.mprop['volnv'] (this classmethod returns a NEW
+                # TwinnedSimple3DBase with its own empty self.mprop,
+                # populated lazily by its own char_morphology() when a
+                # representativeness check actually needs it -- gstslice's
+                # own mprop is never consulted).
+                make_pvgrid=False,
+                set_mprops=False,
             )
         lgi = gstslice.lgi
         if voxel_size is not None:
@@ -233,53 +245,12 @@ class TwinnedSimple3DBase:
             regions were found in that slice). Axes not present in
             comparison_axes are absent from the returned dict.
         """
-        import cc3d
-        from skimage.measure import regionprops
-        from upxo.gsdataops.grid_ops import section_from_3d
-
-        selected_props = list(selected_props)
-        if comparison_axes is None:
-            comparison_axes = ['x', 'y', 'z']
-        if n_slices_per_axis is None:
-            n_slices_per_axis = 5
-
-        axis_map = {'x': 2, 'y': 1, 'z': 0}
-        vs = self.voxel_size
-        by_axis: dict = {}
-
-        for axis in comparison_axes:
-            axis = axis.lower()
-            if axis not in axis_map:
-                continue
-            ax = axis_map[axis]
-            n_this_axis = (n_slices_per_axis[axis]
-                           if isinstance(n_slices_per_axis, dict) else n_slices_per_axis)
-            domain_size = self.lgi.shape[ax]
-            slice_positions = np.linspace(0, domain_size - 1, n_this_axis, dtype=int)
-
-            per_prop_slices = {p: [] for p in selected_props}
-            for slice_pos in slice_positions:
-                lgi_2d = section_from_3d(self.lgi, axis=ax, location=int(slice_pos))
-                relabelled = cc3d.connected_components(lgi_2d, connectivity=connectivity_2d)
-                slice_vals = {p: [] for p in selected_props}
-                for region in regionprops(relabelled):
-                    if 'area' in selected_props:
-                        slice_vals['area'].append(region.area * vs ** 2)
-                    if 'eqdia' in selected_props:
-                        slice_vals['eqdia'].append(region.equivalent_diameter_area * vs)
-                    if 'perimeter' in selected_props:
-                        slice_vals['perimeter'].append(region.perimeter * vs)
-                    if 'solidity' in selected_props:
-                        slice_vals['solidity'].append(region.solidity)
-                    if 'aspect_ratio' in selected_props:
-                        maj, mn = region.major_axis_length, region.minor_axis_length
-                        if mn > 0:
-                            slice_vals['aspect_ratio'].append(maj / mn)
-                for p in selected_props:
-                    per_prop_slices[p].append(np.asarray(slice_vals[p], dtype=float))
-            by_axis[axis] = per_prop_slices
-
-        return by_axis
+        from upxo.pxtal.twinned_simple_3d.feature_props_3d import compute_slice_properties_by_axis
+        return compute_slice_properties_by_axis(
+            self.lgi, selected_props, self.voxel_size,
+            axes=comparison_axes if comparison_axes is not None else ('x', 'y', 'z'),
+            n_slices_per_axis=n_slices_per_axis if n_slices_per_axis is not None else 5,
+            connectivity_2d=connectivity_2d)
 
     def compute_2d_slice_properties(
             self,
@@ -672,7 +643,7 @@ class TwinnedSimple3DBase:
 
         # ── Pool A: maximal independent set, best of mis_runs trials ─────
         best_mis: set = set()
-        for k in range(mis_runs):
+        for k in progress.track(range(mis_runs), message="Independent-set trials"):
             candidate = set(maximal_independent_set(G, seed=seed + k))
             candidate &= eligible_set
             if len(candidate) > len(best_mis):
@@ -1014,6 +985,7 @@ class TwinnedSimple3DBase:
             pxt,
             start: int = 0,
             step: int = 5,
+            tslice_keys: Optional[list] = None,
             ebsd_n_parents: Optional[int] = None,
             n_comparison_slices: int = 5,
             comparison_axes: Optional[list] = None,
@@ -1046,9 +1018,18 @@ class TwinnedSimple3DBase:
         pxt : mcgs
             Simulated mcgs object (after ``pxt.simulate()``).
         start : int
-            Starting positional index into ``pxt.m``.
+            Starting positional index into ``pxt.m``. Ignored when
+            ``tslice_keys`` is given.
         step : int
             Positional increment -- every ``step``-th slice is sampled.
+            Ignored when ``tslice_keys`` is given.
+        tslice_keys : list of int or None
+            Explicit ``pxt.m`` keys to rank, in the given order --
+            overrides ``start``/``step`` entirely when given. Use it to
+            rank exactly the slices that were cleaned (whatever wasn't
+            marked as ignored), already thinned by their own step, rather
+            than a positional range into ``pxt.m`` that has no way to skip
+            a sparse, non-prefix set of slices.
         ebsd_n_parents : int or None
             EBSD pure-parent grain count (2D); if provided, a ratio
             ``n_grains_2d_avg / ebsd_n_parents`` is computed and the
@@ -1131,12 +1112,15 @@ class TwinnedSimple3DBase:
         # pxt.gs is keyed by the actual MC step number a slice was saved
         # at (e.g. 0, 2, 4, ... when save_interval=2), which only equals
         # its position in pxt.m when every single step was saved.
-        temporal_positions = np.arange(start, len(pxt.m), step)
+        if tslice_keys is not None:
+            keys_to_rank = list(tslice_keys)
+        else:
+            keys_to_rank = [pxt.m[int(pos)] for pos in np.arange(start, len(pxt.m), step)]
         rows = []
-        n_total = len(temporal_positions)
+        n_total = len(keys_to_rank)
 
-        for i, pos in enumerate(temporal_positions):
-            tslice_key = pxt.m[int(pos)]
+        for i, tslice_key in enumerate(keys_to_rank):
+            progress.report(i, n_total, "Ranking temporal slices")
             if verbose:
                 print(f"  [{i + 1}/{n_total}] tslice={tslice_key} ...", end='', flush=True)
             gstslice = pxt.gs[tslice_key]
@@ -1788,13 +1772,43 @@ class TwinnedSimple3DBase:
             tslice_keys = list(pxt.m)
 
         summary = {}
-        for tslice_key in tslice_keys:
+        for tslice_key in progress.track(tslice_keys, message="Labelling grains"):
             gstslice = pxt.gs[tslice_key]
+            # find_grain_voxel_locs/find_spatial_bounds_of_grains are left
+            # off: nothing in this pipeline (clean_temporal_slices,
+            # rank_temporal_slices_by_n, host allocation, or anywhere else
+            # that reads gstslice.lgi) ever reads gstslice.grain_locs/
+            # spbound/spboundex -- they're general-purpose extras this
+            # shared method also offers for the unrelated FM-Steel/PAG
+            # pipeline. Computing them is expensive for an early, highly
+            # fragmented MC slice (potentially millions of 1-3-voxel
+            # "grains", each needing its own dict entry + coordinate array)
+            # for no benefit here; n_grains below comes from .lgi directly.
+            #
+            # make_pvgrid/set_mprops are off for the same reason: nothing
+            # ever reads gstslice.pvgrid (every gsviz plotting helper
+            # builds its own fresh PyVista grid on demand from whatever
+            # .lgi is current, never from a pre-built one) or
+            # gstslice.mprop['volnv'] (the real consumer of 'volnv' is a
+            # different object -- TwinnedSimple3DBase, built later by
+            # from_mcgs from the by-then-cleaned .lgi -- which starts with
+            # its own empty self.mprop and (re)computes it lazily, on
+            # demand, when a representativeness check actually needs it).
+            # Cleaning below also rewrites gstslice.lgi in place without
+            # updating either, so both would be silently stale by the time
+            # anything could look at them anyway. Building a full PyVista
+            # grid (and its cell-data array) for every saved slice, for a
+            # value nothing reads even once, was pure wasted time/memory --
+            # most visible on an early, highly fragmented slice with tens
+            # of thousands of grains.
             gstslice.char_morphology_of_grains(
                 label_str_order=1,
-                find_grain_voxel_locs=True,
-                find_spatial_bounds_of_grains=True,
+                find_grain_voxel_locs=False,
+                find_spatial_bounds_of_grains=False,
                 force_compute=True,
+                make_pvgrid=False,
+                set_mprops=False,
+                verbose=False,   # this loop prints its own one-line-per-slice summary below
             )
             n_grains = int(np.unique(gstslice.lgi[gstslice.lgi > 0]).size)
             summary[tslice_key] = {'n_grains': n_grains}
@@ -1900,7 +1914,7 @@ class TwinnedSimple3DBase:
         spike_cleaner = StructureCleaner3D()
         summary = {}
 
-        for tslice_key in tslice_keys:
+        for tslice_key in progress.track(tslice_keys, message="Cleaning slice"):
             gstslice = pxt.gs[tslice_key]
             s = gstslice.s
             lgi = gstslice.lgi.copy()
@@ -2046,9 +2060,11 @@ class TwinnedSimple3DBase:
         for it in range(1, n_passes + 1):
             if n_passes > 1 and verbose:
                 print(f"-- Clean pass {it}/{n_passes} --")
-            pass_summary = cls.clean_temporal_slices(
-                pxt, min_grain_size=min_grain_size, tslice_keys=tslice_keys,
-                do_merge_small=do_merge_small, do_spike_removal=do_spike_removal, verbose=verbose)
+            with progress.stage(f"Pass {it}/{n_passes}", (it - 1) / n_passes, it / n_passes):
+                pass_summary = cls.clean_temporal_slices(
+                    pxt, min_grain_size=min_grain_size, tslice_keys=tslice_keys,
+                    do_merge_small=do_merge_small, do_spike_removal=do_spike_removal,
+                    verbose=verbose)
             n_passes_run = it
             changed = False
             for t, v in pass_summary.items():

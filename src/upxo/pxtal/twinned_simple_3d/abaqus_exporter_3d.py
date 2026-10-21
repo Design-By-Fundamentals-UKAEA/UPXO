@@ -46,6 +46,7 @@ import warnings
 import numpy as np
 from typing import Optional, Dict, Set
 from upxo._sup.data_dir import default_data_dir
+from upxo._sup import progress
 
 # ---------------------------------------------------------------------------
 # Default output directory: <checkout>/data in a source checkout, otherwise
@@ -624,7 +625,8 @@ class AbaqusExporter3D:
             ('08_steps_output.inp',     self._write_steps_output),
         ]
 
-        for fname, writer in steps:
+        for i_step, (fname, writer) in enumerate(steps):
+            progress.report(i_step, len(steps), f"Writing {fname}")
             skip = False
             if fname == '03b_elsets_roles.inp'    and not self.write_roles:    skip = True
             if fname == '03c_elsets_families.inp' and not self.write_families: skip = True

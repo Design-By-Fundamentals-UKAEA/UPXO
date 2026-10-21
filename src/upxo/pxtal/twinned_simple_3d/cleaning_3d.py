@@ -12,6 +12,8 @@ poorly on large domains.
 import numpy as np
 from typing import Optional, Dict, Tuple
 
+from upxo._sup import progress
+
 
 class StructureCleaner3D:
     """
@@ -508,6 +510,7 @@ class StructureCleaner3D:
         cleaner = None
         n_passes_run = 0
         for it in range(1, n_passes + 1):
+            progress.report(it - 1, n_passes, "Cleaning pass")
             if n_passes > 1 and verbose:
                 print(f"-- Clean pass {it}/{n_passes} --")
             cleaner = cls(

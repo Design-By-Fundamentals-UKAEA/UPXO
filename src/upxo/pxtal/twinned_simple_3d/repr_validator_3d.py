@@ -8,6 +8,8 @@ simple 3D pipeline.
 import numpy as np
 from typing import Optional, Dict
 
+from upxo._sup import progress
+
 
 class RepresentativenessValidator3D:
     """
@@ -92,12 +94,16 @@ class RepresentativenessValidator3D:
             (0, self.n_slices_z, 'Z', self.test_along_z),
         ]
 
+        n_total = sum(n for _a, n, _name, on in axes_config if on)
+        n_done = 0
         for axis, n_slices, axis_name, enabled in axes_config:
             if not enabled:
                 continue
             results = []
             domain_size = lgi_3d.shape[axis]
             for slice_idx in np.linspace(0, domain_size - 1, n_slices, dtype=int):
+                progress.report(n_done, n_total, f"Validating {axis_name} slices")
+                n_done += 1
                 lgi_2d = section_from_3d(lgi_3d, axis=axis, location=int(slice_idx))
                 sgc_areas = get_grain_size_distribution_from_slice(lgi_2d)
                 if len(sgc_areas) > 0:
@@ -143,12 +149,16 @@ class RepresentativenessValidator3D:
             (0, self.n_slices_z, 'Z', self.test_along_z),
         ]
 
+        n_total = sum(n for _a, n, _name, on in axes_config if on)
+        n_done = 0
         for axis, n_slices, axis_name, enabled in axes_config:
             if not enabled:
                 continue
             results = []
             domain_size = lgi_3d.shape[axis]
             for slice_idx in np.linspace(0, domain_size - 1, n_slices, dtype=int):
+                progress.report(n_done, n_total, f"Validating {axis_name} slices")
+                n_done += 1
                 lgi_2d, quat_2d = extract_2d_slice_pair(
                     lgi_3d, quat_3d, axis, int(slice_idx))
                 if lgi_2d.max() <= 0:

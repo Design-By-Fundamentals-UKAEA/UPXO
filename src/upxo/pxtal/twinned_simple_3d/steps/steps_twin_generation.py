@@ -70,11 +70,14 @@ def generate_twins(base, rg, parent_info, assigner, twin_thickness, vf_targets=N
     tvf_stage1 = vf_targets['tvf_stage1'] if vf_targets else None
     tvf_2a = vf_targets['tvf_secondary_2a'] if vf_targets else None
     tvf_2b = vf_targets['tvf_secondary_2b'] if vf_targets else None
-    tg.introduce_primary_twins(
-        host_orientations=assigner.all_grain_orientations,
-        twin_thickness=twin_thickness, tvf=tvf, tvf_stage1=tvf_stage1)
-    tg.introduce_secondary_twins(
-        tvf=tvf, twin_thickness=twin_thickness, tvf_2a=tvf_2a, tvf_2b=tvf_2b)
+    from upxo._sup import progress
+    with progress.stage("Primary twins", 0.0, 0.75):
+        tg.introduce_primary_twins(
+            host_orientations=assigner.all_grain_orientations,
+            twin_thickness=twin_thickness, tvf=tvf, tvf_stage1=tvf_stage1)
+    with progress.stage("Secondary twins", 0.75, 1.0):
+        tg.introduce_secondary_twins(
+            tvf=tvf, twin_thickness=twin_thickness, tvf_2a=tvf_2a, tvf_2b=tvf_2b)
     return tg, tvf
 
 
