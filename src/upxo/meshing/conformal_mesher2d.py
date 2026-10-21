@@ -246,7 +246,10 @@ class confMesh2dGMSH():
 
         initialized = False
         try:
-            gmsh.initialize()
+            # Meshing may run in a worker thread.  Gmsh's default SIGINT
+            # handler calls signal.signal(), which Python only permits on
+            # the main thread; the caller owns cancellation instead.
+            gmsh.initialize(interruptible=False)
             initialized = True
             gmsh.model.add("upxo_confmesh")
             gmsh.option.setNumber("General.Terminal", 1 if verbose else 0)
