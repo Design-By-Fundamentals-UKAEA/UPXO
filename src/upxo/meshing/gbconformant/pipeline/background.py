@@ -5,6 +5,8 @@ before it, runs the stage (which saves its own results), and reports through a f
 caller's :class:`PipelineState` is changed only when the stage finishes, by reading the
 saved results of that stage; a cancelled or failed stage leaves it as it was.
 
+Usage::
+
     job = StageProcess(state, "tet_mesh")      # NotReady if the earlier results are not on disk
     job.start()
     while not job.done:

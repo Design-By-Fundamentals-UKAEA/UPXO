@@ -26,9 +26,9 @@ def voxel_spacing(physical_dimensions: Sequence[float], shape: Sequence[int]
     Returns
     -------
     (vx, vy, vz, deviation)
-        ``deviation`` is the largest of |vx - vy| / vx, |vx - vz| / vx and
-        |vy - vz| / vy, and 0 when ``vx`` is not positive. An axis with no
-        voxels has the spacing 1.
+        ``deviation`` is the largest of ``abs(vx - vy) / vx``,
+        ``abs(vx - vz) / vx`` and ``abs(vy - vz) / vy``, and 0 when ``vx`` is
+        not positive. An axis with no voxels has the spacing 1.
     """
     lx, ly, lz = physical_dimensions
     nx, ny, nz = shape

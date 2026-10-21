@@ -17,17 +17,21 @@ set-up and the call for the chosen element type.
 
 Options (all optional; ``options`` is a plain dict)
 ---------------------------------------------------
-``export_level``       'auto' (default), 'subblock', 'block', 'packet' or 'pag'
-``elset_<kind>``       bool, kinds: pag pck blk subblk iso      (default True)
-``prefix_<kind>``      str,  default 'es_<kind>_'
-``elset_gb`` ``elset_jl`` ``elset_jp``
-                       bool, default False; sets ``<prefix>all``
-``prefix_gb`` ``prefix_jl`` ``prefix_jp``
-                       str, default 'es_gb_', 'es_jl_', 'es_jp_'
-``nset_<face>``        bool, faces x_min x_max y_min y_max z_min z_max (default True)
-``prefix_<face>``      str, default the library face-set names
-``nset_origins``       bool, default False; set ``prefix_origins`` ('ns_origin')
-``nset_rve_edges``     bool, default False; set ``prefix_rve_edges`` ('ns_rve_edge')
+* ``export_level``: ``'auto'`` (default), ``'subblock'``, ``'block'``,
+  ``'packet'`` or ``'pag'``.
+* ``elset_<kind>``: bool, kinds pag, pck, blk, subblk and iso (default True).
+* ``prefix_<kind>``: str, default ``'es_<kind>_'``.
+* ``elset_gb``, ``elset_jl``, ``elset_jp``: bool, default False; the set is
+  named ``<prefix>all``.
+* ``prefix_gb``, ``prefix_jl``, ``prefix_jp``: str, default ``'es_gb_'``,
+  ``'es_jl_'`` and ``'es_jp_'``.
+* ``nset_<face>``: bool, faces x_min, x_max, y_min, y_max, z_min and z_max
+  (default True).
+* ``prefix_<face>``: str, default the library face-set names.
+* ``nset_origins``: bool, default False; the set is named ``prefix_origins``
+  (``'ns_origin'``).
+* ``nset_rve_edges``: bool, default False; the set is named
+  ``prefix_rve_edges`` (``'ns_rve_edge'``).
 """
 import os
 import re
