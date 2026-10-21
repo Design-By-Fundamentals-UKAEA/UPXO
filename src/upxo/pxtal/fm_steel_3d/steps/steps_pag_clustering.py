@@ -2,10 +2,9 @@
 
 Groups grains into Prior Austenite Grains (PAGs), then assigns each PAG a
 crystal orientation. `generate_pags` wraps the same technique-selector
-entry point (`pag_technique_selector_3d.generate_pags`) the real GUI's PAG
-generation button calls -- not the lower-level
-`FMSteel3DBase.generate_pag_clusters`, which is only ever reached
-internally, for technique A's non-MIS levers.
+entry point (`pag_technique_selector_3d.generate_pags`) used to generate
+PAGs -- not the lower-level `FMSteel3DBase.generate_pag_clusters`, which is
+only ever reached internally, for technique A's non-MIS levers.
 """
 
 DEFAULT_PAG_SIZE_DISTRIBUTION = {'sizes': [3, 4, 5, 6], 'probs': [0.2, 0.35, 0.3, 0.15]}
@@ -46,8 +45,7 @@ def compare_techniques(fm_base, configs, random_seed=None):
     """Trial-runs `generate_pags` once per config in `configs` (each a dict
     of kwargs accepted by `generate_pags` above, e.g.
     `{'technique': 'A', 'lever': 'lever1'}`), for side-by-side comparison
-    before committing to one (mirrors the PAG Technique Advisor page's own
-    trial-run loop). Does not mutate `fm_base` or keep any of the trial
+    before committing to one. Does not mutate `fm_base` or keep any of the trial
     FMSteel3DWithPAGs objects.
 
     Returns

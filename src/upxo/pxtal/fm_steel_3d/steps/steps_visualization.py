@@ -9,7 +9,7 @@ Bulk property queries via `feature_props_3d.query_level`, an interactive
 `upxo.viz.xphy.pole_figure.PoleFigure`, and misorientation-angle
 distributions via `upxo.xtalphy.crystal_orientation.
 grain_boundary_misorientation_distribution` -- the same classes/functions
-the GUI's own Viz Settings / Pole Figures pages already drive, plus one
+the other FM steel visualisations already use, plus one
 genuinely new core function this needed (geom_metrics_3d.
 feature_aspect_ratio_bbox -- no general 3D aspect-ratio function existed
 outside one instance-bound method on a different pipeline's class).
@@ -136,10 +136,10 @@ def plot_morphology_grid(collection, aspect_ratios, bins=20, figsize=(14, 7), su
 def _randomize_grid_ids(lgi, seed=None):
     """Relabels `lgi`'s feature IDs to a random permutation of the same
     value set, via `gsdataops.gid_ops.shuffleLFIIDs` -- the data-side half
-    of avoiding "adjacent labels get visually-similar colors": the GUI's
-    own Visualization Settings page builds its `block_idx_map`/
-    `block_fid_map` this same way (a random permutation of `1..n_blocks`)
-    specifically because `feature_props_3d._build_block_lgi`/
+    of avoiding "adjacent labels get visually-similar colors": the
+    `block_idx_map`/`block_fid_map` of the visualisation data are built this
+    same way (a random permutation of `1..n_blocks`) specifically because
+    `feature_props_3d._build_block_lgi`/
     `_build_subblock_lgi` (what this module's own LGI builders use) label
     features in plain dict-insertion order, and spatially-clustered
     features (many blocks within the same grain/PAG, say) often end up
@@ -148,7 +148,7 @@ def _randomize_grid_ids(lgi, seed=None):
     `build_distinguishable_cmap`) is fighting labels that were never
     spatially decorrelated in the first place. Doing both (this function
     for the labels, `build_distinguishable_cmap` for the colormap) is the
-    closest notebook-side match to the GUI's own approach.
+    recommended combination.
 
     `seed`: if given, seeds numpy's GLOBAL random state before shuffling
     (matches `shuffleLFIIDs`'s own use of `np.random.shuffle`, which reads
@@ -172,8 +172,7 @@ def render_3d(fm, level='grain', jupyter_backend='trame', cmap=None, cmap_seed=4
     `randomize_ids=True` (default) relabels the feature IDs themselves
     before rendering (see `_randomize_grid_ids`, seeded by `id_seed`) --
     the data-side half of the fix; `cmap`/`cmap_seed` (below) are the
-    colormap-side half. Matches the GUI's own Visualization Settings page
-    convention of doing both together.
+    colormap-side half. Doing both together is the standard convention.
 
     `cmap`: None (default) auto-builds a colormap that stays
     distinguishable even for hundreds of features (see
@@ -189,8 +188,8 @@ def render_3d(fm, level='grain', jupyter_backend='trame', cmap=None, cmap_seed=4
     blocking window; pass None to restore that original behaviour.
 
     Explicitly pins the color range to the full `[0, max(lgi)]` ID space
-    (`clim`), matching the GUI's own 2D preview convention
-    (`pages_base.py`'s `_on_slice_update`, `Normalize(vmin=0, vmax=n_ids)`)
+    (`clim`), the same as the 2D slice previews
+    (`Normalize(vmin=0, vmax=n_ids)`)
     -- without this, PyVista auto-scales the color range to whichever
     subset of IDs happens to be exposed on the rendered surface (this
     render only ever shows the domain's outer shell -- most features
@@ -216,11 +215,9 @@ def render_3d_exploded(stages, level='block', explosion_factor=0.5, jupyter_back
     """Interactive PyVista render of `level`'s features ('block' or
     'subblock' only -- PAG/packet have no meaningful "parent" to explode
     away from), each rigidly translated away from its own parent's
-    centroid by `explosion_factor` (0 = true, unexploded positions) --
-    mirrors the GUI's own "BLK/SBLK Exploded View" (Visualization
-    Settings page, windows W11/W12, via
+    centroid by `explosion_factor` (0 = true, unexploded positions), via
     `GrainStructureViz3D.build_exploded_block_grid`/
-    `build_exploded_subblock_grid`).
+    `build_exploded_subblock_grid`.
 
     Pulls apart features that would otherwise be hidden inside a solid
     volume: `render_3d`'s voxel-surface technique can only ever show
@@ -229,7 +226,7 @@ def render_3d_exploded(stages, level='block', explosion_factor=0.5, jupyter_back
     each feature away from its siblings so previously-buried ones become
     visible without needing a clip plane.
 
-    `stages`: a `steps_raw_export.PipelineStages` (or the real GUI App)
+    `stages`: a `steps_raw_export.PipelineStages` (or any object)
     exposing whichever of `_fm_base`/`_fm_with_pags`/`_fm_with_blocks`/
     `_fm_with_subblocks` this level needs. `randomize_ids`/`id_seed`/
     `cmap`/`cmap_seed` -- see `render_3d`; the exploded grid's own
@@ -283,8 +280,8 @@ def get_level_orientations(stages, level):
     same derivation for both raw export and visualization, not a second
     copy of it.
 
-    `stages`: a `steps_raw_export.PipelineStages` (or the real GUI App --
-    anything duck-typed the same way, exposing `_fm_with_pags`/
+    `stages`: a `steps_raw_export.PipelineStages` (or anything
+    duck-typed the same way, exposing `_fm_with_pags`/
     `_fm_with_blocks`/`_fm_with_orientations`/`_fm_with_subblocks`).
 
     Returns

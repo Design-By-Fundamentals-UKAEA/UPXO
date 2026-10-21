@@ -1,16 +1,16 @@
 """Raw Data Exports -- Part I of the FM Steel 3D walkthrough.
 
-Thin wrapper around `upxo.pxtal.fm_steel_3d.raw_export` (built and tested
-against the GUI's own Raw Data Exports page) -- no reimplementation here.
+Thin wrapper around `upxo.pxtal.fm_steel_3d.raw_export` -- no
+reimplementation here.
 `export_raw_data` (and the functions it calls) only ever access `app`
 duck-typed via `getattr(app, "_fm_base", None)` etc., so a notebook can
-hand it any small object exposing the same five attributes instead of the
-real Tkinter App -- that's exactly what `PipelineStages` is for.
+hand it any small object exposing the same five attributes -- that's
+exactly what `PipelineStages` is for.
 """
 
 
 class PipelineStages:
-    """Duck-typed stand-in for the GUI App's five pipeline-stage attributes,
+    """Duck-typed holder of the five pipeline-stage attributes,
     so `upxo.pxtal.fm_steel_3d.raw_export.export_raw_data` (and
     `level_availability`/`collect_level_data`) work unmodified from a
     notebook. Pass whichever stage objects exist so far; the rest default

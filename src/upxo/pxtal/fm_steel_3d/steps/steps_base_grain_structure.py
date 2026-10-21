@@ -10,9 +10,8 @@ import numpy as np
 
 def generate_voronoi_lfi(nx, ny, nz, n_seeds, seed):
     """Nearest-seed-argmin Voronoi tessellation -- aperiodic, random seed
-    placement only (matches the FM Steel GUI's current Voronoi path exactly;
-    periodic/regular seed layouts are not wired up anywhere in the pipeline
-    today despite the GUI exposing dropdowns for them).
+    placement only (periodic/regular seed layouts are not wired up anywhere
+    in the pipeline today).
 
     Returns
     -------
@@ -35,8 +34,7 @@ def run_mc_simulation(nx=50, ny=50, nz=50, q_states=10, mcsteps=100, save_interv
     """Runs a 3D Potts-model Monte Carlo grain-growth simulation.
 
     `nx`/`ny`/`nz` are voxel counts (not physical dimensions); xmax/ymax/zmax
-    are derived as `n - 1` with unit increment, matching the FM Steel GUI's
-    own MCGSConfig construction exactly (pages_basegrain.py).
+    are derived as `n - 1` with unit increment (the MCGSConfig construction).
 
     Returns
     -------
@@ -87,8 +85,8 @@ def extract_mc_tslice_lfi(pxt, tslice_key, connectivity=6, randomize_ids=True):
 
 def compute_morphology_stats(lfi):
     """Full-structure morphology metrics (volume, surface area, neighbour
-    counts, junction lines/points per grain) -- the same call the FM Steel
-    GUI uses to populate its "3D SGS Morphology Parameters" plots.
+    counts, junction lines/points per grain), as used for the 3D grain
+    structure morphology plots.
 
     Returns
     -------
