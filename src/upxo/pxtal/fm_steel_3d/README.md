@@ -4,8 +4,7 @@
 
 Canonical public docs (user-facing):  
 [Use Cases: FM Steels](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/Use-Cases-FM-Steels) ·  
-[3D Grain Structure Generation](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/3D-Grain-Structure-Generation) ·  
-[GUI Applications](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/GUI-Applications)
+[3D Grain Structure Generation](https://github.com/Design-By-Fundamentals-UKAEA/UPXO/wiki/3D-Grain-Structure-Generation)
 
 There is **no** class named `FMSteelGenerator`. Start from **`FMSteel3DBase`**.
 
@@ -52,11 +51,6 @@ fm_ori = fm_blk.assign_orientations(
 # optional: fm_sub = fm_ori.generate_subblocks(...)
 ```
 
-### Launch GUI
-
-- **Windows:** double-click `guiLaunchers/Launch_FM_Steel_GUI.bat` (repo root)  
-- **Python:** `from upxo.pxtal.fm_steel_3d.gui_launcher import launch_gui; launch_gui()`
-
 ---
 
 ## Layout (this package)
@@ -71,7 +65,7 @@ fm_ori = fm_blk.assign_orientations(
 | `mesh_exporter_3d.py` | Abaqus C3D8 / C3D4 / C3D20 / C3D10 export (**implemented**) |
 | `phases_3d.py`, `feature_props_3d.py`, `geom_metrics_3d.py` | Phases / metrics |
 | `viz/` | PyVista / matplotlib workers |
-| `gui/`, `gui_launcher.py` | Tkinter wizard |
+| `steps/` | Pipeline-stage wrappers used by the demo notebooks |
 | `assets/mesh_limits.json` | Voxel-count soft/hard limits |
 
 **Not canonical:** copies under `src/upxo/scripts/HierarchyGS/FMSteel3D/*_impl.py` (legacy / scripts; often gitignored). Prefer this package.
