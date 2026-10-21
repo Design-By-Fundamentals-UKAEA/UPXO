@@ -55,6 +55,11 @@ def test_scale_one_reuses_the_unchanged_base_state():
     assert mesh_state_for_scale(base, 1.0) is base
 
 
+def test_scale_one_does_not_look_at_the_state():
+    state = object()
+    assert mesh_state_for_scale(state, 1) is state
+
+
 def test_scale_that_collapses_an_axis_is_rejected():
     base = _base_state()
     with pytest.raises(ValueError, match="at least one voxel"):

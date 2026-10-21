@@ -113,7 +113,7 @@ class RescaledMeshState:
 def mesh_state_for_scale(fm_state, scale_factor: float):
     """Return an export state derived afresh from the stored pipeline state."""
     factor = float(scale_factor)
-    scaled_grid_shape(fm_state.lgi.shape, factor)       # validates the factor and the grid
     if factor == 1.0:
         return fm_state
+    scaled_grid_shape(fm_state.lgi.shape, factor)       # validates the factor and the grid
     return RescaledMeshState(fm_state, factor)
