@@ -80,7 +80,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             plotter.close()
     
     def plot_pag_map_pyvista(self, clusters_dict: Dict[int, List[int]],
@@ -106,7 +106,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             plotter.close()
     
     def visualize_block_morphology(self, blocks_dict: Dict[str, np.ndarray],
@@ -128,7 +128,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             plotter.close()
     
     def visualize_block_morphology_v1(self, blocks_dict: Dict[str, np.ndarray],
@@ -151,7 +151,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             plotter.close()
     
     def visualize_blocks_in_packet(self, blocks_dict: Dict[str, np.ndarray],
@@ -352,7 +352,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             pl.close()
 
     def lfi_to_polydata_compare(self, lfi_left, lfi_right, scalar_array_left=None,
@@ -403,7 +403,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             pl.close()
 
     def feature_fid_to_polydata(self, lgi_shape, iso_grain_map, block_fid_map,
@@ -454,7 +454,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             pl.close()
 
     def subblock_family_polydata(self, fid_map, fid_to_rgb, voxel_size=1.0,
@@ -487,7 +487,7 @@ class GrainStructureViz3D:
         finally:
             # Explicit close (rather than leaving it to GC/interpreter shutdown)
             # so this native VTK render window can't leave the process hanging
-            # after the main GUI window is closed.
+            # after the calling program has finished.
             pl.close()
 
 

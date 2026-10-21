@@ -13,8 +13,8 @@ class DataViz3D:
     Statistical plots for FM-steel 3D pipeline property distributions.
 
     Histograms of scalar arrays and optional seaborn correlation matrices
-    over morphological property dicts. Lightweight worker used by GUI /
-    notebook visualisation steps — not a grain-structure container.
+    over morphological property dicts. Lightweight worker used by the notebook
+    visualisation steps — not a grain-structure container.
     """
 
     __slots__ = ('_default_figure_size',)
