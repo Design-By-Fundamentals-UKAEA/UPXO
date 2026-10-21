@@ -55,6 +55,7 @@ rdr.detect_grains(min_grain_size=25, misori_tol=5)  # re-tune, no reload
 import os
 import pathlib
 import numpy as np
+from upxo._sup import progress
 
 # DefDAP is an optional dependency; import lazily so that the rest of UPXO
 # does not break if it is not installed.
@@ -497,11 +498,13 @@ class EBSDReader:
         """
         from upxo.gsdataops.gid_ops import find_neighs2d
 
-        self.rechar_lfi(connectivity=connectivity)
+        with progress.stage("Filling unindexed pixels", 0.0, 0.6):
+            self.rechar_lfi(connectivity=connectivity)
 
-        prop = _char_lfi(self.lfi_ebsd,
-                         px_size=getattr(self, 'step_size', 1.0),
-                         min_grain_size=min_grain_size)
+        with progress.stage("Characterising grains", 0.6, 0.9):
+            prop = _char_lfi(self.lfi_ebsd,
+                             px_size=getattr(self, 'step_size', 1.0),
+                             min_grain_size=min_grain_size)
 
         # Relabel lfi_ebsd so surviving grain IDs are contiguous 1…N.
         # Done after _char_lfi so min_grain_size drops are already resolved.
@@ -515,6 +518,7 @@ class EBSDReader:
         prop = {new_id: prop[old_id]
                 for new_id, old_id in enumerate(surviving, start=1)}
 
+        progress.report(0, None, "Finding grain neighbours", stage="Neighbours")
         neigh = find_neighs2d(self.lfi_ebsd, conn=connectivity)
         self.prop = prop
 
@@ -636,8 +640,10 @@ class EBSDReader:
         lfi_filled   = lfi.copy()
         cc_assignment = {}
 
-        for cc_id in _tqdm(range(1, n_cc + 1),
-                           desc="  assigning CCs", unit="CC", leave=False):
+        for cc_id in progress.track(
+                _tqdm(range(1, n_cc + 1),
+                      desc="  assigning CCs", unit="CC", leave=False),
+                total=n_cc, message="Assigning unindexed regions"):
             temp_label       = n_valid + cc_id
             valid_neighbours = [
                 nb for nb in neigh.get(temp_label, [])
@@ -1047,7 +1053,7 @@ def _char_lfi(lfi, px_size=1.0, min_grain_size=0):
     props_dict = {}
     ps = float(px_size)
 
-    for region in regionprops(lfi):
+    for region in progress.track(regionprops(lfi), message="Characterising grains"):
         gid = region.label
         if gid <= 0:
             continue
@@ -1172,7 +1178,8 @@ def write_subsampled_ctf(
     Raises
     ------
     ValueError
-        If *src_path* does not have a ``.ctf`` extension.
+        If *src_path* does not have a ``.ctf`` extension, or if
+        *dst_path* resolves to the same file as *src_path*.
     FileNotFoundError
         If *src_path* does not exist.
     """
@@ -1187,6 +1194,22 @@ def write_subsampled_ctf(
             f"got '{src_path.suffix}'."
         )
     _check_file(src_path)
+
+    # dst_path is opened in 'w' mode below, which truncates on open --
+    # every current caller builds a distinct dst_path (its own filename
+    # suffix, e.g. "_s2"), so this can't trigger through the normal
+    # pipeline today, but nothing here enforced that independently of
+    # each caller getting it right. A future caller (a refactor, a
+    # script calling this directly) that let dst_path coincide with
+    # src_path would otherwise silently overwrite the user's original
+    # EBSD data with a reformatted, sub-sampled copy -- irreversible,
+    # and no error until it's already gone. Checked explicitly here
+    # instead of trusting every caller.
+    if dst_path == src_path:
+        raise ValueError(
+            f"write_subsampled_ctf: dst_path must not be the same file as "
+            f"src_path (would overwrite the original EBSD data): {src_path}"
+        )
 
     # ── 1. Parse header ────────────────────────────────────────────────
     header_lines = []   # verbatim header lines (to be modified below)
