@@ -513,3 +513,52 @@ def render_3d(
     if legend_entries:
         pvp.add_legend(labels=legend_entries, bcolor='w', border=True, size=(0.28, 0.14))  # type: ignore[call-arg]
     pvp.show()
+
+
+_VOXEL_SET_COLOURS = ('crimson', 'steelblue', 'darkorange', 'seagreen', 'purple', 'goldenrod',
+                      'deeppink', 'teal', 'sienna', 'slategray')
+
+
+def render_voxel_sets(shape, sets, colors=None, opacity=1.0, off_screen=False):
+    """3D render of sets of voxels, each set in its own colour.
+
+    Parameters
+    ----------
+    shape : (nx, ny, nz)
+        Shape of the voxel grid.
+    sets : dict {name: ids}
+        1-based voxel ids, the flat index in C order of an (nx, ny, nz) array
+        plus one (the element ids of one element per voxel, as in the Abaqus
+        element sets). Later sets are drawn over earlier ones where they overlap.
+    colors : dict {name: colour} or None
+        PyVista colour per set; defaults to a cycle of distinct colours.
+    off_screen : bool
+        Return the plotter without showing it.
+    """
+    import pyvista as pv
+
+    nx, ny, nz = (int(v) for v in shape)
+    plotter = pv.Plotter(off_screen=off_screen)
+    outline = pv.ImageData()
+    outline.dimensions = (nx + 1, ny + 1, nz + 1)
+    plotter.add_mesh(outline.outline(), color='black', line_width=1)
+    entries = []
+    for k, (name, ids) in enumerate(sets.items()):
+        ids = np.asarray(ids, dtype=np.int64) - 1
+        if ids.size == 0:
+            continue
+        i, j, kk = np.unravel_index(ids, (nx, ny, nz))
+        grid = pv.ImageData()
+        grid.dimensions = (nx + 1, ny + 1, nz + 1)
+        values = np.zeros(nx * ny * nz, dtype=np.uint8)
+        values[i + nx * (j + ny * kk)] = 1                 # pyvista cell order: x fastest
+        grid.cell_data['in_set'] = values
+        colour = (colors or {}).get(name) or _VOXEL_SET_COLOURS[k % len(_VOXEL_SET_COLOURS)]
+        plotter.add_mesh(grid.threshold(0.5, scalars='in_set'), color=colour, opacity=opacity, show_edges=False)
+        entries.append([f'{name}  ({ids.size} voxels)', colour])
+    if entries:
+        plotter.add_legend(labels=entries, bcolor='w', border=True, size=(0.3, 0.14))  # type: ignore[call-arg]
+    if off_screen:
+        return plotter
+    plotter.show()
+    return None
