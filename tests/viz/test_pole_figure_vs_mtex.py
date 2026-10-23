@@ -258,3 +258,47 @@ def test_density_of_one_orientation_peaks_on_its_pole_and_has_unit_mean():
     k = np.nanargmax(z)
     cell = Xi[0, 1] - Xi[0, 0]
     assert np.hypot(X - Xi.ravel()[k], Y - Yi.ravel()[k]).min() <= 3 * cell
+
+
+# ---------------------------------------------------------------------------
+# Density kernel against mtex
+#
+# UPXO smooths poles with an antipodal von Mises-Fisher kernel (kappa = ln 2 / (1 - cos w)),
+# mtex with the de la Vallee Poussin kernel (1 + k)((1 + t)/2)^k. Both are multiples of a uniform
+# distribution, both fall to half their peak at the half-width, and for equal half-widths the two are
+# the same function to within about half a percent of the peak.
+# ---------------------------------------------------------------------------
+
+# mtex 1.0.0, w = 7.5 deg: antipodal kernel / peak at 0.5, 1, 2, 3 half-widths, and its peak
+_MTEX_KERNEL_RATIOS_7P5 = np.array([0.840974, 0.5, 0.062128, 0.001884])
+_MTEX_KERNEL_PEAK_7P5 = 81.347741
+# mtex 1.0.0 density of the {111} poles of _EULER, w = 10 deg, 21 x 21 grid, at these masked grid points
+_DENSITY_IDX = [5, 40, 80, 120, 160, 200, 240, 280]
+_MTEX_DENSITY = np.array([1.228029, 0.011715, 0.122217, 2.973815, 0.013719, 0.73155, 0.066846, 0.656672])
+
+
+def _upxo_kernel(t, hw_deg):
+    k = np.log(2.0) / (1.0 - np.cos(np.radians(hw_deg)))
+    return k / (1.0 - np.exp(-2.0 * k)) * (np.exp(k * (t - 1.0)) + np.exp(-k * (t + 1.0)))
+
+
+def test_density_kernel_has_the_mtex_profile_at_equal_half_width():
+    t = np.cos(np.radians(7.5 * np.array([0.5, 1.0, 2.0, 3.0])))
+    ratios = _upxo_kernel(t, 7.5) / _upxo_kernel(1.0, 7.5)
+    assert ratios[1] == pytest.approx(0.5, abs=1e-12)                    # half-width = half-maximum angle
+    assert np.allclose(ratios, _MTEX_KERNEL_RATIOS_7P5, atol=2e-3)
+    assert _upxo_kernel(1.0, 7.5) == pytest.approx(_MTEX_KERNEL_PEAK_7P5, rel=0.01)
+
+
+def test_density_kernel_has_unit_mean_over_the_sphere():
+    s = np.linspace(-1.0, 1.0, 400001)
+    assert np.mean(_upxo_kernel(s, 7.5)) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_density_field_matches_the_mtex_density_of_the_same_poles():
+    pf = PoleFigure(_EULER, convention="euler_deg")
+    poles = pf._get_symmetric_poles("111")
+    _, _, z, mask = pf._compute_mud_grid(poles, grid_points=21, half_width_deg=10.0)
+    got = z[mask][_DENSITY_IDX]
+    # within 1% of the peak of the field
+    assert np.abs(got - _MTEX_DENSITY).max() <= 0.01 * np.nanmax(z)
