@@ -100,6 +100,7 @@ FCC_TEXTURE_COMPONENTS: dict[str, tuple[float, float, float]] = {
 
 # Module-level cache for the cubic symmetry operators (numpy array)
 CUBIC_SYMM_OPS_CACHE: np.ndarray | None = None
+CUBIC_SYMM_QUATS_CACHE: np.ndarray | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +361,74 @@ def get_cubic_ops_np() -> np.ndarray:
     return CUBIC_SYMM_OPS_CACHE
 
 
+def rotation_matrices_to_quats(R: np.ndarray) -> np.ndarray:
+    """
+    Convert rotation matrices to unit quaternions [w, x, y, z] with w >= 0.
+
+    The inverse of :func:`quat_to_R_batch`.
+
+    Parameters
+    ----------
+    R : ndarray, shape (N, 3, 3) or (3, 3)
+
+    Returns
+    -------
+    ndarray, shape (N, 4) (or (4,) for a single matrix)
+    """
+    R = np.asarray(R, dtype=np.float64)
+    single = R.ndim == 2
+    R = R.reshape(-1, 3, 3)
+    d0, d1, d2 = R[:, 0, 0], R[:, 1, 1], R[:, 2, 2]
+    sq = np.stack([1 + d0 + d1 + d2, 1 + d0 - d1 - d2,
+                   1 - d0 + d1 - d2, 1 - d0 - d1 + d2], axis=1)
+    k = np.argmax(sq, axis=1)
+    q = np.empty((len(R), 4))
+    d = {0: (R[:, 2, 1] - R[:, 1, 2], R[:, 0, 2] - R[:, 2, 0], R[:, 1, 0] - R[:, 0, 1]),
+         1: (R[:, 2, 1] - R[:, 1, 2], R[:, 0, 1] + R[:, 1, 0], R[:, 0, 2] + R[:, 2, 0]),
+         2: (R[:, 0, 2] - R[:, 2, 0], R[:, 0, 1] + R[:, 1, 0], R[:, 1, 2] + R[:, 2, 1]),
+         3: (R[:, 1, 0] - R[:, 0, 1], R[:, 0, 2] + R[:, 2, 0], R[:, 1, 2] + R[:, 2, 1])}
+    for case in range(4):
+        m = k == case
+        if not m.any():
+            continue
+        lead = np.sqrt(sq[m, case]) / 2.0
+        a, b, c = (v[m] / (4.0 * lead) for v in d[case])
+        if case == 0:
+            q[m] = np.stack([lead, a, b, c], axis=1)
+        elif case == 1:
+            q[m] = np.stack([a, lead, b, c], axis=1)
+        elif case == 2:
+            q[m] = np.stack([a, b, lead, c], axis=1)
+        else:
+            q[m] = np.stack([a, b, c, lead], axis=1)
+    q /= np.linalg.norm(q, axis=1, keepdims=True)
+    q[q[:, 0] < 0] *= -1.0
+    return q[0] if single else q
+
+
+def cubic_symmetry_quats() -> np.ndarray:
+    """
+    The 24 proper cubic symmetry operators as unit quaternions [w, x, y, z],
+    shape (24, 4), in the same order as :func:`get_cubic_ops_np`.
+    """
+    global CUBIC_SYMM_QUATS_CACHE
+    if CUBIC_SYMM_QUATS_CACHE is None:
+        CUBIC_SYMM_QUATS_CACHE = rotation_matrices_to_quats(get_cubic_ops_np())
+    return CUBIC_SYMM_QUATS_CACHE
+
+
+def _quat_mul_batch(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Hamilton product of quaternion arrays [w, x, y, z]; broadcasts over leading axes."""
+    w1, x1, y1, z1 = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+    w2, x2, y2, z2 = b[..., 0], b[..., 1], b[..., 2], b[..., 3]
+    return np.stack([
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+    ], axis=-1)
+
+
 def fcc_symmetrise_ori(bea: tuple[float, float, float],
                         dtype=np.float32) -> np.ndarray:
     """
@@ -377,7 +446,8 @@ def fcc_symmetrise_ori(bea: tuple[float, float, float],
     """
     g       = euler_bunge_to_matrix(*bea, degrees=True)
     sym_ops = cubic_symmetry_operators()
-    eq_mats = [proj_to_so3(S @ g) for S in sym_ops]
+    # g is Rz Rx Rz (crystal -> sample); crystal symmetry acts on its right.
+    eq_mats = [proj_to_so3(g @ S) for S in sym_ops]
     eq_mats = unique_rotations(eq_mats, tol=1e-8)
     return np.array([list(matrix_to_euler_bunge(R, degrees=True))
                      for R in eq_mats], dtype=dtype)
@@ -493,6 +563,24 @@ def cubic_rotation_axis_batch(rstack: np.ndarray,
 # Misorientation  (fast vectorized + scalar reference)
 # ---------------------------------------------------------------------------
 
+def _bunge_g_matrix(x, degrees: bool = True) -> np.ndarray:
+    """
+    The Bunge orientation matrix g (sample -> crystal) of ``x``.
+
+    ``x`` is a Bunge Euler triplet or a (3, 3) matrix in the convention of
+    :func:`euler_bunge_to_matrix`, which returns Rz Rx Rz, the transpose of g.
+    The 24 cubic operators have to act on g from the left (S g), the same
+    side as in the quaternion route of :func:`compute_mdf_from_quats`;
+    applied to Rz Rx Rz they would act on the sample side and give wrong
+    disorientations for large angles.
+    """
+    arr = np.asarray(x, dtype=float)
+    if arr.shape == (3, 3):
+        return arr.T
+    return euler_bunge_to_matrix(float(arr[0]), float(arr[1]), float(arr[2]),
+                                 degrees=degrees).T
+
+
 def cubic_misorientation(EA1, EA2,
                           unique_tol_deg: float = 1e-4,
                           degrees: bool = True
@@ -504,7 +592,8 @@ def cubic_misorientation(EA1, EA2,
     ----------
     EA1, EA2 : array-like
         Each can be a Bunge Euler triplet (phi1, Phi, phi2) **or** a
-        (3×3) rotation matrix.
+        (3×3) rotation matrix in the convention of
+        :func:`euler_bunge_to_matrix`.
     unique_tol_deg : float
         Tolerance (degrees) for deduplicating the top-3 angles.
     degrees : bool
@@ -513,22 +602,15 @@ def cubic_misorientation(EA1, EA2,
     Returns
     -------
     angle_deg_min : float
-        Minimum (fundamental) misorientation angle in degrees.
+        Minimum (fundamental) misorientation angle in degrees. Agrees with
+        mtex ``orientation.angle`` on a cubic crystal frame.
     axis_min : ndarray, shape (3,)
-        Corresponding rotation axis (sample frame).
+        Corresponding rotation axis, in crystal coordinates (up to sign).
     top3_angles_deg : list[float]
         Up to 3 smallest unique misorientation angles (degrees), ascending.
     """
-    def _as_R(x):
-        """ as r."""
-        arr = np.asarray(x, dtype=float)
-        if arr.shape == (3, 3):
-            return arr
-        phi1, Phi, phi2 = float(arr[0]), float(arr[1]), float(arr[2])
-        return euler_bunge_to_matrix(phi1, Phi, phi2, degrees=degrees)
-
-    gA = _as_R(EA1)
-    gB = _as_R(EA2)
+    gA = _bunge_g_matrix(EA1, degrees)
+    gB = _bunge_g_matrix(EA2, degrees)
     S  = get_cubic_ops_np()          # (24, 3, 3)
 
     RA  = S @ gA                     # (24, 3, 3)
@@ -574,16 +656,8 @@ def cubic_misorientation_scalar(EA1, EA2,
     Slower but more transparent.  Same return signature as
     ``cubic_misorientation``.
     """
-    def _as_R(x):
-        """ as r."""
-        arr = np.asarray(x, dtype=float)
-        if arr.shape == (3, 3):
-            return arr
-        return euler_bunge_to_matrix(float(arr[0]), float(arr[1]),
-                                     float(arr[2]), degrees=degrees)
-
-    gA      = _as_R(EA1)
-    gB      = _as_R(EA2)
+    gA      = _bunge_g_matrix(EA1, degrees)
+    gB      = _bunge_g_matrix(EA2, degrees)
     sym_ops = cubic_symmetry_operators()
 
     angles: list[float] = []
@@ -891,12 +965,43 @@ def defdap_passive_to_active(quats: np.ndarray) -> np.ndarray:
     return quats
 
 
-def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _reduce_to_reference(q: np.ndarray, ref: np.ndarray, chunk: int = 50_000) -> np.ndarray:
+    """
+    For every quaternion in ``q`` pick, among its 24 cubic-symmetry
+    equivalents, the one closest to the quaternion in ``ref`` (same row), and
+    put it on the same hemisphere as ``ref``. Both are DefDAP-stored
+    quaternions, on which the operators act from the left (s (x) q).
+    """
+    S = cubic_symmetry_quats()
+    out = np.empty_like(q)
+    for a in range(0, len(q), chunk):
+        qc, rc = q[a:a + chunk], ref[a:a + chunk]
+        eq = _quat_mul_batch(S[None, :, :], qc[:, None, :])          # (c, 24, 4)
+        dots = np.einsum('ckf,cf->ck', eq, rc)
+        best = np.argmax(np.abs(dots), axis=1)
+        rows = np.arange(len(qc))
+        pick = eq[rows, best]
+        out[a:a + chunk] = pick * np.where(dots[rows, best] < 0, -1.0, 1.0)[:, None]
+    return out
+
+
+def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray,
+                    symmetry: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute per-grain average quaternion from a pixel-wise quaternion map.
 
-    Handles the cyclic ambiguity of Euler angles by averaging in quaternion
-    space (enforcing positive-w hemisphere before accumulation).
+    With ``symmetry=True`` (default) the mean is the cubic (m-3m)
+    symmetry-aware mean, as mtex ``orientation.mean`` gives: pixels of one
+    grain may hold different symmetric variants of nearly the same
+    orientation, so each pixel is first replaced by the variant closest to a
+    reference orientation (the grain's first pixel, then the running mean,
+    two refinements), then the quaternions are averaged on one hemisphere and
+    renormalised. A plain quaternion mean of such variants can lie tens of
+    degrees from every pixel of the grain.
+
+    With ``symmetry=False`` only the hemisphere is fixed (w >= 0) before
+    averaging, which is adequate when the pixel orientations are known to be
+    one variant.
 
     Parameters
     ----------
@@ -904,14 +1009,19 @@ def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.n
         Integer grain label field. Positive values are grain IDs;
         values ≤ 0 are ignored.
     quat : ndarray, shape (ny, nx, 4)
-        Per-pixel unit quaternions in [w, x, y, z] convention.
+        Per-pixel unit quaternions in [w, x, y, z] convention, as DefDAP
+        stores them (``EBSDReader.quat_ebsd``).
+    symmetry : bool
+        Use the cubic symmetry-aware mean. Default True.
 
     Returns
     -------
     gids : ndarray, shape (N_grains,), dtype int
         Sorted array of unique positive grain IDs found in *lfi*.
     q_mean : ndarray, shape (N_grains, 4)
-        Normalised mean quaternion for each grain (row order matches *gids*).
+        Normalised mean quaternion for each grain (row order matches *gids*),
+        with w >= 0. With ``symmetry=True`` it is expressed in the variant of
+        the grain's first pixel.
 
     Examples
     --------
@@ -921,25 +1031,41 @@ def grain_avg_quats(lfi: np.ndarray, quat: np.ndarray) -> tuple[np.ndarray, np.n
     lfi  = np.asarray(lfi, dtype=int)
     quat = np.asarray(quat, dtype=np.float64)
 
-    gids     = np.unique(lfi)
-    gids     = gids[gids > 0]
-    N_labels = int(gids.max()) + 1
+    gids = np.unique(lfi)
+    gids = gids[gids > 0]
+    if gids.size == 0:
+        return gids, np.empty((0, 4))
 
     q_flat   = quat.reshape(-1, 4)
     lfi_flat = lfi.ravel()
-
+    valid    = lfi_flat > 0
+    q_valid  = q_flat[valid]
     # Enforce positive-w hemisphere before averaging
-    q_flat = np.where(q_flat[:, 0:1] < 0, -q_flat, q_flat)
+    q_valid  = np.where(q_valid[:, 0:1] < 0, -q_valid, q_valid)
+    gi       = np.searchsorted(gids, lfi_flat[valid])        # row of each pixel's grain
+    n_grains = len(gids)
+    count    = np.bincount(gi, minlength=n_grains).astype(np.float64)
 
-    q_sum   = np.zeros((N_labels, 4), dtype=np.float64)
-    q_count = np.zeros(N_labels, dtype=np.int64)
-    valid   = lfi_flat > 0
-    np.add.at(q_sum,   lfi_flat[valid], q_flat[valid])
-    np.add.at(q_count, lfi_flat[valid], 1)
+    def _mean_of(qs):
+        sums = np.stack([np.bincount(gi, weights=qs[:, c], minlength=n_grains)
+                         for c in range(4)], axis=1)
+        m = sums / count[:, None]
+        norms = np.linalg.norm(m, axis=1, keepdims=True)
+        m = m / np.where(norms > 0, norms, 1.0)
+        m[m[:, 0] < 0] *= -1.0
+        return m
 
-    q_mean = q_sum[gids] / q_count[gids, None]
-    norms  = np.linalg.norm(q_mean, axis=1, keepdims=True)
-    q_mean = q_mean / np.where(norms > 0, norms, 1.0)
+    if not symmetry:
+        return gids, _mean_of(q_valid)
+
+    first = np.full(n_grains, -1, dtype=np.int64)
+    order = np.arange(len(gi))[::-1]
+    first[gi[order]] = order                                   # lowest pixel index per grain
+    ref = q_valid[first]
+    for _ in range(3):
+        reduced = _reduce_to_reference(q_valid, ref[gi])
+        q_mean = _mean_of(reduced)
+        ref = q_mean
     return gids, q_mean
 
 
@@ -1368,7 +1494,9 @@ def detect_texture_component_peaks(
         if nb_weight < min_weight:
             break
 
-        phi1, Phi, phi2 = matrix_to_euler_bunge(R_all[i_star])
+        # R_all holds the Bunge g matrices (from the stored quaternions);
+        # matrix_to_euler_bunge takes the Rz Rx Rz matrix, their transpose.
+        phi1, Phi, phi2 = matrix_to_euler_bunge(R_all[i_star].T)
         name, _angle = _match_std_component(
             (phi1, Phi, phi2), std_components, match_tolerance_deg)
         if name is None:

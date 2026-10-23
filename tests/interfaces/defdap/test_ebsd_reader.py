@@ -263,3 +263,68 @@ def test_write_subsampled_ctf_still_works_for_a_genuinely_different_dst(tmp_path
     text = dst.read_text(encoding="latin-1")
     assert "XCells\t2" in text
     assert "YCells\t1" in text
+
+
+# ---------------------------------------------------------------------------
+# Symmetry-aware grain mean (mtex's mean): pixels of one grain that are cubic
+# symmetric variants of one orientation must average to that orientation, not
+# to a quaternion between the variants. A 90 deg turn about Z is a cubic
+# symmetry operation, so Z(0) and Z(90) are the same crystal orientation.
+# ---------------------------------------------------------------------------
+
+def test_grain_average_euler_deg_averages_symmetric_variants_to_one_orientation():
+    lfi = np.array([[1, 1, 1, 1]], dtype=np.int32)
+    quat = np.stack([_quat_z(0.0), _quat_z(90.0), _quat_z(0.0), _quat_z(90.0)])[None, :, :]
+    rdr = _bare_reader(lfi=lfi, quat=quat)
+
+    phi1, Phi, phi2 = rdr.grain_average_euler_deg()[1]
+
+    # a plain quaternion mean would give 45 deg about Z
+    assert phi1 == pytest.approx(0.0, abs=1e-6)
+    assert Phi == pytest.approx(0.0, abs=1e-6)
+    assert phi2 == pytest.approx(0.0, abs=1e-6)
+
+
+def test_grain_average_euler_deg_equal_split_of_q_and_minus_q_no_longer_cancels():
+    lfi = np.array([[1, 1]], dtype=np.int32)
+    q = _quat_z(37.0)
+    rdr = _bare_reader(lfi=lfi, quat=np.stack([q, -q])[None, :, :])
+
+    phi1, Phi, phi2 = rdr.grain_average_euler_deg()[1]
+
+    assert phi1 == pytest.approx(37.0, abs=1e-6)
+
+
+def test_rechar_lfi_fills_a_pixel_with_the_symmetry_aware_grain_mean():
+    pytest.importorskip("cc3d")
+    lfi = np.array([[1, 1, 1, 1, 0]], dtype=np.int32)
+    quat = np.stack([_quat_z(0.0), _quat_z(90.0), _quat_z(0.0), _quat_z(90.0),
+                     _quat_z(33.0)])[None, :, :]
+    euler = np.zeros((1, 5, 3))
+    euler[0, 4] = [np.radians(33.0), 0.0, 0.0]
+    rdr = _bare_reader(lfi=lfi, quat=quat)
+    rdr.euler_ebsd = euler
+
+    rdr.rechar_lfi(connectivity=4)
+
+    assert rdr.lfi_ebsd.tolist() == [[1, 1, 1, 1, 1]]
+    filled_q = rdr.quat_ebsd[0, 4]
+    assert abs(filled_q @ _quat_z(0.0)) == pytest.approx(1.0, abs=1e-9)    # identity, not 45 deg
+    assert rdr.euler_ebsd[0, 4, 0] % (2 * np.pi) == pytest.approx(0.0, abs=1e-9)
+    assert rdr.euler_ebsd[0, 4, 1] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_rechar_lfi_keeps_filled_euler_consistent_with_the_filled_quaternion():
+    pytest.importorskip("cc3d")
+    lfi = np.array([[1, 1, 1, 0]], dtype=np.int32)
+    quat = np.stack([_quat_z(20.0), _quat_z(22.0), _quat_z(24.0), _quat_z(0.0)])[None, :, :]
+    euler = np.zeros((1, 4, 3))
+    for i, a in enumerate((20.0, 22.0, 24.0)):
+        euler[0, i] = [np.radians(a), 0.0, 0.0]
+    rdr = _bare_reader(lfi=lfi, quat=quat)
+    rdr.euler_ebsd = euler
+
+    rdr.rechar_lfi(connectivity=4)
+
+    assert math.degrees(rdr.euler_ebsd[0, 3, 0]) == pytest.approx(22.0, abs=1e-4)
+    assert abs(rdr.quat_ebsd[0, 3] @ _quat_z(22.0)) == pytest.approx(1.0, abs=1e-9)

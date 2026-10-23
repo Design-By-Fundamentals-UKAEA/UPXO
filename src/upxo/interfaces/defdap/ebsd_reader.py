@@ -662,14 +662,12 @@ class EBSDReader:
         print(f"[rechar_lfi]           {len(cc_assignment)}/{n_cc} CCs assigned "
               f"({n_filled} pixels filled).", flush=True)
 
+        # Step 6-7: grain-average orientation fill
+        # The mean is the cubic symmetry-aware mean (grain_avg_quats), the
+        # same one mtex gives; pixels of one grain can be different
+        # symmetric variants, which a componentwise mean would mix.
         # ------------------------------------------------------------------
-        # Step 6-7: vectorized grain-average orientation fill
-        # Avoid per-grain Python loops by using scipy.ndimage.mean over the
-        # full array at once — O(ny*nx) regardless of grain count.
-        # ------------------------------------------------------------------
-        print("[rechar_lfi] Step 4/5 — computing grain-average orientations "
-              "(vectorized) …", flush=True)
-        from scipy.ndimage import mean as _ndmean
+        from upxo.xtalphy.crystal_orientation import grain_avg_quats
 
         euler = self.euler_ebsd.copy()   # (ny, nx, 3)
         quat  = self.quat_ebsd.copy()    # (ny, nx, 4)
@@ -679,31 +677,18 @@ class EBSDReader:
         print(f"[rechar_lfi]           {n_ag} unique grains to average over.",
               flush=True)
 
-        # Compute per-grain mean for every channel in one ndimage.mean call.
         # Labels array is the *original* lfi (valid pixels only).
         valid_lfi   = lfi.copy()
-        valid_lfi[unknown_mask] = 0          # neutralize unknowns for ndimage
+        valid_lfi[unknown_mask] = 0          # neutralize unknowns
 
-        # euler: 3 channels
-        print("[rechar_lfi]           averaging Euler channels (3) …", flush=True)
-        avg_euler_arr = np.stack(
-            [_ndmean(euler[:, :, ch], labels=valid_lfi, index=assigned_grains)
-             for ch in range(3)], axis=1
-        )                                    # (n_assigned_grains, 3)
-        print("[rechar_lfi]           averaging quaternion channels (4) …",
+        print("[rechar_lfi]           averaging orientations (symmetry-aware) ...",
               flush=True)
-        # quat: 4 channels
-        avg_quat_arr = np.stack(
-            [_ndmean(quat[:, :, ch], labels=valid_lfi, index=assigned_grains)
-             for ch in range(4)], axis=1
-        )                                    # (n_assigned_grains, 4)
-
-        # Normalise quaternions and enforce positive hemisphere
-        norms = np.linalg.norm(avg_quat_arr, axis=1, keepdims=True)
-        norms = np.where(norms > 0, norms, 1.0)
-        avg_quat_arr /= norms
-        neg = avg_quat_arr[:, 0] < 0
-        avg_quat_arr[neg] *= -1
+        mean_gids, mean_quat = grain_avg_quats(valid_lfi, quat, symmetry=True)
+        row_of_gid = {int(g): i for i, g in enumerate(mean_gids)}
+        avg_quat_arr = mean_quat[[row_of_gid[int(g)] for g in assigned_grains]]
+        # Euler angles of the mean quaternion, radians, in [0, 2 pi)
+        avg_euler_arr = np.radians(np.array(
+            [_quat_to_bunge_euler_deg(q) for q in avg_quat_arr])) % (2.0 * np.pi)
         print("[rechar_lfi]           orientation averages ready.", flush=True)
 
         # ------------------------------------------------------------------
@@ -831,14 +816,14 @@ class EBSDReader:
         Compute per-grain Bunge Euler angles (phi1, Phi, phi2), in degrees,
         averaged over every pixel belonging to each grain.
 
-        Averaging is done on ``quat_ebsd`` (mean quaternion, renormalised,
-        positive-hemisphere convention), then converted to Bunge Euler --
-        the same approach already used internally by :meth:`rechar_lfi` to
-        fill unindexed pixels, exposed here as a standalone per-grain
-        result. This is an arithmetic quaternion mean, not a symmetry-aware
-        SO(3) mean: adequate for the low intra-grain misorientation spread
-        typical of a single EBSD grain, not for averaging across
-        misorientation-related variants.
+        Averaging is done on ``quat_ebsd`` with the cubic symmetry-aware
+        mean of :func:`upxo.xtalphy.crystal_orientation.grain_avg_quats`
+        (the mean mtex gives), then converted to Bunge Euler -- the same
+        approach used internally by :meth:`rechar_lfi` to fill unindexed
+        pixels, exposed here as a standalone per-grain result. Pixels that
+        are different symmetric variants of one orientation are averaged
+        correctly; the result is expressed in the variant of the grain's
+        first pixel.
 
         Requires ``lfi_ebsd`` to contain only positive grain labels (call
         :meth:`rechar_lfi` or :meth:`characterise` first if the map still
@@ -855,7 +840,7 @@ class EBSDReader:
         ValueError
             If ``lfi_ebsd`` contains non-positive pixels.
         """
-        from scipy.ndimage import mean as _ndmean
+        from upxo.xtalphy.crystal_orientation import grain_avg_quats
 
         lfi = self.lfi_ebsd
         if (lfi <= 0).any():
@@ -865,16 +850,7 @@ class EBSDReader:
                 "characterise() first to fill non-positive pixels."
             )
 
-        grain_ids = np.unique(lfi)
-        avg_quat = np.stack(
-            [_ndmean(self.quat_ebsd[:, :, ch], labels=lfi, index=grain_ids)
-             for ch in range(4)], axis=1
-        )                                        # (n_grains, 4)
-
-        norms = np.linalg.norm(avg_quat, axis=1, keepdims=True)
-        avg_quat /= np.where(norms > 0, norms, 1.0)
-        neg = avg_quat[:, 0] < 0
-        avg_quat[neg] *= -1
+        grain_ids, avg_quat = grain_avg_quats(lfi, self.quat_ebsd, symmetry=True)
 
         return {int(gid): _quat_to_bunge_euler_deg(q)
                 for gid, q in zip(grain_ids, avg_quat)}

@@ -119,7 +119,10 @@ class ClassificationTests(unittest.TestCase):
                     'ns_gb_pag': x == 3}
         for name, mask in expected.items():
             self.assertEqual(sorted(sets[name].tolist()), np.flatnonzero(mask).tolist(), name)
-        every = sorted(set(sets['ns_gb_lowangle'].tolist()) | set(sets['ns_gb_highangle'].tolist()))
+        # an empty low- or high-angle set is left out, so take what is present
+        nothing = np.empty(0, dtype=int)
+        every = sorted(set(sets.get('ns_gb_lowangle', nothing).tolist())
+                       | set(sets.get('ns_gb_highangle', nothing).tolist()))
         self.assertEqual(every, sorted(np.unique(self.found.faces).tolist()))
 
     def test_the_interface_nodes_are_the_nodes_shared_by_two_features(self):
