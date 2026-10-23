@@ -551,15 +551,19 @@ class EBSDReader:
            (connectivity 4 or 8, matching the supplied parameter).
         3. Assign each connected component a temporary unique label
            ``n_grains + cc_id`` in a working copy of ``lfi_ebsd``.
-        4. Call ``find_neighs2d`` on the augmented label field to obtain
-           the adjacency list for every label (standard + temporary).
-        5. For each temporary CC label, find the neighbouring valid grain
-           with the greatest pixel count and assign that grain's ID to all
-           pixels of the CC.
-        6. Compute per-grain mean Euler angles and mean (normalised)
-           quaternion from the *original* valid pixels of each grain.
-        7. Write those averages into ``euler_ebsd`` and ``quat_ebsd`` at
-           the newly filled pixel positions.
+        4. Take the region adjacency graph of the augmented label field
+           (cc3d ``region_graph``) and keep the edges between a
+           temporary label and a valid grain.
+        5. For each temporary CC label, pick the neighbouring valid grain
+           with the greatest pixel count (the lowest grain ID on a tie)
+           and assign that grain's ID to all pixels of the CC. This is
+           done for all CCs at once, with array operations.
+        6. Compute the cubic symmetry-aware mean quaternion of every
+           grain that was assigned to at least one CC, from the
+           *original* valid pixels of that grain.
+        7. Write those averages (and the Euler angles of the mean
+           quaternion) into ``euler_ebsd`` and ``quat_ebsd`` at the
+           newly filled pixel positions.
         8. Store the updated arrays back to ``self``.
 
         Parameters
@@ -575,21 +579,15 @@ class EBSDReader:
 
         Notes
         -----
-        After calling this method ``lfi_ebsd`` should contain only
-        positive grain labels (>= 1).  ``euler_ebsd`` and ``quat_ebsd``
-        are updated in-place on ``self``.  The grain-average orientation
-        used for filling is the arithmetic mean of the *original* valid
-        pixels — adequate for intra-grain spread; it is not a proper
-        quaternion mean but sufficient for neighbourhood-assignment.
+        After calling this method ``lfi_ebsd`` contains only positive
+        grain labels (>= 1), except when the map holds no indexed pixel,
+        in which case nothing is changed. ``euler_ebsd`` and ``quat_ebsd``
+        are updated on ``self``. The orientation used for filling is the
+        cubic symmetry-aware mean of the grain's valid pixels
+        (:func:`upxo.xtalphy.crystal_orientation.grain_avg_quats`), the
+        same mean mtex gives.
         """
         import cc3d
-        from upxo.gsdataops.gid_ops import find_neighs2d
-        try:
-            from tqdm.auto import tqdm as _tqdm
-        except ImportError:
-            def _tqdm(it, **kw):          # silent fallback if tqdm not installed
-                print(f"[rechar_lfi] {kw.get('desc', '')} ...", flush=True)
-                return it
 
         if connectivity not in (4, 8):
             raise ValueError("connectivity must be 4 or 8 for 2D cc3d.")
@@ -607,9 +605,14 @@ class EBSDReader:
               f"({100*n_unknown/(ny*nx):.2f}%)  |  connectivity={connectivity}",
               flush=True)
 
+        if not (lfi > 0).any():
+            print("[rechar_lfi] No indexed pixels — nothing to fill from.", flush=True)
+            return
+
         # ------------------------------------------------------------------
         # Step 1-3: connected-component labelling of unknown pixels
         # ------------------------------------------------------------------
+        progress.report(0, 4, "Labelling unindexed regions")
         print("[rechar_lfi] Step 1/5 — labelling unknown connected components …",
               flush=True)
         n_valid = int(lfi.max())
@@ -624,68 +627,70 @@ class EBSDReader:
         lfi_aug[unknown_mask] = (n_valid + cc_labels[unknown_mask]).astype(np.int32)
 
         # ------------------------------------------------------------------
-        # Step 4: adjacency
+        # Step 4: adjacency, as (grain, region) edges
         # ------------------------------------------------------------------
+        progress.report(1, 4, "Assigning unindexed regions")
         print("[rechar_lfi] Step 2/5 — computing grain adjacency …", flush=True)
-        neigh = find_neighs2d(lfi_aug, conn=connectivity)
+        edges = np.asarray(list(cc3d.region_graph(lfi_aug, connectivity=connectivity)),
+                           dtype=np.int64).reshape(-1, 2)
+        lo, hi = edges.min(axis=1), edges.max(axis=1)
+        touches = (lo >= 1) & (lo <= n_valid) & (hi > n_valid)
+        edge_grain, edge_cc = lo[touches], hi[touches] - n_valid
 
         # ------------------------------------------------------------------
-        # Step 5: assign each CC to largest neighbouring valid grain
+        # Step 5: assign each CC to its largest neighbouring valid grain
         # ------------------------------------------------------------------
         print("[rechar_lfi] Step 3/5 — assigning CC pixels to grains …", flush=True)
-        valid_pixels = lfi[~unknown_mask]
-        ids, counts  = np.unique(valid_pixels, return_counts=True)
-        grain_size   = dict(zip(ids.tolist(), counts.tolist()))
+        grain_size = np.bincount(lfi[~unknown_mask], minlength=n_valid + 1)
 
-        lfi_filled   = lfi.copy()
-        cc_assignment = {}
+        # Per CC the first edge after sorting: most pixels, then lowest grain ID.
+        order = np.lexsort((edge_grain, -grain_size[edge_grain], edge_cc))
+        cc_sorted, grain_sorted = edge_cc[order], edge_grain[order]
+        first = np.ones(len(order), dtype=bool)
+        first[1:] = cc_sorted[1:] != cc_sorted[:-1]
+        cc_to_grain = np.zeros(n_cc + 1, dtype=np.int32)       # 0 = no valid neighbour
+        cc_to_grain[cc_sorted[first]] = grain_sorted[first]
 
-        for cc_id in progress.track(
-                _tqdm(range(1, n_cc + 1),
-                      desc="  assigning CCs", unit="CC", leave=False),
-                total=n_cc, message="Assigning unindexed regions"):
-            temp_label       = n_valid + cc_id
-            valid_neighbours = [
-                nb for nb in neigh.get(temp_label, [])
-                if 1 <= nb <= n_valid
-            ]
-            if not valid_neighbours:
-                continue
-            largest = max(valid_neighbours,
-                          key=lambda g: grain_size.get(g, 0))
-            cc_mask = cc_labels == cc_id
-            lfi_filled[cc_mask] = largest
-            cc_assignment[cc_id] = largest
+        target = cc_to_grain[cc_labels[unknown_mask]]          # grain per unknown pixel
+        assigned_px = target > 0
+        lfi_filled = lfi.copy()
+        lfi_filled[unknown_mask] = np.where(assigned_px, target, lfi[unknown_mask])
 
-        n_filled = sum((cc_labels == cc_id).sum()
-                       for cc_id in cc_assignment)
-        print(f"[rechar_lfi]           {len(cc_assignment)}/{n_cc} CCs assigned "
+        n_assigned = int(first.sum())
+        n_filled = int(assigned_px.sum())
+        print(f"[rechar_lfi]           {n_assigned}/{n_cc} CCs assigned "
               f"({n_filled} pixels filled).", flush=True)
 
         # Step 6-7: grain-average orientation fill
         # The mean is the cubic symmetry-aware mean (grain_avg_quats), the
         # same one mtex gives; pixels of one grain can be different
         # symmetric variants, which a componentwise mean would mix.
+        # Only the grains that received a region are averaged.
         # ------------------------------------------------------------------
         from upxo.xtalphy.crystal_orientation import grain_avg_quats
+
+        assigned_grains = np.unique(cc_to_grain[cc_to_grain > 0])
+        n_ag = len(assigned_grains)
+        print(f"[rechar_lfi]           {n_ag} unique grains to average over.",
+              flush=True)
+        if n_ag == 0:
+            self.lfi_ebsd = lfi_filled
+            print("[rechar_lfi] Done.", flush=True)
+            return
 
         euler = self.euler_ebsd.copy()   # (ny, nx, 3)
         quat  = self.quat_ebsd.copy()    # (ny, nx, 4)
 
-        assigned_grains = sorted(set(cc_assignment.values()))
-        n_ag = len(assigned_grains)
-        print(f"[rechar_lfi]           {n_ag} unique grains to average over.",
-              flush=True)
+        # Labels of the *original* valid pixels of the assigned grains only.
+        needed = np.zeros(n_valid + 1, dtype=bool)
+        needed[assigned_grains] = True
+        valid_lfi = np.where(needed[np.maximum(lfi, 0)], lfi, 0)
 
-        # Labels array is the *original* lfi (valid pixels only).
-        valid_lfi   = lfi.copy()
-        valid_lfi[unknown_mask] = 0          # neutralize unknowns
-
+        progress.report(2, 4, "Averaging grain orientations")
         print("[rechar_lfi]           averaging orientations (symmetry-aware) ...",
               flush=True)
         mean_gids, mean_quat = grain_avg_quats(valid_lfi, quat, symmetry=True)
-        row_of_gid = {int(g): i for i, g in enumerate(mean_gids)}
-        avg_quat_arr = mean_quat[[row_of_gid[int(g)] for g in assigned_grains]]
+        avg_quat_arr = mean_quat[np.searchsorted(mean_gids, assigned_grains)]
         # Euler angles of the mean quaternion, radians, in [0, 2 pi)
         avg_euler_arr = np.radians(np.array(
             [_quat_to_bunge_euler_deg(q) for q in avg_quat_arr])) % (2.0 * np.pi)
@@ -694,35 +699,18 @@ class EBSDReader:
         # ------------------------------------------------------------------
         # Step 5/5 — vectorised orientation write (O(n_unknown), no loop)
         # ------------------------------------------------------------------
-        # lfi_filled already stores the assigned grain ID for every pixel
-        # (including the ones that were unknown). Build a compact lookup:
-        #   grain_ids[i]   → assigned_grains[i]
-        #   gid_to_idx[gid] → row index in avg_euler_arr / avg_quat_arr
-        # Then fancy-index the two arrays for all unknown pixels at once.
-        # ------------------------------------------------------------------
-        n_unk = int(unknown_mask.sum())
-        print(f"[rechar_lfi] Step 5/5 — writing orientations for {n_unk} "
+        progress.report(3, 4, "Writing orientations")
+        print(f"[rechar_lfi] Step 5/5 — writing orientations for {n_unknown} "
               "unknown pixels (vectorised, no loop) …", flush=True)
 
-        grain_ids  = np.array(assigned_grains, dtype=np.intp)
-        max_gid    = int(grain_ids.max()) + 1
-        gid_to_idx = np.full(max_gid, -1, dtype=np.intp)
-        gid_to_idx[grain_ids] = np.arange(len(grain_ids), dtype=np.intp)
-
-        unk_y, unk_x   = np.where(unknown_mask)
-        assigned_gids  = lfi_filled[unk_y, unk_x]   # grain ID per unknown px
-        row_idx        = gid_to_idx[assigned_gids]   # row in avg arrays
-
-        # Only write pixels that were actually assigned (row_idx >= 0)
-        valid_write    = row_idx >= 0
-        vy, vx, vr     = unk_y[valid_write], unk_x[valid_write], row_idx[valid_write]
-
+        unk_y, unk_x = np.where(unknown_mask)
+        vy, vx = unk_y[assigned_px], unk_x[assigned_px]
+        vr = np.searchsorted(assigned_grains, target[assigned_px])   # row in avg arrays
         euler[vy, vx] = avg_euler_arr[vr]   # (n_written, 3)
         quat[vy, vx]  = avg_quat_arr[vr]    # (n_written, 4)
 
-        n_written = int(valid_write.sum())
-        print(f"[rechar_lfi]           {n_written} pixels written "
-              f"({n_unk - n_written} isolated islands left unfilled).",
+        print(f"[rechar_lfi]           {n_filled} pixels written "
+              f"({n_unknown - n_filled} isolated islands left unfilled).",
               flush=True)
 
         # ------------------------------------------------------------------

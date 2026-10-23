@@ -985,22 +985,27 @@ def defdap_passive_to_active(quats: np.ndarray) -> np.ndarray:
     return quats
 
 
-def _reduce_to_reference(q: np.ndarray, ref: np.ndarray, chunk: int = 50_000) -> np.ndarray:
+def _reduce_to_reference(q: np.ndarray, ref: np.ndarray, chunk: int = 200_000) -> np.ndarray:
     """
     For every quaternion in ``q`` pick, among its 24 cubic-symmetry
     equivalents, the one closest to the quaternion in ``ref`` (same row), and
     put it on the same hemisphere as ``ref``. Both are DefDAP-stored
     quaternions, on which the operators act from the left (s (x) q).
+
+    The 24 variants are rated without being built: for unit q,
+    <s (x) q, r> = <s, r (x) conj(q)>, so one product per quaternion and a
+    (24 x 4) matrix product give all 24 dot products. Only the chosen variant
+    is formed.
     """
     S = cubic_symmetry_quats()
+    conj = np.array([1.0, -1.0, -1.0, -1.0])
     out = np.empty_like(q)
     for a in range(0, len(q), chunk):
         qc, rc = q[a:a + chunk], ref[a:a + chunk]
-        eq = _quat_mul_batch(S[None, :, :], qc[:, None, :])          # (c, 24, 4)
-        dots = np.einsum('ckf,cf->ck', eq, rc)
-        best = np.argmax(np.abs(dots), axis=1)
+        dots = _quat_mul_batch(rc, qc * conj) @ S.T                  # (c, 24)
         rows = np.arange(len(qc))
-        pick = eq[rows, best]
+        best = np.argmax(np.abs(dots), axis=1)
+        pick = _quat_mul_batch(S[best], qc)
         out[a:a + chunk] = pick * np.where(dots[rows, best] < 0, -1.0, 1.0)[:, None]
     return out
 
