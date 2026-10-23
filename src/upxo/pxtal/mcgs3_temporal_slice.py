@@ -302,6 +302,56 @@ _npaw = np.argwhere
 
 
 
+def _warn_stale(name, defect, use):
+    """FutureWarning for orientation code that has been superseded and has a known defect."""
+    warnings.warn(
+        f"mcgs3_grain_structure.{name} is deprecated and has a known defect: {defect}. "
+        f"Use {use} instead.", FutureWarning, stacklevel=3)
+
+
+_DEFECT_ANGLE_SIDE = (
+    'the cubic symmetry operators act on the sample side of the Euler matrix (Rz Rx Rz is '
+    'the transpose of the Bunge g matrix), so disorientations are wrong for large angles, '
+    'by up to 56 deg against mtex'
+)
+_DEFECT_BLOCKMIS = (
+    'it refers to undefined names (gstslice) and measures with cubic_misorientation_old1, '
+    'on the wrong side'
+)
+_DEFECT_EQUIV_SIDE = (
+    'the cubic symmetry operators act on the sample side of the Euler matrix (Rz Rx Rz is '
+    "the transpose of the Bunge g matrix), so the 'symmetric equivalents' are not "
+    'crystal-equivalent orientations, up to 63 deg from the input'
+)
+_DEFECT_IFACE = (
+    'its block misorientation uses cubic_misorientation_old1, on the wrong side'
+)
+_DEFECT_KS = (
+    'it builds block orientations from get_ks_rotations, whose Kurdjumov-Sachs family was '
+    'wrong (fixed in OrientationAssigner3D, commit 06a27bd)'
+)
+_DEFECT_MIS_NAMEERR = (
+    'the cubic symmetry operators act on the sample side of the Euler matrix (Rz Rx Rz is '
+    'the transpose of the Bunge g matrix), so disorientations are wrong for large angles, '
+    'by up to 56 deg against mtex; it also refers to an undefined name, gstslice, and '
+    'raises NameError'
+)
+_DEFECT_TEXV = (
+    'it expands symmetric equivalents with fcc_symmetrise_ori and measures misorientation '
+    'with cubic_misorientation_old1, both on the wrong side'
+)
+_DEFECT_UNORD = (
+    'it calls cubic_misorientation (wrong side, and an undefined name) and leaves a debug '
+    'print(1) in place'
+)
+_USE_ASSIGN = 'OrientationAssigner3D.assign_orientations_to_all_blocks'
+_USE_CO = 'upxo.xtalphy.crystal_orientation.cubic_misorientation'
+_USE_DIS = 'OrientationAssigner3D.disorientation_deg'
+_USE_SYM = 'upxo.xtalphy.crystal_orientation.fcc_symmetrise_ori'
+_USE_SYNTH = 'upxo.xtalphy.texops.tops.synth_fcc (which has its own listed defects)'
+_USE_TWIN = 'the twinned_simple_3d pipeline or OrientationAssigner3D'
+
+
 class mcgs3_grain_structure():
     """
     3D Monte-Carlo grain structure at one temporal slice (``pxt.gs[tslice]``).
@@ -9318,6 +9368,12 @@ class mcgs3_grain_structure():
 
     def fcc_symmetrise_ori(self, bea, dtype=np.float32):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so the 'symmetric equivalents' are not crystal-equivalent orientations, up
+        to 63 deg from the input. Use
+        upxo.xtalphy.crystal_orientation.fcc_symmetrise_ori instead.
+
         Generate symmetric equivalents of an orientation.
 
         Example
@@ -9325,6 +9381,7 @@ class mcgs3_grain_structure():
         bea = texture['ori_means']['brass']
         gstslice.fcc_symmetrise_ori(bea, dtype=np.float32)
         """
+        _warn_stale('fcc_symmetrise_ori', _DEFECT_EQUIV_SIDE, _USE_SYM)
         g = self.cubic_euler_bunge_to_matrix(*bea, degrees=True)
         sym_ops = self.cubic_symmetry_operators()
         eq_mats = [self._proj_to_so3(S @ g) for S in sym_ops]
@@ -9364,6 +9421,12 @@ class mcgs3_grain_structure():
     @classmethod
     def cubic_misorientation(cls, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so disorientations are wrong for large angles, by up to 56 deg against mtex;
+        it also refers to an undefined name, gstslice, and raises NameError. Use
+        upxo.xtalphy.crystal_orientation.cubic_misorientation instead.
+
         Vectorized fast misorientation (cubic, m-3m).
         Inputs: Euler triplet (phi1,Phi,phi2) OR 3x3 rotation matrix.
         Returns:
@@ -9392,6 +9455,7 @@ class mcgs3_grain_structure():
 
         gA = gstslice.cubic_euler_bunge_to_matrix_v1(phi1, Phi, phi2)
         """
+        _warn_stale('cubic_misorientation', _DEFECT_MIS_NAMEERR, _USE_CO)
         gA = gstslice.cubic_euler_bunge_to_matrix_v1(EA1[:, 0], EA1[:, 1],
                                                      EA1[:, 2], degrees=True,
                                                      dtype=np.float32,
@@ -9459,6 +9523,11 @@ class mcgs3_grain_structure():
     @classmethod
     def cubic_misorientation_old1(cls, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so disorientations are wrong for large angles, by up to 56 deg against mtex.
+        Use upxo.xtalphy.crystal_orientation.cubic_misorientation instead.
+
         Vectorized fast misorientation (cubic, m-3m).
         Inputs: Euler triplet (phi1,Phi,phi2) OR 3x3 rotation matrix.
         Returns:
@@ -9466,6 +9535,7 @@ class mcgs3_grain_structure():
           axis_min      : (3,) unit vector (sample frame)
           top3_angles_deg : list of up to 3 smallest UNIQUE angles (deg), ascending
         """
+        _warn_stale('cubic_misorientation_old1', _DEFECT_ANGLE_SIDE, _USE_CO)
         # Normalize inputs to rotation matrices
         gA = cls._as_rotmat(EA1, degrees=degrees)  # (3,3)
         gB = cls._as_rotmat(EA2, degrees=degrees)  # (3,3)
@@ -9522,12 +9592,18 @@ class mcgs3_grain_structure():
     @classmethod
     def cubic_misorientation_old(cls, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so disorientations are wrong for large angles, by up to 56 deg against mtex.
+        Use upxo.xtalphy.crystal_orientation.cubic_misorientation instead.
+
         gA, gB: 3x3 rotation matrices (Bunge convention).
         Returns:
           - angle_deg_min: smallest misorientation angle (deg)
           - axis_min: unit axis (in sample frame) for the smallest angle
           - top3_angles_deg: list of the three smallest UNIQUE angles (deg), sorted
         """
+        _warn_stale('cubic_misorientation_old', _DEFECT_ANGLE_SIDE, _USE_CO)
         # ----------------------------------------------------------
         '''gA = cls.cubic_euler_bunge_to_matrix(EA1[0], EA1[1], EA1[2],
                                              degrees=degrees)
@@ -9701,6 +9777,10 @@ class mcgs3_grain_structure():
                                            allow_parent_reuse=True,
                                            seed=2025):
         """
+        DEPRECATED, known defect: it calls cubic_misorientation (wrong side, and an
+        undefined name) and leaves a debug print(1) in place. Use the
+        twinned_simple_3d pipeline or OrientationAssigner3D instead.
+
         Assign unordered experimental orientations to concrete features (hosts & twins)
         such that Σ3 twins are ~60° from their host and Σ5 twins are ~36.87° or 53.13°.
 
@@ -9709,6 +9789,7 @@ class mcgs3_grain_structure():
           data['ori_twin']   : {tid: (phi1,Phi,phi2)}
           data['ori_assign_report'] : dict
         """
+        _warn_stale('assign_orientations_from_unordered', _DEFECT_UNORD, _USE_TWIN)
         print(1)
         rng = Random(seed)
         data = self.fdb[instance_name]['data']
@@ -10163,6 +10244,12 @@ class mcgs3_grain_structure():
                                 rand_ori_seed = np.random.random()
                                 ):
         """
+        DEPRECATED, known defect: it expands symmetric equivalents with
+        fcc_symmetrise_ori and measures misorientation with
+        cubic_misorientation_old1, both on the wrong side. Use
+        upxo.xtalphy.texops.tops.synth_fcc (which has its own listed defects)
+        instead.
+
         # Complete structure of gstslice.tc_info is below.
         gstslice.tc_info = {"tc1": [vf_tc,
                                     [hw_phi1, hw_Phi, hw_phi2],
@@ -10223,6 +10310,7 @@ class mcgs3_grain_structure():
                             "cube": [0.05, 10]}
         texture = gstslice.generate_fcc_texture_v1(N=1000)
         """
+        _warn_stale('generate_fcc_texture_v1', _DEFECT_TEXV, _USE_SYNTH)
         print(60*'=', '\n\nGenerating orientations for cryst. texture\n')
         self.tc_info = self.standardize_tc_info(self.tc_info,
                                                 tc_info_std_defaults)
@@ -10421,6 +10509,12 @@ class mcgs3_grain_structure():
                                 n_sampling_instances=4
                                 ):
         """
+        DEPRECATED, known defect: it expands symmetric equivalents with
+        fcc_symmetrise_ori and measures misorientation with
+        cubic_misorientation_old1, both on the wrong side. Use
+        upxo.xtalphy.texops.tops.synth_fcc (which has its own listed defects)
+        instead.
+
         # Complete structure of gstslice.tc_info is below.
         gstslice.tc_info = {"tc1": [vf_tc,
                                     [hw_phi1, hw_Phi, hw_phi2],
@@ -10516,6 +10610,7 @@ class mcgs3_grain_structure():
         noritc = [len(v) for v in TEX['tex_instance.1']['sampling_instances']['ossi.1']['tc_ori_stacks'].values()]
         ngrains == sum(noritc)
         """
+        _warn_stale('generate_fcc_texture_v2', _DEFECT_TEXV, _USE_SYNTH)
         # FUNCTION LEVEL (FL) | 2 (i.e. number of tabs at start). In concoise,
         # This wil be written as in below line. These are markers / flags to
         # indicate the code indentations which give a feel of where we are.
@@ -12781,9 +12876,15 @@ class mcgs3_grain_structure():
                                         blocks_dict,
                                         pag_orientations):
         """
+        DEPRECATED, known defect: it builds block orientations from
+        get_ks_rotations, whose Kurdjumov-Sachs family was wrong (fixed in
+        OrientationAssigner3D, commit 06a27bd). Use
+        OrientationAssigner3D.assign_orientations_to_all_blocks instead.
+
         Assigns a physically realistic BCC orientation to each block in a dict
         and runs a verification check on the result.
         """
+        _warn_stale('assign_orientations_to_blocks_old', _DEFECT_KS, _USE_ASSIGN)
         # --- 1. Get Parent Data and All 24 Variants ---
         parent_fcc_ea = pag_orientations[pag_id]
 
@@ -12824,8 +12925,14 @@ class mcgs3_grain_structure():
                                         blocks_dict,
                                         pag_orientations):
         """
+        DEPRECATED, known defect: it builds block orientations from
+        get_ks_rotations, whose Kurdjumov-Sachs family was wrong (fixed in
+        OrientationAssigner3D, commit 06a27bd). Use
+        OrientationAssigner3D.assign_orientations_to_all_blocks instead.
+
         Assigns a physically realistic BCC orientation to each block in a dict.
         """
+        _warn_stale('assign_orientations_to_blocks', _DEFECT_KS, _USE_ASSIGN)
         # --- 1. Get Parent Data and All 24 Variants ---
         parent_fcc_ea = pag_orientations[pag_id]
         parent_fcc_R = self.cubic_euler_bunge_to_matrix_v1(
@@ -12865,9 +12972,15 @@ class mcgs3_grain_structure():
 
     def _verify_block_orientations(self, block_orientations):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so disorientations are wrong for large angles, by up to 56 deg against mtex.
+        Use OrientationAssigner3D.disorientation_deg instead.
+
         Picks two random blocks and prints their misorientation to verify
         that it is a physically plausible value.
         """
+        _warn_stale('_verify_block_orientations', _DEFECT_ANGLE_SIDE, _USE_DIS)
         print("\n--- Running Block Orientation Verification ---")
         if len(block_orientations) < 2:
             print("  - Not enough blocks to compare.")
@@ -13360,12 +13473,17 @@ class mcgs3_grain_structure():
 
     def calculate_all_block_misorientations(self, block_neighbors, block_orientations):
         """
+        DEPRECATED, known defect: it refers to undefined names (gstslice) and
+        measures with cubic_misorientation_old1, on the wrong side. Use
+        OrientationAssigner3D.disorientation_deg instead.
+
         Calculates the misorientation angle for all adjacent block pairs.
         # --- Usage ---
         block_neighbors = generate_block_neighbors(all_blocks)
         misorientation_data = calculate_all_block_misorientations(block_neighbors, all_block_orientations, gstslice.cubic_misorientation)
         plot_distribution(misorientation_data, "Block Boundary Misorientation Distribution", "Misorientation Angle (Degrees)", bins=90)
         """
+        _warn_stale('calculate_all_block_misorientations', _DEFECT_BLOCKMIS, _USE_DIS)
         misorientations = []
         checked_pairs = set()
         for block_id, neighbors in block_neighbors.items():
@@ -13427,6 +13545,10 @@ class mcgs3_grain_structure():
                                              all_blocks_dict,
                                              block_orientations):
         """
+        DEPRECATED, known defect: its block misorientation uses
+        cubic_misorientation_old1, on the wrong side. Use
+        OrientationAssigner3D.disorientation_deg instead.
+
         Identifies block interfaces and generates:
         1. A detailed map of interface voxels grouped by the two adjacent blocks,
            where each value is a single NumPy array (N, 3).
@@ -13445,6 +13567,7 @@ class mcgs3_grain_structure():
             - dict: {BlockA__BlockB: ndarray(N, 3) of BlockA_interface_voxels}
             - ndarray: (M, 3) NumPy array of all unique boundary voxel coordinates.
         """
+        _warn_stale('extract_block_interfaces_and_neighbors', _DEFECT_IFACE, _USE_DIS)
         print("Starting interface and neighbor extraction...")
 
         # Step 1: Create the reverse lookup map

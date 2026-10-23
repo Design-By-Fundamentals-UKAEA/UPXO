@@ -16,6 +16,7 @@ matrix conversion, cubic symmetry operators, cubic misorientation
 :mod:`upxo.viz.xphy.pole_figure`).
 """
 
+import warnings
 from copy import deepcopy
 import numpy as np
 from typing import Union, List, Tuple, Optional, Any
@@ -23,6 +24,35 @@ from math import floor
 from random import Random
 from itertools import permutations, product, combinations
 import matplotlib.pyplot as plt
+
+def _warn_stale(name, defect, use):
+    """FutureWarning for a tops method nothing calls any more and that has a known defect."""
+    warnings.warn(
+        f"tops.{name} is deprecated and has a known defect: {defect}. "
+        f"Use {use} instead.", FutureWarning, stacklevel=3)
+
+
+_DEFECT_EINSUM = (
+    "it sums the wrong entries (np.einsum('iijj->ij', dR) is not the trace) and acts on "
+    'the sample side, so every angle is wrong, by up to about 100 deg'
+)
+_DEFECT_EQUIV_SIDE = (
+    'the cubic symmetry operators act on the sample side of the Euler matrix (Rz Rx Rz is '
+    "the transpose of the Bunge g matrix), so the 'symmetric equivalents' are not "
+    'crystal-equivalent orientations, up to 63 deg from the input'
+)
+_DEFECT_FZ = (
+    'the crystal operators are applied on the sample side (S @ g @ R_sample) and the '
+    'sample operators on the crystal side'
+)
+_DEFECT_FZ_CALL = (
+    'it calls fcc_variants_in_FZ, which applies the crystal and sample operators on the '
+    'wrong sides'
+)
+_USE_CO = 'upxo.xtalphy.crystal_orientation.cubic_misorientation'
+_USE_NONE = 'a corrected implementation (not yet written)'
+_USE_SYM = 'upxo.xtalphy.crystal_orientation.fcc_symmetrise_ori'
+
 
 class tops:
     """
@@ -436,6 +466,12 @@ class tops:
 
     def fcc_symmetrise_ori_V1(self, ea_bunge, dtype=np.float32):
         """
+        DEPRECATED, known defect: the cubic symmetry operators act on the sample
+        side of the Euler matrix (Rz Rx Rz is the transpose of the Bunge g matrix),
+        so the 'symmetric equivalents' are not crystal-equivalent orientations, up
+        to 63 deg from the input. Use
+        upxo.xtalphy.crystal_orientation.fcc_symmetrise_ori instead.
+
         Generate symmetric equivalents of an orientation inside Fund. Zone.
 
         Examples
@@ -469,6 +505,7 @@ class tops:
         >>> for R in eq_mats], dtype=np.float32)
         >>> EA_fund_zone[tc] = symm_eq[np.where(np.prod(symm_eq <= 90, axis=1))[0]]
         """
+        _warn_stale('fcc_symmetrise_ori_V1', _DEFECT_EQUIV_SIDE, _USE_SYM)
         g = self.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
         # sym_ops = self.cubic_symmetry_operators()
         eq_mats = [self._proj_to_so3(S @ g) for S in self.sym_ops]
@@ -651,6 +688,11 @@ class tops:
 
     def cubic_misorientation_V1(self, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
+        DEPRECATED, known defect: it sums the wrong entries (np.einsum('iijj->ij',
+        dR) is not the trace) and acts on the sample side, so every angle is wrong,
+        by up to about 100 deg. Use
+        upxo.xtalphy.crystal_orientation.cubic_misorientation instead.
+
         Vectorized fast misorientation (cubic, m-3m).
 
         Accepts Euler triplet (phi1, Phi, phi2) or 3×3 rotation matrix.
@@ -669,6 +711,7 @@ class tops:
         >>> tex = TO()
         >>> tex.cubic_misorientation_V1([0, 0, 0], [35, 45, 90])
         """
+        _warn_stale('cubic_misorientation_V1', _DEFECT_EINSUM, _USE_CO)
         # Normalize inputs to rotation matrices
         gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
         gB = self._as_rotmat(EA2, degrees=degrees)  # (3,3)
@@ -725,6 +768,11 @@ class tops:
 
     def cubic_misorientation_V2(self, EA1, EA2, unique_tol_deg=1e-4, degrees=True):
         """
+        DEPRECATED, known defect: it sums the wrong entries (np.einsum('iijj->ij',
+        dR) is not the trace) and acts on the sample side, so every angle is wrong,
+        by up to about 100 deg. Use
+        upxo.xtalphy.crystal_orientation.cubic_misorientation instead.
+
         Vectorized fast misorientation (cubic, m-3m).
 
         Accepts Euler triplet (phi1, Phi, phi2) or 3×3 rotation matrix.
@@ -741,6 +789,7 @@ class tops:
         >>> tex = TO()
         >>> tex.cubic_misorientation_V2([0, 0, 0], [35, 45, 90])
         """
+        _warn_stale('cubic_misorientation_V2', _DEFECT_EINSUM, _USE_CO)
         # Normalize inputs to rotation matrices
         gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
         gB = self._as_rotmat(EA2, degrees=degrees)  # (3,3)
@@ -1516,6 +1565,10 @@ class tops:
 
     def fcc_variants_in_FZ_old(self, ea_bunge, *, degrees=True, tol=1e-8):
         """
+        DEPRECATED, known defect: the crystal operators are applied on the sample
+        side (S @ g @ R_sample) and the sample operators on the crystal side. Use a
+        corrected implementation (not yet written) instead.
+
         Return ALL unique variants of an orientation inside the Bunge FZ
         for cubic (24) crystal + orthorhombic-sheet D2 (4) sample symmetry.
         Uniqueness is by rotation (not angles), and angles are canonicalized.
@@ -1532,6 +1585,7 @@ class tops:
         -------
         variants_FZ : (k,3) float ndarray (degrees)
         """
+        _warn_stale('fcc_variants_in_FZ_old', _DEFECT_FZ, _USE_NONE)
         g = self._as_rotmat(ea_bunge, degrees=degrees)  # 3x3
         S = self._get_cubic_ops_np()                    # (24,3,3)
         R_sample = self.sheet_D2_sample_ops()           # list of 4
@@ -1576,9 +1630,14 @@ class tops:
 
     def tc_variants_in_FZ(self):
         """
+        DEPRECATED, known defect: it calls fcc_variants_in_FZ, which applies the
+        crystal and sample operators on the wrong sides. Use a corrected
+        implementation (not yet written) instead.
+
         For every TC mean orientation in self.tc_info, compute the
         unique FZ variants (cubic + D2). Returns dict: name -> (k,3) array.
         """
+        _warn_stale('tc_variants_in_FZ', _DEFECT_FZ_CALL, _USE_NONE)
         if not hasattr(self, 'tc_info'):
             raise RuntimeError("tc_info not set. Call set_tc_info(...) first.")
 
@@ -1606,9 +1665,14 @@ class tops:
 
     def fcc_variants_in_FZ(self, ea_bunge, *, degrees=True, tol=1e-8):
         """
+        DEPRECATED, known defect: the crystal operators are applied on the sample
+        side (S @ g @ R_sample) and the sample operators on the crystal side. Use a
+        corrected implementation (not yet written) instead.
+
         Unique FZ variants for cubic crystal (24 left ops).
         Sample symmetry (D2, 4 right ops) is used ONLY to fold into the FZ.
         """
+        _warn_stale('fcc_variants_in_FZ', _DEFECT_FZ, _USE_NONE)
         g = self._as_rotmat(ea_bunge, degrees=degrees)   # 3x3
         S = self._get_cubic_ops_np()                      # (24,3,3)
         R_sample = self.sheet_D2_sample_ops()             # 4 right ops
