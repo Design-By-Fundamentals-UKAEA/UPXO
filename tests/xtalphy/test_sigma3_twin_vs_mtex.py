@@ -1,6 +1,7 @@
 """
 Sigma3 twin generation (``TwinGenerator3D._apply_sigma3_variant``) and the {111} habit plane
 (``compute_s3_habit_plane_3d``, ``compute_s3_lamella_angle_2d``), checked against mtex.
+The Sigma5 seeding used by the 2D Monte Carlo twin builder is checked at the end.
 
 The numbers below were produced once with mtex 1.0.0 on a cubic m-3m crystal frame and are
 frozen here, so the tests need neither mtex nor an EBSD file.
@@ -23,6 +24,7 @@ import pytest
 from upxo.pxtal.twinned_simple_3d.twin_generator_3d import TwinGenerator3D
 from upxo.xtalphy.crystal_orientation import (
     _SIGMA3_Q_ALL_VARIANTS,
+    _SIGMA5_Q_VARIANTS,
     _positive_w,
     _quat_mul,
     compute_s3_habit_plane_3d,
@@ -171,3 +173,41 @@ def test_parent_and_twin_share_the_habit_plane(parent, variant):
     n_parent = compute_s3_habit_plane_3d(_parent_q(parent), rng, variant_idx=variant)
     n_twin = compute_s3_habit_plane_3d(q_twin, rng, variant_idx=variant)
     assert np.allclose(n_parent, n_twin, atol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Sigma5: 36.87 degrees about a cubic <100> axis, seeded by the 2D Monte Carlo twin builder
+# ---------------------------------------------------------------------------
+
+_MTEX_SIGMA5_DEG = 36.8698976         # mtex angle between a parent and its Sigma5 child, every parent
+
+
+def _crystal_frame_relative(q_parent, q_child):
+    """g_parent @ g_child.T of two stored quaternions: the rotation between the two crystals."""
+    gp = quat_to_R_batch(np.asarray(q_parent)[None])[0]
+    gc = quat_to_R_batch(np.asarray(q_child)[None])[0]
+    return gp @ gc.T
+
+
+def _axis(rel):
+    a = np.array([rel[2, 1] - rel[1, 2], rel[0, 2] - rel[2, 0], rel[1, 0] - rel[0, 1]])
+    return a / np.linalg.norm(a)
+
+
+@pytest.mark.parametrize("variant", range(3))
+@pytest.mark.parametrize("parent", _PARENTS)
+def test_sigma5_child_is_36p87_degrees_about_a_cubic_axis_of_its_parent(parent, variant):
+    q_child = _positive_w(_quat_mul(_SIGMA5_Q_VARIANTS[variant], _parent_q(parent)))
+    rel = _crystal_frame_relative(_parent_q(parent), q_child)
+    assert _disorientation_deg(_parent_R(parent), _R_of_stored(q_child)) == pytest.approx(
+        _MTEX_SIGMA5_DEG, abs=1e-3)
+    assert np.sort(np.abs(_axis(rel)))[-1] == pytest.approx(1.0, abs=1e-9)         # along <100>
+
+
+@pytest.mark.parametrize("parent", _PARENTS)
+def test_sigma5_composed_on_the_parent_side_is_not_about_a_cubic_axis(parent):
+    # The angle alone cannot tell the two sides apart (a rotation under 45 degrees is its own
+    # disorientation); the axis does.
+    q_child = _positive_w(_quat_mul(_parent_q(parent), _SIGMA5_Q_VARIANTS[0]))
+    rel = _crystal_frame_relative(_parent_q(parent), q_child)
+    assert np.sort(np.abs(_axis(rel)))[-1] < 0.999
