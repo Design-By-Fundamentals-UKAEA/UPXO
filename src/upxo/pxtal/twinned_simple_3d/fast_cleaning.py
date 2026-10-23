@@ -190,3 +190,17 @@ def remove_spikes(lgi, same_count_threshold=1):
         raise ImportError("remove_spikes needs numba, which is not installed.")
     out = np.array(lgi, copy=True)
     return out, int(_spike_kernel(out, int(same_count_threshold)))
+
+
+# ---------------------------------------------------------------------------
+# The exporter's grain-to-element index
+# ---------------------------------------------------------------------------
+def group_voxels_by_label(lgi_flat):
+    """``{label: 1-based voxel ids (int32, ascending)}`` for every positive
+    label, from one stable sort instead of one scan per label. Same result as the
+    per-label scan of ``AbaqusExporter3D.build_index``."""
+    flat = np.asarray(lgi_flat).ravel()
+    order = np.argsort(flat, kind='stable')
+    cuts = np.flatnonzero(np.diff(flat[order])) + 1
+    keys = flat[order[np.r_[0, cuts]]]
+    return {int(k): (g + 1).astype(np.int32) for k, g in zip(keys, np.split(order, cuts)) if k > 0}

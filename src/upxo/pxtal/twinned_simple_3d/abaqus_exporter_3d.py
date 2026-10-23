@@ -351,6 +351,10 @@ class AbaqusExporter3D:
         values are accepted but NOT implemented: materials/sections are
         still written per-grain, and a warning is raised at ``write()``
         time rather than silently honouring the request.
+    backend : {'auto', 'numba', 'numpy'}
+        ``'numba'`` uses numba (when installed) for the grain-element index; the
+        files are the same.
+        ``'auto'`` is numba when installed, else numpy. Default ``'auto'``.
     index : GrainElementIndex or None
         A pre-built index from :meth:`build_index`. When given, the
         expensive grain-to-element indexing pass is skipped entirely
@@ -397,6 +401,7 @@ class AbaqusExporter3D:
             twin_role: Dict[int, str],
             twin_parent_of: Dict[int, int],
             verbose: bool = True,
+            backend: str = 'auto',
     ) -> 'GrainElementIndex':
         """
         Build the grain-to-element index from a cleaned labelled
@@ -407,6 +412,10 @@ class AbaqusExporter3D:
         ``(lgi, twin_role, twin_parent_of)``, NOT on any export setting,
         so build it once and reuse the same :class:`GrainElementIndex`
         across repeated exports that only change settings.
+
+        ``backend='numba'`` (or ``'auto'`` with numba installed) groups the voxels
+        with one sort instead of one scan per grain: the same index, much faster
+        for many grains. ``'numpy'`` (default) is the per-grain scan.
         """
         # lgi arrives in the pipeline's native (nz, ny, nx) axis order;
         # transpose once here so every node/element/coordinate calculation
@@ -437,11 +446,15 @@ class AbaqusExporter3D:
             print('AbaqusExporter3D: indexing grain-to-element map...', end='', flush=True)
         _t = time.perf_counter()
         grain_elems: Dict[int, np.ndarray] = {}
-        unique_gids = np.unique(lgi_flat)
-        unique_gids = unique_gids[unique_gids > 0]
-        for gid in unique_gids:
-            grain_elems[int(gid)] = (
-                np.where(lgi_flat == gid)[0] + 1).astype(np.int32)
+        from upxo.pxtal.twinned_simple_3d import fast_cleaning
+        if fast_cleaning.resolve_backend(backend) == 'numba':
+            grain_elems = fast_cleaning.group_voxels_by_label(lgi_flat)
+        else:
+            unique_gids = np.unique(lgi_flat)
+            unique_gids = unique_gids[unique_gids > 0]
+            for gid in unique_gids:
+                grain_elems[int(gid)] = (
+                    np.where(lgi_flat == gid)[0] + 1).astype(np.int32)
         if verbose:
             print(f'  done ({time.perf_counter()-_t:.1f}s)  '
                   f'{len(grain_elems)} grains')
@@ -481,6 +494,7 @@ class AbaqusExporter3D:
             nset_config:          Optional[Dict[str, Dict[str, object]]] = None,
             material_level:       str   = 'feature',
             index:                Optional['GrainElementIndex'] = None,
+            backend:              str = 'auto',
     ):
         if twin_role is None or twin_parent_of is None or all_quats is None:
             raise ValueError(
@@ -508,7 +522,7 @@ class AbaqusExporter3D:
         if index is None:
             if lgi is None:
                 raise ValueError('Either index=... or lgi=... must be provided.')
-            index = self.build_index(lgi, twin_role, twin_parent_of)
+            index = self.build_index(lgi, twin_role, twin_parent_of, backend=backend)
 
         self.lgi              = index.lgi
         self.twin_role        = twin_role
@@ -540,6 +554,7 @@ class AbaqusExporter3D:
         self.element_outputs  = element_outputs
         self.node_outputs     = node_outputs
         self.write_step       = bool(write_step)
+        self.backend          = backend
         if self.write_step:
             # the step's boundary conditions refer to these face node sets
             for face in required_bc_faces(load_axis):
