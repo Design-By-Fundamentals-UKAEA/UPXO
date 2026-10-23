@@ -156,10 +156,16 @@ def build_ipf_rgb(
         quats_dict: dict,
         sample_direction=(0., 0., 1.),
         grey: tuple = (0.75, 0.75, 0.75),
+        quat_convention: str = 'defdap',
 ) -> np.ndarray:
     """
     Build a pixel-level IPF RGB image from an integer label field and a
     grain-quaternion mapping.
+
+    The colour is mtex's default inverse-pole-figure key for cubic (m-3m)
+    crystals (see :mod:`upxo.xtalphy.ipf`): the crystal direction of the
+    sample axis is brought into the fundamental sector and coloured from it,
+    so crystallographically equivalent orientations have one colour.
 
     Parameters
     ----------
@@ -171,44 +177,26 @@ def build_ipf_rgb(
         Sample reference direction for IPF colouring. Default [001] (ND).
     grey : tuple of 3 floats
         RGB colour for pixels whose grain has no assigned orientation.
+    quat_convention : {'defdap', 'crystal_to_sample'}
+        ``'defdap'`` (default): the quaternions are stored the way DefDAP stores
+        them (``EBSDReader.quat_ebsd``, ``grain_avg_quats``, the Twinned pools).
+        ``'crystal_to_sample'``: the quaternion of the crystal -> sample rotation.
 
     Returns
     -------
     rgb : ndarray (ny, nx, 3), float32 in [0, 1]
     """
-    sd = np.asarray(sample_direction, dtype=np.float64)
-    sd /= np.linalg.norm(sd) + 1e-12
+    from upxo.xtalphy.ipf import cubic_ipf_rgb, ipf_crystal_direction
 
+    lfi = np.asarray(lfi)
     max_gid = int(lfi.max())
-    q_lut   = np.zeros((max_gid + 1, 4), dtype=np.float64)
-    q_lut[:, 0] = 1.0                        # identity quaternion default
-    valid   = np.zeros(max_gid + 1, dtype=bool)
-    for gid, q in quats_dict.items():
-        g = int(gid)
-        if 0 <= g <= max_gid:
-            q_lut[g] = q
-            valid[g] = True
-
-    qmap = q_lut[lfi]                        # (ny, nx, 4)
-    w = qmap[..., 0]; x = qmap[..., 1]
-    y = qmap[..., 2]; z = qmap[..., 3]
-
-    # v = |R(q).T @ sd|  (standard IPF colour formula)
-    # R(q) columns:
-    #   col0 = [1-2(y²+z²),  2(xy+wz),   2(xz-wy)]
-    #   col1 = [2(xy-wz),    1-2(x²+z²), 2(yz+wx)]
-    #   col2 = [2(xz+wy),    2(yz-wx),   1-2(x²+y²)]
-    s0, s1, s2 = sd
-    v0 = (1 - 2*(y*y + z*z))*s0 + 2*(x*y + w*z)*s1 + 2*(x*z - w*y)*s2
-    v1 = 2*(x*y - w*z)*s0 + (1 - 2*(x*x + z*z))*s1 + 2*(y*z + w*x)*s2
-    v2 = 2*(x*z + w*y)*s0 + 2*(y*z - w*x)*s1 + (1 - 2*(x*x + y*y))*s2
-
-    v   = np.stack([np.abs(v0), np.abs(v1), np.abs(v2)], axis=-1)
-    vmx = v.max(axis=-1, keepdims=True)
-    vmx = np.where(vmx == 0, 1.0, vmx)
-    rgb = np.clip(v / vmx, 0.0, 1.0).astype(np.float32)
-    rgb[~valid[lfi]] = np.asarray(grey, dtype=np.float32)
-    return rgb
+    lut = np.empty((max_gid + 1, 3), dtype=np.float32)
+    lut[:] = np.asarray(grey, dtype=np.float32)
+    gids = [int(g) for g in quats_dict if 0 <= int(g) <= max_gid]
+    if gids:
+        q = np.array([quats_dict[g] for g in gids], dtype=np.float64)
+        lut[gids] = cubic_ipf_rgb(ipf_crystal_direction(q, sample_direction, quat_convention))
+    return lut[np.clip(lfi, 0, max_gid)]
 
 
 def plot_grain_size_histogram(rdr,

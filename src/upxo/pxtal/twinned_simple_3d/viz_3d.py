@@ -81,50 +81,61 @@ def plot_ipf_slice(
     return fig, ax
 
 
-def _ipf_triangle_rgb_grid(n: int = 200):
-    """Fine RGB grid covering the standard cubic fundamental triangle
-    [001]-[011]-[111], coloured with the exact same formula
-    ``ebsdviz.build_ipf_rgb`` applies per-pixel (``v = |d| / max(|d|)``,
-    here with ``d`` a direction swept across the triangle in place of
-    that function's ``R(q)^T @ sample_direction``) -- so a key built from
-    this grid always matches what :func:`plot_ipf_slice` actually
-    rendered, rather than some other software's IPF colour convention.
-    Corner directions barycentrically blended then renormalised to unit
-    length (a standard, simple way to interpolate across the triangle;
-    not geodesically exact, but adequate for a colour-key legend).
+def _ipf_key_image(n: int = 400):
+    """The mtex IPF key on the fundamental sector [001]-[101]-[111], in the equal-area
+    projection (radius 1 on the equator) that mtex draws it in.
 
-    Returns U, V (grid coordinates, both in [0, 1]), rgb (n, n, 3), and
-    mask (n, n bool -- True inside the triangle U + V <= 1).
+    Directions are sampled on a regular grid of the projection plane, kept where they fall
+    inside the sector, and coloured by :func:`upxo.xtalphy.ipf.cubic_ipf_rgb`.
+
+    Returns
+    -------
+    extent : (x0, x1, y0, y1)
+        Plane extent of the sector.
+    rgba : ndarray (n, n, 4)
+        Colours; alpha 0 outside the sector.
+    outline : ndarray (m, 2)
+        The three boundary arcs of the sector in the projection plane, closed.
+    corners : ndarray (3, 2)
+        Projected positions of [001], [101], [111].
     """
-    c001 = np.array([0., 0., 1.])
-    c011 = np.array([0., 1., 1.]) / np.sqrt(2)
-    c111 = np.array([1., 1., 1.]) / np.sqrt(3)
+    from upxo.xtalphy.ipf import (
+        CUBIC_SECTOR_VERTICES, cubic_ipf_rgb, equal_area_xy, sector_mask)
 
-    u = np.linspace(0., 1., n)
-    v = np.linspace(0., 1., n)
-    U, V = np.meshgrid(u, v)
-    mask = (U + V) <= 1.0
-    a, b, c = 1.0 - U - V, U, V   # barycentric weights on c001/c011/c111
+    V = CUBIC_SECTOR_VERTICES
+    arcs = []
+    for i in range(3):
+        a, b = V[i], V[(i + 1) % 3]
+        ang = np.arccos(np.clip(a @ b, -1.0, 1.0))
+        t = np.linspace(0.0, 1.0, 120)[:, None]
+        arc = (np.sin((1 - t) * ang) * a + np.sin(t * ang) * b) / np.sin(ang)
+        arcs.append(np.stack(equal_area_xy(arc), axis=-1))
+    outline = np.concatenate(arcs + [arcs[0][:1]])
+    x0, y0 = outline.min(axis=0)
+    x1, y1 = outline.max(axis=0)
 
-    d = (a[..., None] * c001 + b[..., None] * c011 + c[..., None] * c111)
-    norm = np.linalg.norm(d, axis=-1, keepdims=True)
-    d = d / np.where(norm == 0, 1.0, norm)
-
-    vabs = np.abs(d)
-    vmax = vabs.max(axis=-1, keepdims=True)
-    rgb = np.clip(vabs / np.where(vmax == 0, 1.0, vmax), 0.0, 1.0)
-    return U, V, rgb, mask
+    X, Y = np.meshgrid(np.linspace(x0, x1, n), np.linspace(y0, y1, n))
+    r2 = X ** 2 + Y ** 2
+    s = np.sqrt(np.clip(2.0 - r2, 0.0, None))
+    dirs = np.stack([X * s, Y * s, 1.0 - r2], axis=-1)
+    inside = (r2 <= 1.0) & sector_mask(dirs, tol=1e-9)
+    rgba = np.zeros((n, n, 4), dtype=np.float64)
+    rgba[inside, :3] = cubic_ipf_rgb(dirs[inside])
+    rgba[inside, 3] = 1.0
+    corners = np.stack(equal_area_xy(V), axis=-1)
+    return (x0, x1, y0, y1), rgba, outline, corners
 
 
 def plot_ipf_triangle_key(
         ax=None,
-        n: int = 200,
-        corner_labels: Tuple[str, str, str] = ('[001]', '[011]', '[111]'),
+        n: int = 400,
+        corner_labels: Tuple[str, str, str] = ('[001]', '[101]', '[111]'),
         figsize: Tuple[float, float] = (4., 4.),
 ):
     """
-    Plot the IPF colour-key triangle matching :func:`plot_ipf_slice`'s
-    colour formula.
+    Plot the IPF colour key: mtex's default key for cubic crystals, drawn on the
+    equal-area projection of the fundamental sector [001]-[101]-[111]. This is the key
+    :func:`plot_ipf_slice` and :func:`upxo.viz.ebsdviz.build_ipf_rgb` colour with.
 
     Parameters
     ----------
@@ -132,16 +143,15 @@ def plot_ipf_triangle_key(
         Plots into an existing axes (e.g. one embedded in a larger figure) if given;
         otherwise creates its own standalone figure.
     n : int
-        Grid resolution (n x n before triangular masking).
+        Grid resolution (n x n before masking to the sector).
     corner_labels : (str, str, str)
-        Labels for the [001]/[011]/[111] corners.
+        Labels for the [001]/[101]/[111] corners.
     figsize : (float, float)
         Only used when ``ax`` is None.
     """
     import matplotlib.pyplot as plt
 
-    U, V, rgb, mask = _ipf_triangle_rgb_grid(n)
-    rgba = np.dstack([rgb, mask.astype(np.float32)])
+    (x0, x1, y0, y1), rgba, outline, corners = _ipf_key_image(n)
 
     standalone = ax is None
     if standalone:
@@ -149,17 +159,18 @@ def plot_ipf_triangle_key(
     else:
         fig = ax.get_figure()
 
-    # Right-triangle layout in (x, y) plot space: (0,0)=[001], (1,0)=[011],
-    # (0,1)=[111] -- matches U/V's meshgrid orientation exactly (U along
-    # columns/x, V along rows/y), so the boundary outline lines up with
-    # the coloured region with no extra transform.
-    ax.imshow(rgba, origin='lower', extent=(0, 1, 0, 1), interpolation='bilinear')
-    ax.plot([0, 1, 0, 0], [0, 0, 1, 0], color='black', linewidth=1.0)
-    ax.text(-0.04, -0.04, corner_labels[0], ha='right', va='top', fontsize=9, fontweight='bold')
-    ax.text(1.02, -0.04, corner_labels[1], ha='left', va='top', fontsize=9, fontweight='bold')
-    ax.text(-0.04, 1.02, corner_labels[2], ha='right', va='bottom', fontsize=9, fontweight='bold')
-    ax.set_xlim(-0.2, 1.25)
-    ax.set_ylim(-0.2, 1.2)
+    ax.imshow(rgba, origin='lower', extent=(x0, x1, y0, y1), interpolation='bilinear')
+    ax.plot(outline[:, 0], outline[:, 1], color='black', linewidth=1.0)
+    centre = corners.mean(axis=0)
+    pad = 0.04 * max(x1 - x0, y1 - y0)
+    for (cx, cy), label in zip(corners, corner_labels):
+        out = np.array([cx, cy]) - centre
+        out = out / (np.linalg.norm(out) + 1e-12)
+        ax.text(cx + pad * out[0], cy + pad * out[1], label, fontsize=9, fontweight='bold',
+                ha='left' if out[0] > 0.2 else ('right' if out[0] < -0.2 else 'center'),
+                va='bottom' if out[1] > 0.2 else ('top' if out[1] < -0.2 else 'center'))
+    ax.set_xlim(x0 - 0.2 * (x1 - x0), x1 + 0.3 * (x1 - x0))
+    ax.set_ylim(y0 - 0.2 * (y1 - y0), y1 + 0.2 * (y1 - y0))
     ax.set_aspect('equal')
     ax.axis('off')
     if standalone:

@@ -691,7 +691,12 @@ def cubic_misorientation_scalar(EA1, EA2,
 
 def ipf_color(euler_deg, sample_direction=(0., 0., 1.)) -> tuple[float, float, float]:
     """
-    Approximate IPF colour for a single cubic orientation.
+    IPF colour of one cubic orientation, mtex's default inverse-pole-figure key.
+
+    The crystal direction of the sample axis, ``R.T @ sd``, is brought into the
+    fundamental sector [001]-[101]-[111] and coloured from there
+    (:func:`upxo.xtalphy.ipf.cubic_ipf_rgb`), so orientations that differ by a
+    cubic symmetry operation have the same colour.
 
     Parameters
     ----------
@@ -704,13 +709,10 @@ def ipf_color(euler_deg, sample_direction=(0., 0., 1.)) -> tuple[float, float, f
     -------
     (r, g, b) : tuple of float in [0, 1]
     """
-    sd = np.asarray(sample_direction, dtype=float)
-    R  = euler_bunge_to_matrix(*euler_deg, degrees=True)
-    v  = np.abs(R.T @ sd)
-    v_max = np.max(v)
-    if v_max > 0:
-        v /= v_max
-    return tuple(v)
+    from upxo.xtalphy.ipf import cubic_ipf_rgb, ipf_crystal_direction
+    R = euler_bunge_to_matrix(*euler_deg, degrees=True)
+    v = ipf_crystal_direction(R[None], sample_direction, convention='matrix')[0]
+    return tuple(float(c) for c in cubic_ipf_rgb(v))
 
 
 # ---------------------------------------------------------------------------

@@ -3648,23 +3648,18 @@ class repgen2d:
     def _poly_ipf_colors(quats_dict: dict, sample_direction=(0., 0., 1.)) -> dict:
         """
         Return ``{gid: ndarray(3,)}`` IPF RGB colour for each grain.
-        Uses the same ``|R(q)ᵀ · sd|`` formula as ``build_ipf_rgb``.
+        Uses the same mtex-default key as ``build_ipf_rgb``; the quaternions are
+        DefDAP-stored ones, as everywhere in this class.
         Grains absent from *quats_dict* are not included — caller supplies grey.
         """
         import numpy as np
-        sd = np.asarray(sample_direction, dtype=np.float64)
-        sd /= np.linalg.norm(sd) + 1e-12
-        colors = {}
-        for gid, q in quats_dict.items():
-            w, x, y, z = float(q[0]), float(q[1]), float(q[2]), float(q[3])
-            R = np.array([
-                [1 - 2*(y*y + z*z),  2*(x*y - z*w),  2*(x*z + y*w)],
-                [    2*(x*y + z*w),  1 - 2*(x*x + z*z),  2*(y*z - x*w)],
-                [    2*(x*z - y*w),  2*(y*z + x*w),  1 - 2*(x*x + y*y)],
-            ])
-            cd = np.abs(R.T @ sd)
-            colors[int(gid)] = cd / (cd.max() + 1e-12)
-        return colors
+        from upxo.xtalphy.ipf import cubic_ipf_rgb, ipf_crystal_direction
+        gids = [int(g) for g in quats_dict]
+        if not gids:
+            return {}
+        q = np.array([quats_dict[g] for g in quats_dict], dtype=np.float64)
+        rgb = cubic_ipf_rgb(ipf_crystal_direction(q, sample_direction, 'defdap'))
+        return {g: rgb[i] for i, g in enumerate(gids)}
 
     def plot_smooth_ipf_comparison(
             self,

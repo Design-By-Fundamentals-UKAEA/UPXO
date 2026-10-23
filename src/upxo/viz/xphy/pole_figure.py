@@ -634,25 +634,27 @@ class PoleFigure:
     ) -> np.ndarray:
         """
         Calculate Inverse Pole Figure (IPF) RGB colors for each orientation.
+
+        For cubic symmetry the colour is mtex's default IPF key
+        (:func:`upxo.xtalphy.ipf.cubic_ipf_rgb`): the crystal direction of the
+        sample axis is brought into the fundamental sector, so equivalent
+        orientations share one colour. The key is implemented for cubic
+        symmetry only; for any other symmetry the colour is the normalised
+        absolute crystal direction, which is not symmetry-invariant, and a
+        warning says so.
         """
-        sd = np.asarray(ipf_direction, dtype=np.float64)
-        sd /= np.linalg.norm(sd) + 1e-12
-        
-        w = self.quats[:, 0]
-        x = self.quats[:, 1]
-        y = self.quats[:, 2]
-        z = self.quats[:, 3]
-        
-        s0, s1, s2 = sd
-        v0 = (1 - 2*(y*y + z*z))*s0 + 2*(x*y + w*z)*s1 + 2*(x*z - w*y)*s2
-        v1 = 2*(x*y - w*z)*s0 + (1 - 2*(x*x + z*z))*s1 + 2*(y*z + w*x)*s2
-        v2 = 2*(x*z + w*y)*s0 + 2*(y*z - w*x)*s1 + (1 - 2*(x*x + y*y))*s2
-        
-        v = np.stack([np.abs(v0), np.abs(v1), np.abs(v2)], axis=-1)
+        import warnings
+        from upxo.xtalphy.ipf import cubic_ipf_rgb, ipf_crystal_direction
+
+        v = ipf_crystal_direction(self.R_stack, ipf_direction, convention='matrix')
+        if len(self.symmetry_ops) == 24:
+            return cubic_ipf_rgb(v)
+        warnings.warn("IPF colours follow mtex's key for cubic symmetry only; this symmetry "
+                      "uses the plain normalised crystal direction, which is not "
+                      "symmetry-invariant.", UserWarning, stacklevel=2)
+        v = np.abs(v)
         vmx = v.max(axis=-1, keepdims=True)
-        vmx = np.where(vmx == 0, 1.0, vmx)
-        rgb = np.clip(v / vmx, 0.0, 1.0)
-        return rgb
+        return np.clip(v / np.where(vmx == 0, 1.0, vmx), 0.0, 1.0)
 
     def _draw_axis_crosshairs(
         self,
