@@ -32,7 +32,7 @@ class StructureCleaner3D:
         'do_spike_removal', 'do_lobe_split',
         'lgi_clean', 'all_quats_clean', 'twin_role_clean', 'twin_parent_of_clean',
         'split_events', 'spike_count', 'n_splits',
-        'remaining_spikes', 'remaining_multi', 'upscale_applied', '_rng',
+        'remaining_spikes', 'remaining_multi', 'upscale_applied', '_rng', 'backend',
     )
 
     def __init__(
@@ -43,6 +43,7 @@ class StructureCleaner3D:
             min_clean_voxels: int = 0,
             do_spike_removal: bool = True,
             do_lobe_split: bool = True,
+            backend: str = 'auto',
     ):
         self.upscale_fallback  = upscale_fallback
         self.split_jitter_deg  = split_jitter_deg
@@ -68,6 +69,12 @@ class StructureCleaner3D:
         self.remaining_multi: int = 0
         self.upscale_applied: bool = False
         self._rng = np.random.default_rng(rng_seed)
+        # 'numba' (or 'auto' with numba installed): the spike pass as a numba kernel and
+        # the lobe split with one pass for component sizes and one lookup relabel, the same
+        # result as the numpy code, much faster for many components. 'numpy': the code
+        # below as it was. 'numba' raises ImportError if numba is not installed.
+        from upxo.pxtal.twinned_simple_3d import fast_cleaning
+        self.backend: str = fast_cleaning.resolve_backend(backend)
 
     # ── fast private helpers ──────────────────────────────────────────────────
 
@@ -257,6 +264,79 @@ class StructureCleaner3D:
 
         return lgi, all_quats, twin_role, twin_parent_of, split_events, next_gid
 
+    def _clean_spikes(self, lgi):
+        """Spike pass of the chosen backend. Returns (lgi, spike_count)."""
+        if self.backend == 'numba':
+            from upxo.pxtal.twinned_simple_3d import fast_cleaning
+            return fast_cleaning.remove_spikes(lgi, self._SPIKE_SAME_COUNT_THRESHOLD)
+        return self._fast_clean_spikes(lgi)
+
+    def _split_lobes(self, lgi, all_quats, twin_role, twin_parent_of, next_gid, skip_gids=None):
+        """Lobe split of the chosen backend. Same arguments and results as
+        :meth:`_fast_split_lobes`."""
+        if self.backend == 'numba':
+            return self._split_lobes_vectorised(lgi, all_quats, twin_role, twin_parent_of, next_gid, skip_gids)
+        return self._fast_split_lobes(lgi, all_quats, twin_role, twin_parent_of, next_gid, skip_gids=skip_gids)
+
+    def _split_lobes_vectorised(self, lgi, all_quats, twin_role, twin_parent_of, next_gid, skip_gids=None):
+        """:meth:`_fast_split_lobes` with the component sizes from one bincount and
+        every split lobe relabelled by one lookup, instead of two full-array scans per
+        lobe. Lobes are numbered in the same order, so the result is identical."""
+        import cc3d
+        from collections import defaultdict
+
+        split_events: Dict = {}
+        cc = cc3d.connected_components(lgi.astype(np.uint32), connectivity=6)
+        n_cc = int(cc.max())
+        sizes = np.bincount(cc.ravel(), minlength=n_cc + 1)
+        flat_cc = cc.ravel()
+        idx = np.flatnonzero(flat_cc)
+        first = np.full(n_cc + 1, -1, dtype=np.int64)
+        first[flat_cc[idx[::-1]]] = idx[::-1]                      # first voxel of every component
+        cc_ids = np.flatnonzero(first >= 0)
+        grain_ids = lgi.ravel()[first[cc_ids]]
+
+        grain_to_ccs: Dict = defaultdict(list)
+        for cc_id, gid in zip(cc_ids.tolist(), grain_ids.tolist()):
+            grain_to_ccs[int(gid)].append(int(cc_id))
+
+        _skip = skip_gids or set()
+        new_of_cc = np.zeros(n_cc + 1, dtype=np.int64)
+        for gid, ccs in grain_to_ccs.items():
+            if len(ccs) <= 1 or gid in _skip:
+                continue
+            comp_sizes = sorted([(c, int(sizes[c])) for c in ccs], key=lambda x: x[1], reverse=True)
+            parent_q = all_quats.get(gid)
+            parent_role = twin_role.get(gid, 'non_host')
+            for rank, (comp_id, comp_size) in enumerate(comp_sizes):
+                if rank == 0:
+                    continue
+                new_of_cc[comp_id] = next_gid
+                q_new = parent_q.copy() if parent_q is not None else np.array([1., 0., 0., 0.])
+                jitter_applied = 0.0
+                if self.split_jitter_deg > 0.0 and parent_q is not None:
+                    try:
+                        from upxo.xtalphy.crystal_orientation import apply_orientation_jitter
+                        q_new = apply_orientation_jitter(parent_q, self.split_jitter_deg, self._rng)
+                        cos_h = float(np.clip(np.abs(np.dot(parent_q, q_new)), 0., 1.))
+                        jitter_applied = float(np.degrees(2. * np.arccos(cos_h)))
+                    except Exception:
+                        pass
+                all_quats[next_gid] = q_new
+                twin_role[next_gid] = parent_role
+                twin_parent_of[next_gid] = gid
+                split_events[next_gid] = {
+                    'parent_gid': gid,
+                    'component_size_vox': comp_size,
+                    'jitter_applied_deg': jitter_applied,
+                }
+                next_gid += 1
+
+        relabel = new_of_cc[cc]
+        sel = relabel > 0
+        lgi[sel] = relabel[sel]
+        return lgi, all_quats, twin_role, twin_parent_of, split_events, next_gid
+
     def _count_defects(self, lgi: np.ndarray) -> Dict:
         """Count remaining spikes and multi-component grains."""
         import cc3d
@@ -312,7 +392,7 @@ class StructureCleaner3D:
         if self.do_spike_removal:
             print('  [S30] Step 1/2  Spike removal...', end='', flush=True)
             _t1 = _t.perf_counter()
-            lgi_c, self.spike_count = self._fast_clean_spikes(lgi_c)
+            lgi_c, self.spike_count = self._clean_spikes(lgi_c)
             print(f'  done  {self.spike_count} spikes  ({_t.perf_counter()-_t1:.1f}s)')
         else:
             print('  [S30] Step 1/2  Spike removal...  SKIPPED (disabled)')
@@ -333,8 +413,8 @@ class StructureCleaner3D:
                 _skip  = set()
                 n_skip = 0
             lgi_c, q_c, role_c, par_c, self.split_events, next_gid = \
-                self._fast_split_lobes(lgi_c, q_c, role_c, par_c, next_gid,
-                                       skip_gids=_skip)
+                self._split_lobes(lgi_c, q_c, role_c, par_c, next_gid,
+                                  skip_gids=_skip)
             self.n_splits = len(self.split_events)
             print(f'  done  {self.n_splits} splits  skipped {n_skip} small grains  '
                   f'({_t.perf_counter()-_t2:.1f}s)')
@@ -359,12 +439,12 @@ class StructureCleaner3D:
             lgi_c = self.apply_upscale(lgi_c, factor=2)
             self.upscale_applied = True
             if self.do_spike_removal:
-                lgi_c, sp2 = self._fast_clean_spikes(lgi_c)
+                lgi_c, sp2 = self._clean_spikes(lgi_c)
                 self.spike_count += sp2
             if self.do_lobe_split:
                 all_gids2 = sorted(int(g) for g in np.unique(lgi_c) if g > 0)
                 next_gid2 = max(all_gids2) + 1
-                lgi_c, q_c, role_c, par_c, ev2, _ = self._fast_split_lobes(
+                lgi_c, q_c, role_c, par_c, ev2, _ = self._split_lobes(
                     lgi_c, q_c, role_c, par_c, next_gid2)
                 self.split_events.update(ev2)
                 self.n_splits = len(self.split_events)
@@ -467,6 +547,7 @@ class StructureCleaner3D:
             do_spike_removal: bool = True,
             do_lobe_split: bool = True,
             verbose: bool = True,
+            backend: str = 'auto',
     ) -> Tuple['StructureCleaner3D', int]:
         """
         Repeats :meth:`clean` up to ``n_passes`` times, feeding each
@@ -493,6 +574,8 @@ class StructureCleaner3D:
         n_passes : int
             Maximum number of cleaning passes. 1 reproduces a single
             ``clean()`` call exactly.
+        backend : {'auto', 'numba', 'numpy'}
+            As the constructor's ``backend``.
         Other parameters : forwarded to the constructor on every pass.
 
         Returns
@@ -520,6 +603,7 @@ class StructureCleaner3D:
                 min_clean_voxels=min_clean_voxels,
                 do_spike_removal=do_spike_removal,
                 do_lobe_split=do_lobe_split,
+                backend=backend,
             )
             cleaner.clean(lgi_in, quats_in, role_in, parent_in)
             n_passes_run = it
