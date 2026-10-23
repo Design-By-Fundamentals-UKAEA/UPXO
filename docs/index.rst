@@ -12,6 +12,7 @@ grain structures.
    introduction
    getting_started
    concepts
+   orientation_conventions
    workflows
 
 .. toctree::

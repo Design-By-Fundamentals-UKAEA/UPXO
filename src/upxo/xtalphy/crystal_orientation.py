@@ -132,6 +132,24 @@ def euler_bunge_to_matrix(phi1: float, Phi: float, phi2: float,
     """
     Bunge ZXZ convention: R = Rz(phi1) · Rx(Phi) · Rz(phi2).
 
+    R takes crystal vectors to the sample frame (``v_sample = R @ v_crystal``).
+    It is the transpose of the Bunge g matrix found in textbooks (sample ->
+    crystal), and it is the matrix mtex holds for an orientation with the same
+    Euler angles.
+
+    Conventions that follow from this, used throughout the package:
+
+    * The 24 cubic symmetry operators act on the crystal side: ``R @ S``
+      (``S @ g`` for g). The disorientation of two orientations is the smallest
+      angle of ``Ra.T @ Rb @ S`` over the operators.
+    * A fixed crystal-frame relationship (a twin, Kurdjumov-Sachs variant) is
+      composed on the same side as a symmetry operator: ``R @ T``, ``T @ g``.
+    * A sample direction ``d`` is ``R.T @ d`` in the crystal frame; the
+      normal of crystal plane ``n`` is ``R @ n`` in the sample frame.
+    * Quaternions stored by the EBSD reader, ``grain_avg_quats`` and the
+      orientation pools are the quaternion of g, not of R. Convert them with
+      ``defdap_passive_to_active`` before using them as crystal -> sample.
+
     Parameters
     ----------
     phi1, Phi, phi2 : float
