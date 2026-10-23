@@ -62,6 +62,41 @@ def disorientation_from_g(g1, g2):
     return angle, M_all[i, j]
 
 
+# trace(S[s] @ dR @ S_T[t]) == trace(C[t, s] @ dR) by the cyclic property of
+# the trace, with C[t, s] = S_T[t] @ S[s] independent of dR -- precomputing it
+# once lets disorientation_from_g_batch get every pair's best trace via a
+# single einsum, without ever forming the (n, 24, 24, 3, 3) reduced matrices
+# disorientation_from_g builds for one pair at a time.
+_CUBIC_SYM_PAIR_PRODUCTS = _CUBIC_SYM_OPS_T[:, None] @ _CUBIC_SYM_OPS[None, :]   # (24, 24, 3, 3)
+
+
+def disorientation_from_g_batch(g1, g2):
+    """
+    Cubic disorientation of N pairs of orientations given as Bunge g matrices.
+
+    Vectorised equivalent of ``disorientation_from_g`` (same convention and
+    reduction, verified to agree with it to floating-point precision on
+    random pairs); use this instead of calling ``disorientation_from_g`` in a
+    per-pair Python loop when N is large.
+
+    Parameters
+    ----------
+    g1, g2 : array-like, shape (N, 3, 3)
+
+    Returns
+    -------
+    ndarray, shape (N,)
+        Minimum rotation angle in degrees over all 24 x 24 operator pairs,
+        one per input pair.
+    """
+    g1 = np.asarray(g1, dtype=float)
+    g2 = np.asarray(g2, dtype=float)
+    dR = np.einsum('nij,nkj->nik', g1, g2)   # g1 @ g2.T, batched
+    traces = np.einsum('nji,tsij->nts', dR, _CUBIC_SYM_PAIR_PRODUCTS)
+    best = traces.reshape(len(g1), -1).max(axis=1)
+    return np.degrees(np.arccos(np.clip((best - 1.0) / 2.0, -1.0, 1.0)))
+
+
 class OrientationAssigner3D:
     """
     Worker class for assigning crystal orientations to blocks via KS relationship.

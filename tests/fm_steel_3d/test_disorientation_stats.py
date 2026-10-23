@@ -4,7 +4,6 @@ import pytest
 
 from upxo.pxtal.fm_steel_3d import disorientation_stats as ds
 from upxo.pxtal.fm_steel_3d.orientation_assigner_3d import OrientationAssigner3D
-from upxo.xtalphy.crystal_orientation import euler_bunge_to_matrix
 
 from .hierarchy_state import build_hierarchy
 
@@ -140,6 +139,45 @@ def test_unknown_types_are_rejected(hierarchy):
         ds.slice_disorientation_histograms(pag_id_map, fm_blocks, {'pag_rand'}, (1, 1, 1))
 
 
+# ── cubic disorientation, not the plain rotation angle ───────────────────────
+
+def test_ks_variant_pairs_match_the_tabulated_characteristic_angles():
+    """The 276 mutual disorientations of the 24 KS variants of one parent
+    must land exactly on KS_CHARACTERISTIC_ANGLES -- the same mtex-verified
+    set the other thread found (see admin/HANDOVER_FM_STEEL_THREAD.md)."""
+    from upxo.pxtal.fm_steel_3d.orientation_assigner_3d import disorientation_from_g
+
+    variants = OrientationAssigner3D().get_ks_rotations()   # (24, 3, 3), g convention
+    angles = [round(disorientation_from_g(variants[i], variants[j])[0], 2)
+             for i in range(24) for j in range(i + 1, 24)]
+    assert len(angles) == 276
+    assert set(angles) == set(ds.KS_CHARACTERISTIC_ANGLES)
+
+
+def test_pair_angles_matches_disorientation_deg_on_random_orientations():
+    """ds._pair_angles (the vectorised helper behind the slice histograms)
+    must agree with OrientationAssigner3D.disorientation_deg -- which is
+    itself verified against mtex -- not just the plain rotation angle."""
+    rng = np.random.default_rng(3)
+    eulers = rng.uniform(0.0, 360.0, size=(10, 3))
+    matrices = np.zeros((11, 3, 3))
+    matrices[1:] = ds.euler_bunge_to_matrix_batch(eulers[:, 0], eulers[:, 1], eulers[:, 2])
+    ia = np.arange(1, 10)
+    ib = np.arange(2, 11)
+
+    got = ds._pair_angles(ia, ib, matrices)
+
+    assigner = OrientationAssigner3D()
+    for k, (i, j) in enumerate(zip(ia, ib)):
+        want = assigner.disorientation_deg(tuple(eulers[i - 1]), tuple(eulers[j - 1]))
+        assert got[k] == pytest.approx(want, abs=1e-6)
+    # the old, unfixed formula (plain angle, no symmetry) would give a
+    # systematically larger value on at least one of these random pairs
+    plain = np.degrees(np.arccos(np.clip(
+        (np.einsum('nij,nij->n', matrices[ia], matrices[ib]) - 1) / 2, -1.0, 1.0)))
+    assert np.any(got < plain - 1.0)
+
+
 # ── slice histograms, against a voxel-by-voxel definition ────────────────────
 
 BINS = ds.DEFAULT_ANGLE_BINS
@@ -192,9 +230,13 @@ def _label_grid(shape, groups):
     return grid
 
 
-def _rotation_angle(orientation_a, orientation_b):
-    ra, rb = euler_bunge_to_matrix(*orientation_a), euler_bunge_to_matrix(*orientation_b)
-    return float(np.degrees(np.arccos(np.clip((np.trace(ra.T @ rb) - 1) / 2, -1, 1))))
+_ASSIGNER = OrientationAssigner3D()
+
+
+def _disorientation(orientation_a, orientation_b):
+    """Cubic disorientation (not the plain rotation angle), matching what
+    slice_disorientation_histograms now computes."""
+    return _ASSIGNER.disorientation_deg(orientation_a, orientation_b)
 
 
 def _assert_same(result, expected):
@@ -218,7 +260,7 @@ def test_block_histograms(hierarchy, within):
     def pair_angle(a, b):
         if (pag_of[a] == pag_of[b]) != within:
             return None
-        return _rotation_angle(fm_blocks.block_orientations[names[a - 1]],
+        return _disorientation(fm_blocks.block_orientations[names[a - 1]],
                                fm_blocks.block_orientations[names[b - 1]])
 
     key = 'blk_within' if within else 'blk_across'
@@ -239,7 +281,7 @@ def test_subblock_histograms(hierarchy, within):
         same_block = ds.parent_block_id(names[a - 1]) == ds.parent_block_id(names[b - 1])
         if same_block != within:
             return None
-        return _rotation_angle(fm_subblocks.subblock_orientations[names[a - 1]],
+        return _disorientation(fm_subblocks.subblock_orientations[names[a - 1]],
                                fm_subblocks.subblock_orientations[names[b - 1]])
 
     key = 'sb_within' if within else 'sb_across'

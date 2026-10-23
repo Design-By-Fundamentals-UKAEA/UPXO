@@ -11,8 +11,11 @@ Two kinds of statistics are provided.
     Density histograms of the disorientation across the boundaries seen on
     evenly spaced slices normal to x, y and z.
 
-Angles are in degrees. Disorientations of orientation triples come from
-``OrientationAssigner3D.disorientation_deg``.
+Angles are in degrees and are cubic disorientations (minimum angle over the
+24 x 24 cubic symmetry pairs, not a plain rotation angle). Disorientations of
+orientation triples come from ``OrientationAssigner3D.disorientation_deg``;
+the slice histograms use the vectorised equivalent,
+``orientation_assigner_3d.disorientation_from_g_batch``, for speed.
 """
 from typing import Dict, Iterable, List, Optional, Sequence
 
@@ -20,7 +23,7 @@ import numpy as np
 
 from upxo.xtalphy.crystal_orientation import euler_bunge_to_matrix_batch
 
-from .orientation_assigner_3d import OrientationAssigner3D
+from .orientation_assigner_3d import OrientationAssigner3D, disorientation_from_g_batch
 
 __all__ = [
     'SAMPLED_TYPES', 'SLICE_TYPES', 'DEFAULT_ANGLE_BINS', 'KS_CHARACTERISTIC_ANGLES',
@@ -36,8 +39,10 @@ SLICE_TYPES = ('blk_within', 'blk_across', 'pag_adj', 'sb_within', 'sb_across')
 DEFAULT_ANGLE_BINS = np.linspace(0.0, 65.0, 51)
 
 # Characteristic disorientation angles (degrees) of the Kurdjumov-Sachs
-# orientation relationship between parent austenite and martensite.
-KS_CHARACTERISTIC_ANGLES = (10.53, 14.88, 20.61, 21.06, 47.11, 49.47, 57.21, 60.00)
+# orientation relationship between parent austenite and martensite: the 10
+# distinct mutual cubic disorientations of the 24 KS variants of one parent
+# (276 pairs), verified against mtex (orientation_assigner_3d.disorientation_from_g).
+KS_CHARACTERISTIC_ANGLES = (10.53, 14.88, 20.61, 21.06, 47.11, 49.47, 50.51, 51.73, 57.21, 60.00)
 
 
 def parent_block_id(subblock_id: str) -> str:
@@ -200,7 +205,8 @@ def hierarchical_disorientations(fm_orientations, selected: Iterable[str], n_pai
 # ── 2-D slice histograms ─────────────────────────────────────────────────────
 
 def _rotation_matrices(n_items: int, orientations: Sequence) -> np.ndarray:
-    """Matrices indexed from 1 (row 0 stays zero) for ``(index, euler angles)`` pairs."""
+    """R matrices (``euler_bunge_to_matrix``'s convention: crystal -> sample),
+    indexed from 1 (row 0 stays zero) for ``(index, euler angles)`` pairs."""
     matrices = np.zeros((n_items + 1, 3, 3), dtype=np.float64)
     if len(orientations):
         index = np.array([i for i, _ in orientations], dtype=np.intp)
@@ -210,9 +216,12 @@ def _rotation_matrices(n_items: int, orientations: Sequence) -> np.ndarray:
 
 
 def _pair_angles(ia, ib, rotation_matrices) -> np.ndarray:
-    """Rotation angle between the orientations of index arrays ``ia`` and ``ib``."""
-    trace = np.einsum('nij,nij->n', rotation_matrices[ia], rotation_matrices[ib])
-    return np.degrees(np.arccos(np.clip((trace - 1) / 2, -1.0, 1.0)))
+    """Cubic disorientation between the orientations of index arrays ``ia``
+    and ``ib``. ``rotation_matrices`` holds R (crystal -> sample); g is its
+    transpose, the convention ``disorientation_from_g_batch`` takes."""
+    g_a = rotation_matrices[ia].transpose(0, 2, 1)
+    g_b = rotation_matrices[ib].transpose(0, 2, 1)
+    return disorientation_from_g_batch(g_a, g_b)
 
 
 def _boundary_pairs(slice_2d) -> list:
