@@ -3424,3 +3424,43 @@ def schmid_factors_fcc_twinning(
     m_per_plane = np.array([m[3*i:3*(i+1)].max() for i in range(4)])
     active_variant = int(np.argmax(m_per_plane))
     return m_per_plane, active_variant
+
+
+def assign_grains_to_texture_components(grain_quats, component_euler_deg, max_angle_deg=None):
+    """Assign every grain to the nearest texture component.
+
+    Parameters
+    ----------
+    grain_quats : ndarray (N, 4)
+        Per-grain mean orientation as DefDAP-stored quaternions, as
+        :func:`grain_avg_quats` returns them.
+    component_euler_deg : sequence of (phi1, Phi, phi2)
+        Component orientations in degrees, in the convention of
+        :func:`detect_texture_component_peaks` (its ``phi1``, ``Phi``,
+        ``phi2``).
+    max_angle_deg : float, optional
+        A grain farther than this cubic disorientation from every component is
+        left unassigned. None assigns every grain.
+
+    Returns
+    -------
+    index : ndarray (N,) of int
+        Row of the nearest component, -1 for an unassigned grain.
+    angle : ndarray (N,)
+        Cubic disorientation (degrees) to the nearest component.
+    """
+    grain_quats = np.asarray(grain_quats, dtype=np.float64)
+    comps = np.asarray(component_euler_deg, dtype=np.float64).reshape(-1, 3)
+    if len(comps) == 0 or len(grain_quats) == 0:
+        return np.full(len(grain_quats), -1, dtype=int), np.full(len(grain_quats), np.nan)
+    g_grain = quat_to_R_batch(grain_quats)                                  # (N, 3, 3), sample -> crystal
+    g_comp = np.stack([euler_bunge_to_matrix(*e).T for e in comps])         # (K, 3, 3)
+    rel = np.einsum('nij,kmj->nkim', g_grain, g_comp)                       # g_grain @ g_comp.T
+    S = get_cubic_ops_np()
+    tr = np.einsum('sab,nkba->nks', S, rel).max(axis=2)
+    angle_all = np.degrees(np.arccos(np.clip((tr - 1.0) / 2.0, -1.0, 1.0)))  # (N, K)
+    index = np.argmin(angle_all, axis=1)
+    angle = angle_all[np.arange(len(index)), index]
+    if max_angle_deg is not None:
+        index = np.where(angle <= max_angle_deg, index, -1)
+    return index.astype(int), angle

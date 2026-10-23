@@ -267,3 +267,45 @@ def disorientation_from_polygons(polygons_by_gid, grains, quat, smooth_passes=0,
         segments=segments, angles=angles, pairs=pairs_arr, shape=tuple(grains.shape),
         n_grains=int(len(gids)), smooth_passes=smooth_passes,
         max_smooth_levels=tuple(max_smooth_levels), original_ids=original_ids)
+
+
+def smooth_structure(lfi, technique="A", params=(2, (3, 3)), subsample=1):
+    """Smoothed grain structure of a label map, optionally computed on a
+    subsampled copy to save time.
+
+    technique : ``"A"`` (``params = (smooth_passes, max_smooth_levels)``) or
+        ``"B"`` (``params = (seeds_per_grain,)``), as for
+        :func:`smooth_technique_a` and :func:`smooth_technique_b`.
+    subsample : keep every ``subsample``-th pixel along each axis before
+        smoothing. The polygons are scaled back to the full-resolution pixel
+        coordinates and ``grains`` is expanded to the full shape, so the result
+        is used exactly like an unsubsampled one, with boundaries only as fine
+        as the subsampled grid.
+
+    Returns ``{'technique', 'polygons', 'grains', 'gb_rings', 'gb_ridges',
+    'subsample'}``; ``gb_rings`` / ``gb_ridges`` (exact boundary segment data)
+    are kept only for ``subsample == 1`` and are ``None`` otherwise.
+    """
+    lfi = np.asarray(lfi)
+    k = int(subsample)
+    if k < 1:
+        raise ValueError("subsample must be >= 1.")
+    small = lfi[::k, ::k] if k > 1 else lfi
+    if technique == "A":
+        passes, levels = params
+        polygons, grains, gb_rings = smooth_technique_a(
+            small, smooth_passes=passes, max_smooth_levels=levels)
+        gb_ridges = None
+    elif technique == "B":
+        (seeds,) = params
+        polygons, grains, gb_ridges = smooth_technique_b(small, seeds_per_grain=seeds)
+        gb_rings = None
+    else:
+        raise ValueError("technique must be 'A' or 'B'.")
+    if k > 1:
+        from shapely import affinity
+        polygons = {g: affinity.scale(p, xfact=k, yfact=k, origin=(0, 0)) for g, p in polygons.items()}
+        grains = np.repeat(np.repeat(grains, k, axis=0), k, axis=1)[:lfi.shape[0], :lfi.shape[1]]
+        gb_rings = gb_ridges = None
+    return {'technique': technique, 'polygons': polygons, 'grains': grains,
+            'gb_rings': gb_rings, 'gb_ridges': gb_ridges, 'subsample': k}

@@ -12,7 +12,7 @@ from matplotlib.figure import Figure
 
 __all__ = [
     "euler_map_figure", "ipf_map_figure", "gb_pixel_map_figure",
-    "gb_disorientation_figure",
+    "gb_disorientation_figure", "texture_component_map_figure",
 ]
 
 _EULER_ANGLE_NAMES = ("phi1", "Phi", "phi2")
@@ -108,7 +108,8 @@ def _grain_first_pixel_rgb(grains, rgb_raster):
 def euler_map_figure(lfi, euler_rad, angle_index, cmap="hsv", step_um=1.0,
                      show_boundaries=True, boundary_color=(0, 0, 0),
                      figsize=(6.5, 6.5), polygons=None, grains=None,
-                     pixel_stride=1):
+                     pixel_stride=1, title=None, show_axes=True, show_scale_bar=False,
+                     font_sizes=None, xlim=None, ylim=None, dpi=None):
     """One Bunge Euler angle (phi1, Phi or phi2) as a single pixel map --
     or, if `polygons` is given, a Smoothed display: each grain filled
     with its own mean angle (see module docstring's Pixellated/Smoothed
@@ -122,13 +123,23 @@ def euler_map_figure(lfi, euler_rad, angle_index, cmap="hsv", step_um=1.0,
     pixel_stride : int >= 1 -- Pixellated mode only. Show every Nth pixel
     along each axis (nearest-neighbour subsampling, same physical extent)
     for a faster, lighter plot of a large map.
+    title : str, optional -- replaces the default "Bunge <angle>" title.
+    show_axes : bool -- False hides the axes, ticks and labels (the colour bar stays).
+    show_scale_bar : bool -- draw a length scale bar (the axes are in micrometres
+    when step_um is not 1).
+    font_sizes : dict, optional -- keys 'title', 'label', 'tick', 'colorbar'.
+    xlim, ylim : (low, high), optional -- axis limits in the axes' units; the y
+    axis keeps pointing down.
     """
     if angle_index not in (0, 1, 2):
         raise ValueError("angle_index must be 0 (phi1), 1 (Phi) or 2 (phi2).")
     euler_deg = np.degrees(euler_rad)
-    fig = Figure(figsize=figsize)
+    fig = Figure(figsize=figsize, dpi=dpi) if dpi else Figure(figsize=figsize)
     ax = fig.add_subplot(111)
     label = _EULER_LABELS[angle_index]
+    fs = {'title': 12, 'label': 10, 'tick': 9, 'colorbar': 10}
+    fs.update(font_sizes or {})
+    cbar = None
 
     if polygons is not None:
         values = _grain_mean_scalar(grains, euler_deg[:, :, angle_index])
@@ -138,7 +149,7 @@ def euler_map_figure(lfi, euler_rad, angle_index, cmap="hsv", step_um=1.0,
         mappable = ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap)
         colors = {gid: mappable.to_rgba(v) for gid, v in values.items()}
         _polygon_fill_overlay(ax, polygons, colors, step_um=step_um)
-        fig.colorbar(mappable, ax=ax, label="degrees", fraction=0.046, pad=0.04)
+        cbar = fig.colorbar(mappable, ax=ax, label="degrees", fraction=0.046, pad=0.04)
     else:
         stride = max(1, int(pixel_stride))
         lfi_s = lfi[::stride, ::stride]
@@ -146,12 +157,27 @@ def euler_map_figure(lfi, euler_rad, angle_index, cmap="hsv", step_um=1.0,
         data[lfi_s <= 0] = np.nan
         extent = _extent(lfi_s.shape, step_um * stride)
         image = ax.imshow(data, cmap=cmap, interpolation="nearest", extent=extent)
-        fig.colorbar(image, ax=ax, label="degrees", fraction=0.046, pad=0.04)
+        cbar = fig.colorbar(image, ax=ax, label="degrees", fraction=0.046, pad=0.04)
         if show_boundaries:
             _boundary_overlay(ax, lfi_s, step_um * stride, boundary_color)
 
-    ax.set_title(f"Bunge {label}")
+    ax.set_title(title if title else f"Bunge {label}", fontsize=fs['title'])
     _axis_labels(ax, step_um)
+    ax.xaxis.label.set_size(fs['label'])
+    ax.yaxis.label.set_size(fs['label'])
+    ax.tick_params(labelsize=fs['tick'])
+    if cbar is not None:
+        cbar.ax.tick_params(labelsize=fs['tick'])
+        cbar.set_label("degrees", fontsize=fs['colorbar'])
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(max(ylim), min(ylim))
+    if show_scale_bar:
+        from upxo.viz.ebsdviz import add_map_scale_bar
+        add_map_scale_bar(ax, step_um, lfi.shape, fontsize=fs['label'], data_per_pixel=float(step_um))
+    if not show_axes:
+        ax.set_axis_off()
     fig.tight_layout()
     return fig
 
@@ -347,4 +373,78 @@ def gb_disorientation_figure(result, cmap="viridis", step_um=1.0, vmin=None, vma
     fig.suptitle(f"Grain-boundary disorientation ({result.n_grains} grains, "
                 f"{shown} of {int(shared.sum())} boundary segments shown)")
     _axis_labels(ax, step_um)
+    return fig
+
+
+def texture_component_map_figure(lfi, grain_ids, component_index, component_names, step_um=1.0,
+                                 colors=None, other_color=(0.85, 0.85, 0.85),
+                                 show_legend=True, legend_fontsize=10, show_scale_bar=True,
+                                 show_axes=True, title=None, font_sizes=None,
+                                 figsize=(8.5, 6.0), dpi=None, polygons=None, grains=None):
+    """Grain map with every texture component in its own colour.
+
+    ``grain_ids`` and ``component_index`` are parallel arrays: grain id and the
+    row of its component in ``component_names`` (-1 = no component, drawn in
+    ``other_color`` and listed as "Other"). The legend is placed outside the
+    map. With ``polygons`` and ``grains`` (a smoothed structure) the grains are
+    drawn as filled polygons instead of pixels.
+    """
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as mpatches
+    from upxo.viz.ebsdviz import add_map_scale_bar, place_legend_outside
+
+    lfi = np.asarray(lfi)
+    names = list(component_names)
+    palette = list(colors) if colors else [
+        c for c in mcolors.TABLEAU_COLORS.values()] + list(mcolors.CSS4_COLORS.values())[::7]
+    comp_rgb = [mcolors.to_rgb(palette[i % len(palette)]) for i in range(len(names))]
+    other = mcolors.to_rgb(other_color)
+    index = dict(zip((int(g) for g in grain_ids), (int(i) for i in component_index)))
+    fs = {'title': 12, 'label': 10, 'tick': 9}
+    fs.update(font_sizes or {})
+
+    fig = Figure(figsize=figsize, dpi=dpi) if dpi else Figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+    present = set()
+
+    def _rgb(gid):
+        i = index.get(int(gid), -1)
+        present.add(i)
+        return comp_rgb[i] if i >= 0 else other
+
+    if polygons is not None:
+        colour_by_gid = {}
+        # a smoothed grain takes the component of the original grain under it
+        for gid in polygons:
+            first = np.argwhere(grains == gid)
+            if first.size:
+                r, c = first[0]
+                colour_by_gid[gid] = _rgb(lfi[r, c])
+        _polygon_fill_overlay(ax, polygons, colour_by_gid, step_um=step_um)
+    else:
+        top = int(lfi.max()) + 1
+        lut = np.ones((top + 1, 4))
+        lut[:, :3] = other
+        for gid in np.unique(lfi[lfi > 0]):
+            lut[gid, :3] = _rgb(gid)
+        rgba = lut[np.clip(lfi, 0, top)]
+        rgba[lfi <= 0, 3] = 0.0
+        ax.imshow(rgba, interpolation="nearest", extent=_extent(lfi.shape, step_um))
+
+    ax.set_title(title if title else "Texture components", fontsize=fs['title'])
+    _axis_labels(ax, step_um)
+    ax.xaxis.label.set_size(fs['label'])
+    ax.yaxis.label.set_size(fs['label'])
+    ax.tick_params(labelsize=fs['tick'])
+    if show_scale_bar:
+        add_map_scale_bar(ax, step_um, lfi.shape, fontsize=fs['label'], data_per_pixel=float(step_um))
+    if show_legend:
+        handles = [mpatches.Patch(color=comp_rgb[i], label=names[i])
+                   for i in range(len(names)) if i in present]
+        if -1 in present:
+            handles.append(mpatches.Patch(color=other, label="Other"))
+        place_legend_outside(ax, handles, fontsize=legend_fontsize)
+    if not show_axes:
+        ax.set_axis_off()
+    fig.tight_layout()
     return fig

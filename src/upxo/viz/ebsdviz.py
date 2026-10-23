@@ -468,27 +468,29 @@ def plot_mdf_selected(
 # CSL grain map
 # ---------------------------------------------------------------------------
 
-def add_map_scale_bar(ax, step_size, shape_px, fontsize=10, color='black'):
+def add_map_scale_bar(ax, step_size, shape_px, fontsize=10, color='black', data_per_pixel=1.0):
     """Draw a length scale bar at the lower left of a pixel map.
 
     ``step_size`` is the pixel size in micrometres; the bar length is the
     round value (1, 2 or 5 x a power of ten) closest to a fifth of the map
     width. Returns the bar length in micrometres, or None when
-    ``step_size`` is not given."""
+    ``step_size`` is not given. ``data_per_pixel`` is the size of one pixel in
+    the axes' data units (1 for a pixel-indexed axes, the step for micrometres)."""
     if not step_size or step_size <= 0:
         return None
     width_um = shape_px[1] * float(step_size)
+    dpp = float(data_per_pixel)
     target = width_um / 5.0
     magnitude = 10.0 ** np.floor(np.log10(target))
     length_um = min((m * magnitude for m in (1, 2, 5, 10)), key=lambda v: abs(v - target))
-    length_px = length_um / float(step_size)
+    length_px = length_um / float(step_size) * dpp
     ny, nx = shape_px
-    x0 = 0.04 * nx
-    y0 = ny - 0.05 * ny
+    x0 = 0.04 * nx * dpp
+    y0 = (ny - 0.05 * ny) * dpp
     ax.plot([x0, x0 + length_px], [y0, y0], color=color, linewidth=3,
             solid_capstyle='butt', clip_on=False)
     label = f'{length_um:g} \u00b5m'
-    ax.text(x0 + length_px / 2.0, y0 - 0.015 * ny, label, color=color, fontsize=fontsize,
+    ax.text(x0 + length_px / 2.0, y0 - 0.015 * ny * dpp, label, color=color, fontsize=fontsize,
             ha='center', va='bottom')
     return length_um
 
