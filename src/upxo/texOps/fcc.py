@@ -70,14 +70,19 @@ def matrix_to_euler_bunge(R: np.ndarray, degrees: bool = True) -> Tuple[float, f
     Phi_rad = np.arccos(c)
     
     if abs(Phi_rad) < 1e-12:
+        # R = Rz(phi1 + phi2): only the sum is determined, phi2 := 0
         phi1_rad = np.arctan2(R[1, 0], R[0, 0])
         phi2_rad = 0.0
     elif abs(Phi_rad - np.pi) < 1e-12:
-        phi1_rad = np.arctan2(R[1, 2], R[0, 2])
+        # R = Rz(phi1 - phi2): only the difference is determined, phi2 := 0
+        phi1_rad = np.arctan2(R[1, 0], R[0, 0])
         phi2_rad = 0.0
     else:
-        phi1_rad = np.arctan2(R[2, 0], -R[2, 1])
-        phi2_rad = np.arctan2(R[0, 2], R[1, 2])
+        # R = Rz(phi1) Rx(Phi) Rz(phi2) gives R[0,2] = sin(phi1) sin(Phi),
+        # R[1,2] = -cos(phi1) sin(Phi), R[2,0] = sin(Phi) sin(phi2),
+        # R[2,1] = sin(Phi) cos(phi2)
+        phi1_rad = np.arctan2(R[0, 2], -R[1, 2])
+        phi2_rad = np.arctan2(R[2, 0], R[2, 1])
         
     if degrees:
         return (float(np.degrees(phi1_rad) % 360.0),
@@ -141,7 +146,9 @@ def fcc_symmetrise_ori(bea: Tuple[float, float, float]) -> np.ndarray:
     """Generate all symmetrically equivalent Bunge Euler angle triplets for one FCC orientation."""
     g = euler_bunge_to_matrix(*bea, degrees=True)
     sym_ops = cubic_symmetry_operators()
-    eq_mats = [proj_to_so3(S @ g) for S in sym_ops]
+    # g is Rz Rx Rz (crystal -> sample), the transpose of the Bunge matrix;
+    # the cubic operators act on its crystal side, the right.
+    eq_mats = [proj_to_so3(g @ S) for S in sym_ops]
     eq_mats = unique_rotations(eq_mats, tol=1e-8)
     return np.array([list(matrix_to_euler_bunge(R, degrees=True))
                      for R in eq_mats], dtype=np.float32)
@@ -314,7 +321,12 @@ class FCCTexture:
         return group
 
     def _get_combined_symmetry_equivalents(self, mean_euler: Tuple[float, float, float]) -> np.ndarray:
-        """Apply crystal (left) and sample (right) symmetries and return unique canonical Euler angles."""
+        """Apply crystal and sample symmetries and return unique canonical Euler angles.
+
+        euler_bunge_to_matrix gives Rz Rx Rz (crystal -> sample), the transpose of the
+        Bunge matrix, so the crystal operators act on its right and the sample
+        operators on its left.
+        """
         g = euler_bunge_to_matrix(*mean_euler, degrees=True)
         sym_ops = cubic_symmetry_operators()
         sample_ops = self._compute_sample_symmetry_group()
@@ -322,7 +334,7 @@ class FCCTexture:
         eq_mats = []
         for S in sym_ops:
             for M in sample_ops:
-                eq_mats.append(proj_to_so3(S @ g @ M))
+                eq_mats.append(proj_to_so3(M @ g @ S))
                 
         eq_mats = unique_rotations(eq_mats, tol=1e-8)
         return np.array([list(matrix_to_euler_bunge(R, degrees=True))

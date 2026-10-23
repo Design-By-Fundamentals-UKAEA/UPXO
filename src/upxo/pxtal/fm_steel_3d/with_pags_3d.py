@@ -549,8 +549,7 @@ class FMSteel3DWithPAGs:
         import warnings as _warnings
         from .orientation_assigner_3d import (
             OrientationAssigner3D,
-            _CUBIC_SYM_OPS,
-            _CUBIC_SYM_OPS_T,
+            disorientation_from_g,
         )
 
         rng = np.random.default_rng(seed=random_seed)
@@ -588,10 +587,7 @@ class FMSteel3DWithPAGs:
             )
 
         def _misori_deg(R1: np.ndarray, R2: np.ndarray) -> float:
-            dR = R1.T @ R2
-            M_all = (_CUBIC_SYM_OPS @ dR)[:, None] @ _CUBIC_SYM_OPS_T[None, :]
-            tr = M_all[:, :, 0, 0] + M_all[:, :, 1, 1] + M_all[:, :, 2, 2]
-            return float(np.degrees(np.arccos(np.clip((float(tr.max()) - 1.0) / 2.0, -1.0, 1.0))))
+            return disorientation_from_g(R1, R2)[0]
 
         # ---- Process isolated grains in random order ----
         iso_list = list(leftover_isolated)

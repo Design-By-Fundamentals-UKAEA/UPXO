@@ -30,6 +30,38 @@ def _build_cubic_sym_ops() -> Tuple[np.ndarray, np.ndarray]:
 _CUBIC_SYM_OPS, _CUBIC_SYM_OPS_T = _build_cubic_sym_ops()
 
 
+def disorientation_from_g(g1, g2):
+    """
+    Cubic disorientation of two orientations given as Bunge g matrices.
+
+    ``OrientationAssigner3D.cubic_euler_bunge_to_matrix_v1`` returns g, the
+    sample -> crystal matrix. The crystal-frame relative rotation is
+    ``g1 @ g2.T``; the 24 cubic operators then act on both sides of it
+    (``S g1 g2.T S'``). ``g1.T @ g2`` would be the sample-frame rotation, which
+    the crystal operators do not reduce correctly.
+
+    Parameters
+    ----------
+    g1, g2 : array-like, shape (3, 3) or (1, 3, 3)
+
+    Returns
+    -------
+    angle_deg : float
+        Minimum rotation angle over all 24 x 24 operator pairs; agrees with
+        mtex ``orientation.angle`` on a cubic crystal frame.
+    reduced : ndarray, shape (3, 3)
+        The relative rotation that attains it.
+    """
+    g1 = np.asarray(g1, dtype=float).reshape(3, 3)
+    g2 = np.asarray(g2, dtype=float).reshape(3, 3)
+    dR = g1 @ g2.T
+    M_all = (_CUBIC_SYM_OPS @ dR)[:, None] @ _CUBIC_SYM_OPS_T[None, :]
+    traces = M_all[:, :, 0, 0] + M_all[:, :, 1, 1] + M_all[:, :, 2, 2]
+    i, j = np.unravel_index(np.argmax(traces), traces.shape)
+    angle = float(np.degrees(np.arccos(np.clip((traces[i, j] - 1.0) / 2.0, -1.0, 1.0))))
+    return angle, M_all[i, j]
+
+
 class OrientationAssigner3D:
     """
     Worker class for assigning crystal orientations to blocks via KS relationship.
@@ -552,15 +584,7 @@ class OrientationAssigner3D:
         R1 = R1[0] if R1.ndim == 3 else R1
         R2 = R2[0] if R2.ndim == 3 else R2
 
-        sym_ops   = _CUBIC_SYM_OPS
-        sym_ops_T = _CUBIC_SYM_OPS_T
-
-        dR    = R1.T @ R2
-        M1    = sym_ops @ dR                         # (24, 3, 3)
-        M_all = M1[:, None] @ sym_ops_T[None, :]    # (24, 24, 3, 3)
-        traces = M_all[:, :, 0, 0] + M_all[:, :, 1, 1] + M_all[:, :, 2, 2]
-        return float(np.degrees(
-            np.arccos(np.clip((traces.max() - 1.0) / 2.0, -1.0, 1.0))))
+        return disorientation_from_g(R1, R2)[0]
 
     def cubic_misorientation_old1(self,
                                    EA1: Tuple[float, float, float],
@@ -568,9 +592,10 @@ class OrientationAssigner3D:
                                    unique_tol_deg: float = 1e-4,
                                    degrees: bool = True) -> Tuple[float, float, float]:
         """
-        Compute misorientation between two cubic orientations.
-        
-        Vectorized, fast implementation for cubic (m-3m) symmetry.
+        Compute the cubic (m-3m) disorientation between two orientations.
+
+        The minimum rotation angle over all 24 x 24 crystal-symmetry-equivalent
+        pairs, as in disorientation_deg and mtex orientation.angle.
         
         Parameters
         ----------
@@ -584,7 +609,8 @@ class OrientationAssigner3D:
         Returns
         -------
         tuple
-            (misorientation_angle_deg, axis, angle_info).
+            (disorientation_angle_deg, reduced relative rotation matrix,
+            disorientation_angle_deg).
         """
         R1 = self.cubic_euler_bunge_to_matrix_v1(
             np.array([EA1[0]]), np.array([EA1[1]]), np.array([EA1[2]]), degrees=degrees)
@@ -593,13 +619,9 @@ class OrientationAssigner3D:
         if R1.ndim == 3: R1 = R1[0]
         if R2.ndim == 3: R2 = R2[0]
         
-        dR = R1.T @ R2
-        trace = np.trace(dR)
-        cos_angle = np.clip((trace - 1) / 2, -1, 1)
-        angle_rad = np.arccos(cos_angle)
-        angle_deg = float(np.degrees(angle_rad))
-        
-        return angle_deg, dR, angle_deg
+        angle_deg, reduced = disorientation_from_g(R1, R2)
+
+        return angle_deg, reduced, angle_deg
 
 
     def assign_pag_orientations_with_hagb(
@@ -677,11 +699,7 @@ class OrientationAssigner3D:
             return R[0] if R.ndim == 3 else R
 
         def _misori_deg(R1: np.ndarray, R2: np.ndarray) -> float:
-            dR    = R1.T @ R2
-            M1    = _CUBIC_SYM_OPS @ dR
-            M_all = M1[:, None] @ _CUBIC_SYM_OPS_T[None, :]
-            traces = M_all[:, :, 0, 0] + M_all[:, :, 1, 1] + M_all[:, :, 2, 2]
-            return float(np.degrees(np.arccos(np.clip((traces.max() - 1.0) / 2.0, -1.0, 1.0))))
+            return disorientation_from_g(R1, R2)[0]
 
         n_fallbacks = 0
 

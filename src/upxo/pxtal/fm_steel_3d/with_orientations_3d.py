@@ -314,7 +314,9 @@ class FMSteel3DWithOrientations:
         sym_ops_T = sym_ops.transpose(0, 2, 1)   # (24, 3, 3) — precomputed transposes
 
         def _disori(i: int, j: int) -> float:
-            dR     = R_arr[i].T @ R_arr[j]
+            # R_arr holds Bunge g matrices; g_i @ g_j.T is the crystal-frame
+            # relative rotation (see disorientation_from_g).
+            dR     = R_arr[i] @ R_arr[j].T
             # Full cubic-cubic bicrystal symmetry:
             #   H1 @ dR @ H2.T  for all (H1, H2) in G × G  →  576 combinations
             # Step 1: apply all left operators  →  (24, 3, 3)
