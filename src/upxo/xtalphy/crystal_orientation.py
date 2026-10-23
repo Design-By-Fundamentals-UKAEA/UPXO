@@ -2395,7 +2395,9 @@ def compute_s3_lamella_angle_2d(q: 'np.ndarray') -> float:
     Parameters
     ----------
     q : array-like, shape (4,)
-        Host grain quaternion [w, x, y, z].
+        Host grain quaternion [w, x, y, z], DefDAP-stored: the quaternion of
+        the Bunge g matrix (sample -> crystal), as held by the EBSD grain
+        means and the orientation pools.
 
     Returns
     -------
@@ -2406,11 +2408,12 @@ def compute_s3_lamella_angle_2d(q: 'np.ndarray') -> float:
     q = q / np.linalg.norm(q)
     w, x, y, z = q
 
-    R = np.array([
+    g = np.array([
         [1 - 2*(y*y + z*z),   2*(x*y - w*z),   2*(x*z + w*y)],
         [  2*(x*y + w*z), 1 - 2*(x*x + z*z),   2*(y*z - w*x)],
         [  2*(x*z - w*y),   2*(y*z + w*x), 1 - 2*(x*x + y*y)],
     ])
+    R = g.T                           # crystal -> sample
 
     inv_sqrt3 = 1.0 / np.sqrt(3.0)
     n_crystal = np.array([
@@ -3070,7 +3073,9 @@ def compute_s3_habit_plane_3d(q, rng, variant_idx=None):
     Parameters
     ----------
     q : array-like (4,)
-        Host grain quaternion [w, x, y, z].
+        Host grain quaternion [w, x, y, z], DefDAP-stored: the quaternion of
+        the Bunge g matrix (sample -> crystal), as held by the EBSD grain
+        means and the orientation pools.
     rng : numpy.random.Generator
         Random number generator; used only when *variant_idx* is None.
     variant_idx : int (0-3) or None
@@ -3089,11 +3094,12 @@ def compute_s3_habit_plane_3d(q, rng, variant_idx=None):
     q = q / np.linalg.norm(q)
     w, x, y, z = q
 
-    R = np.array([
+    g = np.array([
         [1 - 2*(y*y + z*z),   2*(x*y - w*z),   2*(x*z + w*y)],
         [  2*(x*y + w*z), 1 - 2*(x*x + z*z),   2*(y*z - w*x)],
         [  2*(x*z - w*y),   2*(y*z + w*x), 1 - 2*(x*x + y*y)],
     ])
+    R = g.T                           # crystal -> sample
 
     inv_sqrt3 = 1.0 / np.sqrt(3.0)
     n_crystal = np.array([
@@ -3104,7 +3110,7 @@ def compute_s3_habit_plane_3d(q, rng, variant_idx=None):
     ]) * inv_sqrt3
 
     n_sample = (R @ n_crystal.T).T
-    idx = int(variant_idx) if variant_idx is not None else int(rng.integers(0, 4))
+    idx =int(variant_idx) if variant_idx is not None else int(rng.integers(0, 4))
     normal = n_sample[idx]
     return normal / np.linalg.norm(normal)
 
