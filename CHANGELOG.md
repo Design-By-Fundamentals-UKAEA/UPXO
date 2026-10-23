@@ -4,6 +4,22 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+Cubic orientation maths now agrees with mtex. `euler_bunge_to_matrix` returns Rz Rx Rz, the transpose of the Bunge g matrix, and the 24 cubic symmetry operators act on its crystal side; several functions applied them on the sample side, or compared orientations in the sample frame. Orientation pools, texture component names, boundary disorientation distributions and misorientation statistics produced by earlier versions used the wrong values. The reference tests carry frozen mtex 1.0.0 values, so they need neither mtex nor an EBSD file.
+
+- **`cubic_misorientation` and `cubic_misorientation_scalar`** (`xtalphy.crystal_orientation`) returned wrong disorientations for large angles, by up to 56 deg. `grain_boundary_misorientation_distribution` and `gbmd_from_lfi` use them. The returned axis is now in crystal coordinates, and a 3x3 argument is read in the convention of `euler_bunge_to_matrix`.
+- **`grain_avg_quats`** averaged pixels that are different symmetric variants of one orientation as plain quaternions, which can land tens of degrees from every pixel of the grain. It is now the cubic symmetry-aware mean (`symmetry=True`; `symmetry=False` keeps the plain mean). `EBSDReader.rechar_lfi` and `EBSDReader.grain_average_euler_deg` use it, and `rechar_lfi` derives the Euler angles of the pixels it fills from the mean quaternion.
+- **`fcc_symmetrise_ori` and `detect_texture_component_peaks`**: the symmetric equivalents were up to 63 deg from their input, and the peaks reported the Euler angles of the inverse orientation, so copper, brass, Goss and S were never recognised by name.
+- **`tops.synth_fcc`, `tops.synth_fcc_quats` and `tops.cubic_misorientation_V3`** (`xtalphy.texops`): the symmetric equivalents were wrong, so a copper-only texture had 8% of its orientations within 15 deg of copper; it now has at least 95%. `synth_fcc_quats` returned the quaternion of Rz Rx Rz, the inverse of the stored convention that EBSD grain means and the Abaqus Euler export use. `cubic_misorientation_V3` summed the wrong matrix entries.
+- **`FCCTexture` and `texOps.fcc.fcc_symmetrise_ori`**: crystal and sample symmetry operators were on the wrong sides. `texOps.fcc.matrix_to_euler_bunge` was not the inverse of `euler_bunge_to_matrix` (it swapped phi1 and phi2).
+- **FM steel disorientation** (`fm_steel_3d`): `OrientationAssigner3D.disorientation_deg`, the HAGB constraint of `assign_pag_orientations_with_hagb` and `assign_isolated_grain_orientations`, and `compute_misorientation_distribution` formed the relative rotation of the Bunge g matrices in the sample frame, so grains could be assigned orientations closer than the HAGB threshold (7.8 deg measured against 15 deg requested). `cubic_misorientation_old1` applied no symmetry at all. All now share `disorientation_from_g`, and the 24 variants of one Kurdjumov-Sachs parent are separated by exactly the tabulated set of angles.
+- **Kurdjumov-Sachs variants** (`OrientationAssigner3D.get_ks_rotations`) were built from the wrong one of the two in-plane BCC directions and symmetrised on the wrong side; block orientations assigned from them were not members of the KS family.
+
+### Deprecated
+
+- Unused methods that carry the same defects now raise a `FutureWarning` naming the defect and the replacement: `tops.cubic_misorientation_V1` and `_V2`, `tops.fcc_symmetrise_ori_V1`, `tops.fcc_variants_in_FZ`, `tops.fcc_variants_in_FZ_old`, `tops.tc_variants_in_FZ`, and the orientation, texture and block-orientation methods of `mcgs3_grain_structure` that were not already deprecated.
+
 ## [1.4.0] — 2026-10-21
 
 ### Fixed
