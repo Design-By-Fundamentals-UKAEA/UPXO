@@ -1824,6 +1824,7 @@ class TwinnedSimple3DBase:
             do_merge_small: bool = True,
             do_spike_removal: bool = True,
             verbose: bool = True,
+            backend: str = 'auto',
     ) -> dict:
         """
         Clean every saved MC temporal slice's persisted LFI
@@ -1889,12 +1890,21 @@ class TwinnedSimple3DBase:
             voxels untouched.
         verbose : bool
             Print a per-slice summary.
+        backend : {'auto', 'numba', 'numpy'}
+            ``'numba'`` runs both stages as numba kernels
+            (:mod:`upxo.pxtal.twinned_simple_3d.fast_cleaning`), which give the
+            same labels and counts as the numpy code in a fraction of the time;
+            ``'numpy'`` runs the numpy code. ``'auto'`` (default) is numba when
+            it is installed and numpy otherwise; ``'numba'`` raises
+            ``ImportError`` if it is not installed.
 
         Returns
         -------
         dict
             ``{tslice_key: {'n_small_merged': int, 'n_spikes_removed': int}}``
         """
+        from upxo.pxtal.twinned_simple_3d import fast_cleaning
+        use_numba = fast_cleaning.resolve_backend(backend) == 'numba'
         from upxo.gsdataops.gid_ops import find_small_fids
         from upxo.netops.neighops import adjacency_from_labels
         from upxo.pxtal.twinned_simple_3d.cleaning_3d import StructureCleaner3D
@@ -1946,7 +1956,9 @@ class TwinnedSimple3DBase:
             # every other cost in this method. A single LUT application is
             # O(N) regardless of how many grains merge in that pass.
             n_small_merged = 0
-            if do_merge_small:
+            if do_merge_small and use_numba:
+                lgi, n_small_merged = fast_cleaning.merge_small_grains(lgi, min_grain_size)
+            elif do_merge_small:
                 for _ in range(50):  # merging only grows grains -> guaranteed to converge
                     small_gids = find_small_fids(lgi, min_grain_size)
                     if small_gids.size == 0:
@@ -1991,7 +2003,10 @@ class TwinnedSimple3DBase:
             # raw state values instead would under-detect spikes whenever
             # a spike's neighbour happens to share its state by chance
             # without being part of the same grain).
-            if do_spike_removal:
+            if do_spike_removal and use_numba:
+                lgi, spike_count = fast_cleaning.remove_spikes(
+                    lgi, spike_cleaner._SPIKE_SAME_COUNT_THRESHOLD)
+            elif do_spike_removal:
                 lgi, spike_count = spike_cleaner._fast_clean_spikes(lgi)
             else:
                 spike_count = 0
@@ -2027,6 +2042,7 @@ class TwinnedSimple3DBase:
             do_spike_removal: bool = True,
             n_passes: int = 1,
             verbose: bool = True,
+            backend: str = 'auto',
     ) -> Tuple[dict, int]:
         """
         Repeats :meth:`clean_temporal_slices` with the same settings up
@@ -2037,6 +2053,8 @@ class TwinnedSimple3DBase:
 
         Parameters
         ----------
+        backend : {'auto', 'numba', 'numpy'}
+            As for :meth:`clean_temporal_slices`.
         n_passes : int
             Maximum number of cleaning passes. 1 reproduces a single
             :meth:`clean_temporal_slices` call exactly.
@@ -2062,7 +2080,7 @@ class TwinnedSimple3DBase:
                 pass_summary = cls.clean_temporal_slices(
                     pxt, min_grain_size=min_grain_size, tslice_keys=tslice_keys,
                     do_merge_small=do_merge_small, do_spike_removal=do_spike_removal,
-                    verbose=verbose)
+                    verbose=verbose, backend=backend)
             n_passes_run = it
             changed = False
             for t, v in pass_summary.items():
