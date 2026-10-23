@@ -1378,6 +1378,7 @@ def detect_texture_component_peaks(
         match_tolerance_deg: float = 15.0,
         std_components: dict[str, tuple[float, float, float]] | None = None,
         block_size: int = 200,
+        verbose: bool = False,
 ) -> dict:
     """
     Detect FCC texture components from a population of grain orientations.
@@ -1427,6 +1428,8 @@ def detect_texture_component_peaks(
         (bounds peak memory for large *N*); automatically reduced for
         large *N* to keep any single transient array under roughly
         50M elements. Default 200.
+    verbose : bool
+        Print the major steps and the density-pass progress. Default False.
 
     Returns
     -------
@@ -1490,8 +1493,16 @@ def detect_texture_component_peaks(
     eff_block = max(1, min(block_size, max_elems // (576 * max(N, 1))))
 
     density = np.zeros(N, dtype=np.float64)
+    n_blocks = (N + eff_block - 1) // eff_block
+    if verbose:
+        print(f"[texture components] Step 1/2: orientation density of {N} grains "
+              f"({n_blocks} blocks, bandwidth {bandwidth_deg:.1f} deg) ...", flush=True)
+    next_report = 0.1
     for start in range(0, N, eff_block):
         stop = min(start + eff_block, N)
+        if verbose and stop / N >= next_report:
+            print(f"[texture components]   density {100 * stop / N:.0f}% done", flush=True)
+            next_report = (int(10 * stop / N) + 1) / 10.0
         q_block_flat = S_R[:, start:stop, :, :].reshape(24, stop - start, 9)
         dots = np.einsum('mbk,lk->mbl', q_block_flat, S_R_flat)   # (24, blk, 24N)
         cos_ang = np.clip((dots - 1.0) * 0.5, -1.0, 1.0)
@@ -1502,6 +1513,8 @@ def detect_texture_component_peaks(
     remaining = np.ones(N, dtype=bool)
     min_weight = min_weight_frac * total_weight
     components: list[dict] = []
+    if verbose:
+        print(f"[texture components] Step 2/2: extracting up to {n_peaks} components ...", flush=True)
     for _ in range(n_peaks):
         if not remaining.any():
             break
@@ -1527,6 +1540,9 @@ def detect_texture_component_peaks(
         if name is None:
             name = f"Component {len(components) + 1}"
 
+        if verbose:
+            print(f"[texture components]   component {len(components) + 1}: {name} "
+                  f"({100.0 * nb_weight / total_weight:.2f}% of weight)", flush=True)
         components.append({
             'name': name,
             'phi1': phi1, 'Phi': Phi, 'phi2': phi2,

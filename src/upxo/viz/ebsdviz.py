@@ -468,6 +468,37 @@ def plot_mdf_selected(
 # CSL grain map
 # ---------------------------------------------------------------------------
 
+def add_map_scale_bar(ax, step_size, shape_px, fontsize=10, color='black'):
+    """Draw a length scale bar at the lower left of a pixel map.
+
+    ``step_size`` is the pixel size in micrometres; the bar length is the
+    round value (1, 2 or 5 x a power of ten) closest to a fifth of the map
+    width. Returns the bar length in micrometres, or None when
+    ``step_size`` is not given."""
+    if not step_size or step_size <= 0:
+        return None
+    width_um = shape_px[1] * float(step_size)
+    target = width_um / 5.0
+    magnitude = 10.0 ** np.floor(np.log10(target))
+    length_um = min((m * magnitude for m in (1, 2, 5, 10)), key=lambda v: abs(v - target))
+    length_px = length_um / float(step_size)
+    ny, nx = shape_px
+    x0 = 0.04 * nx
+    y0 = ny - 0.05 * ny
+    ax.plot([x0, x0 + length_px], [y0, y0], color=color, linewidth=3,
+            solid_capstyle='butt', clip_on=False)
+    label = f'{length_um:g} \u00b5m'
+    ax.text(x0 + length_px / 2.0, y0 - 0.015 * ny, label, color=color, fontsize=fontsize,
+            ha='center', va='bottom')
+    return length_um
+
+
+def place_legend_outside(ax, handles, fontsize=10, title=None):
+    """Legend to the right of the map, outside the axes."""
+    return ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.02, 0.5),
+                     fontsize=fontsize, framealpha=1.0, title=title, borderaxespad=0.0)
+
+
 def plot_csl_grain_map(
         lfi: 'np.ndarray',
         csl_grains: dict,
@@ -475,6 +506,8 @@ def plot_csl_grain_map(
         dpi: int = 130,
         alpha_bg: float = 0.15,
         suptitle: str | None = None,
+        step_size: float | None = None,
+        legend_fontsize: float = 10,
 ) -> tuple:
     """
     Colour-code the grain label field by CSL boundary participation.
@@ -493,6 +526,10 @@ def plot_csl_grain_map(
         ``'n_pairs'``, and ``'n_grains'``.
     figsize, dpi, alpha_bg, suptitle
         Standard figure parameters.
+    step_size : float, optional
+        Pixel size in micrometres; adds a length scale bar when given.
+    legend_fontsize : float
+        Font size of the legend, which is drawn outside the map.
 
     Returns
     -------
@@ -549,7 +586,8 @@ def plot_csl_grain_map(
     ]
     patches.append(mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)),
                                   label='Non-CSL grains'))
-    ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
+    place_legend_outside(ax, patches, fontsize=legend_fontsize)
+    add_map_scale_bar(ax, step_size, (ny, nx), fontsize=legend_fontsize)
     ax.set_axis_off()
     if suptitle:
         ax.set_title(suptitle, fontsize=10)
@@ -647,6 +685,8 @@ def plot_parent_twin_map(
         alpha_bg: float = 0.12,
         colors: dict | None = None,
         suptitle: str | None = None,
+        step_size: float | None = None,
+        legend_fontsize: float = 10,
 ) -> tuple:
     """
     Colour-code the grain label field by parent / twin / intermediate role
@@ -674,6 +714,10 @@ def plot_parent_twin_map(
         ``'intermediate'``.  Values: any Matplotlib colour spec.
     suptitle : str, optional
         Figure-level title.
+    step_size : float, optional
+        Pixel size in micrometres; adds a length scale bar to each map.
+    legend_fontsize : float
+        Font size of the legend, which is drawn outside each map.
 
     Returns
     -------
@@ -695,7 +739,7 @@ def plot_parent_twin_map(
     labels = list(parent_info.keys())
     n      = len(labels)
 
-    fig_w  = figsize[0] * n
+    fig_w  = figsize[0] * n * 1.35      # room for each legend beside its map
     fig, axes = plt.subplots(1, n, figsize=(fig_w, figsize[1]), dpi=dpi,
                              squeeze=False)
 
@@ -752,7 +796,8 @@ def plot_parent_twin_map(
             mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)),
                            label='Non-role grains'),
         ]
-        ax.legend(handles=patches, loc='upper right', fontsize=7, framealpha=0.9)
+        place_legend_outside(ax, patches, fontsize=legend_fontsize)
+        add_map_scale_bar(ax, step_size, (ny, nx), fontsize=legend_fontsize)
 
     if suptitle:
         # y kept under 1.0 and tight_layout given an explicit rect so the
@@ -778,6 +823,8 @@ def plot_combined_parent_twin_map(
         color_non_participating: str = '#E8A33D',
         highlight: str = 'combined',
         suptitle: str | None = None,
+        step_size: float | None = None,
+        legend_fontsize: float = 10,
 ) -> tuple:
     """
     Single map showing pure-parent, pure-twin, intermediate, and/or
@@ -812,6 +859,10 @@ def plot_combined_parent_twin_map(
     suptitle : str or None
         Figure title. When ``None`` (default), an auto-generated title
         matching *highlight* is used.
+    step_size : float, optional
+        Pixel size in micrometres; adds a length scale bar when given.
+    legend_fontsize : float
+        Font size of the legend, which is drawn outside the map.
 
     Returns
     -------
@@ -891,7 +942,8 @@ def plot_combined_parent_twin_map(
 
     patches = [mpatches.Patch(color=colour_str, label=label) for _, colour_str, label in highlighted]
     patches.append(mpatches.Patch(color=(0.85, 0.85, 0.85, max(alpha_bg, 0.4)), label=dimmed_label))
-    ax.legend(handles=patches, loc='upper right', fontsize=8, framealpha=0.9)
+    place_legend_outside(ax, patches, fontsize=legend_fontsize)
+    add_map_scale_bar(ax, step_size, (ny, nx), fontsize=legend_fontsize)
 
     if suptitle is None:
         suptitle = {

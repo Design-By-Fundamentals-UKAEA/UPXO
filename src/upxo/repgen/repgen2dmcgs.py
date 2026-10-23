@@ -1432,7 +1432,9 @@ class repgen2d:
         ebsdviz.plot_csl_grain_map(self.lfi_ebsd, csl_grains,
             figsize=kwargs.get('figsize', (6, 6)),
             dpi=kwargs.get('dpi', 140),
-            suptitle=kwargs.get('suptitle', 'CSL grain participation map — EBSD target'),)
+            suptitle=kwargs.get('suptitle', 'CSL grain participation map — EBSD target'),
+            step_size=kwargs.get('step_size', getattr(self, 'ebsd_step', None)),
+            legend_fontsize=kwargs.get('legend_fontsize', 10),)
         plt.show()
 
     def compute_csl_volume_fractions(self, csl_grains):
@@ -3829,7 +3831,9 @@ class repgen2d:
         from upxo.viz.ebsdviz import plot_parent_twin_map
         plot_parent_twin_map(self.lfi_ebsd, parent_info,
             figsize=kwargs.get('map_figsize', (6, 6)), dpi=kwargs.get('map_dpi', 140),
-            suptitle=kwargs.get('map_suptitle', 'Parent / twin grain map — EBSD target'),)
+            suptitle=kwargs.get('map_suptitle', 'Parent / twin grain map — EBSD target'),
+            step_size=kwargs.get('step_size', getattr(self, 'ebsd_step', None)),
+            legend_fontsize=kwargs.get('legend_fontsize', 10),)
         plt.show()
 
     def plot_combined_parent_twin_map(self, parent_info, **kwargs):
@@ -3870,7 +3874,9 @@ class repgen2d:
             figsize=kwargs.get('combmap_figsize', (6, 6)), dpi=kwargs.get('combmap_dpi', 140),
             alpha_bg=kwargs.get('combmap_alpha_bg', 0.08),
             highlight=kwargs.get('highlight', 'combined'),
-            suptitle=kwargs.get('combmap_suptitle', None),)
+            suptitle=kwargs.get('combmap_suptitle', None),
+            step_size=kwargs.get('step_size', getattr(self, 'ebsd_step', None)),
+            legend_fontsize=kwargs.get('legend_fontsize', 10),)
         plt.show()
 
     def selectProps_twinGS(self):

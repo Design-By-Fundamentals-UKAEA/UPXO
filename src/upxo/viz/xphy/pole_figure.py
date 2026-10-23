@@ -992,6 +992,8 @@ class PoleFigure:
         z_label: Optional[str] = None,
         colorbar_decimals: Optional[int] = None,
         title: Optional[str] = None,
+        colorbar_label: Optional[str] = None,
+        colorbar_orientation: str = 'vertical',
     ) -> Tuple[plt.Figure, plt.Axes]:
         """
         Plot the pole figure as continuous density contours in Multiples of Uniform Distribution (MUD)
@@ -1000,6 +1002,11 @@ class PoleFigure:
         colorbar_decimals : optional number of decimal places for the
         colour-bar's tick labels (e.g. 2 -> "1.23"). Default None: leave
         matplotlib's own automatic tick formatting unchanged.
+
+        colorbar_label : optional title of the density colour bar; None keeps
+        'MUD (Multiples of Uniform Distribution)'.
+
+        colorbar_orientation : 'vertical' (default) or 'horizontal'.
 
         mud_clip_min / mud_clip_max : optional lower/upper bounds to clip the
         computed MUD values to before building the color scale -- either can
@@ -1085,8 +1092,13 @@ class PoleFigure:
             ax.clabel(contours, inline=True, fontsize=8, fmt='%.1f')
 
         cbar_format = f'%.{colorbar_decimals}f' if colorbar_decimals is not None else None
-        ax.figure.colorbar(im, ax=ax, label='MUD (Multiples of Uniform Distribution)',
-                           fraction=0.046, pad=0.04, format=cbar_format)
+        if colorbar_orientation not in ('vertical', 'horizontal'):
+            raise ValueError("colorbar_orientation must be 'vertical' or 'horizontal'")
+        ax.figure.colorbar(im, ax=ax,
+                           label=colorbar_label or 'MUD (Multiples of Uniform Distribution)',
+                           orientation=colorbar_orientation, fraction=0.046,
+                           pad=0.04 if colorbar_orientation == 'vertical' else 0.08,
+                           format=cbar_format)
         
         # ── 7. Overlay scatter points ──
         if overlay_scatter:
@@ -1127,7 +1139,8 @@ class PoleFigure:
                 # pad is wider than the MUD colorbar's own 0.04 so the two
                 # colorbars sit side by side instead of overlapping.
                 ax.figure.colorbar(im2, ax=ax, label='Marker Colour (Grain Size, voxel count)',
-                                   fraction=0.046, pad=0.14)
+                                   orientation=colorbar_orientation, fraction=0.046,
+                                   pad=0.14 if colorbar_orientation == 'vertical' else 0.2)
             else:
                 ax.scatter(X, Y, c='black', **s_args)
 
