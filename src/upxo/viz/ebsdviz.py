@@ -948,12 +948,14 @@ GRAIN_ROLE_PROP_LABELS = {
     'role_mix_diversity':    'Neighbour Role Diversity',
 }
 GRAIN_ROLE_GROUP_COLORS = {
+    'full':          '#222222',
     'pure_parents':  '#4878CF',
     'pure_twins':    '#D65F5F',
     'intermediates': '#59A14F',
     'non_role':      '#888888',
 }
 GRAIN_ROLE_GROUP_LABELS_DISPLAY = {
+    'full':          'Full grain structure',
     'pure_parents':  'Pure parents',
     'pure_twins':    'Pure twins',
     'intermediates': 'Intermediates',
@@ -1116,7 +1118,8 @@ def compute_grain_role_property_distributions(
         Subset of ``GRAIN_ROLE_ALL_PROPS`` (see that constant's Tier
         1-4 grouping for what each property needs).  Defaults to all.
     selected_groups : list of str, optional
-        Subset of ``GRAIN_ROLE_ALL_GROUPS``.  Defaults to all four.
+        Subset of ``GRAIN_ROLE_ALL_GROUPS`` plus ``'full'`` (every indexed
+        grain, whatever its role).  Defaults to the four role groups.
     step_size : float
         EBSD step size (µm).  Used ONLY for Tier 2 properties
         (circularity/gb_segment_length/n_tjp), which are recomputed
@@ -1145,6 +1148,8 @@ def compute_grain_role_property_distributions(
     # gid -> its own role -- Tier 4's neighbour-composition properties
     # look THIS up for each of a grain's neighbours, not the grain itself.
     role_of = {gid: role for role, gids in grain_sets.items() for gid in gids}
+    group_sets = dict(grain_sets)
+    group_sets['full'] = set(int(g) for g in np.unique(lfi[lfi > 0]))
 
     # Tier 2 (circularity/gb_segment_length/n_tjp) needs a fresh
     # per-label metrics pass over the label field -- computed once,
@@ -1224,7 +1229,7 @@ def compute_grain_role_property_distributions(
         return arr[np.isfinite(arr)]
 
     return {
-        pname: {grp: _get_vals(grain_sets[grp], pname) for grp in selected_groups}
+        pname: {grp: _get_vals(group_sets[grp], pname) for grp in selected_groups}
         for pname in selected_props
     }
 

@@ -8,6 +8,7 @@ All notable changes to UPXO are documented in this file.
 
 - **`OrientationAssigner3D.assign_pag_orientations_with_hagb`** now sets `self.last_hagb_fallback_count` to the number of PAGs that could not meet the HAGB threshold within `max_attempts`, previously only visible by parsing its `RuntimeWarning`. `FMSteel3DWithPAGs.assign_pag_orientations` surfaces it as `self.hagb_fallback_count` for `pag_ori_mode='hagb_constrained'` and `'textured'` with `hagb_constraint=True`.
 - **Orientation conventions page** (`docs/orientation_conventions.rst`) and the `euler_bunge_to_matrix` docstring: which rotation each orientation format holds (Euler angles, R, g, stored and active quaternions), the side on which symmetry operators and twin or Kurdjumov-Sachs relationships are composed, and how directions and plane normals are rotated between frames.
+- **`compute_grain_role_property_distributions`** (`viz.ebsdviz`) accepts a `'full'` group: every indexed grain, whatever its role. The default groups are unchanged.
 
 ### Fixed
 
