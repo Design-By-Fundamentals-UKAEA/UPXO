@@ -462,16 +462,19 @@ class FMSteel3DWithOrientations:
 
     def get_misorientation_statistics(self) -> Dict[str, any]:
         """
-        Compute grain-grain and block-block misorientation statistics.
-        
-        Uses cubic_misorientation_old1 (from parent class) to compute
-        misorientation angles between neighboring grains/blocks.
-        
+        Sample block-block misorientation statistics.
+
+        Draws up to 10 random pairs of blocks (not neighbours -- any two
+        blocks in the structure) via ``np.random.choice`` and computes their
+        cubic misorientation with ``cubic_misorientation_old1``.
+
         Returns
         -------
         dict
-            Keys: 'grain_grain_misori', 'block_block_misori',
-            (each is dict of statistics: min, max, mean, etc.)
+            Empty if fewer than 2 blocks have an assigned orientation.
+            Otherwise: 'n_block_pairs_sampled', 'mean_block_misorientation_deg',
+            'std_block_misorientation_deg', 'block_misorientations' (the raw
+            per-pair angles, degrees).
         """
         from .orientation_assigner_3d import OrientationAssigner3D
         ori_assigner = OrientationAssigner3D()

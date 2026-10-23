@@ -4,6 +4,10 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`OrientationAssigner3D.assign_pag_orientations_with_hagb`** now sets `self.last_hagb_fallback_count` to the number of PAGs that could not meet the HAGB threshold within `max_attempts`, previously only visible by parsing its `RuntimeWarning`. `FMSteel3DWithPAGs.assign_pag_orientations` surfaces it as `self.hagb_fallback_count` for `pag_ori_mode='hagb_constrained'` and `'textured'` with `hagb_constraint=True`.
+
 ### Fixed
 
 Cubic orientation maths now agrees with mtex. `euler_bunge_to_matrix` returns Rz Rx Rz, the transpose of the Bunge g matrix, and the 24 cubic symmetry operators act on its crystal side; several functions applied them on the sample side, or compared orientations in the sample frame. Orientation pools, texture component names, boundary disorientation distributions and misorientation statistics produced by earlier versions used the wrong values. The reference tests carry frozen mtex 1.0.0 values, so they need neither mtex nor an EBSD file.

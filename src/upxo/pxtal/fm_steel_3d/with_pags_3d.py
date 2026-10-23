@@ -78,6 +78,14 @@ class FMSteel3DWithPAGs:
         correct, group-consistent orientation via pag_orientations and
         should not be re-assigned here.
 
+    hagb_fallback_count : int or None
+        Number of PAGs for which assign_pag_orientations(pag_ori_mode=
+        'hagb_constrained', ...) (or 'textured' with hagb_constraint=True)
+        could not satisfy the HAGB threshold within max_attempts and fell
+        back to the best candidate seen -- the same count the method's
+        RuntimeWarning reports, kept here so it can be inspected without
+        parsing warnings. None if that mode was never used.
+
     grain_to_pag_id : dict[int, int]
         Reverse lookup: grain_id -> pag_id.
         Derived from clusters_dict at construction time.
@@ -106,6 +114,7 @@ class FMSteel3DWithPAGs:
         '_random_seed',
         'grain_to_pag_id',
         'grain_to_local_pkt_idx',
+        'hagb_fallback_count',
         '_verbosity',
         '_log_sink',
     )
@@ -170,6 +179,7 @@ class FMSteel3DWithPAGs:
         self._retained_austenite_selection_info = retained_austenite_selection_info
         self.pag_orientations = pag_orientations or {}
         self.isolated_grain_orientations: Dict[int, Tuple[float, float, float]] = {}
+        self.hagb_fallback_count: Optional[int] = None
         self._target_pag_grain_fraction = target_pag_grain_fraction
         self._random_seed = random_seed
         self._verbosity = int(getattr(parent, '_verbosity', 0) if verbosity is None else verbosity)
@@ -291,7 +301,10 @@ class FMSteel3DWithPAGs:
         Returns
         -------
         None
-            Results stored in ``self.pag_orientations``.
+            Results stored in ``self.pag_orientations``. For
+            ``'hagb_constrained'``, and for ``'textured'`` with
+            ``hagb_constraint=True``, ``self.hagb_fallback_count`` is also set
+            to the number of PAGs that could not meet the threshold.
         """
         if random_seed is not None:
             np.random.seed(random_seed)
@@ -315,6 +328,7 @@ class FMSteel3DWithPAGs:
                 random_seed=random_seed,
                 max_attempts=int(pag_ori_params.get('max_attempts', 1000)),
             )
+            self.hagb_fallback_count = _ori.last_hagb_fallback_count
         elif pag_ori_mode == 'textured':
             tc_info = pag_ori_params.get('tc_info')
             if tc_info is None:
@@ -342,6 +356,7 @@ class FMSteel3DWithPAGs:
                     random_seed=random_seed,
                     max_attempts=int(pag_ori_params.get('max_attempts', 1000)),
                 )
+                self.hagb_fallback_count = _ori.last_hagb_fallback_count
             else:
                 rng = np.random.default_rng(random_seed)
                 indices = rng.integers(0, len(pool_list), size=len(self.clusters_dict))

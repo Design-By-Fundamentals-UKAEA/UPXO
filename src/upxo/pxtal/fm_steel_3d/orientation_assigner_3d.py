@@ -108,7 +108,7 @@ class OrientationAssigner3D:
     All methods are instance methods to allow storing session config.
     """
     
-    __slots__ = ('_verbosity', '_log_sink')
+    __slots__ = ('_verbosity', '_log_sink', 'last_hagb_fallback_count')
 
     def __init__(self, verbosity: int = 0, log_sink=None):
         """
@@ -128,6 +128,7 @@ class OrientationAssigner3D:
         """
         self._verbosity = int(verbosity)
         self._log_sink = log_sink
+        self.last_hagb_fallback_count: Optional[int] = None
 
     def _emit(self, level: int, msg: str, component: str = 'ORI') -> None:
         if self._verbosity < int(level):
@@ -507,18 +508,25 @@ class OrientationAssigner3D:
                                         degrees: bool = True) -> np.ndarray:
         """
         Convert Bunge Euler angles to rotation matrix (vectorized).
-        
+
+        Despite the name, this returns the Bunge **g** matrix (sample ->
+        crystal) -- the transpose of
+        ``upxo.xtalphy.crystal_orientation.euler_bunge_to_matrix``, which
+        returns **R** = Rz(phi1) Rx(Phi) Rz(phi2) (crystal -> sample) for the
+        same angles. ``matrix_to_euler_bunge`` is this function's inverse and
+        also expects/returns g.
+
         Parameters
         ----------
         phi1, Phi, phi2 : np.ndarray
             Euler angles (1D arrays of same length, or scalars).
         degrees : bool, optional
             If True, input angles are in degrees. Default True.
-        
+
         Returns
         -------
         np.ndarray
-            Rotation matrices, shape (..., 3, 3).
+            g matrices (sample -> crystal), shape (..., 3, 3).
         """
         if degrees:
             phi1 = np.radians(phi1)
@@ -707,6 +715,8 @@ class OrientationAssigner3D:
         -------
         dict
             {pag_id: (phi1_deg, Phi_deg, phi2_deg)}.
+            Also sets ``self.last_hagb_fallback_count`` to the number of
+            PAGs that needed the best-effort fallback.
         """
         import warnings as _warnings
         rng = np.random.default_rng(seed=random_seed)
@@ -792,6 +802,10 @@ class OrientationAssigner3D:
                f"(threshold={hagb_threshold:.1f}°, fallbacks={n_fallbacks})",
             component='ORI-HAGB',
         )
+
+        # Exposed so a caller can report the fallback count without parsing
+        # the RuntimeWarning above (see FMSteel3DWithPAGs.hagb_fallback_count).
+        self.last_hagb_fallback_count = n_fallbacks
 
         return assigned
 

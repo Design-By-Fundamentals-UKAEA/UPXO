@@ -145,10 +145,11 @@ class OrientationViz3D:
         """
         Convert Bunge Euler angles (degrees) to an IPF RGB colour.
 
-        Delegates to upxo.xtalphy.crystal_orientation.ipf_color which uses
-        the standard cubic R.T @ sd formula: the sample direction is transformed
-        into the crystal frame, its absolute components are taken, and the
-        result is normalised to [0, 1]^3.
+        Delegates to upxo.xtalphy.crystal_orientation.ipf_color, mtex's default
+        inverse-pole-figure key for cubic crystals: the crystal direction of the
+        sample axis, R.T @ sd, is brought into the fundamental sector
+        [001]-[101]-[111] and coloured from there, so orientations related by a
+        cubic symmetry operation get the same colour.
 
         Parameters
         ----------
