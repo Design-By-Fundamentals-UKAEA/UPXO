@@ -375,7 +375,12 @@ class PoleFigure:
         - 'euler_deg' or 'euler_rad': (N, 3)
         - 'matrix': (N, 3, 3)
     convention : str
-        Convention type of orientations.
+        Convention type of orientations. Euler angles are Bunge ZXZ. A matrix and a
+        quaternion describe the crystal -> sample rotation (the matrix euler_bunge_to_matrix
+        gives, Rz Rx Rz). Quaternions stored the way DefDAP stores them
+        (``EBSDReader.quat_ebsd``, ``grain_avg_quats``) are the quaternion of the transpose:
+        convert them with ``defdap_passive_to_active`` (or ``sample_frame_quats`` in the
+        Twinned pipeline) first, otherwise every pole is placed at its transposed position.
     gids : np.ndarray, optional
         Grain IDs corresponding to the orientations, used for metadata-based coloring.
     symmetry : str or np.ndarray
@@ -439,7 +444,9 @@ class PoleFigure:
             - 'euler_deg' or 'euler_rad': (N, 3)
             - 'matrix': (N, 3, 3)
         convention : str
-            Convention type of orientations.
+            Convention type of orientations. Quaternions and matrices are the
+            crystal -> sample rotation; DefDAP-stored quaternions must be conjugated
+            first (see the class docstring).
         gids : np.ndarray, optional
             Grain IDs corresponding to the orientations, used for metadata-based coloring.
         symmetry : str or np.ndarray
@@ -1545,7 +1552,8 @@ def plot_pole_figure_from_3d(
     lgi_3d : np.ndarray
         3D grain label field (nz, ny, nx).
     quats_dict : dict
-        Dict mapping grain ID -> quaternion [w, x, y, z].
+        Dict mapping grain ID -> quaternion [w, x, y, z] of the crystal -> sample rotation
+        (conjugate DefDAP-stored quaternions with ``defdap_passive_to_active`` first).
     axis : int
         Slicing direction normal: 0=X, 1=Y, 2=Z.
     slice_idx : int, optional

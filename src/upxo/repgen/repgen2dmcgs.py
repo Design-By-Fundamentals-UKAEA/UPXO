@@ -1699,8 +1699,10 @@ class repgen2d:
             ``'all_twins'``         — ``primary_twins`` and
                                        ``secondary_twins`` combined
 
-            Every stage's ``(gids, quats)`` pair is ready to pass directly
-            into ``PoleFigure(quats, gids=gids, convention='quaternion')``.
+            The ``quats`` are DefDAP-stored quaternions. Convert them with
+            ``defdap_passive_to_active`` before
+            ``PoleFigure(quats, gids=gids, convention='quaternion')``; passed
+            as they are, every pole sits at its transposed position.
         """
         from upxo.xtalphy.crystal_orientation import (
             grain_avg_quats, classify_grain_roles_extended)
