@@ -393,7 +393,10 @@ class OrientationAssigner3D:
                 for block_id in pp_block_ids:
                     v_idx       = var_idx_map[block_id]
                     raw_variant = packet_variants[v_idx]
-                    variant_R   = pag_R @ raw_variant
+                    # g_block = raw_variant @ pag_g (crystal-frame KS variant applied
+                    # on top of the parent orientation), not pag_g @ raw_variant --
+                    # verified against mtex's variants(p2c, parentOri).
+                    variant_R   = raw_variant @ pag_R
                     block_orientations[block_id] = self.matrix_to_euler_bunge(
                         variant_R, degrees=True)
                     block_to_variant_idx[block_id] = v_idx
