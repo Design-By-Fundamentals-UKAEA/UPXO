@@ -208,6 +208,11 @@ class tops:
         ``scipy.spatial.transform.Rotation``.  Orientations are returned in the
         canonical positive-w hemisphere (w >= 0).
 
+        The quaternions are in the convention DefDAP stores and the EBSD
+        grain means use: the quaternion of the Bunge g matrix (sample ->
+        crystal), the inverse of the rotation Rz Rx Rz that scipy builds
+        from the Euler angles. They can therefore be pooled with those.
+
         Parameters
         ----------
         N : int
@@ -226,7 +231,7 @@ class tops:
         tc_stacks = (tex.tex['tex_instance.1']
                         ['sampling_instances']['ossi.1']['tc_ori_stacks'])
         ea = np.vstack(list(tc_stacks.values())).astype(np.float64)
-        q_xyzw = _Rotation.from_euler('ZXZ', ea, degrees=True).as_quat()
+        q_xyzw = _Rotation.from_euler('ZXZ', ea, degrees=True).inv().as_quat()
         q_wxyz = np.column_stack([q_xyzw[:, 3], q_xyzw[:, :3]])
         neg_w = q_wxyz[:, 0] < 0
         q_wxyz[neg_w] *= -1
@@ -457,8 +462,9 @@ class tops:
         >>> tex.fcc_symmetrise_ori(ea_bunge, dtype=np.float32)
         """
         g = self.cubic_euler_bunge_to_matrix(*ea_bunge, degrees=True)
-        # sym_ops = self.cubic_symmetry_operators()
-        eq_mats = [self._proj_to_so3(S @ g) for S in self.sym_ops]
+        # g is Rz Rx Rz (crystal -> sample), the transpose of the Bunge matrix;
+        # the cubic operators act on its crystal side, the right.
+        eq_mats = [self._proj_to_so3(g @ S) for S in self.sym_ops]
         eq_mats = self._unique_rotations(eq_mats, tol=1E-8)
         symm_eq = np.array([list(self._matrix_to_euler_bunge(R, degrees=True))
                             for R in eq_mats], dtype=dtype)
@@ -844,8 +850,7 @@ class tops:
         Returns
         -------
         angle_deg_min : float
-        axis_min : ndarray, shape (3,)
-            Unit vector in sample frame.
+            Disorientation angle in degrees; agrees with mtex orientation.angle.
 
         Examples
         --------
@@ -853,9 +858,11 @@ class tops:
         >>> tex = TO()
         >>> tex.cubic_misorientation_V3([0, 0, 0], [35, 45, 90])
         """
-        # Normalize inputs to rotation matrices
-        gA = self._as_rotmat(EA1, degrees=degrees)  # (3,3)
-        gB = self._as_rotmat(EA2, degrees=degrees)  # (3,3)
+        # Normalize inputs to the Bunge g matrix. _as_rotmat gives Rz Rx Rz (or
+        # the 3x3 argument as given, in that convention), the transpose of g;
+        # the cubic operators act on g from the left.
+        gA = self._as_rotmat(EA1, degrees=degrees).T  # (3,3)
+        gB = self._as_rotmat(EA2, degrees=degrees).T  # (3,3)
 
         # Symmetry ops as (24,3,3)
         S = self._get_cubic_ops_np()  # (24,3,3)
@@ -871,8 +878,7 @@ class tops:
         dR = RB[:, None, :, :] @ RtA[None, :, :, :]  # (24,24,3,3)
 
         # Angles from trace: angle = arccos( (tr(dR)-1)/2 )
-        # tr = dR[..., 0, 0] + dR[..., 1, 1] + dR[..., 2, 2]  # (24,24)
-        tr = np.einsum('iijj->ij', dR)
+        tr = np.trace(dR, axis1=-2, axis2=-1)  # (24,24)
         x = np.clip((tr - 1.0) * 0.5, -1.0, 1.0)
         ang = np.arccos(x)  # radians, (24,24)
 
