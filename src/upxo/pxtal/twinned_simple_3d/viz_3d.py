@@ -519,7 +519,30 @@ _VOXEL_SET_COLOURS = ('crimson', 'steelblue', 'darkorange', 'seagreen', 'purple'
                       'deeppink', 'teal', 'sienna', 'slategray')
 
 
-def render_voxel_sets(shape, sets, colors=None, opacity=1.0, off_screen=False):
+def build_feature_ids(lgi, sets, mode='feature'):
+    """Integer volume (shape of ``lgi``) giving every voxel of ``sets`` a feature id, 0 elsewhere.
+
+    ``mode='grain'``: the id is the voxel's grain id in the global grain structure ``lgi``.
+    ``mode='feature'``: each connected cluster (face-connected, inside one grain) of the
+    union of the sets is a feature and gets its own id, 1 to the number of features.
+    ``sets`` is ``{name: 1-based C-order voxel ids}``. Returns ``(ids, n_features)``."""
+    lgi = np.asarray(lgi)
+    mask = np.zeros(lgi.size, dtype=bool)
+    for ids in sets.values():
+        mask[np.asarray(ids, dtype=np.int64) - 1] = True
+    mask = mask.reshape(lgi.shape)
+    if mode == 'grain':
+        out = np.where(mask, lgi, 0)
+        return out, int(len(np.unique(out[out > 0])))
+    if mode != 'feature':
+        raise ValueError("mode must be 'grain' or 'feature'.")
+    import cc3d
+    labels = cc3d.connected_components(np.where(mask, lgi, 0).astype(np.uint32), connectivity=6)
+    return labels.astype(np.int64), int(labels.max())
+
+
+def render_voxel_sets(shape, sets, colors=None, opacity=1.0, off_screen=False, lgi=None, color_by=None,
+                      cmap='nipy_spectral'):
     """3D render of sets of voxels, each set in its own colour.
 
     Parameters
@@ -542,6 +565,30 @@ def render_voxel_sets(shape, sets, colors=None, opacity=1.0, off_screen=False):
     outline = pv.ImageData()
     outline.dimensions = (nx + 1, ny + 1, nz + 1)
     plotter.add_mesh(outline.outline(), color='black', line_width=1)
+    if color_by is not None:
+        if lgi is None:
+            raise ValueError("color_by needs the grain label field lgi.")
+        ids, n_feat = build_feature_ids(lgi, sets, mode=color_by)
+        if n_feat == 0:
+            return plotter if off_screen else None
+        scalars = ids.astype(np.float64)
+        if color_by == 'feature':                     # neighbouring features should not get neighbouring colours
+            perm = np.random.default_rng(0).permutation(n_feat) + 1
+            scalars = np.where(ids > 0, perm[np.clip(ids - 1, 0, n_feat - 1)], 0).astype(np.float64)
+            clim, title = (1.0, float(n_feat)), f'feature id ({n_feat} features)'
+        else:
+            top = float(np.max(lgi))
+            clim, title = (1.0, top), 'grain id'
+        grid = pv.ImageData()
+        grid.dimensions = (nx + 1, ny + 1, nz + 1)
+        grid.cell_data['fid'] = scalars.ravel(order='F')            # pyvista cell order: x fastest
+        plotter.add_mesh(grid.threshold(0.5, scalars='fid'), scalars='fid', cmap=cmap, clim=clim,
+                         opacity=opacity, show_edges=False, scalar_bar_args={'title': title})
+        plotter.add_text('  |  '.join(f'{k} ({len(v)} voxels)' for k, v in sets.items())[:240], font_size=8)
+        if off_screen:
+            return plotter
+        plotter.show()
+        return None
     entries = []
     for k, (name, ids) in enumerate(sets.items()):
         ids = np.asarray(ids, dtype=np.int64) - 1

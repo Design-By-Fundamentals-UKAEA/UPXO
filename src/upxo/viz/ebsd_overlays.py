@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 from matplotlib.collections import LineCollection
 
-__all__ = ["junction_points", "polygon_boundary_lines", "overlay_grain_boundaries",
+__all__ = ["junction_points", "polygon_boundary_lines", "overlay_grain_boundaries", "apply_boundary_overlay",
            "overlay_junctions", "JUNCTION_MARKERS"]
 
 JUNCTION_MARKERS = {"circle": "o", "square": "s", "triangle": "^", "diamond": "D",
@@ -100,3 +100,24 @@ def overlay_junctions(ax, lfi, triple=True, quadruple=True, marker='circle', siz
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     return len(xy)
+
+
+def apply_boundary_overlay(fig, ax, lfi, polygons=None, gb_color='black', gb_width=1.0,
+                           triple=False, quadruple=False, marker='circle', marker_size=12.0,
+                           marker_edge='black', marker_fill='black', data_per_pixel=1.0):
+    """Draw grain boundaries and, optionally, junction markers on ``ax``,
+    replacing an overlay this function drew earlier on the same figure.
+
+    Returns ``'smoothed'`` or ``'pixel'`` (see :func:`overlay_grain_boundaries`)."""
+    for artist in getattr(fig, '_upxo_overlay_artists', []):
+        try:
+            artist.remove()
+        except (ValueError, NotImplementedError):
+            pass
+    before = {id(a) for a in (*ax.collections, *ax.images, *ax.lines)}
+    mode = overlay_grain_boundaries(ax, lfi, polygons=polygons, color=gb_color, linewidth=gb_width,
+                                    data_per_pixel=data_per_pixel)
+    overlay_junctions(ax, lfi, triple=triple, quadruple=quadruple, marker=marker, size=marker_size,
+                      edgecolor=marker_edge, facecolor=marker_fill, data_per_pixel=data_per_pixel)
+    fig._upxo_overlay_artists = [a for a in (*ax.collections, *ax.images, *ax.lines) if id(a) not in before]
+    return mode

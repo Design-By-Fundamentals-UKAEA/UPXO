@@ -114,3 +114,19 @@ def test_euler_map_options():
     assert any('\u00b5m' in t.get_text() for t in ax.texts)
     hidden = euler_map_figure(lfi, euler, 0, show_axes=False)
     assert not hidden.axes[0].axison
+
+
+def test_apply_boundary_overlay_replaces_the_previous_overlay_and_scales_to_the_axes_units():
+    from upxo.viz.ebsd_overlays import apply_boundary_overlay
+    lfi = _four_grains()
+    fig = euler_map_figure(lfi, np.zeros((*lfi.shape, 3)) + 0.5, 0, step_um=0.5)
+    ax = fig.axes[0]
+    n0 = len(ax.images)
+    assert apply_boundary_overlay(fig, ax, lfi, data_per_pixel=0.5, triple=True, quadruple=True) == 'pixel'
+    n1, c1 = len(ax.images), len(ax.collections)
+    assert n1 == n0 + 1 and c1 >= 1
+    apply_boundary_overlay(fig, ax, lfi, data_per_pixel=0.5, triple=True, quadruple=True)
+    assert (len(ax.images), len(ax.collections)) == (n1, c1)           # replaced, not stacked
+    assert ax.get_xlim()[1] < 11                                       # axes stay in micrometres
+    s = smooth_structure(lfi, "A", (1, (1,)))
+    assert apply_boundary_overlay(fig, ax, lfi, polygons=s['polygons'], data_per_pixel=0.5) == 'smoothed'
