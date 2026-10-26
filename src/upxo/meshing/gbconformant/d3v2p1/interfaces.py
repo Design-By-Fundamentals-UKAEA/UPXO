@@ -16,7 +16,7 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
                       junction_max_displacement=None, frozen_grain_ids=(),
                       iterations_by_pair=None, ramp_rings=2, thickness_cap_fraction=None,
                       minimum_wedge_angle=None, minimum_corner_angle=None,
-                      progress=None):
+                      progress=None, track_history=False):
     """Return shared internal interface triangles; no tetrahedra or RVE caps.
 
     Voxel axes are x/y/z. Surface nodes average surface neighbors and junction
@@ -49,6 +49,8 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
     angles there, i.e. the angle between the two junction lines bounding it).
     A move that would bring a corner below the minimum, or make an already
     smaller corner smaller, stops the nodes involved.
+    track_history: when True, smoothing_report['history'] holds one entry per accepted
+    iteration (displacement, newly wedge/corner-frozen nodes, turn-angle stats).
     """
     labels = np.asarray(labels)
     frozen_grain_ids = tuple(frozen_grain_ids)
@@ -152,6 +154,10 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
         thickness = node_local_thickness(labels, lattice, grain_ids=signatures)
         node_limit = thickness_cap_fraction * .5 * thickness * float(spacing.min())
     stopped = np.zeros(len(points), bool)
+    stopped_wedge = np.zeros(len(points), bool)
+    stopped_corner = np.zeros(len(points), bool)
+    prev_wedge_frozen = prev_corner_frozen = 0
+    history = []
     incidence = EdgeIncidence(triangles) if minimum_wedge_angle is not None else None   # connectivity is fixed
     if minimum_corner_angle is not None:
         # triangle corners at fixed junction points, grouped by (point, patch)
@@ -215,17 +221,19 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
             # below the minimum; recheck orientation after each change of the step.
             corner_now = corner_sums(points) if minimum_corner_angle is not None else None
             for _ in range(50):
-                culprits = np.empty(0, int)
+                wedge_culprits = np.empty(0, int)
+                corner_culprits = np.empty(0, int)
                 if minimum_wedge_angle is not None:
                     folds, _ = small_facet_angles(points+delta, triangles, minimum_wedge_angle, incidence=incidence)
                     if len(folds):
-                        culprits = np.unique(triangles[np.unique(folds)])
+                        wedge_culprits = np.unique(triangles[np.unique(folds)])
                 if minimum_corner_angle is not None and n_keys:
                     after = corner_sums(points+delta)
                     closing = (after < minimum_corner_angle) & (after < corner_now - 1e-9)
                     if closing.any():
                         rows = np.flatnonzero(closing[corner_key])
-                        culprits = np.union1d(culprits, np.unique(triangles[corner_tri[rows]]))
+                        corner_culprits = np.unique(triangles[corner_tri[rows]])
+                culprits = np.union1d(wedge_culprits, corner_culprits)
                 culprits = culprits[np.linalg.norm(delta[culprits], axis=1) > 0]
                 proposed = normals(points+delta)
                 bad = (np.linalg.norm(proposed, axis=1) < area_floor) | (np.einsum('ij,ij->i', current, proposed) <= 0)
@@ -233,11 +241,30 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
                 flips = flips[np.linalg.norm(delta[flips], axis=1) > 0]
                 if not len(culprits) and not len(flips):
                     break
+                if track_history:
+                    stopped_wedge[np.intersect1d(wedge_culprits, culprits)] = True
+                    stopped_corner[np.intersect1d(corner_culprits, culprits)] = True
                 stopped[culprits] = True
                 delta[culprits] = 0
                 delta[flips] = 0
         if np.linalg.norm(delta, axis=1).max() < 1e-9*spacing.min():
             break
+        if track_history:
+            final_normals = normals(points+delta)
+            na = current/np.maximum(np.linalg.norm(current, axis=1, keepdims=True), 1e-300)
+            nb = final_normals/np.maximum(np.linalg.norm(final_normals, axis=1, keepdims=True), 1e-300)
+            turn = np.degrees(np.arccos(np.clip(np.einsum('ij,ij->i', na, nb), -1, 1)))
+            disp = np.linalg.norm(delta, axis=1)
+            moved = disp > 1e-12
+            wedge_frozen, corner_frozen = int(stopped_wedge.sum()), int(stopped_corner.sum())
+            entry = dict(mean_displacement=float(disp[moved].mean()) if moved.any() else 0.0,
+                        max_displacement=float(disp.max()),
+                        nodes_frozen_wedge=wedge_frozen-prev_wedge_frozen,
+                        nodes_frozen_corner=corner_frozen-prev_corner_frozen,
+                        mean_turn_angle=float(turn.mean()), max_turn_angle=float(turn.max()))
+            entry['pass'] = iteration+1
+            history.append(entry)
+            prev_wedge_frozen, prev_corner_frozen = wedge_frozen, corner_frozen
         points += delta
         accepted += 1
     report = {}
@@ -251,4 +278,6 @@ def smooth_interfaces(labels, spacing=1., iterations=20, relaxation=.35,
                       wedge_stopped_nodes=int(stopped.sum()))
         if minimum_corner_angle is not None and n_keys:
             report['smallest_patch_corner'] = float(corner_sums(points).min())
+    if track_history:
+        report['history'] = history
     return Interfaces(points, triangles, pairs, original, kind, fixed, accepted, junction, smoothing_report=report)

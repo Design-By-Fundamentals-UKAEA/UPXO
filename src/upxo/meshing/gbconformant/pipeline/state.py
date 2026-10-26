@@ -101,6 +101,19 @@ class PipelineState:
         if status != StageStatus.STALE:
             self.stale_reasons.pop(stage_id, None)
 
+    def pop_history(self, stage_id: str, data: dict) -> dict:
+        """Move ``data['history']`` into the stage's history artefact; returns ``data`` without it.
+
+        The per-pass list stays out of the compact stage report (and the JSON written for it) the
+        same way it was dropped before this existed; it is kept instead at ``"<stage_id>.history"``
+        for later per-pass inspection, and is invalidated together with the stage that wrote it.
+        """
+        if not isinstance(data, dict) or "history" not in data:
+            return data
+        history = data["history"]
+        self.store_artefact(f"{stage_id}.history", history if isinstance(history, list) else [])
+        return {k: v for k, v in data.items() if k != "history"}
+
     def store_artefact(self, key: str, value: object) -> None:
         self.artefacts[key] = value
         if self.current_stage is not None:

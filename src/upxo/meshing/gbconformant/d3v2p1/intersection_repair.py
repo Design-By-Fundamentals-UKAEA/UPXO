@@ -12,7 +12,7 @@ from .mesh_tables import unique_rows
 
 
 def repair_interface_crossings(surface, max_displacement=.35, radius=1., opening=.1,
-                               max_passes=3, n_workers=None, backend='auto'):
+                               max_passes=3, n_workers=None, backend='auto', track_history=False):
     """Open intersecting interface wedges while freezing their shared junction.
 
     Only free vertices on intersecting triangles move. Each pair of interfaces
@@ -36,7 +36,7 @@ def repair_interface_crossings(surface, max_displacement=.35, radius=1., opening
     fixed |= np.any((np.abs(p)<=tol)|(np.abs(p-extent)<=tol),axis=1)
     xyz=original[f];old_normal=np.cross(xyz[:,1]-xyz[:,0],xyz[:,2]-xyz[:,0])
     crossings=find_surface_intersections(p,f,n_workers=n_workers,backend=backend)
-    initial=len(crossings);passes=0
+    initial=len(crossings);passes=0;history=[]
     for passes in range(1,max_passes+1):
         if not len(crossings):break
         xyz=p[f];normals=np.cross(xyz[:,1]-xyz[:,0],xyz[:,2]-xyz[:,0])
@@ -91,6 +91,9 @@ def repair_interface_crossings(surface, max_displacement=.35, radius=1., opening
         if np.any(np.einsum('ij,ij->i',old_normal,new_normal)<=0):
             raise RuntimeError('Intersection repair would invert a triangle; adjust radius/opening or repair upstream')
         crossings=find_surface_intersections(p,f,n_workers=n_workers,backend=backend)
+        if track_history:
+            history.append({'pass':passes,'intersections_remaining':int(len(crossings)),
+                            'max_displacement_so_far':float(displacement.max())})
         if not len(crossings):break
     if len(crossings):
         raise RuntimeError(f'{len(crossings)} surface intersections remain after repair; example faces {crossings[:5].tolist()}')
@@ -100,4 +103,6 @@ def repair_interface_crossings(surface, max_displacement=.35, radius=1., opening
         'moved_nodes':np.flatnonzero(displacement>tol).tolist(),
         'maximum_displacement':float(displacement.max()),'junction_nodes_fixed':True,
         'passes':passes if initial else 0}
+    if track_history:
+        report['intersection_repair']['history']=history
     return replace(surface,points=p,report=report)

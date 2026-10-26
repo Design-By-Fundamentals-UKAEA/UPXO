@@ -75,6 +75,15 @@ SETTINGS: tuple[Setting, ...] = (
     S('CHECKPOINT_KEEP_HISTORY', True),     # off: a newer result replaces the older copy (less disk)
     S('WRITE_STAGE_TET_FILES', False),      # on: every tet stage also writes verified_tets.vtu and .json to the run folder
 
+    # Per-iteration metric capture, by stage group (off: the group's stages skip the extra
+    # bookkeeping and every iteration plot of them stays inactive)
+    S('COMPUTE_ITERATION_METRICS_CLEANING', True, stages=('small_grains', 'spikes', 'pinches', 'voxel_topology')),
+    S('COMPUTE_ITERATION_METRICS_SURFACE', True,
+      stages=('smooth_interfaces', 'geometry_guard', 'guard_relax', 'unpinch', 'pre_joint_quality')),
+    S('COMPUTE_ITERATION_METRICS_VALIDATION', True, stages=('crossing_repair', 'surface_repair')),
+    S('COMPUTE_ITERATION_METRICS_VOLUME', True,
+      stages=('tet_smooth', 'tet_swaps', 'tet_smooth_after', 'dihedral_gate', 'insert_nodes')),
+
     # Optional stage switches (True = run the stage when it is reached)
     S('STAGE_SMALL_GRAINS', True),
     S('STAGE_SPIKES', True),

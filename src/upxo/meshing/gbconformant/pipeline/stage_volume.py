@@ -5,6 +5,7 @@ from typing import Optional
 
 import numpy as np
 
+from upxo.meshing.gbconformant.pipeline.iteration_metrics import metrics_enabled
 from upxo.meshing.gbconformant.pipeline.progress import adapt_dict_progress, phase_progress
 from upxo.meshing.gbconformant.pipeline.quality_snapshots import (
     compare_snapshots, tet_quality_snapshot,
@@ -184,6 +185,7 @@ def _run_smooth(
     kwargs["enabled"] = enabled
     kwargs["frozen_grain_ids"] = tuple(state.get_artefact("frozen_grain_ids") or ())
     kwargs["surface"] = surface if move_surface else None
+    kwargs["track_history"] = metrics_enabled(cfg, stage_id)
     max_passes = int(kwargs.get("max_passes") or cfg_int(cfg, "TET_SMOOTHING_PASSES", 10))
     label = "Gate smooth" if gate else "Tet smooth"
     kwargs["progress"] = adapt_dict_progress(
@@ -196,11 +198,13 @@ def _run_smooth(
         save_surface_vtp(ensure_run_dir(cfg) / "repaired_RVE.vtp", surface)
     state.store_artefact("verified_tets", tets)
     path = _save_tets(state, tets)
+    dihedral_smoothing = tets.report.get("dihedral_smoothing") or {}
+    state.store_artefact(f"{stage_id}.history", list(dihedral_smoothing.get("history") or []))
     summary = _tet_summary(tets)
     summary["path"] = path
     summary["enabled"] = enabled
     summary["gate"] = gate
-    summary["dihedral_smoothing"] = tets.report.get("dihedral_smoothing")
+    summary["dihedral_smoothing"] = {k: v for k, v in dihedral_smoothing.items() if k != "history"}
     if capture_quality and before is not None:
         _attach_quality_compare(
             state, summary, before=before, stage_id=stage_id)
@@ -231,14 +235,17 @@ def handle_tet_swaps(state: PipelineState) -> dict:
         max_passes=max_passes,
         progress=adapt_dict_progress(
             state, label="Tet swaps", total=max_passes),
+        track_history=metrics_enabled(cfg, "tet_swaps"),
         **backend_kwargs(cfg),
     )
     state.store_artefact("verified_tets", tets)
     path = _save_tets(state, tets)
+    tet_swaps_report = tets.report.get("tet_swaps") or {}
+    state.store_artefact("tet_swaps.history", list(tet_swaps_report.get("history") or []))
     summary = _tet_summary(tets)
     summary["path"] = path
     summary["enabled"] = enabled
-    summary["tet_swaps"] = tets.report.get("tet_swaps")
+    summary["tet_swaps"] = {k: v for k, v in tet_swaps_report.items() if k != "history"}
     return _attach_quality_compare(
         state, summary, before=before, stage_id="tet_swaps")
 
@@ -275,15 +282,20 @@ def handle_dihedral_gate(state: PipelineState) -> dict:
         max_passes=max_passes,
         progress=adapt_dict_progress(
             state, label="Gate swaps", total=max_passes),
+        track_history=metrics_enabled(cfg, "dihedral_gate"),
         **backend_kwargs(cfg),
     )
     state.store_artefact("verified_tets", tets)
     path = _save_tets(state, tets)
+    tet_swaps_report = tets.report.get("tet_swaps") or {}
+    gate_history = list(state.get_artefact("dihedral_gate.history") or [])
+    gate_history.extend(tet_swaps_report.get("history") or [])
+    state.store_artefact("dihedral_gate.history", gate_history)
     summary = _tet_summary(tets)
     summary["path"] = path
     summary["enabled"] = enabled
     summary["gate_smooth"] = smooth_report
-    summary["tet_swaps"] = tets.report.get("tet_swaps")
+    summary["tet_swaps"] = {k: v for k, v in tet_swaps_report.items() if k != "history"}
     return _attach_quality_compare(
         state, summary, before=before, stage_id="dihedral_gate")
 
@@ -303,13 +315,13 @@ def handle_insert_nodes(state: PipelineState) -> dict:
         max_angle=cfg_float(cfg, "TET_MAX_DIHEDRAL", 150.0),
         progress=adapt_dict_progress(
             state, label="Node insertion", total=max_passes),
+        track_history=metrics_enabled(cfg, "insert_nodes"),
     )
     state.store_artefact("verified_tets", tets)
     path = _save_tets(state, tets)
-    insertion = {
-        k: v for k, v in dict(tets.report.get("node_insertion") or {}).items()
-        if k != "history"
-    }
+    node_insertion_report = dict(tets.report.get("node_insertion") or {})
+    state.store_artefact("insert_nodes.history", list(node_insertion_report.get("history") or []))
+    insertion = {k: v for k, v in node_insertion_report.items() if k != "history"}
     summary = _tet_summary(tets)
     summary["path"] = path
     summary["enabled"] = enabled

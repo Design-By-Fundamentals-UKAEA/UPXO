@@ -339,7 +339,7 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
                          max_deviation=None, minimum_facet_angle=0., triangle_target=30.,
                          triangle_floor=None, search_directions=True, progress=None,
                          corner_max_deviation=None, wedge_limit=None, n_workers=None, block_size=12.,
-                         minimum_gain=0., backend='auto'):
+                         minimum_gain=0., backend='auto', track_history=True):
     """Block-parallel version of d3v2p0.tet_smoothing.smooth_tet_dihedrals.
 
     Same arguments and rules, plus backend / n_workers (see d3v2p1.backend;
@@ -506,9 +506,11 @@ def smooth_tet_dihedrals(points, tetrahedra, movable, *, enabled=True, target=30
             entry = dict(pass_number=pass_number + 1, outside_limits=outside_before, accepted_moves=accepted,
                          below_target=int(np.sum(mn < target)), minimum_dihedral=float(mn.min()),
                          skipped_shared_nodes=skipped)
-            history.append(entry)
+            entry['pass'] = entry['pass_number']
             if progress is not None:
                 progress(entry)
+            if track_history:
+                history.append(entry)
             if not accepted or (outside_before - outside_after) < minimum_gain * outside_before:
                 break
     finally:

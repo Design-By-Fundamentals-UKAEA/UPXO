@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
+from upxo.meshing.gbconformant.pipeline.iteration_metrics import metrics_enabled
 from upxo.meshing.gbconformant.pipeline.progress import phase_progress
 from upxo.meshing.gbconformant.pipeline.rolling import (
     current_labels, ensure_frozen_geometry, ensure_labels_upscaled,
@@ -79,19 +80,22 @@ def handle_smooth_interfaces(state: PipelineState) -> dict:
         minimum_wedge_angle=cfg_float(cfg, "SMOOTH_MIN_WEDGE_DEGREES", 30.0),
         minimum_corner_angle=cfg_float(cfg, "SMOOTH_MIN_CORNER_DEGREES", 20.0),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "smooth_interfaces"),
     )
     frozen_geometry = state.get_artefact("frozen_geometry")
     if frozen_geometry is not None:
         frozen_geometry.check(interfaces)
     state.store_artefact("interfaces", interfaces)
     state.store_artefact("interfaces_smoothed", interfaces)
+    smoothing_report = dict(interfaces.smoothing_report or {})
+    state.store_artefact("smooth_interfaces.history", smoothing_report.pop("history", []))
     report = {
         "n_points": int(len(interfaces.points)),
         "n_triangles": int(len(interfaces.triangles)),
         "accepted_iterations": int(interfaces.accepted_iterations),
         "frozen_junction_points": int(np.count_nonzero(interfaces.node_kind == 3)),
         "junction_metrics": interfaces.junction_metrics(),
-        "smoothing_report": interfaces.smoothing_report,
+        "smoothing_report": smoothing_report,
     }
     write_json(ensure_run_dir(cfg) / "smooth_interfaces.json", report)
     return report
@@ -117,13 +121,14 @@ def handle_geometry_guard(state: PipelineState) -> dict:
         max_correction=cfg.get("GEOMETRY_MAX_CORRECTION"),
         minimum_facet_angle=cfg_float(cfg, "MIN_FACET_OPENING_DEGREES", 15.0),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "geometry_guard"),
         **backend_kwargs(cfg),
     )
     interfaces, report = result
     state.store_artefact("interfaces", interfaces)
     state.store_artefact("interfaces_before_unpinch", interfaces)
     write_json(ensure_run_dir(cfg) / "geometry_guard.json", report)
-    return dict(report)
+    return state.pop_history("geometry_guard", dict(report))
 
 
 def handle_guard_relax(state: PipelineState) -> dict:
@@ -156,13 +161,14 @@ def handle_guard_relax(state: PipelineState) -> dict:
         junction_max_displacement=jmax,
         exclude_grain_ids=tuple(state.get_artefact("frozen_grain_ids") or ()),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "guard_relax"),
         **backend_kwargs(cfg),
     )
     interfaces, report = result
     state.store_artefact("interfaces", interfaces)
     state.store_artefact("interfaces_before_unpinch", interfaces)
     write_json(ensure_run_dir(cfg) / "guard_relaxation.json", report)
-    return {k: v for k, v in dict(report).items() if k != "history"}
+    return state.pop_history("guard_relax", dict(report))
 
 
 def handle_unpinch(state: PipelineState) -> dict:
@@ -183,12 +189,13 @@ def handle_unpinch(state: PipelineState) -> dict:
         relaxation=cfg_float(cfg, "PINCH_PRESS_RELAXATION", 0.25),
         min_separation=cfg_float(cfg, "PINCH_MIN_OPENING", 0.02 * smin),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "unpinch"),
     )
     interfaces, report, audit = result
     state.store_artefact("interfaces", interfaces)
     write_json(ensure_run_dir(cfg) / "unpinch.json",
                {"report": report, "contacts": audit})
-    return dict(report)
+    return state.pop_history("unpinch", dict(report))
 
 
 def handle_gmsh_interfaces(state: PipelineState) -> dict:
@@ -285,12 +292,13 @@ def handle_pre_joint_quality(state: PipelineState) -> dict:
         max_passes=cfg_int(cfg, "PRE_JOINT_QUALITY_MAX_PASSES", 10),
         minimum_facet_angle=cfg_float(cfg, "MIN_FACET_OPENING_DEGREES", 15.0),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "pre_joint_quality"),
         **backend_kwargs(cfg),
     )
     state.store_artefact("closed_rve", closed)
-    repair = closed.report.get("surface_quality_repair", {})
+    repair = dict(closed.report.get("surface_quality_repair", {}))
     write_json(ensure_run_dir(cfg) / "pre_joint_quality.json", repair)
-    return dict(repair)
+    return state.pop_history("pre_joint_quality", repair)
 
 
 def handle_joint_remesh(state: PipelineState) -> dict:
@@ -419,6 +427,7 @@ def handle_crossing_repair(state: PipelineState) -> dict:
             max_displacement=cfg_float(cfg, "CROSSING_MAX_DISPLACEMENT", 0.35 * smin),
             radius=cfg_float(cfg, "CROSSING_NEIGHBOURHOOD_RADIUS", 1.0 * smin),
             opening=cfg_float(cfg, "CROSSING_OPENING", 0.10),
+            track_history=metrics_enabled(cfg, "crossing_repair"),
             **backend_kwargs(cfg),
         )
         out = ensure_run_dir(cfg) / "repaired_RVE.vtp"
@@ -427,10 +436,13 @@ def handle_crossing_repair(state: PipelineState) -> dict:
         phase_progress(prog, 2, 3, "Crossing repair: skipped (disabled)")
     phase_progress(prog, 3, 3, "Crossing repair: done")
     state.store_artefact("repaired_rve", surface)
-    return {
-        "enabled": enabled,
-        "intersection_repair": surface.report.get("intersection_repair", "disabled"),
-    }
+    intersection_repair = surface.report.get("intersection_repair", "disabled")
+    history = []
+    if isinstance(intersection_repair, dict):
+        intersection_repair = dict(intersection_repair)
+        history = intersection_repair.pop("history", [])
+    state.store_artefact("crossing_repair.history", history)
+    return {"enabled": enabled, "intersection_repair": intersection_repair}
 
 
 def handle_surface_repair(state: PipelineState) -> dict:
@@ -448,6 +460,8 @@ def handle_surface_repair(state: PipelineState) -> dict:
     quality_target = cfg_float(
         cfg, "SURFACE_QUALITY_TARGET",
         cfg_float(cfg, "MIN_SURFACE_TRIANGLE_QUALITY", 0.05))
+    track_history = metrics_enabled(cfg, "surface_repair")
+    combined_history: list = []
     if do_quality:
         surface = frozen(state).run(
             improve_surface_quality,
@@ -457,8 +471,16 @@ def handle_surface_repair(state: PipelineState) -> dict:
             max_passes=cfg_int(cfg, "SURFACE_QUALITY_MAX_PASSES", 10),
             minimum_facet_angle=cfg_float(cfg, "MIN_FACET_OPENING_DEGREES", 15.0),
             progress=state.report_progress,
+            track_history=track_history,
             **backend_kwargs(cfg),
         )
+        for entry in surface.report.get("surface_quality_repair", {}).get("history", []):
+            combined_history.append({
+                "pass": len(combined_history) + 1,
+                "quality_proposed": entry.get("proposed"),
+                "quality_accepted": entry.get("accepted"),
+                "min_quality_after": entry.get("min_quality_after"),
+            })
     if do_angles:
         surface = frozen(state).run(
             improve_surface_angles,
@@ -471,13 +493,25 @@ def handle_surface_repair(state: PipelineState) -> dict:
             frozen_grain_ids=tuple(state.get_artefact("frozen_grain_ids") or ()),
             wedge_limit=cfg.get("SMOOTH_MIN_WEDGE_DEGREES", 30.0),
             progress=state.report_progress,
+            track_history=track_history,
             **backend_kwargs(cfg),
         )
+        for entry in surface.report.get("surface_angle_repair", {}).get("history", []):
+            combined_history.append({
+                "pass": len(combined_history) + 1,
+                "angle_proposed": entry.get("proposed"),
+                "angle_worked": entry.get("worked"),
+                "min_angle_after": entry.get("min_angle_after"),
+            })
+    state.store_artefact("surface_repair.history", combined_history)
     state.store_artefact("repaired_rve", surface)
     out = ensure_run_dir(cfg) / "repaired_RVE.vtp"
     save_surface_vtp(out, surface)
     return {
-        "quality": surface.report.get("surface_quality_repair"),
+        "quality": {
+            k: v for k, v in dict(surface.report.get("surface_quality_repair") or {}).items()
+            if k != "history"
+        },
         "angles": {
             k: v for k, v in dict(surface.report.get("surface_angle_repair") or {}).items()
             if k != "history"

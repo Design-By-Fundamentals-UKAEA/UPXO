@@ -67,7 +67,7 @@ class _ArrayMesh:
 
 
 def swap_tets(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True, target=30., max_angle=150.,
-              max_passes=5, progress=None, backend='auto', n_workers=None):
+              max_passes=5, progress=None, backend='auto', n_workers=None, track_history=True):
     """d3v2p0.tet_swaps.swap_tets; backend / n_workers: see d3v2p1.backend
     (the swap loop is serial; n_workers sets the numba threads used to measure
     the whole mesh). Returns (tetrahedra, grain_ids, report)."""
@@ -75,18 +75,18 @@ def swap_tets(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True,
     if not chosen.numba:
         out_t, out_g, report = ref.swap_tets(points, tetrahedra, grain_ids, surface_triangles, enabled=enabled,
                                              target=target, max_angle=max_angle, max_passes=max_passes,
-                                             progress=progress)
+                                             progress=progress, track_history=track_history)
         report['backend'] = chosen.report()
         return out_t, out_g, report
     with numba_threads(chosen.workers):
         out_t, out_g, report = _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled,
-                                                  target, max_angle, max_passes, progress)
+                                                  target, max_angle, max_passes, progress, track_history)
     report['backend'] = chosen.report()
     return out_t, out_g, report
 
 
 def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled, target, max_angle, max_passes,
-                       progress):
+                       progress, track_history=True):
     from .numba_swaps import evaluate_swap, measure_tets
     p = np.ascontiguousarray(points, dtype=float)
     t0 = np.asarray(tetrahedra)
@@ -185,9 +185,11 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
         entry = dict(pass_number=pass_number + 1, swaps_2_3=done['2-3'], swaps_3_2=done['3-2'],
                      below_target=int(np.sum(amn < target)), below_15=int(np.sum(amn < 15)),
                      below_10=int(np.sum(amn < 10)), minimum_dihedral=float(amn.min()))
-        history.append(entry)
+        entry['pass'] = entry['pass_number']
         if progress is not None:
             progress(entry)
+        if track_history:
+            history.append(entry)
         if not done['2-3'] and not done['3-2']:
             break
     alive = np.flatnonzero(mesh.alive)
@@ -200,12 +202,13 @@ def _swap_tets_kernels(points, tetrahedra, grain_ids, surface_triangles, enabled
 
 
 def swap_grain_tetrahedra(tets, surface, *, enabled=True, target=30., max_angle=150., max_passes=5,
-                          progress=None, backend='auto', n_workers=None):
+                          progress=None, backend='auto', n_workers=None, track_history=True):
     """d3v2p0.tet_swaps.swap_grain_tetrahedra on the d3v2p1 swap_tets
     (backend / n_workers: see swap_tets); re-verification is _reverify below."""
     new_t, new_g, swaps = swap_tets(tets.points, tets.tetrahedra, tets.grain_ids, surface.triangles,
                                     enabled=enabled, target=target, max_angle=max_angle,
-                                    max_passes=max_passes, progress=progress, backend=backend, n_workers=n_workers)
+                                    max_passes=max_passes, progress=progress, backend=backend, n_workers=n_workers,
+                                    track_history=track_history)
     report = dict(tets.report)
     report['tet_swaps'] = swaps
     if not enabled:
@@ -268,11 +271,12 @@ def _reverify(tets, points, new_t, new_g, surface, report, what):
 
 
 def insert_grain_tetrahedra(tets, surface, *, enabled=True, target=30., max_angle=150., cavity_rings=(1, 2, 3),
-                            max_passes=3, progress=None):
+                            max_passes=3, progress=None, track_history=True):
     """d3v2p0.tet_swaps.insert_grain_tetrahedra: d3v2p0's insertion, re-verified by _reverify above."""
     points, new_t, new_g, insertion = insert_nodes(
         tets.points, tets.tetrahedra, tets.grain_ids, surface.triangles, enabled=enabled, target=target,
-        max_angle=max_angle, cavity_rings=cavity_rings, max_passes=max_passes, progress=progress)
+        max_angle=max_angle, cavity_rings=cavity_rings, max_passes=max_passes, progress=progress,
+        track_history=track_history)
     report = dict(tets.report)
     report['node_insertion'] = insertion
     if not enabled or not insertion['inserted_nodes']:

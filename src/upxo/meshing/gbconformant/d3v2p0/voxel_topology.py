@@ -66,7 +66,7 @@ def detect_voxel_topology(labels):
 def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
                          max_volume_fraction=.2, protect_grains_up_to=0,
                          preserve_components=False, max_pair_trials=20000,
-                         progress=None):
+                         progress=None, track_history=True):
     """Greedily reduce vertex-link defects without deleting a grain ID.
 
     Only voxels adjacent to detected defects are considered. Every edit strictly
@@ -79,7 +79,7 @@ def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
     for name,v in [('max_passes',max_passes),('max_changes',max_changes),('protect_grains_up_to',protect_grains_up_to),('max_pair_trials',max_pair_trials)]:
         if isinstance(v,(bool,np.bool_)) or not isinstance(v,Integral) or v<0:raise ValueError(name+' must be a nonnegative integer')
     if not np.isfinite(max_volume_fraction) or not 0<=max_volume_fraction<=1:raise ValueError('Invalid volume fraction')
-    if not isinstance(enabled,(bool,np.bool_)) or not isinstance(preserve_components,(bool,np.bool_)):raise ValueError('Switches must be boolean')
+    if not isinstance(enabled,(bool,np.bool_)) or not isinstance(preserve_components,(bool,np.bool_)) or not isinstance(track_history,(bool,np.bool_)):raise ValueError('Switches must be boolean')
     candidates=detect_voxel_topology(a)
     initial_count=sum(map(len,candidates.values()))
     ids,counts=np.unique(a,return_counts=True);initial=dict(zip(map(int,ids),map(int,counts)));current=initial.copy()
@@ -178,7 +178,9 @@ def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
                 for v,old,new in [(pos,donor,recipient),(q,donor2,recipient2)]:
                     changes.append(dict(voxel=[int(x-1) for x in v],from_grain=old,to_grain=new,pair_group=group,removed_defects=gain))
                 accepted=2
-        history.append(dict(pass_number=iteration+1,accepted=accepted,remaining=sum(map(len,candidates.values()))))
+        if track_history:
+            history.append({'pass_number':iteration+1,'pass':iteration+1,'accepted':accepted,
+                            'remaining':sum(map(len,candidates.values())),'pair_trials':pair_trials})
         if not candidates:reason='no defects remain';break
         if len(changes)>=max_changes:reason='maximum changes reached';break
         if not accepted:reason='no admissible bounded repair';break
@@ -188,7 +190,7 @@ def clean_voxel_topology(labels, enabled=True, max_passes=20, max_changes=5000,
     assert final==candidates
     report=dict(enabled=bool(enabled),initial_defects=initial_count,remaining_defects=sum(map(len,final.values())),
                 accepted_changes=len(changes),net_changed_voxels=int(np.count_nonzero(result!=a)),
-                all_grain_ids_preserved=True,preserve_components=bool(preserve_components),stop_reason=reason,passes=history,pair_trials=pair_trials,
+                all_grain_ids_preserved=True,preserve_components=bool(preserve_components),stop_reason=reason,history=history,pair_trials=pair_trials,
                 unresolved=[dict(vertex=list(o),grains=sorted(gs)) for o,gs in sorted(final.items())],
                 grain_voxel_changes={str(g):current[g]-initial[g] for g in initial if current[g]!=initial[g]})
     return result,report,changes

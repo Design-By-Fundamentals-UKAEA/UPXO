@@ -40,7 +40,7 @@ def _fans(triangles, npoints):
 
 def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.5,
                         iterations=30, relaxation=.25, min_separation=.02,
-                        progress=None):
+                        progress=None, track_history=False):
     """Return (new Interfaces, report, node audit) without changing the input.
 
     Split vertices whose full triangle stars have disconnected fans. This
@@ -67,11 +67,11 @@ def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.
                      node_kind=source.node_kind.copy(), fixed_axes=source.fixed_axes.copy(),
                      junction_edges=source.junction_edges.copy())
     if not enabled:
-        return result, {'enabled': False, 'split_contacts': 0, 'stop_reason': 'disabled'}, []
+        return result, {'enabled': False, 'split_contacts': 0, 'stop_reason': 'disabled', 'history': []}, []
     contacts = _fans(source.triangles, len(source.points))
     if not contacts:
         return result, {'enabled': True, 'candidate_contacts': 0, 'split_contacts': 0,
-                        'stop_reason': 'no disconnected surface fans'}, []
+                        'stop_reason': 'no disconnected surface fans', 'history': []}, []
     # A fan may have open edges only where the source already has them: fan
     # splitting cannot split an existing edge, so its triangle incidence stays
     # unchanged. All grain-pair assignments are copied without alteration.
@@ -140,6 +140,8 @@ def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.
         tri = p[result.triangles]
         return np.cross(tri[:, 1]-tri[:, 0], tri[:, 2]-tri[:, 0])
     area_floor = .1*np.linalg.norm(normals(anchor), axis=1)
+    tip_groups = [item['fan_nodes'] for item in audit if len(item['fan_nodes']) > 1]
+    history = []
     accepted = 0
     for iteration in range(iterations):
         if progress is not None:
@@ -173,6 +175,13 @@ def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.
             break
         result.points += delta
         accepted += 1
+        if track_history:
+            moved_count = int(np.count_nonzero(np.linalg.norm(delta, axis=1) > 1e-12))
+            seps = [min(float(np.linalg.norm(result.points[g[i]] - result.points[g[j]]))
+                       for i in range(len(g)) for j in range(i)) for g in tip_groups]
+            history.append({'pass': iteration + 1, 'accepted_this_pass': moved_count,
+                            'max_displacement': float(np.linalg.norm(delta, axis=1).max()),
+                            'min_tip_separation': min(seps) if seps else None})
     unresolved = []
     for item in audit:
         p = result.points[item['fan_nodes']]
@@ -185,7 +194,8 @@ def separate_pinch_fans(interfaces, enabled=True, radius=1.5, max_displacement=.
               'added_nodes': len(result.points)-len(source.points), 'relaxation_steps': accepted,
               'maximum_displacement': float(np.linalg.norm(result.points-anchor, axis=1).max()),
               'minimum_tip_separation': min(item['minimum_separation'] for item in audit),
-              'unresolved_contacts': unresolved, 'stop_reason': 'completed'}
+              'unresolved_contacts': unresolved, 'stop_reason': 'completed',
+              'history': history if track_history else []}
     if unresolved:
         report.update(split_contacts=0, added_nodes=0, maximum_displacement=0.,
                       stop_reason='batch rolled back: some tips could not be safely separated')

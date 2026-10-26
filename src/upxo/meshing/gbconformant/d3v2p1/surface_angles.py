@@ -402,7 +402,7 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
                            max_deviation=None, minimum_facet_angle=.1, frozen_grain_ids=(),
                            flips=True, relocation=True, collapses=True,
                            max_normal_change=60., wedge_limit=None, n_workers=None, max_rounds=8,
-                           backend='auto', progress=None):
+                           backend='auto', progress=None, track_history=False):
     """d3v2p0.surface_angles.improve_surface_angles with parallel candidate
     evaluation in rounds. backend / n_workers: see d3v2p1.backend (None =
     automatic); the result does not depend on n_workers. max_rounds: evaluation rounds per pass;
@@ -599,10 +599,16 @@ def improve_surface_angles(surface, enabled=True, minimum_angle=30., max_passes=
             counts = {k: sum(o['kind'] == k for o in accepted) for k in ('flip', 'relocation', 'collapse')}
             totals['flips'] += counts['flip']; totals['relocations'] += counts['relocation']
             totals['collapses'] += counts['collapse']
-            history.append(dict(pass_number=iteration + 1, worked=int(len(work)), proposed=len(ops),
-                                accepted=len(accepted), rejected_geometry=len(ops) - len(accepted),
-                                evaluation_rounds=int(state['rounds']),
-                                seconds={k: round(v, 3) for k, v in clock.items()}, **counts))
+            entry = dict(pass_number=iteration + 1, worked=int(len(work)), proposed=len(ops),
+                        accepted=len(accepted), rejected_geometry=len(ops) - len(accepted),
+                        evaluation_rounds=int(state['rounds']),
+                        seconds={k: round(v, 3) for k, v in clock.items()}, **counts)
+            if track_history:
+                entry['pass'] = iteration + 1
+                live_ang = np.full(len(f), 180.)
+                live_ang[alive] = triangle_angles(p, f[alive]).min(axis=1)
+                entry['min_angle_after'] = float(live_ang[alive].min()) if alive.any() else None
+            history.append(entry)
             if not accepted:
                 break
     finally:

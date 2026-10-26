@@ -14,7 +14,8 @@ from ..d3v2p0.surface_quality import triangle_quality  # unchanged helper
 
 
 def improve_surface_quality(surface, enabled=True, minimum_quality=.05, max_passes=10,
-                            minimum_facet_angle=.1, progress=None, n_workers=None, backend='auto'):
+                            minimum_facet_angle=.1, progress=None, n_workers=None, backend='auto',
+                            track_history=False):
     """Flip interior diagonals without moving nodes or changing patch ownership.
 
     Every accepted pair improves its minimum triangle quality. Shared grain
@@ -105,11 +106,16 @@ def improve_surface_quality(surface, enabled=True, minimum_quality=.05, max_pass
             trial[ids] = f[ids]
             active[rejected] = False
         accepted = int(active.sum())
-        history.append(dict(pass_number=iteration+1, proposed=len(proposals), accepted=accepted,
-                            rejected_geometry=int((~active).sum())))
+        q_trial = triangle_quality(p, trial)
+        entry = dict(pass_number=iteration+1, proposed=len(proposals), accepted=accepted,
+                     rejected_geometry=int((~active).sum()))
+        if track_history:
+            entry['pass'] = iteration+1
+            entry['min_quality_after'] = float(q_trial.min())
+        history.append(entry)
         if not accepted: break
         f = trial
-        q = triangle_quality(p, f)
+        q = q_trial
     report = dict(surface.report)
     if 'enclosed_grain_volumes' in report:
         grains = np.unique(surface.grain_pairs)

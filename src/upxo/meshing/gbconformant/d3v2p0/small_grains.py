@@ -13,7 +13,7 @@ from .voxel_topology import detect_voxel_topology
 def remove_small_grains(labels, *, enabled=True, min_voxels=4,
                         protected_ids=(), protect_rve=False, max_passes=10,
                         selection='shared_area', spacing=(1., 1., 1.),
-                        preserve_recipient_components=True):
+                        preserve_recipient_components=True, track_history=True):
     """Absorb entire IDs with count < min_voxels; return copy and JSON report.
 
     All nonnegative labels (including zero) are grains. Threshold is measured
@@ -22,12 +22,16 @@ def remove_small_grains(labels, *, enabled=True, min_voxels=4,
     A protected island should be listed explicitly. No IDs are renumbered.
     Exact checks favour correctness; this first version is not optimized for
     thousands of candidates. Failed proposals leave the working array intact.
+
+    ``track_history`` builds the per-pass ``history`` in the report (grains
+    still below the floor, voxels merged, proposals rejected); off, it stays
+    empty and the extra bookkeeping is skipped.
     """
     a = np.asarray(labels)
     for name, value in [('min_voxels', min_voxels), ('max_passes', max_passes)]:
         if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral) or value < 1:
             raise ValueError(name + ' must be a positive integer')
-    for value in (enabled, protect_rve, preserve_recipient_components):
+    for value in (enabled, protect_rve, preserve_recipient_components, track_history):
         if not isinstance(value, (bool, np.bool_)):
             raise ValueError('switches must be boolean')
     spacing = np.asarray(spacing, dtype=float)
@@ -46,7 +50,7 @@ def remove_small_grains(labels, *, enabled=True, min_voxels=4,
         for axis in range(3):
             protected.update(map(int, np.unique(np.take(a, [0, -1], axis=axis))))
     mapping = {g: g for g in initial}
-    events, rejected = [], []
+    events, rejected, history = [], [], []
     initial_defects = sum(map(len, defects.values()))
     structure = ndimage.generate_binary_structure(3, 1)
     stop = 'disabled'
@@ -57,6 +61,7 @@ def remove_small_grains(labels, *, enabled=True, min_voxels=4,
             candidates = sorted((int(n), int(g)) for g, n in zip(ids, sizes)
                                 if n < min_voxels and g not in protected)
             changed = False
+            rejected_before, merged_voxels = len(rejected), 0
             for _, source in candidates:
                 mask = a == source
                 count = int(mask.sum())
@@ -93,7 +98,15 @@ def remove_small_grains(labels, *, enabled=True, min_voxels=4,
                     events.append(dict(source=source, target=target, voxels=count,
                                        shared_area=contacts[target], pass_number=iteration + 1))
                     changed = True
+                    merged_voxels += count
                     break
+            if track_history:
+                ids2, sizes2 = np.unique(a, return_counts=True)
+                remaining = int(np.count_nonzero(
+                    (sizes2 < min_voxels) & ~np.isin(ids2, list(protected))))
+                history.append({'pass': iteration + 1, 'defects_remaining': remaining,
+                                'voxels_merged': merged_voxels,
+                                'proposals_rejected': len(rejected) - rejected_before})
             if not changed:
                 stop = 'no_acceptable_merges'
                 break
@@ -106,5 +119,6 @@ def remove_small_grains(labels, *, enabled=True, min_voxels=4,
                   remaining_defects=sum(map(len, defects.values())),
                   unresolved_small_ids=sorted(g for g, n in final.items() if n < min_voxels),
                   voxel_changes={g: final.get(g, 0) - n for g, n in initial.items()},
-                  total_voxels_preserved=sum(initial.values()) == sum(final.values()))
+                  total_voxels_preserved=sum(initial.values()) == sum(final.values()),
+                  history=history)
     return a, report

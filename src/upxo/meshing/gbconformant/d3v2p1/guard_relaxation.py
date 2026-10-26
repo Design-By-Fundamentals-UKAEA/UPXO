@@ -47,7 +47,7 @@ def relax_guarded_interfaces(surface, smoothed, dimensions, enabled=True, iterat
                              relaxation=.35, junction_relaxation=.25, margin_rings=2,
                              minimum_facet_angle=1., boundary_clearance=.025,
                              junction_max_displacement=None, exclude_grain_ids=(),
-                             progress=None, n_workers=None, backend='auto'):
+                             progress=None, n_workers=None, backend='auto', track_history=False):
     """Return (Interfaces, report) after relaxing the guard's rollback regions.
 
     surface is the geometry-guard output and smoothed its input; both share
@@ -159,7 +159,16 @@ def relax_guarded_interfaces(surface, smoothed, dimensions, enabled=True, iterat
             reverted += int(ring.sum())
             check = np.flatnonzero(ring[f].any(axis=1))
         accepted = int(np.count_nonzero(np.any(p != previous, axis=1)))
-        history.append(dict(iteration=iteration + 1, proposed=int(moving.sum()), accepted=accepted, reverted=reverted))
+        entry = dict(iteration=iteration + 1, proposed=int(moving.sum()), accepted=accepted, reverted=reverted)
+        if track_history:
+            entry['pass'] = iteration + 1
+            disp = np.linalg.norm(p - previous, axis=1)
+            moved_mask = disp > 1e-12
+            entry['max_displacement'] = float(disp.max()) if accepted else 0.0
+            entry['mean_displacement'] = float(disp[moved_mask].mean()) if moved_mask.any() else 0.0
+            entry['fold_count'] = int(fold_counts(p, f, surface.grain_pairs, thresholds=(120.,),
+                                                  exclude_grain_ids=exclude_grain_ids, incidence=incidence)['below_120'])
+        history.append(entry)
         if not accepted:
             break
     if len(find_surface_intersections(p, f, n_workers=n_workers, backend=backend)):

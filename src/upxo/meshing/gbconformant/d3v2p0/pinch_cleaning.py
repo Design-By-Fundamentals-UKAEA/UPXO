@@ -54,7 +54,7 @@ def detect_pinch_candidates(labels):
 
 def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
                          max_volume_fraction=.03, protect_grains_up_to=8,
-                         progress=None):
+                         progress=None, track_history=True):
     """Greedily repair detected contacts, returning (copy, report, change_log).
 
     Each accepted single-voxel reassignment must strictly reduce candidate
@@ -67,8 +67,8 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
     """
     original = _validate(labels)
     a = original.copy()
-    if not isinstance(enabled, (bool, np.bool_)):
-        raise ValueError('enabled must be boolean')
+    if not isinstance(enabled, (bool, np.bool_)) or not isinstance(track_history, (bool, np.bool_)):
+        raise ValueError('enabled and track_history must be boolean')
     for name, value in [('max_passes', max_passes), ('max_changes', max_changes),
                         ('protect_grains_up_to', protect_grains_up_to)]:
         if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral) or value < 0:
@@ -76,7 +76,7 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
     if not np.isfinite(max_volume_fraction) or not 0 <= max_volume_fraction <= 1:
         raise ValueError('max_volume_fraction must be between 0 and 1')
     if not enabled:
-        return a, {'enabled': False, 'accepted_changes': 0, 'stop_reason': 'disabled'}, []
+        return a, {'enabled': False, 'accepted_changes': 0, 'stop_reason': 'disabled', 'history': []}, []
     from scipy.ndimage import label, generate_binary_structure
     structure = generate_binary_structure(3, 1)
     ids, counts = np.unique(a, return_counts=True)
@@ -88,6 +88,7 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
     initial_count = sum(map(len, candidates.values()))
     changes, pass_history = [], []
     reason = 'maximum passes reached'
+    total_allowance = sum(allowance.values())
     for pass_number in range(1, max_passes+1):
         if progress is not None:
             try:
@@ -148,8 +149,14 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
                             'from_grain': donor, 'to_grain': recipient,
                             'candidates_removed': improvement})
             accepted += 1
-        pass_history.append({'pass': pass_number, 'accepted': accepted,
-                             'remaining_candidates': sum(map(len, candidates.values()))})
+        if track_history:
+            volume_fraction_used = (
+                sum(abs(current[g] - initial[g]) for g in initial) / total_allowance
+                if total_allowance else 0.0)
+            pass_history.append({'pass': pass_number, 'accepted': accepted,
+                                 'remaining_candidates': sum(map(len, candidates.values())),
+                                 'net_voxels_moved': len(changes),
+                                 'volume_fraction_used': volume_fraction_used})
         if not candidates:
             reason = 'no candidates remain'
             break
@@ -163,6 +170,6 @@ def clean_pinch_contacts(labels, enabled=True, max_passes=5, max_changes=200,
               'remaining_candidates': sum(map(len, candidates.values())),
               'accepted_changes': len(changes), 'net_changed_voxels': int(np.count_nonzero(a != original)),
               'grains_retained': len(initial), 'face_component_counts_preserved': True,
-              'stop_reason': reason, 'passes': pass_history,
+              'stop_reason': reason, 'history': pass_history,
               'grain_voxel_changes': {str(g): current[g]-initial[g] for g in initial if current[g] != initial[g]}}
     return a, report, changes

@@ -15,7 +15,8 @@ from .mesh_tables import unique_rows, EdgeIncidence
 
 def stabilize_interfaces(surface, dimensions, enabled=True, boundary_clearance=.025,
                          max_passes=12, relaxation=.5, max_correction=None,
-                         minimum_facet_angle=1., progress=None, n_workers=None, backend='auto'):
+                         minimum_facet_angle=1., progress=None, n_workers=None, backend='auto',
+                         track_history=False):
     """Pull defective neighbourhoods toward their extracted voxel coordinates.
 
     Checks all triangle intersections, source-relative normal reversal/collapse,
@@ -26,7 +27,8 @@ def stabilize_interfaces(surface, dimensions, enabled=True, boundary_clearance=.
     ``max_correction`` bounds movement from the incoming smoothed coordinates;
     None permits rollback all the way to the extracted geometry.
     backend / n_workers: see d3v2p1.backend (None = automatic); the result does
-    not depend on them.
+    not depend on them. track_history is accepted for signature parity with the other
+    iterative repairs; this stage's history is already in the returned report regardless.
     """
     check_backend(backend); check_workers(n_workers)
     extent=np.asarray(dimensions,dtype=float)
@@ -61,7 +63,10 @@ def stabilize_interfaces(surface, dimensions, enabled=True, boundary_clearance=.
         bad_node=np.any((p<lower-1e-12)|(p>upper+1e-12),axis=1)
         if len(hits):bad_face[np.unique(hits)]=True
         bad_node[np.unique(f[bad_face])]=True
-        history.append(dict(pass_number=step,intersections=len(hits),small_facet_angles=len(folds),affected_nodes=int(bad_node.sum())))
+        entry=dict(pass_number=step,intersections=len(hits),small_facet_angles=len(folds),affected_nodes=int(bad_node.sum()))
+        if track_history:
+            entry['pass']=step
+        history.append(entry)
         if not np.any(bad_node):break
         if step==max_passes:raise RuntimeError(f'Geometry guard exhausted passes: {history[-1]}')
         # One ring spreads the transition and avoids moving only a sharp tip.

@@ -11,10 +11,11 @@ from numbers import Integral
 import numpy as np
 
 
-def clean_spikes(labels, max_passes=100, progress=None):
+def clean_spikes(labels, max_passes=100, progress=None, track_history=True):
     """Return ``(cleaned_labels, report)``; the input array is not modified.
 
-    ``report`` has ``stop_reason``, ``history`` (voxels changed per pass),
+    ``report`` has ``stop_reason``, ``history`` (voxels changed, and spike
+    candidates remaining, per pass — empty when ``track_history`` is off),
     ``remaining_candidates`` (spike candidates left, including protected last
     voxels) and ``net_changed_voxels`` (voxels that differ from the input).
     ``progress(message, current, total)`` is called before every pass.
@@ -38,7 +39,12 @@ def clean_spikes(labels, max_passes=100, progress=None):
         if progress is not None:
             progress(f'Spike removal pass {number}/{max_passes}', number, int(max_passes))
         cleaned, changed = cleaner._fast_clean_spikes(cleaned)
-        history.append({'pass': number, 'changed_voxels': int(changed)})
+        if track_history:
+            remaining_now = int(np.count_nonzero(
+                (cleaned > 0) & (cleaner._count_face_same_grain(cleaned)
+                                 <= cleaner._SPIKE_SAME_COUNT_THRESHOLD)))
+            history.append({'pass': number, 'changed_voxels': int(changed),
+                            'candidates_remaining': remaining_now})
         if changed == 0:
             stop_reason = 'no further changes'
             break

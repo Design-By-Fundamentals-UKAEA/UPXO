@@ -57,7 +57,7 @@ class _Mesh:
 
 
 def swap_tets(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True, target=30., max_angle=150.,
-              max_passes=5, progress=None):
+              max_passes=5, progress=None, track_history=True):
     """Return (tetrahedra, grain_ids, report) after face and edge swaps.
 
     surface_triangles: (m, 3) node indices of every grain-surface and RVE-face
@@ -175,9 +175,11 @@ def swap_tets(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True,
         entry = dict(pass_number=pass_number + 1, swaps_2_3=done['2-3'], swaps_3_2=done['3-2'],
                      below_target=int(np.sum(amn < target)), below_15=int(np.sum(amn < 15)),
                      below_10=int(np.sum(amn < 10)), minimum_dihedral=float(amn.min()))
-        history.append(entry)
+        entry['pass'] = entry['pass_number']
         if progress is not None:
             progress(entry)
+        if track_history:
+            history.append(entry)
         if not done['2-3'] and not done['3-2']:
             break
     alive = np.flatnonzero(mesh.alive)
@@ -262,7 +264,8 @@ _DIRS /= np.linalg.norm(_DIRS, axis=1)[:, None]
 
 
 def insert_nodes(points, tetrahedra, grain_ids, surface_triangles, *, enabled=True, target=30., max_angle=150.,
-                 cavity_rings=(1, 2, 3), max_passes=3, search_iterations=40, samples=256, seed=0, progress=None):
+                 cavity_rings=(1, 2, 3), max_passes=3, search_iterations=40, samples=256, seed=0, progress=None,
+                 track_history=True):
     """Return (points, tetrahedra, grain_ids, report) after node insertion.
 
     For each tet below target (worst first), the cavity is first the union of
@@ -475,9 +478,11 @@ def insert_nodes(points, tetrahedra, grain_ids, surface_triangles, *, enabled=Tr
         entry = dict(pass_number=pass_number + 1, inserted=done, below_target=int(np.sum(amn < target)),
                      below_15=int(np.sum(amn < 15)), below_10=int(np.sum(amn < 10)),
                      minimum_dihedral=float(amn.min()))
-        history.append(entry)
+        entry['pass'] = entry['pass_number']
         if progress is not None:
             progress(entry)
+        if track_history:
+            history.append(entry)
         if not done:
             break
     X = coords()

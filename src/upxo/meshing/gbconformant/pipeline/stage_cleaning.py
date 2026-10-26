@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from upxo.meshing.gbconformant.pipeline.iteration_metrics import metrics_enabled
 from upxo.meshing.gbconformant.pipeline.rolling import current_labels, set_labels
 from upxo.meshing.gbconformant.pipeline.runfiles import (
     cfg_float, cfg_int, ensure_run_dir, spacing_tuple, write_json,
@@ -26,6 +27,7 @@ def handle_small_grains(state: PipelineState) -> dict:
         max_passes=cfg_int(cfg, "REMOVAL_MAX_PASSES", 10),
         selection=str(cfg.get("RECIPIENT_SELECTION", "shared_area")),
         spacing=spacing_tuple(cfg),
+        track_history=metrics_enabled(cfg, "small_grains"),
     )
     set_labels(state, labels_out)
     state.store_artefact("small_grains.survivor_map",
@@ -36,6 +38,7 @@ def handle_small_grains(state: PipelineState) -> dict:
         "n_grains_after": int(len(np.unique(labels_out))),
         **removal_report,
     }
+    report = state.pop_history("small_grains", report)
     write_json(ensure_run_dir(cfg) / "small_grains.json",
                {"report": report})
     return report
@@ -51,13 +54,15 @@ def handle_spikes(state: PipelineState) -> dict:
 
         labels_cleaned, result = clean_spikes(
             labels_in, max_passes=cfg_int(cfg, "SPIKE_MAX_PASSES", 100),
-            progress=state.report_progress)
+            progress=state.report_progress,
+            track_history=metrics_enabled(cfg, "spikes"))
     else:
         labels_cleaned = labels_in
         result = {"stop_reason": "disabled", "history": [], "remaining_candidates": None,
                   "net_changed_voxels": 0}
     set_labels(state, labels_cleaned)
     report = {"enabled": enabled, **result}
+    report = state.pop_history("spikes", report)
     write_json(ensure_run_dir(cfg) / "spike_cleaning.json", report)
     return report
 
@@ -77,10 +82,12 @@ def handle_pinches(state: PipelineState) -> dict:
         max_volume_fraction=cfg_float(cfg, "PINCH_MAX_VOLUME_FRACTION", 0.03),
         protect_grains_up_to=cfg_int(cfg, "PINCH_PROTECT_GRAINS_UP_TO", 8),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "pinches"),
     )
     set_labels(state, labels_out)
     report = dict(pinch_report)
     report["enabled"] = enabled
+    report = state.pop_history("pinches", report)
     write_json(ensure_run_dir(cfg) / "pinch_cleaning.json",
                {"report": report, "changes": pinch_changes})
     return report
@@ -104,6 +111,7 @@ def handle_voxel_topology(state: PipelineState) -> dict:
         preserve_components=bool(cfg.get("TOPOLOGY_PRESERVE_COMPONENTS", False)),
         max_pair_trials=cfg_int(cfg, "TOPOLOGY_MAX_PAIR_TRIALS", 20000),
         progress=state.report_progress,
+        track_history=metrics_enabled(cfg, "voxel_topology"),
     )
     if (cfg.get("REQUIRE_CLEAN_TOPOLOGY", False)
             and topology_report.get("remaining_defects")):
@@ -118,6 +126,7 @@ def handle_voxel_topology(state: PipelineState) -> dict:
     state.store_artefact("labels_meshing", labels_out.copy())
     report = dict(topology_report)
     report["enabled"] = enabled
+    report = state.pop_history("voxel_topology", report)
     write_json(ensure_run_dir(cfg) / "voxel_topology.json",
                {"report": report, "changes": topology_changes})
     return report
