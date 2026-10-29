@@ -308,3 +308,43 @@ def test_reference_step_defaults_are_the_reference_values():
         step_time=80.0, initial_inc=0.01, min_inc=1e-8, max_inc=1.0,
         max_increments=10000, output_interval=0.5,
         element_outputs=('LE', 'NE', 'S', 'SDV'), node_outputs=('U',))
+
+
+# ------------------------------------------------------------------ further element-set files
+def _elset(text, name):
+    m = re.search(rf'^\*Elset, elset={re.escape(name)}\n((?:[0-9, ]+\n)+)', text, flags=re.M)
+    return None if m is None else [int(v) for v in re.findall(r'\d+', m.group(1))]
+
+
+def _first_voxels(exporter):
+    return {'es_extra': np.array([1, 2, 3], dtype=np.int64)}
+
+
+def test_further_element_set_files_are_written_before_the_node_sets(tmp_path):
+    exp, _ = _export(tmp_path, extra_elsets=[('03e_elsets_extra.inp', '** extra\n', _first_voxels)])
+    includes = re.findall(r'\*INCLUDE, INPUT=(\S+)', _read(tmp_path, 'model_master.inp'))
+    assert includes.index('03e_elsets_extra.inp') == includes.index('04_nsets_bc.inp') - 1
+    text = _read(tmp_path, '03e_elsets_extra.inp')
+    assert text.startswith('** extra\n')
+    assert _elset(text, 'es_extra') == [1, 2, 3]
+    assert exp.n_extra_elsets_written == {'03e_elsets_extra.inp': 1}
+
+
+def test_further_sets_hold_every_element_of_a_voxel_for_tetrahedra(tmp_path):
+    (tmp_path / 'b').mkdir()
+    _export(tmp_path / 'b', element_type='C3D4', extra_elsets=[('03e_elsets_extra.inp', '', _first_voxels)])
+    ids = _elset(_read(tmp_path / 'b', '03e_elsets_extra.inp'), 'es_extra')
+    assert len(ids) == 6 * 3
+    assert sorted({(e - 1) // 6 + 1 for e in ids}) == [1, 2, 3]
+
+
+@pytest.mark.parametrize("name", ['extra.inp', '03a_elsets_cells.inp', '04x_nsets.inp'])
+def test_further_files_must_be_new_element_set_files(tmp_path, name):
+    with pytest.raises(ValueError, match='03<letter>'):
+        _export(tmp_path, extra_elsets=[(name, '', _first_voxels)])
+
+
+def test_without_further_sets_no_further_file_is_written(tmp_path):
+    exp, _ = _export(tmp_path)
+    assert not any(p.name.startswith(('03e', '03f')) for p in tmp_path.iterdir())
+    assert exp.n_extra_elsets_written == {}

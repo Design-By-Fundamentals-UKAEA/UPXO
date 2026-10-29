@@ -351,6 +351,10 @@ class AbaqusExporter3D:
         values are accepted but NOT implemented: materials/sections are
         still written per-grain, and a warning is raised at ``write()``
         time rather than silently honouring the request.
+    extra_elsets : list of (file name, header, build) or None
+        Further element-set files: ``build(exporter)`` returns ``{set name: 1-based voxel ids}``; the
+        voxels are turned into element ids and written, after ``header``, to the file (named
+        ``03<letter>_<name>.inp``, before the node sets). None writes no further file.
     backend : {'auto', 'numba', 'numpy'}
         ``'numba'`` uses numba (when installed) for the grain-element index; the
         files are the same.
@@ -494,6 +498,7 @@ class AbaqusExporter3D:
             nset_config:          Optional[Dict[str, Dict[str, object]]] = None,
             material_level:       str   = 'feature',
             index:                Optional['GrainElementIndex'] = None,
+            extra_elsets:         Optional[list] = None,
             backend:              str = 'auto',
     ):
         if twin_role is None or twin_parent_of is None or all_quats is None:
@@ -554,6 +559,7 @@ class AbaqusExporter3D:
         self.element_outputs  = element_outputs
         self.node_outputs     = node_outputs
         self.write_step       = bool(write_step)
+        self.extra_elsets     = list(extra_elsets or [])
         self.backend          = backend
         if self.write_step:
             # the step's boundary conditions refer to these face node sets
@@ -570,6 +576,7 @@ class AbaqusExporter3D:
         # were actually written without re-deriving it from shared_state.
         self.n_role_elsets_written = 0
         self.n_nsets_written = 0
+        self.n_extra_elsets_written: Dict[str, int] = {}
 
         self.nx, self.ny, self.nz = index.nx, index.ny, index.nz
         self._role_map    = index.role_map
@@ -639,6 +646,12 @@ class AbaqusExporter3D:
             ('07_interactions.inp',     self._write_interactions),
             ('08_steps_output.inp',     self._write_steps_output),
         ]
+
+        for fname, header, build in self.extra_elsets:
+            if not (str(fname).startswith('03') and str(fname).endswith('.inp')) or fname in [n for n, _ in steps]:
+                raise ValueError(f'extra element-set file {fname!r} must be a new 03<letter>_<name>.inp file.')
+            at = [n for n, _ in steps].index('04_nsets_bc.inp')
+            steps.insert(at, (fname, (lambda f, n=fname, h=header, b=build: self._write_extra_elsets(f, n, h, b))))
 
         for i_step, (fname, writer) in enumerate(steps):
             progress.report(i_step, len(steps), f"Writing {fname}")
@@ -777,6 +790,20 @@ class AbaqusExporter3D:
         if twin_eids:
             self._write_elset_block(f, 'es_role_twin', np.array(twin_eids, dtype=np.int32))
             self.n_role_elsets_written += 1
+
+    # -----------------------------------------------------------------------
+    # further element-set files (extra_elsets)
+    # -----------------------------------------------------------------------
+    def _write_extra_elsets(self, f, fname, header, build):
+        f.write(header)
+        sets = build(self)
+        k = _ELEMS_PER_VOXEL[self.element_type]
+        local = np.arange(1, k + 1, dtype=np.int64)
+        for name, voxels in sets.items():
+            voxels = np.asarray(voxels, dtype=np.int64)
+            eids = voxels if k == 1 else ((voxels - 1)[:, None] * k + local).ravel()
+            self._write_elset_block(f, name, eids.astype(np.int32))
+        self.n_extra_elsets_written[fname] = len(sets)
 
     # -----------------------------------------------------------------------
     # 03c  parent-twin family ELSETs (Option 3)
