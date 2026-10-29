@@ -11,7 +11,7 @@ from upxo.meshing.gbconformant.pipeline.stage_input import (
     handle_grain_id_map, handle_load_lgi, handle_subset_extract,
 )
 from upxo.meshing.gbconformant.pipeline.stage_output import (
-    handle_compare_before_after, handle_export_abaqus, handle_export_surfaces,
+    handle_compare_before_after, handle_export_abaqus, handle_export_abaqus_voxel, handle_export_surfaces,
     handle_export_volume,
 )
 from upxo.meshing.gbconformant.pipeline.stage_quality import handle_region_quality
@@ -66,4 +66,5 @@ def default_handlers() -> dict[str, Handler]:
         "export_surfaces": handle_export_surfaces,
         "export_volume": handle_export_volume,
         "export_abaqus": handle_export_abaqus,
+        "export_abaqus_voxel": handle_export_abaqus_voxel,
     }

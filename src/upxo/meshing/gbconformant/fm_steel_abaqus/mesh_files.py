@@ -1,4 +1,4 @@
-"""Mesh files that carry the orientation of every tetrahedron: Gmsh ``.msh`` and VTK ``.vtu``.
+"""Mesh files that carry the orientation of every tetrahedron (or hexahedron): Gmsh ``.msh`` and VTK ``.vtu``.
 
 Both hold the nodes and tetrahedra of the deck in the deck's numbering and units, the feature each
 tetrahedron belongs to, the feature's Bunge-Euler angles in degrees and its IPF colour for the three
@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 
 from upxo._sup.text_rows import write_rows
+
+from .elements import element_kind
 
 _CHUNK = 250_000
 IPF_AXES = {'x': (1., 0., 0.), 'y': (0., 1., 0.), 'z': (0., 0., 1.)}
@@ -42,8 +44,9 @@ def write_vtu(path, points, tetrahedra, fields):
     import pyvista as pv
 
     t = np.asarray(tetrahedra, dtype=np.int64)
-    cells = np.column_stack((np.full(len(t), 4, dtype=np.int64), t)).ravel()
-    grid = pv.UnstructuredGrid(cells, np.full(len(t), 10, dtype=np.uint8), np.asarray(points, dtype=float))
+    kind = element_kind(t)
+    cells = np.column_stack((np.full(len(t), kind.n_nodes, dtype=np.int64), t)).ravel()
+    grid = pv.UnstructuredGrid(cells, np.full(len(t), kind.vtk_type, dtype=np.uint8), np.asarray(points, dtype=float))
     grid.cell_data['feature_label'] = fields['feature_label'].astype(np.int64)
     grid.cell_data['global_id'] = fields['global_id'].astype(np.int64)
     grid.cell_data['euler_deg'] = fields['euler_deg']
@@ -63,6 +66,7 @@ def write_msh(path, points, tetrahedra, fields):
     """Gmsh MSH 2.2 ASCII: physical groups named after the element sets, element data for the orientations."""
     p = np.asarray(points, dtype=float)
     t = np.asarray(tetrahedra, dtype=np.int64) + 1
+    gmsh_type = element_kind(t).gmsh_type
     tags = fields['feature_label']
     with Path(path).open('w', encoding='ascii') as f:
         f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
@@ -81,7 +85,7 @@ def write_msh(path, points, tetrahedra, fields):
             block = t[start:start + _CHUNK]
             ids = np.arange(start + 1, start + 1 + len(block))
             tag = tags[start:start + _CHUNK]
-            rows = np.column_stack((ids, np.full(len(block), 4), np.full(len(block), 2), tag, tag, block))
+            rows = np.column_stack((ids, np.full(len(block), gmsh_type), np.full(len(block), 2), tag, tag, block))
             write_rows(f, rows, '%d', ' ')
         f.write('$EndElements\n')
         arrays = dict(fields.get('ids', {}))

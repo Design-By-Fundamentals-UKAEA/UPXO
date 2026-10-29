@@ -32,7 +32,10 @@ def deck_settings(cfg: dict):
     """Settings -> :class:`DeckSettings`."""
     from upxo.meshing.gbconformant.fm_steel_abaqus import DeckSettings
 
+    from upxo.meshing.gbconformant.fm_steel_abaqus.extra_sets import provider_options
+
     units = str(cfg.get("FM_OUTPUT_UNITS") or SAME_AS_SOURCE)
+    provider = str(cfg.get("SET_PROVIDER") or "").strip()
     return DeckSettings(
         material_format=str(cfg.get("FM_MATERIAL_FORMAT", "reference_umat")),
         n_depvar=int(cfg.get("FM_N_DEPVAR", 1)),
@@ -94,14 +97,19 @@ def deck_settings(cfg: dict):
             "ZMIN": str(cfg.get("FM_NSET_ZMIN", "ns_zminus")),
             "ZMAX": str(cfg.get("FM_NSET_ZMAX", "ns_zplus")),
         },
+        prefix_gb_layer=str(cfg.get("FM_PREFIX_GB_LAYER", "es_gb_layer")),
+        prefix_interior=str(cfg.get("FM_PREFIX_INTERIOR", "es_interior")),
+        set_provider=provider,
+        provider_options=provider_options(provider, cfg) if provider else {},
     )
 
 
-def build_identity(state: PipelineState, hierarchy):
-    """Raw identity of every meshed grain from the stored shuffle and merge maps."""
+def build_identity(state: PipelineState, hierarchy, config: Optional[dict] = None):
+    """Raw identity of every meshed grain from the stored shuffle and merge maps (``config``: settings to use
+    in place of the state's)."""
     from upxo.meshing.gbconformant.fm_steel_abaqus import resolve_identities
 
-    cfg = state.config
+    cfg = state.config if config is None else config
     return resolve_identities(
         hierarchy.voxel_counts,
         shuffle_map=state.get_artefact("grain_id_map") or None,
@@ -126,8 +134,19 @@ def export_fm_deck(state: PipelineState, tets, folder: Path) -> dict:
         folder, tets.points, tets.tetrahedra, tets.grain_ids, hierarchy, identity,
         deck_settings(cfg), mesh_voxel_length=spacing,
         meshed_labels=state.get_artefact("labels_meshing"))
+    report = _deck_summary(state, cfg, hierarchy, identity, result)
+    report["tetrahedra"] = result["info"]["tetrahedra"]
+    return report
+
+
+def _deck_summary(state: PipelineState, cfg: dict, hierarchy, identity, result: dict) -> dict:
+    """Merge log, provenance and deck check of a written deck, and the summary the stage reports."""
     info = result["info"]
     realloc = result["reallocation"] or {}
+    folder_name = Path(result["directory"]).name
+    extra = info.get("extra_sets") or {}
+    for item in extra.get("skipped") or []:
+        state.append_log(f"{folder_name}: set {item['name']} not written: {item['reason']}")
     merges = _write_merge_log(cfg, hierarchy, identity, result["directory"])
     if cfg.get("EXPORT_PROVENANCE", True):
         from upxo.meshing.gbconformant.pipeline.provenance import write_provenance
@@ -151,7 +170,6 @@ def export_fm_deck(state: PipelineState, tets, folder: Path) -> dict:
         "folder": str(result["directory"]),
         "merged_features": merges,
         "level": hierarchy.level,
-        "tetrahedra": info["tetrahedra"],
         "features_with_elements": info["features_with_elements"],
         "features_without_elements": info["features_without_elements"],
         "output_units": info["output_units"],
@@ -159,6 +177,7 @@ def export_fm_deck(state: PipelineState, tets, folder: Path) -> dict:
         "identity_rule": identity.rule,
         "voxels_moved": realloc.get("voxels_moved"),
         "volume_over_own_raw_label": (result["audit"] or {}).get("volume_over_own_raw_label"),
+        "extra_sets": info.get("extra_sets"),
     }
 
 
@@ -325,4 +344,93 @@ def handle_export_abaqus(state: PipelineState) -> dict:
         folder = folder or mesh_only
     state.store_artefact("abaqus_folder", folder)
     report["folder"] = str(folder)
+    return report
+
+
+VOXEL_SOURCES = ("cleaned labels", "voxelized tet mesh")
+
+
+def voxel_deck_folder(base: Path, paired: Optional[Path], subset: bool) -> tuple[Path, Optional[str]]:
+    """Folder of the next voxel deck in ``base`` and the conformal export it is paired with.
+
+    The voxel deck takes the number (or time stamp) of ``paired``, the latest conformal export, as
+    ``<stamp>_voxel``; when there is no such export, or a voxel deck already holds that number, it takes
+    the next free number (a new time stamp outside subset runs) and is paired with nothing.
+    """
+    from upxo.meshing.gbconformant.fm_steel_abaqus.subset import indexed_name, next_index
+
+    stamp = None
+    if paired is not None and Path(paired).parent == Path(base):
+        name = Path(paired).name
+        for suffix in ("_fm", "_mesh"):
+            if name.endswith(suffix):
+                stamp = name[: -len(suffix)]
+        if stamp is None and not subset:
+            stamp = name
+    if stamp is None and subset and Path(base).is_dir():
+        numbered = sorted(p.name[:-3] for p in Path(base).glob("*_fm") if p.is_dir() and p.name[:-3].isdigit())
+        stamp = numbered[-1] if numbered else None
+    if stamp is not None and not (Path(base) / f"{stamp}_voxel").exists():
+        return Path(base) / f"{stamp}_voxel", stamp
+    fresh = indexed_name(next_index(base)) if subset else datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return Path(base) / f"{fresh}_voxel", None
+
+
+def voxel_labels(state: PipelineState, config: Optional[dict] = None) -> tuple[np.ndarray, tuple, dict]:
+    """``(labels, voxel size in mesh units (x, y, z), source report)`` of the voxel deck."""
+    from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import resample_labels, voxelize_tetrahedra
+
+    cfg = state.config if config is None else config
+    spacing = _isotropic_spacing(cfg)
+    source = str(cfg.get("VOXEL_SOURCE", VOXEL_SOURCES[0]))
+    if source not in VOXEL_SOURCES:
+        raise ValueError(f"VOXEL_SOURCE must be one of {', '.join(VOXEL_SOURCES)}, not {source!r}.")
+    cleaned = state.get_artefact("labels_meshing")
+    if source == VOXEL_SOURCES[0]:
+        if cleaned is None:
+            raise RuntimeError("The cleaned labels are missing: run the cleaning stages first.")
+        labels = np.asarray(cleaned)
+        report = {"kind": source, "cleaned_shape": [int(n) for n in labels.shape], "resampled": None}
+        size = (spacing,) * 3
+        factor = float(cfg.get("VOXEL_SCALE_FACTOR", 1.0))
+        if cfg.get("VOXEL_RESCALE") and factor != 1.0:
+            labels, report["resampled"] = resample_labels(labels, factor)
+            size = tuple(spacing * float(o) / float(n) for o, n in zip(cleaned.shape, labels.shape))
+        return labels, size, report
+    tets = state.get_artefact("verified_tets")
+    if tets is None:
+        raise RuntimeError("verified_tets missing: run tetrahedral meshing first, or use the cleaned labels.")
+    edge = float(cfg.get("VOXEL_TET_VOXEL_SIZE", 1.0)) * spacing
+    box = {} if cleaned is None else {"low": np.zeros(3), "high": np.asarray(np.shape(cleaned), dtype=float) * spacing}
+    labels, report = voxelize_tetrahedra(tets.points, tets.tetrahedra, tets.grain_ids, edge, **box)
+    report = {"kind": source, "requested_voxel_size_raw_voxels": float(cfg.get("VOXEL_TET_VOXEL_SIZE", 1.0)), **report}
+    return labels, tuple(report["voxel_size"]), report
+
+
+def handle_export_abaqus_voxel(state: PipelineState) -> dict:
+    """Write the voxel (C3D8) FM-steel deck beside the conformal one, under the same number."""
+    from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import write_voxel_deck
+
+    cfg = state.config
+    hierarchy = active_hierarchy(state)
+    if hierarchy is None:
+        raise RuntimeError(
+            "The voxel deck needs an FM-steel raw folder as the input (or a twinned FCC folder): "
+            "set the dataset type to FM steel or twinned FCC and rerun.")
+    labels, size, source = voxel_labels(state)
+    base = ensure_run_dir(cfg) / "abaqus"
+    base.mkdir(parents=True, exist_ok=True)
+    paired = state.get_artefact("abaqus_folder")
+    folder, stamp = voxel_deck_folder(base, None if paired is None else Path(paired), subset_run_active(cfg))
+    identity = build_identity(state, hierarchy)
+    result = write_voxel_deck(
+        folder, labels, hierarchy, identity, deck_settings(cfg), voxel_size=size,
+        mesh_voxel_length=_isotropic_spacing(cfg), meshed_labels=state.get_artefact("labels_meshing"),
+        source=source)
+    report = _deck_summary(state, cfg, hierarchy, identity, result)
+    report.update({"elements": result["info"]["elements"], "voxel_source": source,
+                   "paired_with": None if stamp is None else f"{stamp}_fm",
+                   "grid_shape": [int(n) for n in labels.shape]})
+    state.store_artefact("abaqus_voxel_folder", Path(result["directory"]))
+    write_json(Path(result["directory"]) / "voxel_source.json", source)
     return report

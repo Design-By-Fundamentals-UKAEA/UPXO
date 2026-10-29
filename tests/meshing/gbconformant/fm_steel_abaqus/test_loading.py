@@ -246,7 +246,7 @@ class OutputSetTests(unittest.TestCase):
             _, _, (pts, tets, grains), res = build(root, settings=DeckSettings(layer_sets=True, boundary_sets=True,
                                                                               output_elset='es_gb_layer'))
             text = (res['directory'] / '08_steps_output.inp').read_text()
-            self.assertIn('*Element Output, elset=es_gb_layer, directions=YES', text)
+            self.assertIn('*Element Output, elset=FM_STEEL_RVE-1.es_gb_layer, directions=YES', text)
             layer = read_elsets(res['directory'] / '03f_elsets_layers.inp')['es_gb_layer']
             self.assertEqual(res['info']['output_estimate']['elements_in_output'], len(layer))
 

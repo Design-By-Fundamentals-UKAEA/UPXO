@@ -1,4 +1,4 @@
-"""Grain-boundary and junction nodes of a tetrahedral mesh, by feature.
+"""Grain-boundary and junction nodes of a tetrahedral (or hexahedral) mesh, by feature.
 
 A node belongs to every feature whose tetrahedra use it. A node shared by two or more features lies
 on a grain boundary; one shared by three or more lies on a junction (a triple line or a corner of
@@ -28,12 +28,12 @@ def boundary_nodes(tetrahedra, tet_feature, n_nodes=None):
     """Boundary nodes from the tetrahedra (0-based node indices) and one feature label per tetrahedron."""
     t = np.asarray(tetrahedra, dtype=np.int64)
     f = np.asarray(tet_feature, dtype=np.int64)
-    if t.ndim != 2 or t.shape[1] != 4 or f.shape != (len(t),):
-        raise ValueError('Expected Mx4 tetrahedra and one feature label per tetrahedron')
+    if t.ndim != 2 or t.shape[1] not in (4, 8) or f.shape != (len(t),):
+        raise ValueError('Expected Mx4 tetrahedra (or Mx8 hexahedra) and one feature label per element')
     n_nodes = int(t.max()) + 1 if n_nodes is None else int(n_nodes)
     labels, f_index = np.unique(f, return_inverse=True)
     n_labels = len(labels)
-    pair = np.unique(t.ravel() * n_labels + np.repeat(f_index, 4))
+    pair = np.unique(t.ravel() * n_labels + np.repeat(f_index, t.shape[1]))
     node, feat = pair // n_labels, pair % n_labels
     shared = np.bincount(node, minlength=n_nodes)
     on_boundary = shared[node] >= 2

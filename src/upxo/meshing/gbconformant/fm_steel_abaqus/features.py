@@ -57,17 +57,18 @@ def id_columns(hierarchy, labels=None):
     return out
 
 
-def feature_table(hierarchy, names, material_names, tets_of, volume_of, prefixes=None):
+def feature_table(hierarchy, names, material_names, tets_of, volume_of, prefixes=None, element_column='tetrahedra'):
     """``(columns, rows)`` of the feature table.
 
     ``names`` and ``material_names`` map a label to its element set and material; ``tets_of`` and ``volume_of``
-    map a label to the tetrahedra and the volume the mesh made of it (output units cubed).
+    map a label to the tetrahedra and the volume the mesh made of it (output units cubed). ``element_column``
+    names the element count column (``hexahedra`` for a voxel deck).
     """
     labels = [f.label for f in hierarchy.ordered_features() if f.label in tets_of]
     ids = id_columns(hierarchy, labels)
     total = float(sum(volume_of[l] for l in labels)) or 1.0
     head = ['label', 'elset', 'material', 'umat_grain_number', 'phi1_deg', 'Phi_deg', 'phi2_deg']
-    tail = ['voxels_raw', 'tetrahedra', 'volume', 'volume_fraction']
+    tail = ['voxels_raw', element_column, 'volume', 'volume_fraction']
     if hierarchy.extra:
         middle = ['role', 'family_id', 'family_elset']
         extra = lambda l, f: [hierarchy.extra[l]['role'], ids['family_id'][l],

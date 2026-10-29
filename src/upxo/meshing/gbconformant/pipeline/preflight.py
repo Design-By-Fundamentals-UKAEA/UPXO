@@ -70,6 +70,7 @@ _REQUIREMENTS: dict[str, StageRequirements] = {
     "export_surfaces": StageRequirements(),
     "export_volume": StageRequirements(artefacts=("verified_tets",)),
     "export_abaqus": StageRequirements(artefacts=("verified_tets",)),
+    "export_abaqus_voxel": StageRequirements(),
 }
 
 

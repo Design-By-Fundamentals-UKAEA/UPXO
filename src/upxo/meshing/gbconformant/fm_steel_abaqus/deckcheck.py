@@ -5,10 +5,13 @@ reports, check by check, whether the deck is consistent:
 
 * nodes and elements are numbered 1..N without gaps, every connectivity entry names a node,
   and every node is used;
-* every tetrahedron has a positive volume;
+* every element (C3D4 tetrahedron or C3D8 hexahedron) has a positive volume;
 * the element sets that sections point at cover each element exactly once;
 * every section names an existing element set and material, and every material is used;
 * every element set and node set is non-empty and names only existing elements or nodes;
+* no set name is defined twice (ignoring case, as Abaqus does) and every name follows the naming rules;
+* every surface names existing elements and faces those elements have;
+* a step's element output set exists, named through the instance;
 * every set the step applies a boundary condition to exists;
 * every file the master file includes exists.
 
@@ -17,6 +20,9 @@ A deck that passes is consistent as a file; it has not been run in Abaqus.
 from pathlib import Path
 import re
 import numpy as np
+
+from .elements import element_volumes
+
 
 def _ids(lines):
     values = []
@@ -46,6 +52,37 @@ def read_sets(path, keyword):
             buffer.append(line)
     close()
     return sets
+
+
+def set_names(path, keyword):
+    """Every ``*Elset``/``*Nset``/``*Surface`` name of an include file, in file order (repeats kept)."""
+    pattern = re.compile(rf'^\*{keyword},.*?\b{"name" if keyword == "Surface" else keyword.lower()}=([^,\s]+)',
+                         re.IGNORECASE)
+    return [m.group(1) for line in Path(path).read_text(encoding='ascii').splitlines()
+            if (m := pattern.match(line))]
+
+
+def read_surfaces(path):
+    """``{name: (element ids, face numbers)}`` of the ``*Surface, type=ELEMENT`` blocks of an include file."""
+    out, name, rows = {}, None, []
+
+    def close():
+        if name is not None:
+            out[name] = (np.array([r[0] for r in rows], dtype=np.int64), np.array([r[1] for r in rows], dtype=np.int64))
+
+    for line in Path(path).read_text(encoding='ascii').splitlines():
+        match = re.match(r'^\*Surface,.*?\bname=([^,\s]+)', line, re.IGNORECASE)
+        if match:
+            close()
+            name, rows = match.group(1), []
+        elif line.startswith('*'):
+            close()
+            name, rows = None, []
+        elif name is not None and line.strip() and not line.startswith('**'):
+            element, face = (v.strip() for v in line.split(',')[:2])
+            rows.append((int(element), int(face.upper().lstrip('S'))))
+    close()
+    return out
 
 
 def _read_table(path, columns):
@@ -93,6 +130,8 @@ def check_deck(folder):
     checks.append(_check('elements numbered 1..M', n_elements > 0 and np.array_equal(element_ids, np.arange(1, n_elements + 1)),
                          f'{n_elements} elements'))
     connectivity = elements[:, 1:].astype(np.int64) if n_elements else np.zeros((0, 4), dtype=np.int64)
+    noun = 'hexahedron' if connectivity.shape[1] == 8 else 'tetrahedron'
+    counts['element_type'] = 'C3D8' if connectivity.shape[1] == 8 else 'C3D4'
     in_range = bool(connectivity.size) and connectivity.min() >= 1 and connectivity.max() <= n_nodes
     checks.append(_check('connectivity names existing nodes', in_range,
                          '' if in_range else 'an element refers to a node that does not exist'))
@@ -100,12 +139,11 @@ def check_deck(folder):
         unused = n_nodes - len(np.unique(connectivity))
         checks.append(_check('every node is used', unused == 0, f'{unused} unused' if unused else ''))
         coordinates = nodes[:, 1:]
-        v = coordinates[connectivity - 1]
-        volume = np.einsum('ij,ij->i', v[:, 1] - v[:, 0], np.cross(v[:, 2] - v[:, 0], v[:, 3] - v[:, 0])) / 6
+        volume = element_volumes(coordinates, connectivity - 1)
         bad = int((~(volume > 0)).sum())
         counts['smallest_volume'] = float(volume.min())
         counts['largest_volume'] = float(volume.max())
-        checks.append(_check('every tetrahedron has a positive volume', bad == 0,
+        checks.append(_check(f'every {noun} has a positive volume', bad == 0,
                              f'{bad} not positive' if bad else f'smallest {volume.min():.4g}'))
 
     elsets = {}
@@ -148,6 +186,28 @@ def check_deck(folder):
     else:
         checks.append(_check('each element is in exactly one section set', False, 'no section sets to check'))
 
+    from .setnames import name_problem
+
+    for keyword, pattern in (('Elset', '03*.inp'), ('Nset', '04*.inp'), ('Surface', '03*.inp')):
+        names = [n for path in sorted(folder.glob(pattern)) for n in set_names(path, keyword)]
+        lowered = [n.lower() for n in names]
+        twice = sorted({n for n in names if lowered.count(n.lower()) > 1})
+        checks.append(_check(f'no {keyword.lower()} name defined twice', not twice,
+                             ', '.join(twice[:5]) if twice else f'{len(names)} names'))
+        bad = sorted({n for n in names if name_problem(n)})
+        checks.append(_check(f'{keyword.lower()} names follow the naming rules', not bad, ', '.join(bad[:5])))
+    surfaces = {}
+    for path in sorted(folder.glob('03*.inp')):
+        surfaces.update(read_surfaces(path))
+    if surfaces:
+        width = connectivity.shape[1] if n_elements else 4
+        n_faces = 6 if width == 8 else 4
+        wrong = sorted(name for name, (ids, numbers) in surfaces.items()
+                       if not len(ids) or ids.min() < 1 or ids.max() > n_elements
+                       or numbers.min() < 1 or numbers.max() > n_faces)
+        checks.append(_check('surfaces name existing elements and faces', not wrong,
+                             ', '.join(wrong[:5]) if wrong else f'{len(surfaces)} surfaces'))
+        counts['surfaces'] = len(surfaces)
     empty = sorted([n for n, ids in elsets.items() if not len(ids)] + [n for n, ids in nsets.items() if not len(ids)])
     checks.append(_check('no empty sets', not empty, ', '.join(empty[:5]) if empty else ''))
     out_of_range = sorted([n for n, ids in elsets.items() if len(ids) and (ids.min() < 1 or ids.max() > n_elements)]
@@ -167,6 +227,11 @@ def check_deck(folder):
         wanted = {m for m in re.findall(r'^\*Boundary,[^\n]*?amplitude=([^,\s]+)', text, re.MULTILINE | re.IGNORECASE)}
         missing = sorted(m for m in wanted if m.lower() not in defined)
         counts['steps'] = len(re.findall(r'^\*Step,', text, re.MULTILINE))
+        outputs = re.findall(r'^\*Element Output,[^\n]*?elset=([^,\s]+)', text, re.MULTILINE | re.IGNORECASE)
+        known_sets = {n.lower() for n in elsets}
+        unknown = sorted({o for o in outputs if '.' not in o or o.split('.', 1)[1].lower() not in known_sets})
+        checks.append(_check('element output sets exist (named through the instance)', not unknown,
+                             ', '.join(unknown) if unknown else (f'{len(outputs)} used' if outputs else 'whole model')))
         checks.append(_check('boundary conditions use defined amplitudes', not missing,
                              ', '.join(missing) if missing else (f'{len(wanted)} used' if wanted else 'no amplitude used')))
     return _finish(checks, counts)

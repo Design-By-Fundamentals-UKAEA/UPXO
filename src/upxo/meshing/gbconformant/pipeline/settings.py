@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping, Optional
 
 CONFIG_VERSION = 2
@@ -107,6 +107,7 @@ SETTINGS: tuple[Setting, ...] = (
     S('STAGE_COMPARISON', True),
     S('STAGE_REGION_QUALITY', True),
     S('STAGE_SUBSET', False),
+    S('STAGE_EXPORT_VOXEL', False),
 
     # Input: an FM-steel raw export folder, or one labelled image (.npy)
     S('DATASET_TYPE', 'fm_steel', kind='choice', choices=('fm_steel', 'labels', 'twinned_fcc'), stages=('load_lgi',)),
@@ -387,6 +388,12 @@ SETTINGS: tuple[Setting, ...] = (
     S('FM_PREFIX_PCK', 'es_pck_', stages=('export_abaqus',)),
     S('FM_PREFIX_BLK', 'es_blk_', stages=('export_abaqus',)),
     S('FM_PREFIX_SBLK', 'es_subblk_', stages=('export_abaqus',)),
+
+    # Whole-structure grain-boundary layer / interior element sets (names only; the sets
+    # themselves are always written when EXPORT_BOUNDARY_LAYER is on)
+    S('FM_PREFIX_GB_LAYER', 'es_gb_layer', stages=('export_abaqus',)),
+    S('FM_PREFIX_INTERIOR', 'es_interior', stages=('export_abaqus',)),
+
     S('FM_NSET_XMIN', 'ns_xminus', stages=('export_abaqus',)),
     S('FM_NSET_XMAX', 'ns_xplus', stages=('export_abaqus',)),
     S('FM_NSET_YMIN', 'ns_yminus', stages=('export_abaqus',)),
@@ -397,10 +404,61 @@ SETTINGS: tuple[Setting, ...] = (
     S('ABAQUS_UNITS', 'unspecified', stages=('export_abaqus',)),
     S('REQUIRE_READY_TET_MESH', False, stages=('export_abaqus',)),
 
+    # An optional module that adds further sets to the decks (empty: none); see fm_steel_abaqus.extra_sets
+    S('SET_PROVIDER', '', stages=('export_abaqus',), signed_when_changed=True),
+
+    # Voxel deck: one C3D8 element per voxel, with the element sets and deck settings of the FM-steel deck
+    S('VOXEL_SOURCE', 'cleaned labels', kind='choice', choices=('cleaned labels', 'voxelized tet mesh'),
+      stages=('export_abaqus_voxel',)),
+    S('VOXEL_RESCALE', False, stages=('export_abaqus_voxel',)),
+    S('VOXEL_SCALE_FACTOR', 1.0, minimum=0.05, maximum=8.0, stages=('export_abaqus_voxel',)),
+    S('VOXEL_TET_VOXEL_SIZE', 1.0, minimum=0.05, maximum=100.0, stages=('export_abaqus_voxel',)),
+
 )
+
+# Settings of the FM-steel deck that only the tetrahedral deck uses; every other export_abaqus setting
+# (element sets, materials, step, job, files) decides the voxel deck too.
+_TET_DECK_ONLY = frozenset({'EXPORT_FM_DECK', 'EXPORT_MESH_ONLY', 'ABAQUS_ELSET_PREFIX', 'ABAQUS_UNITS',
+                            'REQUIRE_READY_TET_MESH'})
+SETTINGS = tuple(
+    replace(s, stages=s.stages + ('export_abaqus_voxel',))
+    if 'export_abaqus' in s.stages and s.key not in _TET_DECK_ONLY else s
+    for s in SETTINGS)
 
 SCHEMA: dict[str, Setting] = {s.key: s for s in SETTINGS}
 assert len(SCHEMA) == len(SETTINGS), "a setting is listed twice"
+
+
+
+def register_settings(extra: Iterable[Setting]) -> None:
+    """Add ``extra`` settings to the table (a set provider's own settings). Registering a key again replaces it."""
+    global SETTINGS
+    extra = tuple(extra)
+    keys = {setting.key for setting in extra}
+    clash = sorted(keys & {s.key for s in SETTINGS if s.key not in _REGISTERED})
+    if clash:
+        raise SettingsError(f"Settings {', '.join(clash)} are already part of the table.")
+    SETTINGS = tuple(s for s in SETTINGS if s.key not in keys) + extra
+    SCHEMA.clear()
+    SCHEMA.update({s.key: s for s in SETTINGS})
+    _REGISTERED.update(keys)
+
+
+_REGISTERED: set = set()
+
+
+def prepare_provider(values: Mapping) -> None:
+    """Load the set provider ``values`` names (``SET_PROVIDER``) so that its settings are known."""
+    name = str((values or {}).get("SET_PROVIDER") or "").strip()
+    if not name:
+        return
+    from upxo.meshing.gbconformant.fm_steel_abaqus.extra_sets import load_provider
+
+    module = load_provider(name)
+    extra = getattr(module, "SETTINGS", ())
+    if extra and not set(s.key for s in extra) <= _REGISTERED:
+        register_settings(extra)
+
 
 _TRUE = {"true", "yes", "on", "1"}
 _FALSE = {"false", "no", "off", "0"}
@@ -551,6 +609,7 @@ def coerce_config(loaded: Mapping, extra: Iterable[Setting] = ()) -> tuple[dict,
     Returns ``(config, problems)``. A value that cannot be used falls back to the
     default and is listed; settings this version does not know are kept.
     """
+    prepare_provider(loaded)
     extra = tuple(extra)
     table = _table(extra)
     config = default_config(extra)
@@ -608,7 +667,10 @@ def parse_assignment(text: str, extra: Iterable[Setting] = ()) -> tuple[str, Any
     setting = _table(extra).get(key)
     if setting is None:
         raise SettingsError(f"{key} is not a setting; see the list of settings for the names.")
-    return key, parse_value(setting, value)
+    checked = parse_value(setting, value)
+    if key == "SET_PROVIDER":
+        prepare_provider({key: checked})            # its settings may follow on the same command line
+    return key, checked
 
 
 def build_config(overrides: Optional[Mapping] = None, *, extra: Iterable[Setting] = (),
@@ -617,11 +679,12 @@ def build_config(overrides: Optional[Mapping] = None, *, extra: Iterable[Setting
 
     Unknown names and unusable values raise :class:`SettingsError`.
     """
+    changes = dict(overrides or {})
+    changes.update(named)
+    prepare_provider(changes)
     extra = tuple(extra)
     table = _table(extra)
     config = default_config(extra)
-    changes = dict(overrides or {})
-    changes.update(named)
     for key, value in changes.items():
         setting = table.get(key)
         if setting is None:

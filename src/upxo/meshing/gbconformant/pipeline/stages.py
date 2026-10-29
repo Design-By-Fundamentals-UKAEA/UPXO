@@ -70,6 +70,7 @@ STAGES: tuple[StageDef, ...] = (
     _c("export_surfaces", "Export surfaces", "Export", kind=EXPORT),
     _c("export_volume", "Export volume mesh", "Export", kind=EXPORT),
     _c("export_abaqus", "Abaqus INP export", "Export", kind=EXPORT),
+    _c("export_abaqus_voxel", "Abaqus INP export (voxel)", "Export", "STAGE_EXPORT_VOXEL", "none", kind=EXPORT),
 )
 
 _BY_ID = {s.id: s for s in STAGES}

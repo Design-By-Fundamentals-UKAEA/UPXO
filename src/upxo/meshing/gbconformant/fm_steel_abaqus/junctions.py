@@ -119,25 +119,29 @@ def junction_point_nodes(edges, n_nodes, ignore_ends=None):
 
 def tet_junction_edges(points, tetrahedra, grains, include_rve_faces=False,
                        face_tolerance=1e-8):
-    """Junction edges of a tetrahedral mesh; ``grains`` is one label per tetrahedron.
+    """Junction edges of a tetrahedral (or hexahedral) mesh; ``grains`` is one label per element.
 
     ``grains`` must be positive. With ``include_rve_faces`` an edge lying in a
-    box face also belongs to the exterior region (label 0).
+    box face also belongs to the exterior region (label 0). ``tetrahedra`` may
+    be ``(T, 8)`` hexahedra: their twelve edges are used instead of six.
     """
+    from .elements import element_kind
+
     p = np.asarray(points, dtype=float)
     t = np.asarray(tetrahedra, dtype=np.int64)
     g = np.asarray(grains, dtype=np.int64)
     if g.shape != (len(t),) or (len(g) and g.min() <= 0):
         raise ValueError('grains must hold one positive label per tetrahedron')
+    pairs = element_kind(t).edges
     n_nodes, stride = len(p), int(g.max()) + 2
     face_bits = box_face_bits(p, face_tolerance) if include_rve_faces else np.zeros(n_nodes, dtype=np.int64)
     node_pairs = np.unique(np.concatenate((
-        t.ravel() * stride + np.repeat(g, 4) + 1,
+        t.ravel() * stride + np.repeat(g, t.shape[1]) + 1,
         np.flatnonzero(face_bits) * stride + 1)))
     regions_at_node = np.bincount(node_pairs // stride, minlength=n_nodes)
     candidate = regions_at_node >= 3
     edge_keys, edge_grains = [], []
-    for i, j in PAIRS:
+    for i, j in pairs:
         a, b = t[:, i], t[:, j]
         keep = candidate[a] & candidate[b]
         if not keep.any():

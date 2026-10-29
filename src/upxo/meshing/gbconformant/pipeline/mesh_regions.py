@@ -1,5 +1,9 @@
-"""Where the grain boundary surface, the junction lines and the junction points of a tetrahedral mesh are, and
-how many layers of elements every tetrahedron and surface triangle lies from each of them.
+"""Where the grain boundary surface, the junction lines and the junction points of a mesh are, and how many layers
+of elements every element and surface face lies from each of them.
+
+The mesh is made of linear tetrahedra (``(T, 4)``, faces are triangles) or linear hexahedra (``(T, 8)``, for example
+one per voxel, faces are quadrilaterals); the type is told by the shape of the connectivity array. Names below say
+tetrahedron and triangle; for a hexahedral mesh read hexahedron and quadrilateral.
 
 A *feature* is one of three things a grain structure has:
 
@@ -20,8 +24,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from upxo.meshing.gbconformant.fm_steel_abaqus.elements import element_faces, element_kind
 from upxo.meshing.gbconformant.fm_steel_abaqus.junctions import (
-    PAIRS, box_face_bits, junction_lines, junction_point_nodes, tet_junction_edges)
+    box_face_bits, junction_lines, junction_point_nodes, tet_junction_edges)
 
 GB_SURFACE, JUNCTION_LINES, JUNCTION_POINTS = "gb_surface", "junction_lines", "junction_points"
 FEATURES = (GB_SURFACE, JUNCTION_LINES, JUNCTION_POINTS)
@@ -31,7 +36,6 @@ FACE_OR_EDGE, NODE = "face or edge", "node"
 TOUCH_CHOICES = (FACE_OR_EDGE, NODE)
 MAX_ORDER = 50
 TRIANGLE_PAIRS = ((0, 1), (0, 2), (1, 2))
-_FACE_CORNERS = np.array(((1, 2, 3), (0, 2, 3), (0, 1, 3), (0, 1, 2)))
 
 
 @dataclass
@@ -39,7 +43,7 @@ class MeshSurface:
     """The triangles that separate regions: faces between two grains and, when asked, faces on the box exterior."""
 
     nodes: np.ndarray
-    """(F, 3) node indices of every triangle, ascending in each row."""
+    """(F, 3) node indices of every triangle, ascending in each row; (F, 4) quadrilaterals in cyclic order."""
     grains: np.ndarray
     """(F, 2) the two grain labels of a grain boundary triangle (lower first); (0, grain) on the exterior."""
     tets: np.ndarray
@@ -70,27 +74,11 @@ class RegionLayers:
 
 
 def tet_faces(tetrahedra, n_nodes):
-    """Every distinct face of the mesh: ``(nodes (F,3), first tet, second tet or -1, number of tets on the face)``."""
-    t = np.asarray(tetrahedra, dtype=np.int64)
-    if not len(t):
-        return (np.zeros((0, 3), dtype=np.int64), np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64),
-                np.zeros(0, dtype=np.int64))
-    faces = np.sort(t[:, _FACE_CORNERS].reshape(-1, 3), axis=1)
-    owner = np.repeat(np.arange(len(t)), 4)
-    n = int(n_nodes)
-    if n ** 3 < 2 ** 62:
-        key = (faces[:, 0] * n + faces[:, 1]) * n + faces[:, 2]
-        order = np.argsort(key, kind="stable")
-        sorted_key = key[order]
-        starts = np.flatnonzero(np.r_[True, sorted_key[1:] != sorted_key[:-1]])
-    else:
-        order = np.lexsort((faces[:, 2], faces[:, 1], faces[:, 0]))
-        sorted_faces = faces[order]
-        starts = np.flatnonzero(np.r_[True, np.any(sorted_faces[1:] != sorted_faces[:-1], axis=1)])
-    count = np.diff(np.r_[starts, len(order)])
-    first = owner[order[starts]]
-    second = np.where(count >= 2, owner[order[np.minimum(starts + 1, len(order) - 1)]], -1)
-    return faces[order[starts]], first, second, count
+    """Every distinct face of the mesh: ``(nodes (F,3), first tet, second tet or -1, number of tets on the face)``.
+
+    Hexahedra ``(T, 8)`` give ``(F, 4)`` quadrilaterals (see :func:`~upxo.meshing.gbconformant.fm_steel_abaqus.elements.element_faces`).
+    """
+    return element_faces(tetrahedra, n_nodes)
 
 
 def mesh_surface(tetrahedra, grains, n_nodes, include_rve_faces=False) -> MeshSurface:
@@ -149,6 +137,8 @@ def feature_layers(points, tetrahedra, grains, *, order=1, touch=FACE_OR_EDGE, i
     surface = mesh_surface(t, g, n, include_rve_faces)
     tri = surface.nodes
     out = RegionLayers(order, touch, bool(include_rve_faces), surface)
+    kind = element_kind(t)
+    face_pairs = tuple((a, b) for a, b in kind.face_edges)
 
     edges = tet_junction_edges(p, t, g, include_rve_faces)
     out.edges = np.asarray(edges.nodes, dtype=np.int64).reshape(-1, 2)
@@ -176,8 +166,8 @@ def feature_layers(points, tetrahedra, grains, *, order=1, touch=FACE_OR_EDGE, i
     if JUNCTION_LINES in features:
         if touch == FACE_OR_EDGE and len(out.edges):
             keys = np.unique(np.minimum(out.edges[:, 0], out.edges[:, 1]) * n + np.maximum(out.edges[:, 0], out.edges[:, 1]))
-            seed_t = np.isin(_edge_keys(t, PAIRS, n), keys).any(axis=1)
-            seed_f = np.isin(_edge_keys(tri, TRIANGLE_PAIRS, n), keys).any(axis=1)
+            seed_t = np.isin(_edge_keys(t, kind.edges, n), keys).any(axis=1)
+            seed_f = np.isin(_edge_keys(tri, face_pairs, n), keys).any(axis=1)
         else:
             seed_t, seed_f = out.line_nodes[t].any(axis=1), out.line_nodes[tri].any(axis=1)
         out.tet[JUNCTION_LINES] = _grow(t, seed_t, n, order)

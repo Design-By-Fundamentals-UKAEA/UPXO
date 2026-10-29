@@ -8,6 +8,7 @@ features that are not part of that grain's merge history.
 """
 import numpy as np
 
+from .elements import element_volumes
 from .hierarchy import parent_tables
 
 
@@ -74,8 +75,7 @@ def location_audit(points, tetrahedra, tet_grain, identity, hierarchy,
     volume = np.empty(len(t))
     for start in range(0, len(t), chunk):
         v = p[t[start:start + chunk]]
-        volume[start:start + chunk] = np.abs(np.einsum(
-            'ij,ij->i', v[:, 1] - v[:, 0], np.cross(v[:, 2] - v[:, 0], v[:, 3] - v[:, 0]))) / 6
+        volume[start:start + chunk] = np.abs(element_volumes(p, t[start:start + chunk]))
         idx = np.clip(np.floor(v.mean(axis=1) / mesh_voxel_length).astype(np.int64), 0, shape - 1)
         raw_under[start:start + chunk] = hierarchy.lgi[idx[:, 0], idx[:, 1], idx[:, 2]]
     match = raw_under == assigned

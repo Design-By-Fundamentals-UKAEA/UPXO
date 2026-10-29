@@ -1,10 +1,11 @@
-"""Partitioned C3D4 Abaqus deck for FM-steel conformal tetrahedral meshes.
+"""Partitioned Abaqus deck for FM-steel meshes: conformal tetrahedra (C3D4) or voxel hexahedra (C3D8).
 
 The deck follows the layout of the voxel FM-steel export: nodes, elements,
 hierarchy element sets, face node sets, one material and section per feature
 of the chosen level, an interactions template and a static step. Each
-tetrahedron belongs to the feature its grain stands for (see
-:mod:`.identity`); the parent-level sets are unions of those tetrahedra.
+element belongs to the feature its grain stands for (see
+:mod:`.identity`); the parent-level sets are unions of those elements.
+Both element types get the same sets under the same names.
 """
 from dataclasses import asdict, dataclass, field
 import json
@@ -18,8 +19,11 @@ from .audit import location_audit, reallocation_report
 from .boundary_classes import class_nodes, classify
 from .boundary_sets import boundary_nodes
 from .constraints import periodic_pairs, summary as constraint_summary, template_text
-from .deckcheck import check_deck, read_sets
-from .features import feature_table, id_columns, tet_volumes, write_feature_table
+from .deckcheck import check_deck
+from .element_sets import BASIC_FAMILIES, deck_sets
+from .setnames import SetNameError, SetRegistry, settings_problems
+from .elements import TET4, element_kind, element_volumes
+from .features import feature_table, id_columns, write_feature_table
 from .hierarchy import parent_tables
 from .interfaces import interface_faces
 from .jobs import validate_job, write_job_scripts
@@ -81,6 +85,12 @@ class DeckSettings:
     deck_check: bool = False
     write_msh: bool = False
     write_vtu: bool = False
+    prefix_gb_layer: str = C.GB_LAYER_ELSET
+    prefix_interior: str = C.INTERIOR_ELSET
+    set_provider: str = ''
+    """Module that adds further sets to the deck (see :mod:`.extra_sets`); empty: none."""
+    provider_options: dict = field(default_factory=dict)
+    """The provider's options, as its ``options_from_config`` read them."""
 
     def validate(self):
         """Raise ``ValueError`` on an invalid setting; return output tuples."""
@@ -98,6 +108,9 @@ class DeckSettings:
             raise ValueError(f'output_units must be one of {C.UNITS}.')
         if set(self.nset_names) != set(C.FACE_NSET_NAMES):
             raise ValueError('nset_names must name all six faces.')
+        problems = settings_problems(self)
+        if problems:
+            raise SetNameError(problems)
         validate_load(self)
         validate_job(self)
         c = load_controls(self)
@@ -106,22 +119,21 @@ class DeckSettings:
             c['output_interval'], self.element_outputs, self.node_outputs)
 
 
-def _validate_mesh(points, tets, grains):
+def _validate_mesh(points, elements, grains):
     if points.ndim != 2 or points.shape[1] != 3 or not len(points) or not np.isfinite(points).all():
         raise ValueError('Expected finite Nx3 points')
-    if tets.ndim != 2 or tets.shape[1] != 4 or not len(tets) or tets.dtype.kind not in 'iu':
-        raise ValueError('Expected nonempty integer Mx4 tetrahedra')
-    if tets.min() < 0 or tets.max() >= len(points):
+    if elements.ndim != 2 or elements.shape[1] not in (4, 8) or not len(elements) or elements.dtype.kind not in 'iu':
+        raise ValueError('Expected nonempty integer Mx4 tetrahedra or Mx8 hexahedra')
+    if elements.min() < 0 or elements.max() >= len(points):
         raise ValueError('Connectivity references missing nodes')
-    if grains.shape != (len(tets),) or grains.dtype.kind not in 'iu' or np.any(grains < 0):
-        raise ValueError('Expected one nonnegative grain ID per tetrahedron')
+    if grains.shape != (len(elements),) or grains.dtype.kind not in 'iu' or np.any(grains < 0):
+        raise ValueError('Expected one nonnegative grain ID per element')
+    noun = 'tetrahedron' if elements.shape[1] == 4 else 'hexahedron'
     total, smallest = 0.0, np.inf
-    for start in range(0, len(tets), _CHUNK):
-        v = points[tets[start:start + _CHUNK]]
-        vol = np.einsum('ij,ij->i', v[:, 1] - v[:, 0],
-                        np.cross(v[:, 2] - v[:, 0], v[:, 3] - v[:, 0])) / 6
+    for start in range(0, len(elements), _CHUNK):
+        vol = element_volumes(points, elements[start:start + _CHUNK])
         if not np.isfinite(vol).all() or np.any(vol <= 0):
-            raise ValueError('Nonpositive or nonfinite tetrahedron volume')
+            raise ValueError(f'Nonpositive or nonfinite {noun} volume')
         total += float(vol.sum())
         smallest = min(smallest, float(vol.min()))
     return total, smallest
@@ -199,7 +211,8 @@ def _write_steps(f, settings, element_outputs, node_outputs, plan=None):
         pairs = ['%.10g, %.10g' % pair for pair in table]
         for start in range(0, len(pairs), 4):
             f.write(', '.join(pairs[start:start + 4]) + '\n')
-    elset = f', elset={settings.output_elset}' if settings.output_elset else ''
+    # element sets live in the Part: the step names them through the instance
+    elset = f', elset={C.INSTANCE_NAME}.{settings.output_elset}' if settings.output_elset else ''
     for index, step in enumerate(plan.steps):
         displacement = step.displacement * settings.length_scale
         f.write('** STEP: %s\n*Step, name=%s, nlgeom=YES, inc=%d\n' % (step.name, step.name, settings.max_increments))
@@ -229,8 +242,9 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
     Parameters
     ----------
     points, tetrahedra : mesh coordinates (in units where one raw voxel edge is
-        ``mesh_voxel_length``) and 0-based node indices of linear tetrahedra.
-    tet_grain : meshed grain label of every tetrahedron.
+        ``mesh_voxel_length``) and 0-based node indices of linear tetrahedra
+        ``(M, 4)``, or of linear hexahedra ``(M, 8)`` in C3D8 order (a voxel mesh).
+    tet_grain : meshed grain label of every element.
     hierarchy : :class:`~.hierarchy.Hierarchy` of the chosen level.
     identity : :class:`~.identity.IdentityMap` for the meshed grains.
     meshed_labels : optional cleaned label array (pipeline labels); when given a
@@ -246,6 +260,7 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
     t = np.asarray(tetrahedra)
     g = np.asarray(tet_grain)
     total_volume, min_volume = _validate_mesh(p, t, g)
+    kind = element_kind(t)
     lut = identity.lookup()
     if g.max() >= len(lut) or np.any(lut[g] < 0):
         raise ValueError('A tetrahedron carries a grain with no resolved identity')
@@ -277,6 +292,36 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
     if empty:
         raise ValueError(f'No nodes found on face(s) {empty}')
 
+    leaf = _groups(assigned)
+    present = [feat for feat in hierarchy.ordered_features() if feat.label in leaf]
+    names_by_label = {feat.label: feature_elset_name(hierarchy, settings.elset_prefixes, feat) for feat in present}
+    materials_by_label = {feat.label: feature_material_name(hierarchy, feat) for feat in present}
+
+    # Every set is computed, and every name checked, before anything is written.
+    sets = deck_sets(base, compact, assigned, hierarchy, settings, mesh_voxel_length=mesh_voxel_length,
+                     face_nodes={key: ids - 1 for key, ids in faces.items()})
+    classes, found, by_set = None, None, {}
+    if settings.boundary_classes:
+        found = interface_faces(base, compact, assigned)
+        classes = classify(hierarchy, found, scale=scale, symmetry=settings.crystal_symmetry,
+                           low_angle_degrees=settings.low_angle_degrees)
+        by_set = class_nodes(found, classes)
+    registry = SetRegistry()
+    for set_file in sets.files:
+        for name, _ids in set_file.entries:
+            registry.add(set_file.keyword, name, f'set in {set_file.file}')
+    for name in by_set:
+        registry.add('Nset', name, 'boundary-class node set')
+    registry.raise_problems()
+    if settings.output_elset:
+        known = {name.lower(): ids for name, ids in sets.element_sets().items()}
+        if settings.output_elset.lower() not in known:
+            raise ValueError(f'output_elset {settings.output_elset!r} is not an element set of the deck '
+                             f'(for example: {", ".join(sorted(sets.element_sets())[:4])}).')
+        output_count = len(known[settings.output_elset.lower()])
+    else:
+        output_count = None
+
     out = Path(directory)
     out.mkdir(parents=True, exist_ok=False)
     with (out / '01_nodes.inp').open('w', encoding='ascii') as f:
@@ -286,114 +331,43 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
             rows = np.column_stack((np.arange(start + 1, start + 1 + len(block)), block))
             write_rows(f, rows, ['%10d', '%14.6e', '%14.6e', '%14.6e'], ', ')
     with (out / '02_elements.inp').open('w', encoding='ascii') as f:
-        f.write('*Element, type=C3D4\n')
+        f.write(f'*Element, type={kind.abaqus}\n')
         for start in range(0, len(compact), _CHUNK):
             block = compact[start:start + _CHUNK] + 1
             rows = np.column_stack((np.arange(start + 1, start + 1 + len(block)), block))
             write_rows(f, rows, '%10d', ', ')
 
     level = hierarchy.level
-    leaf = _groups(assigned)
-    pag_lut, pck_lut, pck_keys, blk_lut, blk_keys = parent_tables(hierarchy)
     files = ['01_nodes.inp', '02_elements.inp']
-
-    def parent_sets(lut):
-        return _groups(lut[assigned])
-
-    with (out / '03a_elsets_pag.inp').open('w', encoding='ascii') as f:
-        f.write('** PAG elsets\n')
-        sets = _groups(pag_lut[assigned])
-        for pag in hierarchy.pag_order:
-            if pag in sets:
-                named = hierarchy.names.get(pag) if level == 'pag' else None
-                _write_elset(f, named or elset_name(settings.elset_prefixes, 'pag', (pag,)), sets[pag])
-    files.append('03a_elsets_pag.inp')
-    has_pck = level in ('pck', 'blk', 'sblk')
-    has_blk = level in ('blk', 'sblk')
-    if has_pck:
-        with (out / '03b_elsets_pck.inp').open('w', encoding='ascii') as f:
-            f.write('** Packet elsets\n')
-            sets = parent_sets(pck_lut)
-            rank = {key: i for i, key in enumerate(hierarchy.pck_order)}
-            for index, key in sorted(enumerate(pck_keys), key=lambda kv: rank[kv[1]]):
-                if index in sets:
-                    _write_elset(f, elset_name(settings.elset_prefixes, 'pck', key), sets[index])
-        files.append('03b_elsets_pck.inp')
-    if has_blk:
-        with (out / '03c_elsets_blk.inp').open('w', encoding='ascii') as f:
-            f.write('** Block elsets\n')
-            sets = parent_sets(blk_lut)
-            rank = {key: i for i, key in enumerate(hierarchy.blk_order)}
-            for index, key in sorted(enumerate(blk_keys), key=lambda kv: rank[kv[1]]):
-                if index in sets:
-                    _write_elset(f, elset_name(settings.elset_prefixes, 'blk', key), sets[index])
-        files.append('03c_elsets_blk.inp')
-    if level == 'sblk':
-        with (out / '03d_elsets_subblk.inp').open('w', encoding='ascii') as f:
-            f.write('** Sub-block elsets\n')
-            for feature in hierarchy.ordered_features():
-                if feature.label in leaf:
-                    _write_elset(f, feature_elset_name(hierarchy, settings.elset_prefixes, feature),
-                                 leaf[feature.label])
-        files.append('03d_elsets_subblk.inp')
-    if hierarchy.groups:
-        with (out / '03e_elsets_groups.inp').open('w', encoding='ascii') as f:
-            f.write('** Element sets that join features (by role and by host family)\n')
-            for name, members in hierarchy.groups.items():
-                ids = [leaf[label] for label in members if label in leaf]
-                if ids:
-                    _write_elset(f, name, np.sort(np.concatenate(ids)))
-        files.append('03e_elsets_groups.inp')
-
-    with (out / '04_nsets_bc.inp').open('w', encoding='ascii') as f:
-        for face in ('XMIN', 'XMAX', 'YMIN', 'YMAX', 'ZMIN', 'ZMAX'):
-            f.write(f'*Nset, nset={settings.nset_names[face]}, instance={C.INSTANCE_NAME}\n')
-            _write_ids(f, faces[face])
-    files.append('04_nsets_bc.inp')
+    nset_files = []
+    always = {'03a_elsets_pag.inp', '04_nsets_bc.inp'}
+    for set_file in sets.files:
+        if not set_file.entries and set_file.file not in always:
+            continue
+        with (out / set_file.file).open('w', encoding='ascii') as f:
+            if set_file.header:
+                f.write(''.join(f'** {line}\n' if not line.startswith('**') else f'{line}\n'
+                                for line in set_file.header.split('\n')))
+            for name, ids in set_file.entries:
+                if set_file.keyword == 'Elset':
+                    _write_elset(f, name, np.asarray(ids) + 1)
+                elif set_file.keyword == 'Nset':
+                    f.write(f'*Nset, nset={name}, instance={C.INSTANCE_NAME}\n')
+                    _write_ids(f, np.asarray(ids) + 1)
+                else:
+                    elements_on, numbers = ids
+                    f.write(f'*Surface, type=ELEMENT, name={name}\n')
+                    for element, number in zip((np.asarray(elements_on) + 1).tolist(), np.asarray(numbers).tolist()):
+                        f.write(f'{element}, S{number}\n')
+        files.append(set_file.file)
+        if set_file.keyword == 'Nset':
+            nset_files.append(set_file.file)
     pairs = periodic_pairs(base, faces, tol)
+    layers = sets.summary.get('layer_sets')
+    boundary_counts = sets.summary.get('boundary_sets')
 
-    boundary = boundary_nodes(compact, assigned, len(used)) if (settings.boundary_sets or settings.layer_sets) else None
-    if settings.boundary_sets:
-        with (out / '04b_nsets_boundaries.inp').open('w', encoding='ascii') as f:
-            f.write('** Grain-boundary and junction node sets (nodes shared by 2 or more / 3 or more features)\n')
-            for name, nodes in ((C.GRAIN_BOUNDARY_NSET, boundary.grain_boundary),
-                                (C.JUNCTION_NSET, boundary.junction)):
-                if len(nodes):
-                    f.write(f'*Nset, nset={name}, instance={C.INSTANCE_NAME}\n')
-                    _write_ids(f, nodes + 1)
-            for feature in hierarchy.ordered_features():
-                nodes = boundary.by_feature.get(feature.label)
-                if nodes is not None and len(nodes):
-                    name = C.FEATURE_BOUNDARY_NSET_PREFIX + feature_elset_name(hierarchy, settings.elset_prefixes, feature)
-                    f.write(f'*Nset, nset={name}, instance={C.INSTANCE_NAME}\n')
-                    _write_ids(f, nodes + 1)
-        files.append('04b_nsets_boundaries.inp')
-
-    layers = None
-    if settings.layer_sets:
-        touches = np.zeros(len(used), dtype=bool)
-        touches[boundary.grain_boundary] = True
-        in_layer = touches[compact].any(axis=1)
-        layer_ids, interior_ids = np.flatnonzero(in_layer) + 1, np.flatnonzero(~in_layer) + 1
-        with (out / '03f_elsets_layers.inp').open('w', encoding='ascii') as f:
-            f.write('** Elements with a node on a grain boundary, and the elements with none\n')
-            for name, ids in ((C.GB_LAYER_ELSET, layer_ids), (C.INTERIOR_ELSET, interior_ids)):
-                if len(ids):
-                    _write_elset(f, name, ids)
-        files.append('03f_elsets_layers.inp')
-        layers = {'gb_layer_elements': int(len(layer_ids)), 'interior_elements': int(len(interior_ids)),
-                  'gb_layer_fraction': float(len(layer_ids) / len(t))}
-
-    present = [feat for feat in hierarchy.ordered_features() if feat.label in leaf]
-    names_by_label = {feat.label: feature_elset_name(hierarchy, settings.elset_prefixes, feat) for feat in present}
-    materials_by_label = {feat.label: feature_material_name(hierarchy, feat) for feat in present}
-
-    classes, class_sets_written = None, False
+    class_sets_written = False
     if settings.boundary_classes:
-        found = interface_faces(base, compact, assigned)
-        classes = classify(hierarchy, found, scale=scale, symmetry=settings.crystal_symmetry,
-                           low_angle_degrees=settings.low_angle_degrees)
-        by_set = class_nodes(found, classes)
         if by_set:
             with (out / '04c_nsets_boundary_classes.inp').open('w', encoding='ascii') as f:
                 f.write('** Nodes on the grain boundaries of each kind (a node on the edge between kinds is in both),\n'
@@ -402,8 +376,10 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
                     f.write(f'*Nset, nset={name}, instance={C.INSTANCE_NAME}\n')
                     _write_ids(f, nodes + 1)
             files.append('04c_nsets_boundary_classes.inp')
+            nset_files.append('04c_nsets_boundary_classes.inp')
             class_sets_written = True
-        write_boundary_class_table(out / C.BOUNDARY_CLASS_TABLE_NAME, classes, names_by_label)
+        write_boundary_class_table(out / C.BOUNDARY_CLASS_TABLE_NAME, classes, names_by_label,
+                                   'triangles' if kind is TET4 else 'quadrilaterals')
         files.append(C.BOUNDARY_CLASS_TABLE_NAME)
         write_interface_surface(out / C.INTERFACE_FILE_NAME, base * scale, found, classes, scale)
         files.append(C.INTERFACE_FILE_NAME)
@@ -448,15 +424,6 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
     if settings.write_step:
         axis_length = domain_lengths(hierarchy, settings.output_units)['xyz'.index(settings.load_axis)]
         plan = plan_load(settings, axis_length)
-    output_count = None
-    if settings.output_elset:
-        known = {}
-        for path in sorted(out.glob('03*.inp')):
-            known.update(read_sets(path, 'Elset'))
-        if settings.output_elset not in known:
-            raise ValueError(f'output_elset {settings.output_elset!r} is not an element set of the deck '
-                             f'(for example: {", ".join(sorted(known)[:4])}).')
-        output_count = len(known[settings.output_elset])
     if plan is not None:
         output_figures = estimate_for_plan(settings, plan, len(used), len(t), output_count)
     with (out / '08_steps_output.inp').open('w', encoding='ascii') as f:
@@ -467,12 +434,12 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
 
     if settings.feature_table:
         order, inverse = np.unique(assigned, return_inverse=True)
-        volumes = np.bincount(inverse, weights=tet_volumes(base, compact)) * scale ** 3
+        volumes = np.bincount(inverse, weights=element_volumes(base, compact)) * scale ** 3
         counts = np.bincount(inverse)
         columns, rows = feature_table(
             hierarchy, names_by_label, materials_by_label,
             {int(l): int(n) for l, n in zip(order, counts)}, {int(l): float(v) for l, v in zip(order, volumes)},
-            settings.elset_prefixes)
+            settings.elset_prefixes, element_column=kind.noun)
         write_feature_table(out / C.FEATURE_TABLE_NAME, columns, rows)
         files.append(C.FEATURE_TABLE_NAME)
 
@@ -488,8 +455,9 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
                     f'{tuple(hierarchy.origin)}, parent shape {tuple(hierarchy.parent_shape)}\n**\n')
         f.write(
             '*Heading\n'
-            f'** {hierarchy.system} microstructure - element type: C3D4 (conformal tetrahedra)\n'
-            f'** Nodes: {len(used):,}  |  Tetrahedra: {len(t):,}  |  Features: {len(present)}'
+            f'** {hierarchy.system} microstructure - element type: {kind.abaqus} '
+            f'({"conformal tetrahedra" if kind is TET4 else "voxel hexahedra"})\n'
+            f'** Nodes: {len(used):,}  |  {kind.noun.capitalize()}: {len(t):,}  |  Features: {len(present)}'
             f'  |  Level: {level}\n'
             f'** Scale: {scale:.6g} {dst_units} per mesh unit '
             f'(structure defined in {src_units}'
@@ -498,9 +466,7 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
             f'*Part, name={C.PART_NAME}\n' + includes +
             '*INCLUDE, INPUT=06_sections.inp\n*End Part\n*Assembly, name=Assembly\n'
             f'*Instance, name={C.INSTANCE_NAME}, part={C.PART_NAME}\n*End Instance\n'
-            '*INCLUDE, INPUT=04_nsets_bc.inp\n'
-            + ('*INCLUDE, INPUT=04b_nsets_boundaries.inp\n' if settings.boundary_sets else '')
-            + ('*INCLUDE, INPUT=04c_nsets_boundary_classes.inp\n' if class_sets_written else '') +
+            + ''.join(f'*INCLUDE, INPUT={name}\n' for name in sorted(nset_files)) +
             '*End Assembly\n'
             '*INCLUDE, INPUT=05_materials.inp\n*INCLUDE, INPUT=07_interactions.inp\n'
             '*INCLUDE, INPUT=08_steps_output.inp\n')
@@ -521,20 +487,21 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
         dump('deck_check.json', result)
         deck_check = {'ok': result['ok'], 'failed': result['failed']}
     info = {
-        'level': level, 'system': hierarchy.system, 'element_type': 'C3D4', 'nodes': int(len(used)),
-        'unused_nodes_dropped': dropped_nodes, 'tetrahedra': int(len(t)),
+        'level': level, 'system': hierarchy.system, 'element_type': kind.abaqus, 'nodes': int(len(used)),
+        'unused_nodes_dropped': dropped_nodes, kind.noun: int(len(t)), 'elements': int(len(t)),
         'features_with_elements': len(present),
         'features_in_structure': len(hierarchy.features),
         'features_without_elements': sorted(set(hierarchy.features) - set(leaf)),
         'source_units': src_units, 'output_units': dst_units,
         'voxel_size': hierarchy.voxel_size, 'mesh_voxel_length': mesh_voxel_length,
         'coordinate_scale': scale, 'domain_extent': extent.tolist(),
-        'total_volume_mesh_units': total_volume, 'minimum_tet_volume_mesh_units': min_volume,
+        'total_volume_mesh_units': total_volume,
+        ('minimum_tet_volume_mesh_units' if kind is TET4 else 'minimum_element_volume_mesh_units'): min_volume,
         'face_node_counts': {k: int(len(v)) for k, v in faces.items()},
         'subset_of_parent': (None if hierarchy.origin is None else {
             'origin_voxels': [int(v) for v in hierarchy.origin],
             'parent_shape': [int(n) for n in hierarchy.parent_shape]}),
-        'boundary_sets': boundary.counts() if settings.boundary_sets else None,
+        'boundary_sets': boundary_counts,
         'layer_sets': layers,
         'load_case': None if plan is None else plan.summary,
         'job_scripts': scripts,
@@ -545,20 +512,25 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
         'constraints': {'active': False, 'periodic_pairs': constraint_summary(pairs)},
         'mesh_files': mesh_files,
         'settings': asdict(settings), 'simulation_ready': False,
+        'extra_sets': None if not settings.set_provider else {
+            'provider': settings.set_provider, 'options': settings.provider_options,
+            'files': [f.file for f in sets.files if f.family not in BASIC_FAMILIES],
+            'skipped': sets.skipped, 'summary': sets.summary.get('extra_sets', {}),
+            'note': 'This deck uses sets from a set provider; a plain install of the package does not make them.'},
         'note': 'Interactions are a template; no periodic, tie or contact constraint is active.'}
     dump('deck_info.json', info)
     return {'directory': out, 'files': files, 'info': info,
             'audit': audit_report, 'reallocation': reallocation}
 
 
-def write_boundary_class_table(path, classes, names):
+def write_boundary_class_table(path, classes, names, face_column='triangles'):
     """One row per pair of neighbouring features: their element sets, the kind of boundary, area and misorientation."""
     import csv
 
     low = classes.low_angle()
     with Path(path).open('w', encoding='ascii', newline='') as handle:
         writer = csv.writer(handle)
-        writer.writerow(['label_a', 'elset_a', 'label_b', 'elset_b', 'kind', 'triangles', 'area',
+        writer.writerow(['label_a', 'elset_a', 'label_b', 'elset_b', 'kind', face_column, 'area',
                          'misorientation_deg', 'low_angle'])
         for i, (a, b) in enumerate(classes.pairs):
             angle = classes.misorientation[i]
@@ -569,11 +541,12 @@ def write_boundary_class_table(path, classes, names):
 
 
 def write_interface_surface(path, points, interfaces, classes, scale=1.0):
-    """The interface triangles as a VTK surface; cell data: kind, misorientation, area and the two features."""
+    """The interface triangles (quadrilaterals for hexahedra) as a VTK surface; cell data: kind, misorientation, area and the two features."""
     import pyvista as pv
 
     k = len(interfaces.faces)
-    cells = np.column_stack((np.full(k, 3, dtype=np.int64), interfaces.faces)).ravel() if k else np.zeros(0, dtype=np.int64)
+    width = interfaces.faces.shape[1] if interfaces.faces.ndim == 2 else 3
+    cells = np.column_stack((np.full(k, width, dtype=np.int64), interfaces.faces)).ravel() if k else np.zeros(0, dtype=np.int64)
     surface = pv.PolyData(np.asarray(points, dtype=float), cells)
     pair = classes.face_pair
     surface.cell_data['boundary_kind'] = classes.face_kind.astype(np.int64)

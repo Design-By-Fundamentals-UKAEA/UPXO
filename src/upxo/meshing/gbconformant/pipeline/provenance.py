@@ -116,8 +116,19 @@ def build_provenance(config: dict) -> dict[str, Any]:
         "input": {"dataset_type": dataset, "folder_or_file": _absolute(config.get(key)),
                   "files": input_signature(config)},
         "subset": _subset_record(config),
+        "set_provider": _provider_record(config),
         "environment": collect_environment(),
     }
+
+
+def _provider_record(config: dict):
+    """The set provider the run used and its settings (``None`` when there was none)."""
+    name = str(config.get("SET_PROVIDER") or "").strip()
+    if not name:
+        return None
+    return {"module": name,
+            "note": "The deck holds sets from this provider; the command above rebuilds them only where the "
+                    "provider can be imported (its settings are among those changed from the defaults)."}
 
 
 def write_provenance(folder, config: dict) -> Path:

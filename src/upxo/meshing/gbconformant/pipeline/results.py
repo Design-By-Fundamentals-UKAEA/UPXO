@@ -397,6 +397,7 @@ _NOTES = {
     "export_surfaces": lambda r: f"{len(r.get('written') or [])} files",
     "export_volume": lambda r: Path(str(r.get("path", ""))).name,
     "export_abaqus": lambda r: Path(str(r.get("folder", ""))).name,
+    "export_abaqus_voxel": lambda r: Path(str(r.get("folder", ""))).name,
 }
 for _tet_stage in ("tet_mesh", "tet_smooth", "tet_swaps", "tet_smooth_after", "dihedral_gate", "insert_nodes"):
     _NOTES[_tet_stage] = lambda r: (
