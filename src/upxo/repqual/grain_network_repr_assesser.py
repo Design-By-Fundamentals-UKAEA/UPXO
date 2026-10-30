@@ -525,7 +525,6 @@ class KREPR():
             This means that bth target and samnple grain strucruers are 3D.
             '''
             self.set_mprop3d_flags()
-            self.set_sprop3d_flags()
         elif 2 in (self.dim.tgt, self.dim.smp) or 3 in (self.dim.tgt, self.dim.smp):
             '''
             This means that the target set and sample sets, each can contain
@@ -533,7 +532,6 @@ class KREPR():
             '''
             self.set_mprop2d_flags()
             self.set_mprop3d_flags()
-            # self.set_sprop3d_flags()
 
     def set_ordern(self, ordern):
         """
@@ -1554,9 +1552,15 @@ class KREPR():
                                         neigh_order_tgt=1,
                                         neigh_order_smp=1,
                                         equal_bins=False):
-        """Calculate rkf wd on generalized."""
+        """Calculate rkf wd on generalized.
+
+        Returns the (n samples, n targets) matrix of the measure between the
+        target networks of order neigh_order_tgt and the sample networks of order
+        neigh_order_smp;
+        nothing is stored on ``self.rkf``.
+        """
         # Validations
-        print(f'Calculating RKF-JS for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
+        print(f'Calculating RKF-WD for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
         skset = list(self.skset[neigh_order_smp].values())
         # ---------------------------
@@ -1567,6 +1571,7 @@ class KREPR():
             for idsmp, ksmp in enumerate(skset):
                 r = DEF_rkf_wd(ktgt, ksmp, equal_bins=equal_bins)
                 rkf_wd[idsmp, idtgt] = r
+        return rkf_wd
 
     def calculate_rkf_ksp_on(self, neigh_order=1, equal_bins=False):
         """Calculate rkf ksp on."""
@@ -1585,7 +1590,13 @@ class KREPR():
                                          neigh_order_tgt=1,
                                          neigh_order_smp=1,
                                          equal_bins=False):
-        """Calculate rkf ksp on generalized."""
+        """Calculate rkf ksp on generalized.
+
+        Returns the (n samples, n targets) matrix of the measure between the
+        target networks of order neigh_order_tgt and the sample networks of order
+        neigh_order_smp;
+        nothing is stored on ``self.rkf``.
+        """
         # Validations
         print(f'Calculating RKF-KSP for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1598,6 +1609,7 @@ class KREPR():
             for idsmp, ksmp in enumerate(skset):
                 r = DEF_rkf_ksp(ktgt, ksmp, equal_bins=equal_bins)
                 rkf_ksp[idsmp, idtgt] = r
+        return rkf_ksp
 
     def calculate_rkf_ed_on(self, neigh_order=1, equal_bins=False):
         """Calculate rkf ed on."""
@@ -1617,7 +1629,13 @@ class KREPR():
                                         neigh_order_tgt=1,
                                         neigh_order_smp=1,
                                         equal_bins=False):
-        """Calculate rkf ed on generalized."""
+        """Calculate rkf ed on generalized.
+
+        Returns the (n samples, n targets) matrix of the measure between the
+        target networks of order neigh_order_tgt and the sample networks of order
+        neigh_order_smp;
+        nothing is stored on ``self.rkf``.
+        """
         # Validations
         print(f'Calculating RKF-ED for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1630,6 +1648,7 @@ class KREPR():
             for idsmp, ksmp in enumerate(skset):
                 r = DEF_rkf_ed(ktgt, ksmp, equal_bins=equal_bins)
                 rkf_ed[idsmp, idtgt] = r
+        return rkf_ed
 
     def calculate_rkf_nlsd_on(self, neigh_order=1,
                               timescales=np.logspace(-2, 2, 20),
@@ -1653,7 +1672,13 @@ class KREPR():
                                           neigh_order_tgt=1,
                                           neigh_order_smp=1,
                                           equal_bins=False):
-        """Calculate rkf ed nlsd generalized."""
+        """Calculate rkf ed nlsd generalized.
+
+        Returns the (n samples, n targets) matrix of the measure between the
+        target networks of order neigh_order_tgt and the sample networks of order
+        neigh_order_smp;
+        nothing is stored on ``self.rkf``.
+        """
         # Validations
         print(f'Calculating RKF-NLSD for T-O({neigh_order_tgt})|S-O({neigh_order_smp})')
         tkset = list(self.tkset[neigh_order_tgt].values())
@@ -1666,6 +1691,7 @@ class KREPR():
             for idsmp, ksmp in enumerate(skset):
                 r = DEF_rkf_nlsd(ktgt, ksmp, equal_bins=equal_bins)
                 rkf_nlsd[idsmp, idtgt] = r
+        return rkf_nlsd
 
     def calculate_rkf_js(self):
         """Calculate rkf js."""
