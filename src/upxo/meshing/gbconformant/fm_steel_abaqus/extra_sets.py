@@ -62,6 +62,7 @@ class SetRequest:
     """What a provider is given: the deck's mesh (compacted node numbering), the feature of every element, the
     hierarchy and the :class:`~.export.DeckSettings`. ``mesh_voxel_length`` is the length of one raw voxel in
     mesh units, ``face_nodes`` the nodes on each box face and ``families`` the families wanted (``None``: all).
+    ``identity`` is the :class:`~.identity.IdentityMap` of the meshed grains (``None`` when not at hand).
     ``cache`` is free for the provider's use during one request."""
     points: np.ndarray
     elements: np.ndarray
@@ -72,6 +73,7 @@ class SetRequest:
     face_nodes: dict = field(default_factory=dict)
     families: object = None
     cache: dict = field(default_factory=dict)
+    identity: object = None
 
 
 def load_provider(name):

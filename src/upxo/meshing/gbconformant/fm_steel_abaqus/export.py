@@ -299,7 +299,7 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
 
     # Every set is computed, and every name checked, before anything is written.
     sets = deck_sets(base, compact, assigned, hierarchy, settings, mesh_voxel_length=mesh_voxel_length,
-                     face_nodes={key: ids - 1 for key, ids in faces.items()})
+                     face_nodes={key: ids - 1 for key, ids in faces.items()}, identity=identity)
     classes, found, by_set = None, None, {}
     if settings.boundary_classes:
         found = interface_faces(base, compact, assigned)

@@ -61,7 +61,7 @@ def box_face_nodes(points, face_tolerance=1e-8):
 
 
 def deck_sets(points, elements, assigned, hierarchy, settings, *, mesh_voxel_length=1.0, families=None,
-              face_nodes=None) -> DeckSets:
+              face_nodes=None, identity=None) -> DeckSets:
     """The sets of the deck. ``points``/``elements`` are the deck's (compacted) mesh, ``assigned`` the feature
     of every element; ``families`` limits the work to some families (default all)."""
     from .export import elset_name, feature_elset_name
@@ -147,7 +147,8 @@ def deck_sets(points, elements, assigned, hierarchy, settings, *, mesh_voxel_len
     if getattr(settings, 'set_provider', ''):
         if face_nodes is None:
             face_nodes, _tol = box_face_nodes(p, settings.face_tolerance)
-        request = SetRequest(p, e, a, hierarchy, settings, float(mesh_voxel_length), face_nodes, families)
+        request = SetRequest(p, e, a, hierarchy, settings, float(mesh_voxel_length), face_nodes, families,
+                             identity=identity)
         extra = check_files(settings.set_provider, load_provider(settings.set_provider).extra_sets(request))
         taken = {f.file for f in files} | {'04c_nsets_boundary_classes.inp'}
         clash = sorted(taken & {f.file for f in extra.files})

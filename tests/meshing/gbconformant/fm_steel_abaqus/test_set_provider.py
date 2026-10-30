@@ -55,7 +55,7 @@ class ProviderTests(unittest.TestCase):
             info = json.loads((deck / 'deck_info.json').read_text())
             self.assertEqual(info['extra_sets']['provider'], FAKE)
             self.assertEqual(info['extra_sets']['skipped'][0]['name'], 'es_never')
-            self.assertEqual(info['extra_sets']['summary'], {'calls': 1})
+            self.assertEqual(info['extra_sets']['summary'], {'calls': 1, 'identity_given': True})
             self.assertTrue(json.loads((deck / 'deck_check.json').read_text())['ok'])
 
     def test_provider_names_are_checked_like_the_decks_own(self):

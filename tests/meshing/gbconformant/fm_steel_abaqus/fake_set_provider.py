@@ -27,4 +27,4 @@ def extra_sets(request):
                SetFile('04x_nsets_extra.inp', 'Nset', 'Extra node set', 'extra',
                        [('ns_extra', np.unique(request.elements[first].ravel()))])],
         skipped=[{'name': 'es_never', 'family': 'extra', 'reason': 'not asked for'}],
-        summary={'calls': 1})
+        summary={'calls': 1, 'identity_given': request.identity is not None})
