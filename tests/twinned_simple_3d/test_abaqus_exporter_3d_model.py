@@ -348,3 +348,80 @@ def test_without_further_sets_no_further_file_is_written(tmp_path):
     exp, _ = _export(tmp_path)
     assert not any(p.name.startswith(('03e', '03f')) for p in tmp_path.iterdir())
     assert exp.n_extra_elsets_written == {}
+
+
+# ------------------------------------------------------------------ voids (label <= 0)
+def _export_with_voids(tmp_path, void, **kwargs):
+    """The test structure with ``void(lgi)`` -> boolean mask set to 0."""
+    lgi, role, parent, quats = _structure()
+    lgi[void(lgi)] = 0
+    exp = AbaqusExporter3D(lgi=lgi, twin_role=role, twin_parent_of=parent, all_quats=quats,
+                           write_variant_elsets=False, **kwargs)
+    exp.write(str(tmp_path))
+    return exp, lgi
+
+
+def _element_ids(tmp_path):
+    rows = [l for l in _read(tmp_path, '02_elements.inp').splitlines() if l[:1].isdigit()]
+    return np.array([int(l.split(',')[0]) for l in rows])
+
+
+def _corner_void(lgi):
+    mask = np.zeros(lgi.shape, dtype=bool)
+    mask[:2, :2, :2] = True                                        # (z, y, x) array order: a corner block
+    return mask
+
+
+def test_void_voxels_get_no_element_and_the_others_keep_their_numbers(tmp_path):
+    exp, lgi = _export_with_voids(tmp_path, _corner_void)
+    solid = np.transpose(lgi, (2, 1, 0)) > 0                       # (nx, ny, nz), the exporter's order
+    ids = _element_ids(tmp_path)
+    np.testing.assert_array_equal(ids, np.flatnonzero(solid.ravel(order='C')) + 1)
+    assert exp.n_elements == int(solid.sum()) == len(ids)
+    assert f'Active elements: {len(ids):,}' in _read(tmp_path, 'model_master.inp')
+    sets = _read(tmp_path, '03a_elsets_cells.inp')
+    listed = {int(v) for v in re.findall(r'\d+', re.sub(r'\*Elset, elset=\S+', '', sets))}
+    assert listed == set(ids.tolist())                             # every element in a cell set, none for a void
+
+
+def test_only_the_nodes_of_solid_voxels_are_written_and_the_node_sets_follow(tmp_path):
+    exp, lgi = _export_with_voids(tmp_path, _corner_void)
+    solid = np.transpose(lgi, (2, 1, 0)) > 0
+    used = np.zeros((NX + 1, NY + 1, NZ + 1), dtype=bool)
+    for di in (0, 1):
+        for dj in (0, 1):
+            for dk in (0, 1):
+                used[di:di + NX, dj:dj + NY, dk:dk + NZ] |= solid
+    nodes = _nodes(tmp_path)
+    expected = {(ix * (NY + 1) + iy) * (NZ + 1) + iz + 1 for ix, iy, iz in np.argwhere(used)}
+    assert set(nodes) == expected
+    # every node an element names is written, and every node set names written nodes only
+    conn = [int(v) for l in _read(tmp_path, '02_elements.inp').splitlines() if l[:1].isdigit() for v in l.split(',')[1:]]
+    assert set(conn) == expected
+    bc = _read(tmp_path, '04_nsets_bc.inp')
+    named = {int(v) for v in re.findall(r'\d+', re.sub(r'\*Nset, nset=\S+', '', bc))}
+    assert named <= expected
+
+
+def test_the_tetrahedral_deck_skips_the_tetrahedra_of_void_voxels(tmp_path):
+    exp, lgi = _export_with_voids(tmp_path, _corner_void, element_type='C3D4')
+    solid = np.transpose(lgi, (2, 1, 0)) > 0
+    ids = _element_ids(tmp_path)
+    assert len(ids) == 6 * int(solid.sum()) == exp.n_elements
+    voxels = np.unique((ids - 1) // 6)
+    np.testing.assert_array_equal(voxels, np.flatnonzero(solid.ravel(order='C')))
+
+
+def test_a_deck_without_voids_is_what_it_was(tmp_path):
+    exp, _ = _export(tmp_path)
+    assert not exp._has_voids and exp.n_elements == NX * NY * NZ
+    assert len(_element_ids(tmp_path)) == NX * NY * NZ and len(_nodes(tmp_path)) == (NX + 1) * (NY + 1) * (NZ + 1)
+
+
+def test_a_face_that_is_all_void_is_refused_with_the_reason(tmp_path):
+    def whole_xmin_layer(lgi):
+        mask = np.zeros(lgi.shape, dtype=bool)
+        mask[:, :, 0] = True                                       # array axis 2 is x
+        return mask
+    with pytest.raises(ValueError, match='XMIN'):
+        _export_with_voids(tmp_path, whole_xmin_layer)

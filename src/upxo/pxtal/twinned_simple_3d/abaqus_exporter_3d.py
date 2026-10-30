@@ -581,6 +581,10 @@ class AbaqusExporter3D:
         self.nx, self.ny, self.nz = index.nx, index.ny, index.nz
         self._role_map    = index.role_map
         self._lgi_flat     = self.lgi.ravel(order='C')
+        # A voxel with label <= 0 is a void: it gets no element, and a node only void voxels touch is not written.
+        solid = np.asarray(self.lgi) > 0
+        self._has_voids = not bool(solid.all())
+        self._solid = solid if self._has_voids else None
         # index.grain_elems holds voxel ids (one per voxel, 1-based). With
         # several elements per voxel, voxel v owns elements
         # k*(v-1)+1 .. k*v. A new dict: the index may be reused for other
@@ -605,8 +609,18 @@ class AbaqusExporter3D:
 
     @property
     def n_elements(self) -> int:
-        """Number of elements written (voxels x elements per voxel)."""
-        return self.nx * self.ny * self.nz * _ELEMS_PER_VOXEL[self.element_type]
+        """Number of elements written (voxels that are not void x elements per voxel)."""
+        voxels = int(self._solid.sum()) if self._has_voids else self.nx * self.ny * self.nz
+        return voxels * _ELEMS_PER_VOXEL[self.element_type]
+
+    def _used_nodes(self) -> np.ndarray:
+        """Boolean ``(nx + 1, ny + 1, nz + 1)``: the node is a corner of a voxel that is not void."""
+        used = np.zeros((self.nx + 1, self.ny + 1, self.nz + 1), dtype=bool)
+        for di in (0, 1):
+            for dj in (0, 1):
+                for dk in (0, 1):
+                    used[di:di + self.nx, dj:dj + self.ny, dk:dk + self.nz] |= self._solid
+        return used
 
     def write(self, out_dir: str = DEFAULT_ABQ_OUT_DIR) -> None:
         """
@@ -684,6 +698,11 @@ class AbaqusExporter3D:
         f.write('*Node\n')
         nx, ny, nz = self.nx, self.ny, self.nz
         vs = self.vox_um * self.length_scale
+        if self._has_voids:
+            for ix, iy, iz in np.argwhere(self._used_nodes()):
+                node_id = (int(ix) * (ny + 1) + int(iy)) * (nz + 1) + int(iz) + 1
+                f.write(f'{node_id}, {ix*vs:.10g}, {iy*vs:.10g}, {iz*vs:.10g}\n')
+            return
         node_id = 0
         for ix in range(nx + 1):
             for iy in range(ny + 1):
@@ -722,6 +741,8 @@ class AbaqusExporter3D:
             for iy in range(ny):
                 for iz in range(nz):
                     eid += 1
+                    if self._has_voids and not self._solid[ix, iy, iz]:
+                        continue                          # a void: no element (the numbers of the others stay)
                     n1  = nid(ix,   iy,   iz  )
                     n2  = nid(ix+1, iy,   iz  )
                     n3  = nid(ix+1, iy+1, iz  )
@@ -745,6 +766,9 @@ class AbaqusExporter3D:
                 conn[:, t, c] = (ix + di) * nn_y * nn_z + (iy + dj) * nn_z + (iz + dk) + 1
         conn = conn.reshape(-1, 4)
         eids = np.arange(1, conn.shape[0] + 1, dtype=np.int64)
+        if self._has_voids:
+            keep = np.repeat(self._solid.ravel(order='C'), len(_KUHN_TETS))
+            conn, eids = conn[keep], eids[keep]
         f.write(f'** Element connectivity  type={self.element_type}  '
                 f'(6 tetrahedra per voxel)\n')
         f.write(f'*Element, type={self.element_type}\n')
@@ -888,6 +912,11 @@ class AbaqusExporter3D:
             if not cfg.get('enabled', True):
                 continue
             nset_name = cfg.get('prefix') or self._DEFAULT_NSET_CONFIG[name]['prefix']
+            if self._has_voids:
+                used = self._used_nodes()
+                coords = [c for c in coords if used[c]]
+                if not coords:
+                    raise ValueError(f'No element touches the {name} face: it is void, so its node set would be empty.')
             nodes = np.array([nid(*c) for c in coords], dtype=np.int32)
             f.write(f'*Nset, nset={nset_name}\n')
             self._write_id_list(f, nodes)
