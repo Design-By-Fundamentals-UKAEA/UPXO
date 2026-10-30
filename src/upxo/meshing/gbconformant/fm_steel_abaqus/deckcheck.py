@@ -17,18 +17,19 @@ reports, check by check, whether the deck is consistent:
 
 A deck that passes is consistent as a file; it has not been run in Abaqus.
 """
+from itertools import islice
 from pathlib import Path
 import re
 import numpy as np
 
 from .elements import element_volumes
 
+_BLOCK = 200_000
+
 
 def _ids(lines):
-    values = []
-    for line in lines:
-        values.extend(int(v) for v in line.replace(' ', '').split(',') if v)
-    return np.array(values, dtype=np.int64)
+    text = ','.join(line.replace(' ', '').strip(',') for line in lines if line.strip())
+    return np.fromstring(text, dtype=np.int64, sep=',') if text else np.zeros(0, dtype=np.int64)
 
 
 def read_sets(path, keyword):
@@ -40,16 +41,18 @@ def read_sets(path, keyword):
         if name is not None:
             sets[name] = _ids(buffer)
 
-    for line in Path(path).read_text(encoding='ascii').splitlines():
-        match = pattern.match(line)
-        if match:
-            close()
-            name, buffer = match.group(1), []
-        elif line.startswith('*'):
-            close()
-            name, buffer = None, []
-        elif name is not None and line.strip() and not line.startswith('**'):
-            buffer.append(line)
+    with Path(path).open(encoding='ascii') as handle:
+        for line in handle:
+            line = line.rstrip('\n')
+            match = pattern.match(line)
+            if match:
+                close()
+                name, buffer = match.group(1), []
+            elif line.startswith('*'):
+                close()
+                name, buffer = None, []
+            elif name is not None and line.strip() and not line.startswith('**'):
+                buffer.append(line)
     close()
     return sets
 
@@ -85,12 +88,19 @@ def read_surfaces(path):
     return out
 
 
-def _read_table(path, columns):
-    text = Path(path).read_text(encoding='ascii').splitlines()[1:]
-    rows = [line for line in text if line.strip() and not line.startswith('*')]
-    if not rows:
-        return np.zeros((0, columns))
-    return np.loadtxt(rows, delimiter=',', ndmin=2)
+def _read_table(path, columns, dtype=float):
+    """The numbers under the keyword line of a node or element file, read a block of lines at a time."""
+    parts = []
+    with Path(path).open(encoding='ascii') as handle:
+        handle.readline()
+        while True:
+            lines = list(islice(handle, _BLOCK))
+            if not lines:
+                break
+            rows = [line for line in lines if line.strip() and not line.startswith('*')]
+            if rows:
+                parts.append(np.loadtxt(rows, delimiter=',', ndmin=2, dtype=dtype))
+    return np.concatenate(parts) if parts else np.zeros((0, columns), dtype=dtype)
 
 
 def _check(name, ok, detail=''):
@@ -119,7 +129,7 @@ def check_deck(folder):
     if nodes_path is None or elements_path is None:
         return _finish(checks, {})
     nodes = _read_table(nodes_path, 4)
-    elements = _read_table(elements_path, 5)
+    elements = _read_table(elements_path, 5, dtype=np.int32 if len(nodes) < 2 ** 31 - 1 else np.int64)
     n_nodes, n_elements = len(nodes), len(elements)
     counts = {'nodes': n_nodes, 'elements': n_elements}
 
@@ -129,22 +139,28 @@ def check_deck(folder):
                          f'{n_nodes} nodes'))
     checks.append(_check('elements numbered 1..M', n_elements > 0 and np.array_equal(element_ids, np.arange(1, n_elements + 1)),
                          f'{n_elements} elements'))
-    connectivity = elements[:, 1:].astype(np.int64) if n_elements else np.zeros((0, 4), dtype=np.int64)
+    connectivity = elements[:, 1:] if n_elements else np.zeros((0, 4), dtype=np.int64)
     noun = 'hexahedron' if connectivity.shape[1] == 8 else 'tetrahedron'
     counts['element_type'] = 'C3D8' if connectivity.shape[1] == 8 else 'C3D4'
     in_range = bool(connectivity.size) and connectivity.min() >= 1 and connectivity.max() <= n_nodes
     checks.append(_check('connectivity names existing nodes', in_range,
                          '' if in_range else 'an element refers to a node that does not exist'))
     if in_range:
-        unused = n_nodes - len(np.unique(connectivity))
-        checks.append(_check('every node is used', unused == 0, f'{unused} unused' if unused else ''))
+        seen = np.zeros(n_nodes + 1, dtype=bool)
         coordinates = nodes[:, 1:]
-        volume = element_volumes(coordinates, connectivity - 1)
-        bad = int((~(volume > 0)).sum())
-        counts['smallest_volume'] = float(volume.min())
-        counts['largest_volume'] = float(volume.max())
+        bad, smallest, largest = 0, np.inf, -np.inf
+        for start in range(0, n_elements, _BLOCK):
+            block = connectivity[start:start + _BLOCK]
+            seen[block.ravel()] = True
+            volume = element_volumes(coordinates, block - 1)
+            bad += int((~(volume > 0)).sum())
+            smallest, largest = min(smallest, float(volume.min())), max(largest, float(volume.max()))
+        unused = n_nodes - int(seen[1:].sum())
+        checks.append(_check('every node is used', unused == 0, f'{unused} unused' if unused else ''))
+        counts['smallest_volume'] = smallest
+        counts['largest_volume'] = largest
         checks.append(_check(f'every {noun} has a positive volume', bad == 0,
-                             f'{bad} not positive' if bad else f'smallest {volume.min():.4g}'))
+                             f'{bad} not positive' if bad else f'smallest {smallest:.4g}'))
 
     elsets = {}
     for path in sorted(folder.glob('03*.inp')):

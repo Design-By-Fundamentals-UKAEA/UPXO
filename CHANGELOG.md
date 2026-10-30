@@ -25,6 +25,11 @@ All notable changes to UPXO are documented in this file.
 - **Hexahedra in the FM-steel deck writer** (`fm_steel_abaqus.write_deck`, `fm_steel_abaqus.elements`): the writer, the deck check, the mesh files, the boundary classes and the junction and region code accept `(M, 8)` C3D8 hexahedra as well as `(M, 4)` C3D4 tetrahedra. Decks of tetrahedra are unchanged; `deck_info.json` gains `elements`.
 - **Further element sets from a provider module** (`SET_PROVIDER`, `fm_steel_abaqus.extra_sets`): a module named by the setting can add element sets, node sets and surfaces to the FM-steel decks; the writer checks their names and records the module in `deck_info.json` and `provenance.json`. Empty by default: the decks are unchanged. `AbaqusExporter3D(extra_elsets=...)` adds further element-set files to the twinned FCC voxel deck in the same way.
 
+### Changed
+
+- **Less memory for large FM-steel decks** (`fm_steel_abaqus.write_deck`, `deckcheck.check_deck`, `interfaces.interface_faces`, `boundary_sets.boundary_nodes`, `elements.element_faces`): the writer finds the nodes in use by counting instead of sorting every element corner, the boundary classes build only the faces next to a boundary, the boundary nodes and the volume check work in blocks, and the deck check reads the files back in blocks instead of as lists of text lines. The decks written are byte-identical.
+- **Memory estimate for the voxel deck** (`fm_steel_abaqus.voxel_deck.estimate_voxel_deck`, `voxel_grid_shape`): the stage reports the peak memory and the disk space the deck needs, and logs a warning when the peak would use most of the free memory.
+
 ### Fixed
 
 - **Twinned FCC decks and reports said `PAG`** (`fm_steel_abaqus.hierarchy.Hierarchy.level_text`): a twinned structure has only grains, but the deck heading, the header of `03a_elsets_pag.inp`, `deck_info.json`, the export summary and the before/after comparison gave its level as `pag`. They say `grain`. File and element-set names are unchanged.

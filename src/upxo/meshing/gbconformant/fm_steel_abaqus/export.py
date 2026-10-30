@@ -274,10 +274,22 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
     reallocation = (reallocation_report(hierarchy.lgi, meshed_labels, identity, hierarchy)
                     if meshed_labels is not None else None)
 
-    used = np.unique(t)
+    # the nodes the elements use, found by counting (no sort of every element corner)
+    in_use = np.zeros(len(p), dtype=bool)
+    for start in range(0, len(t), _CHUNK):
+        in_use[t[start:start + _CHUNK].ravel()] = True
+    used = np.flatnonzero(in_use)
     dropped_nodes = int(len(p) - len(used))
-    compact = np.searchsorted(used, t)
-    base = p[used]
+    if dropped_nodes:
+        dt = t.dtype if t.dtype.kind == "i" else np.int64
+        renumber = np.full(len(p), -1, dtype=dt)
+        renumber[used] = np.arange(len(used), dtype=dt)
+        compact = renumber[t]
+        del renumber
+    else:
+        compact = t                                            # every node is used: the numbering stays
+    del in_use
+    base = p[used] if dropped_nodes else p
     low, high = base.min(axis=0), base.max(axis=0)
     src_units = hierarchy.units
     dst_units = settings.output_units or src_units

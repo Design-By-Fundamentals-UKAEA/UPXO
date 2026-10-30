@@ -61,7 +61,7 @@ def _tet_volume(v):
 def element_volumes(points, elements, chunk=_CHUNK):
     """Signed volume of every element (positive for a correctly numbered element)."""
     p = np.asarray(points, dtype=float)
-    e = np.asarray(elements, dtype=np.int64)
+    e = np.asarray(elements)
     kind = element_kind(e)
     out = np.empty(len(e))
     for start in range(0, len(e), chunk):
@@ -73,24 +73,43 @@ def element_volumes(points, elements, chunk=_CHUNK):
     return out
 
 
-def element_faces(elements, n_nodes):
+def element_faces(elements, n_nodes, node_mask=None, chunk=200_000):
     """Every distinct face: ``(nodes (F, k), first element, second element or -1, elements on the face)``.
 
     Tetrahedron faces come with their nodes ascending; hexahedron faces keep the cyclic order of the
     first element that has them (a quadrilateral needs it to stay a quadrilateral). Faces are ordered
     by their ascending node triple.
+
+    ``node_mask`` (a boolean per node) keeps only the faces whose nodes are all in it: the other faces are
+    never built into the tables that are sorted, which is what makes the call cheap for a large mesh when
+    only some faces matter. The faces that are kept, and their order, are the same as without it.
     """
-    e = np.asarray(elements, dtype=np.int64)
+    e = np.asarray(elements)
     kind = element_kind(e) if e.ndim == 2 and e.shape[1] in KINDS else TET4
     width = len(kind.faces[0])
     if not len(e):
         empty = np.zeros(0, dtype=np.int64)
         return np.zeros((0, width), dtype=np.int64), empty, empty.copy(), empty.copy()
-    cyclic = e[:, np.array(kind.faces)].reshape(-1, width)
+    corners, per = np.array(kind.faces), len(kind.faces)
+    cyclic_parts, owner_parts = [], []
+    for start in range(0, len(e), chunk):
+        block = e[start:start + chunk].astype(np.int64, copy=False)
+        cyc = block[:, corners].reshape(-1, width)
+        own = np.repeat(np.arange(start, start + len(block)), per)
+        if node_mask is not None:
+            keep = node_mask[cyc].all(axis=1)
+            cyc, own = cyc[keep], own[keep]
+        cyclic_parts.append(cyc)
+        owner_parts.append(own)
+    cyclic = np.concatenate(cyclic_parts)
+    owner = np.concatenate(owner_parts)
+    del cyclic_parts, owner_parts
     ordered = np.sort(cyclic, axis=1)
+    if not len(ordered):
+        empty = np.zeros(0, dtype=np.int64)
+        return np.zeros((0, width), dtype=np.int64), empty, empty.copy(), empty.copy()
     # Three corners of a face name it: two faces of a conforming mesh never share three nodes.
     triple = ordered[:, :3]
-    owner = np.repeat(np.arange(len(e)), len(kind.faces))
     n = int(n_nodes)
     if n ** 3 < 2 ** 62:
         key = (triple[:, 0] * n + triple[:, 1]) * n + triple[:, 2]
@@ -130,11 +149,19 @@ def grid_hexahedra(shape, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0)):
     if min(nx, ny, nz) < 1:
         raise ValueError(f'A voxel grid needs at least one voxel along each axis, not {shape}.')
     sx, sy, sz = (float(s) for s in spacing)
-    i, j, k = np.meshgrid(np.arange(nx + 1), np.arange(ny + 1), np.arange(nz + 1), indexing='ij')
-    points = np.column_stack((i.ravel() * sx, j.ravel() * sy, k.ravel() * sz)) + np.asarray(origin, dtype=float)
+    shape_n = (nx + 1, ny + 1, nz + 1)
+    points = np.empty((shape_n[0] * shape_n[1] * shape_n[2], 3))
+    points[:, 0] = np.broadcast_to((np.arange(nx + 1) * sx)[:, None, None], shape_n).ravel()
+    points[:, 1] = np.broadcast_to((np.arange(ny + 1) * sy)[None, :, None], shape_n).ravel()
+    points[:, 2] = np.broadcast_to((np.arange(nz + 1) * sz)[None, None, :], shape_n).ravel()
+    points += np.asarray(origin, dtype=float)
     stride_i, stride_j = (ny + 1) * (nz + 1), nz + 1
-    vi, vj, vk = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz), indexing='ij')
-    base = (vi.ravel() * stride_i + vj.ravel() * stride_j + vk.ravel()).astype(np.int64)
-    offsets = np.array([0, stride_i, stride_i + stride_j, stride_j], dtype=np.int64)
-    bottom = base[:, None] + offsets[None, :]
-    return points, np.hstack((bottom, bottom + 1))
+    # node numbers fit in 32 bits for any grid of up to about 1290 voxels along each axis
+    dtype = np.int32 if len(points) < 2 ** 31 - 1 else np.int64
+    base = (np.arange(nx)[:, None, None] * stride_i + np.arange(ny)[None, :, None] * stride_j
+            + np.arange(nz)[None, None, :]).ravel().astype(dtype)
+    offsets = np.array([0, stride_i, stride_i + stride_j, stride_j], dtype=dtype)
+    hexahedra = np.empty((len(base), 8), dtype=dtype)
+    hexahedra[:, :4] = base[:, None] + offsets[None, :]
+    hexahedra[:, 4:] = hexahedra[:, :4] + dtype(1)
+    return points, hexahedra

@@ -98,6 +98,20 @@ class VoxelStageTests(unittest.TestCase):
         self.assertEqual(report['voxel_source']['grains_lost'], [])
         self.assertTrue(report['deck_check']['ok'], report['deck_check']['failed'])
 
+    def test_the_grid_shape_and_memory_estimate_follow_the_settings(self):
+        from upxo.meshing.gbconformant.pipeline.stage_output import voxel_grid_shape
+        state = meshed_state(self.root, 'shape')
+        shape = tuple(np.shape(state.get_artefact('labels_meshing')))
+        self.assertEqual(voxel_grid_shape(state), shape)
+        self.assertEqual(voxel_grid_shape(state, dict(state.config, VOXEL_RESCALE=True, VOXEL_SCALE_FACTOR=2.0)),
+                         tuple(2 * n for n in shape))
+        self.assertEqual(voxel_grid_shape(state, dict(state.config, VOXEL_SOURCE='voxelized tet mesh',
+                                                      VOXEL_TET_VOXEL_SIZE=2.0)), tuple(round(n / 2) for n in shape))
+        report = handle_export_abaqus_voxel(state)
+        estimate = report['memory_estimate']
+        self.assertEqual(estimate['voxels'], int(np.prod(shape)))
+        self.assertGreater(estimate['peak_memory_bytes'], 0)
+
     def test_missing_inputs_are_explained(self):
         state = meshed_state(self.root, 'missing')
         state.config['VOXEL_SOURCE'] = 'voxelized tet mesh'

@@ -69,6 +69,7 @@ def location_audit(points, tetrahedra, tet_grain, identity, hierarchy,
     lut = identity.lookup()
     if g.max() >= len(lut) or np.any(lut[g] < 0):
         raise IdentityError('a tetrahedron carries a grain with no resolved identity')
+    chunk = min(int(chunk), max(20_000, 4_000_000 // t.shape[1]))      # a block of elements stays a few MB
     shape = np.array(hierarchy.lgi.shape)
     assigned = lut[g]
     raw_under = np.empty(len(t), dtype=np.int64)

@@ -233,5 +233,41 @@ class VoxelDeckTests(unittest.TestCase):
             self.assertTrue(any(',twin,' in row for row in table[1:]))
 
 
+class EstimateTests(unittest.TestCase):
+    def test_the_estimate_grows_with_the_grid_and_warns_when_memory_is_short(self):
+        from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import estimate_voxel_deck, format_bytes
+        small = estimate_voxel_deck((10, 10, 10), available=3_000_000_000)
+        big = estimate_voxel_deck((200, 200, 200), available=3_000_000_000)
+        self.assertEqual((small['voxels'], small['nodes']), (1000, 1331))
+        self.assertGreater(big['peak_memory_bytes'], small['peak_memory_bytes'])
+        self.assertGreater(big['disk_bytes'], small['disk_bytes'])
+        self.assertIsNone(small['warning'])
+        self.assertIn('8,000,000 voxels', big['warning'])
+        self.assertIn('3 GB is free', big['warning'])
+        self.assertIn(format_bytes(big['peak_memory_bytes']), big['warning'])
+        self.assertIsNone(estimate_voxel_deck((200, 200, 200), available=1_000_000_000_000)['warning'])
+
+    def test_a_system_that_cannot_say_what_is_free_gives_no_warning(self):
+        from unittest import mock
+        from upxo.meshing.gbconformant.fm_steel_abaqus import voxel_deck
+        with mock.patch.object(voxel_deck, 'available_memory_bytes', return_value=None):
+            info = voxel_deck.estimate_voxel_deck((300, 300, 300))
+        self.assertIsNone(info['warning'])
+        self.assertIsNone(info['fraction_of_available'])
+
+    def test_the_estimate_is_close_to_what_a_small_deck_uses(self):
+        """The model overestimates the measured peak (about 270 MB + 300 bytes per voxel)."""
+        from upxo.meshing.gbconformant.fm_steel_abaqus import voxel_deck
+        info = voxel_deck.estimate_voxel_deck((120, 80, 80), available=10 ** 12)
+        self.assertGreater(info['peak_memory_bytes'], 500e6)
+        self.assertLess(info['peak_memory_bytes'], 1500e6)
+
+    def test_format_bytes(self):
+        from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import format_bytes
+        self.assertEqual(format_bytes(999), '999 bytes')
+        self.assertEqual(format_bytes(1_500_000), '1.5 MB')
+        self.assertEqual(format_bytes(2_340_000_000), '2.34 GB')
+
+
 if __name__ == '__main__':
     unittest.main()

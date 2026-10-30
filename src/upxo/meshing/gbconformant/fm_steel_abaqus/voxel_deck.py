@@ -153,6 +153,77 @@ def voxelize_tetrahedra(points, tetrahedra, grains, voxel_size, *, low=None, hig
     return labels, report
 
 
+# Measured on grids of 96,000 to 2.6 million voxels with every output on (deck check, boundary classes, .msh and .vtu):
+# the peak grows by about 300 bytes per voxel on top of about 270 MB, and the deck takes about 570 bytes per voxel on
+# disk. The figures used are rounded up; they are an estimate, not a limit.
+PEAK_BASE_BYTES = 300_000_000
+PEAK_BYTES_PER_VOXEL = 350
+DISK_BYTES_PER_VOXEL = 600
+_WARN_FRACTION = 0.8
+
+
+def available_memory_bytes():
+    """Memory the system can give a program now, in bytes (``None`` when it cannot be found)."""
+    try:
+        import psutil
+
+        return int(psutil.virtual_memory().available)
+    except Exception:
+        pass
+    try:
+        if __import__('os').name == 'nt':
+            import ctypes
+
+            class _Status(ctypes.Structure):
+                _fields_ = [('length', ctypes.c_ulong), ('load', ctypes.c_ulong), ('total', ctypes.c_ulonglong),
+                            ('avail', ctypes.c_ulonglong), ('tpage', ctypes.c_ulonglong), ('apage', ctypes.c_ulonglong),
+                            ('tvirt', ctypes.c_ulonglong), ('avirt', ctypes.c_ulonglong), ('ext', ctypes.c_ulonglong)]
+
+            status = _Status()
+            status.length = ctypes.sizeof(_Status)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return int(status.avail)
+        with open('/proc/meminfo', encoding='ascii') as handle:
+            for line in handle:
+                if line.startswith('MemAvailable:'):
+                    return int(line.split()[1]) * 1024
+    except Exception:
+        pass
+    return None
+
+
+def format_bytes(count):
+    """``1.4 GB``-style text for a size in bytes."""
+    value = float(count)
+    for unit in ('bytes', 'kB', 'MB', 'GB', 'TB'):
+        if value < 1000 or unit == 'TB':
+            return f'{value:.0f} {unit}' if unit == 'bytes' else f'{value:.3g} {unit}'
+        value /= 1000.0
+
+
+def estimate_voxel_deck(shape, *, available=None) -> dict:
+    """Rough memory and disk need of the voxel deck of a grid of ``shape`` voxels.
+
+    Returns ``voxels``, ``nodes``, ``peak_memory_bytes``, ``disk_bytes``, ``available_memory_bytes`` (``None`` when
+    unknown), ``fraction_of_available`` and ``warning``: text when the peak would use more than 80 % of the free
+    memory (``None`` otherwise), with what to change.
+    """
+    dims = [int(n) for n in shape]
+    voxels = int(np.prod(dims, dtype=np.int64))
+    nodes = int(np.prod([n + 1 for n in dims], dtype=np.int64))
+    peak = PEAK_BASE_BYTES + PEAK_BYTES_PER_VOXEL * voxels
+    disk = DISK_BYTES_PER_VOXEL * voxels
+    free = available_memory_bytes() if available is None else int(available)
+    fraction = None if not free else peak / free
+    warning = None
+    if fraction is not None and fraction > _WARN_FRACTION:
+        warning = (f'The voxel deck of {voxels:,} voxels needs about {format_bytes(peak)} of memory at its peak and '
+                   f'{format_bytes(free)} is free. A smaller scale factor, a coarser voxelization, or switching off the '
+                   'Gmsh and VTK mesh files, the boundary classes or the deck check lowers it.')
+    return {'voxels': voxels, 'nodes': nodes, 'peak_memory_bytes': peak, 'disk_bytes': disk,
+            'available_memory_bytes': free, 'fraction_of_available': fraction, 'warning': warning}
+
+
 def write_voxel_deck(directory, labels, hierarchy, identity, settings=None, *, voxel_size=1.0,
                      mesh_voxel_length=1.0, meshed_labels=None, audit=True, source=None):
     """Write the voxel deck of ``labels`` into the new ``directory``; return the summary of :func:`.export.write_deck`.

@@ -407,9 +407,23 @@ def voxel_labels(state: PipelineState, config: Optional[dict] = None) -> tuple[n
     return labels, tuple(report["voxel_size"]), report
 
 
+def voxel_grid_shape(state: PipelineState, config: Optional[dict] = None):
+    """Shape of the voxel grid the voxel deck would have, or ``None`` before the cleaned labels exist."""
+    cfg = state.config if config is None else config
+    cleaned = state.get_artefact("labels_meshing")
+    if cleaned is None:
+        return None
+    shape = np.array(np.shape(cleaned), dtype=float)
+    if str(cfg.get("VOXEL_SOURCE", VOXEL_SOURCES[0])) == VOXEL_SOURCES[1]:
+        shape = shape / float(cfg.get("VOXEL_TET_VOXEL_SIZE", 1.0))
+    elif cfg.get("VOXEL_RESCALE") and float(cfg.get("VOXEL_SCALE_FACTOR", 1.0)) != 1.0:
+        shape = shape * float(cfg.get("VOXEL_SCALE_FACTOR", 1.0))
+    return tuple(int(max(1, round(n))) for n in shape)
+
+
 def handle_export_abaqus_voxel(state: PipelineState) -> dict:
     """Write the voxel (C3D8) FM-steel deck beside the conformal one, under the same number."""
-    from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import write_voxel_deck
+    from upxo.meshing.gbconformant.fm_steel_abaqus.voxel_deck import estimate_voxel_deck, write_voxel_deck
 
     cfg = state.config
     hierarchy = active_hierarchy(state)
@@ -418,6 +432,9 @@ def handle_export_abaqus_voxel(state: PipelineState) -> dict:
             "The voxel deck needs an FM-steel raw folder as the input (or a twinned FCC folder): "
             "set the dataset type to FM steel or twinned FCC and rerun.")
     labels, size, source = voxel_labels(state)
+    estimate = estimate_voxel_deck(labels.shape)
+    if estimate["warning"]:
+        state.append_log(estimate["warning"])
     base = ensure_run_dir(cfg) / "abaqus"
     base.mkdir(parents=True, exist_ok=True)
     paired = state.get_artefact("abaqus_folder")
@@ -428,7 +445,7 @@ def handle_export_abaqus_voxel(state: PipelineState) -> dict:
         mesh_voxel_length=_isotropic_spacing(cfg), meshed_labels=state.get_artefact("labels_meshing"),
         source=source)
     report = _deck_summary(state, cfg, hierarchy, identity, result)
-    report.update({"elements": result["info"]["elements"], "voxel_source": source,
+    report.update({"elements": result["info"]["elements"], "voxel_source": source, "memory_estimate": estimate,
                    "paired_with": None if stamp is None else f"{stamp}_fm",
                    "grid_shape": [int(n) for n in labels.shape]})
     state.store_artefact("abaqus_voxel_folder", Path(result["directory"]))
