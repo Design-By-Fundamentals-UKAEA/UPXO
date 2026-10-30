@@ -194,6 +194,8 @@ class ParameterTests(unittest.TestCase):
         for p in PARAMETERS:
             if p.key == 'pole_figures':
                 continue
+            if p.key in ('pag_diameter', 'packet_diameter', 'block_diameter', 'family_diameter'):
+                continue                    # which groups exist depends on the level meshed: see DatasetParameterTests
             series = read(p, self.voxel)
             self.assertGreater(series.count, 0, p.key)
             self.assertEqual(series.noun, p.noun)
@@ -284,6 +286,93 @@ class ParameterTests(unittest.TestCase):
         self.assertEqual(choose_units(2, 'mm', [np.array([0.00004])]), 'microns')
         self.assertEqual(choose_units(0, 'mm', [np.array([3.0])]), 'mm')
         self.assertEqual(choose_units(1, 'mm', [np.zeros(0)]), 'mm')
+
+
+class DatasetParameterTests(unittest.TestCase):
+    """The orientation and the group sizes the dataset itself gives, read from the snapshots."""
+
+    def hierarchies(self, root):
+        from upxo.meshing.gbconformant.fm_steel_abaqus import load_hierarchy
+        from .helpers import write_raw_folder
+
+        raw = root / 'raw'
+        raw.mkdir()
+        write_raw_folder(raw, with_sblk=True)
+        return {level: load_hierarchy(raw, level) for level in ('pag', 'pck', 'blk', 'sblk')}
+
+    def test_euler_angles_are_the_datasets_for_every_grain(self):
+        with work_dir() as root:
+            h = self.hierarchies(root)['sblk']
+            snap = voxel_snapshot(h, SETTINGS)
+            for key, column in (('euler_phi1', 0), ('euler_phi', 1), ('euler_phi2', 2)):
+                series = read(key, snap)
+                self.assertEqual(sorted(series.items), snap.labels.tolist())
+                for label, value in series.items.items():
+                    self.assertAlmostEqual(value, h.features[label].euler[column], places=9)
+                self.assertEqual(parameter(key).dimension, 'angle')
+
+    def test_group_diameters_add_the_volumes_of_the_grains_of_each_group(self):
+        with work_dir() as root:
+            h = self.hierarchies(root)['sblk']
+            snap = voxel_snapshot(h, SETTINGS)
+            for key, name, pick in (('pag_diameter', 'pag', lambda f: f.pag_id), ('packet_diameter', 'packet', lambda f: f.pck_key),
+                                    ('block_diameter', 'block', lambda f: f.blk_key)):
+                series = read(key, snap)
+                volume = {}
+                for label, v in zip(snap.labels.tolist(), snap.volume):
+                    volume[pick(h.features[label])] = volume.get(pick(h.features[label]), 0.0) + float(v)
+                self.assertEqual(set(series.items), set(volume))
+                for group, total in volume.items():
+                    self.assertAlmostEqual(series.items[group], (6 * total / np.pi) ** (1 / 3), places=9)
+            # fewer, larger groups at each coarser level
+            counts = [read(k, snap).count for k in ('pag_diameter', 'packet_diameter', 'block_diameter')]
+            self.assertEqual(counts, sorted(counts))
+            self.assertLess(counts[0], len(snap.labels))
+
+    def test_only_the_levels_above_the_meshed_one_have_groups(self):
+        with work_dir() as root:
+            hs = self.hierarchies(root)
+            snaps = {level: voxel_snapshot(h, SETTINGS) for level, h in hs.items()}
+            self.assertIn('block', available('block_diameter', snaps['blk']))
+            self.assertIsNone(available('pag_diameter', snaps['blk']))
+            self.assertIsNone(available('packet_diameter', snaps['blk']))
+            self.assertIsNone(available('pag_diameter', snaps['pck']))
+            self.assertIn('packet', available('packet_diameter', snaps['pck']))
+            self.assertIn('PAG', available('pag_diameter', snaps['pag']))
+            self.assertIn('twinned', available('family_diameter', snaps['sblk']))
+
+    def test_a_twinned_structure_has_families_and_no_pags(self):
+        from upxo.meshing.gbconformant.fm_steel_abaqus.twinned import load_twinned
+        from .helpers import write_twinned_folder
+
+        with work_dir() as root:
+            raw = root / 'raw'
+            raw.mkdir()
+            write_twinned_folder(raw)
+            h = load_twinned(raw)
+            snap = voxel_snapshot(h, SETTINGS)
+            family = read('family_diameter', snap)
+            self.assertEqual(family.count, 3)                       # two hosts with their twins, and one stand-alone grain
+            self.assertIsNotNone(available('pag_diameter', snap))
+            self.assertIsNone(available('euler_phi1', snap))
+            self.assertEqual(count_noun(parameter('family_diameter').noun, 1), '1 family group')
+            self.assertEqual(count_noun(parameter('pag_diameter').noun, 1), '1 PAG')
+
+    def test_the_groups_survive_the_tetrahedral_snapshot_and_match_by_group(self):
+        hier, ident, pts, tets, grains = pieces()
+        before = voxel_snapshot(hier, SETTINGS)
+        after = tet_snapshot(hier, pts, tets, ident.lookup()[grains], SETTINGS)
+        b, a = read('packet_diameter', before), read('packet_diameter', after)
+        keys, vb, va = matched_items(b, a)
+        self.assertEqual(len(keys), b.count)
+        np.testing.assert_allclose(vb, va, rtol=1e-9)                # the mesh fills the same voxels
+
+    def test_a_snapshot_without_the_dataset_says_so(self):
+        with work_dir() as root:
+            snap = voxel_snapshot(self.hierarchies(root)['sblk'], SETTINGS)
+            snap.dataset = None
+            with self.assertRaisesRegex(Unavailable, 'does not carry the fields of the dataset'):
+                read('euler_phi1', snap)
 
 
 if __name__ == '__main__':

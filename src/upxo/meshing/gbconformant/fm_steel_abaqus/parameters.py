@@ -66,7 +66,25 @@ PARAMETERS = (
               description='Area-weighted mean of the misorientations across all the boundaries of the grain.'),
     Parameter('pole_figures', 'Pole figures', 'Orientation', 'angle', 'grains', views=(POLE,),
               description='Pole figures of the grains on each side, and their difference.'),
+    Parameter('euler_phi1', 'Euler angle phi1', 'Dataset', 'angle', 'grains', views=(DISTRIBUTION,),
+              description='Bunge-Euler angle phi1 (degrees) the dataset gives every grain.'),
+    Parameter('euler_phi', 'Euler angle Phi', 'Dataset', 'angle', 'grains', views=(DISTRIBUTION,),
+              description='Bunge-Euler angle Phi (degrees) the dataset gives every grain.'),
+    Parameter('euler_phi2', 'Euler angle phi2', 'Dataset', 'angle', 'grains', views=(DISTRIBUTION,),
+              description='Bunge-Euler angle phi2 (degrees) the dataset gives every grain.'),
+    Parameter('pag_diameter', 'PAG sphere-equivalent diameter', 'Dataset', 'length', 'PAGs', needs_volume=True,
+              description='Diameter of the sphere with the volume of the prior-austenite grain the grain belongs to.'),
+    Parameter('packet_diameter', 'Packet sphere-equivalent diameter', 'Dataset', 'length', 'packets', needs_volume=True,
+              description='Diameter of the sphere with the volume of the packet the grain belongs to.'),
+    Parameter('block_diameter', 'Block sphere-equivalent diameter', 'Dataset', 'length', 'blocks', needs_volume=True,
+              description='Diameter of the sphere with the volume of the block the grain belongs to.'),
+    Parameter('family_diameter', 'Family sphere-equivalent diameter', 'Dataset', 'length', 'family groups',
+              needs_volume=True,
+              description='Twinned structures: diameter of the sphere with the volume of a host and its twins.'),
 )
+_EULER_COLUMN = {'euler_phi1': 0, 'euler_phi': 1, 'euler_phi2': 2}
+_GROUP_OF = {'pag_diameter': 'pag', 'packet_diameter': 'packet', 'block_diameter': 'block', 'family_diameter': 'family'}
+_GROUP_NAME = {'pag': 'PAG', 'packet': 'packet', 'block': 'block', 'family': 'family'}
 BY_KEY = {p.key: p for p in PARAMETERS}
 LABELS = tuple(p.label for p in PARAMETERS)
 
@@ -115,12 +133,40 @@ def _per_grain(snapshot: Snapshot, values, parameter_, **extra) -> Series:
     return Series(values[keep], items=items, noun=parameter_.noun, dimension=parameter_.dimension, **extra)
 
 
+def _dataset(snapshot: Snapshot) -> dict:
+    if snapshot.dataset is None:
+        raise Unavailable(f'{snapshot.title} does not carry the fields of the dataset.')
+    return snapshot.dataset
+
+
+def _group_diameters(snapshot: Snapshot, parameter_, level: str) -> Series:
+    """Sphere-equivalent diameter of every group of ``level`` (its grains' volumes added up), keyed by the group."""
+    keys = _dataset(snapshot)['groups'][level]
+    if all(k is None for k in keys):
+        what = ('a twinned structure has no PAGs, packets or blocks' if level != 'family'
+                else 'only a twinned structure has families (a host with its twins)')
+        raise Unavailable(f'There are no {_GROUP_NAME[level]} groups to measure here: {what}, or the structure is '
+                          f'meshed at that level (see the sphere-equivalent diameter).')
+    volume = {}
+    for key, v in zip(keys, np.asarray(snapshot.volume, dtype=float)):
+        if key is not None and np.isfinite(v):
+            volume[key] = volume.get(key, 0.0) + float(v)
+    ordered = sorted(volume, key=lambda k: (str(type(k)), k))
+    diameter = sphere_equivalent_diameter(np.array([volume[k] for k in ordered], dtype=float))
+    return Series(np.asarray(diameter, dtype=float), items={k: float(d) for k, d in zip(ordered, diameter)},
+                  noun=parameter_.noun, dimension=parameter_.dimension)
+
+
 def read(parameter_, snapshot: Snapshot, *, normalisation=AREA_FRACTION, grain_weight=BY_GRAIN) -> Series:
     """The values of ``parameter_`` in ``snapshot``; raises :class:`Unavailable` when it has none."""
     p = parameter(parameter_) if not isinstance(parameter_, Parameter) else parameter_
     if p.needs_volume and not snapshot.has_volume:
         raise Unavailable(f'{snapshot.title} has no grain volume: it holds the interior boundaries only.')
     key = p.key
+    if key in _EULER_COLUMN:
+        return _per_grain(snapshot, _dataset(snapshot)['euler'][:, _EULER_COLUMN[key]], p)
+    if key in _GROUP_OF:
+        return _group_diameters(snapshot, p, _GROUP_OF[key])
     if key == 'grain_volume':
         return _per_grain(snapshot, snapshot.volume, p)
     if key == 'diameter':

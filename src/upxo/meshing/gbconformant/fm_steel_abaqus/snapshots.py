@@ -67,6 +67,8 @@ class Snapshot:
     aspect: Optional[np.ndarray] = None
     note: str = ''
     problems: dict = field(default_factory=dict)
+    dataset: Optional[dict] = None
+    """What the dataset says about every grain (:func:`dataset_columns`), aligned with ``labels``."""
 
     @property
     def has_volume(self) -> bool:
@@ -131,6 +133,34 @@ def _summary(lines, scale):
             'stats': out['lines'], 'per_grain_stats': out['per_grain_total']}
 
 
+def dataset_columns(hierarchy, labels) -> dict:
+    """What the raw dataset says about every grain of ``labels`` (aligned with it).
+
+    ``euler`` is ``(N, 3)`` Bunge-Euler angles in degrees (NaN where the label is no feature). ``groups`` maps
+    ``pag``, ``packet``, ``block`` and ``family`` to a list of group keys, one per grain: the group of a coarser
+    level than the one meshed (``None`` where the level does not apply). A twinned structure has the ``family`` of
+    a host and its twins (a grain with no family is a family of its own).
+    """
+    labels = np.asarray(labels, dtype=np.int64)
+    n = len(labels)
+    euler = np.full((n, 3), np.nan)
+    groups = {name: [None] * n for name in ('pag', 'packet', 'block', 'family')}
+    coarser = {'pag': (), 'pck': ('pag',), 'blk': ('pag', 'packet'), 'sblk': ('pag', 'packet', 'block')}
+    for i, label in enumerate(labels.tolist()):
+        feature = hierarchy.features.get(label)
+        if feature is None:
+            continue
+        euler[i] = feature.euler
+        if hierarchy.extra:
+            family = hierarchy.extra.get(label, {}).get('family', -1)
+            groups['family'][i] = int(family) if family >= 0 else int(label)
+            continue
+        keys = {'pag': feature.pag_id, 'packet': feature.pck_key, 'block': feature.blk_key}
+        for name in coarser.get(hierarchy.level, ()):
+            groups[name][i] = keys[name]
+    return {'euler': euler, 'groups': groups}
+
+
 def _label_array(labels):
     return np.unique(np.asarray(list(labels), dtype=np.int64))
 
@@ -152,7 +182,7 @@ def voxel_snapshot(hierarchy, settings: Optional[ComparisonSettings] = None) -> 
         VOXELS, TITLES[VOXELS], units, labels, pair_labels, faces * per_voxel ** 2,
         pair_misorientation(hierarchy, pair_labels, settings.symmetry), _summary(junction_lines(edges), per_voxel),
         float(counts.sum()) * per_voxel ** 3, volume=counts * per_voxel ** 3, aspect=aspect[labels],
-        problems={'truncated_edges': int(edges.truncated)})
+        problems={'truncated_edges': int(edges.truncated)}, dataset=dataset_columns(hierarchy, labels))
 
 
 # --- tetrahedra ---------------------------------------------------------------------------------------------------
@@ -172,7 +202,8 @@ def tet_snapshot(hierarchy, points, tetrahedra, resolved, settings: Optional[Com
         TETS, TITLES[TETS], units, labels, pair_labels, area * scale ** 2,
         pair_misorientation(hierarchy, pair_labels, settings.symmetry), _summary(junction_lines(edges), scale),
         float(volume.sum()) * scale ** 3, volume=volume[labels] * scale ** 3,
-        aspect=mesh_aspect(points, tetrahedra, grain, top)[labels], problems={'truncated_edges': int(edges.truncated)})
+        aspect=mesh_aspect(points, tetrahedra, grain, top)[labels], problems={'truncated_edges': int(edges.truncated)},
+        dataset=dataset_columns(hierarchy, labels))
 
 
 # --- surfaces -----------------------------------------------------------------------------------------------------
@@ -314,4 +345,4 @@ def surface_snapshot(key, hierarchy, points, triangles, region_a, region_b, sett
             box = float(volume.sum())
     return Snapshot(key, TITLES[key], units, labels, unique.astype(np.int64), shared,
                     pair_misorientation(hierarchy, unique, settings.symmetry), lines, box, volume=volume, aspect=aspect,
-                    note=note, problems=problems)
+                    note=note, problems=problems, dataset=dataset_columns(hierarchy, labels))

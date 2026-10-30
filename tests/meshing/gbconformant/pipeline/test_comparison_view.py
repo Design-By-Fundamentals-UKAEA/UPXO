@@ -120,11 +120,21 @@ class ViewTests(unittest.TestCase):
             V.get_snapshot(self.state, VOXELS)
 
     def test_every_parameter_is_drawn_in_every_view(self):
+        absent = ('block_diameter', 'family_diameter')          # this structure is meshed at block level and is not twinned
         for p in PARAMETERS:
+            if p.key in absent:
+                continue
             for view in p.views:
                 picture = V.comparison_figure(self.state, p.key, view)
                 self.assertTrue(picture.figure.axes, (p.key, view))
                 self.assertTrue(picture.key.startswith('fidelity.'))
+
+    def test_groups_that_the_structure_does_not_have_are_explained(self):
+        for key in ('block_diameter', 'family_diameter'):
+            with self.assertRaisesRegex(ValueError, 'no .* groups to measure'):
+                V.comparison_figure(self.state, key, 'distribution')
+        picture = V.comparison_figure(self.state, 'packet_diameter', 'matched')
+        self.assertTrue(picture.figure.axes)
 
     def test_the_figures_name_what_they_compare(self):
         picture = V.comparison_figure(self.state, 'diameter', 'distribution')
