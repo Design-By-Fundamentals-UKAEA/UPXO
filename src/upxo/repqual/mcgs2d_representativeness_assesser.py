@@ -24,6 +24,51 @@ from scipy.stats import skew
 from scipy.stats import kurtosis
 from scipy.spatial.distance import jensenshannon
 
+_PROBABILITY_FLOOR = 1e-12
+
+
+def shared_bin_probabilities(target, sample, bins='auto'):
+    """Probabilities of two data sets on the same histogram bins.
+
+    The bin edges come from the pooled data (numpy's ``bins`` rule, ``'auto'`` by default), so both sets are
+    counted over the same range. Missing values are dropped. Returns ``(p_target, p_sample)``, each summing to 1,
+    or ``None`` when either set has no value.
+    """
+    t = np.asarray(target, dtype=float)
+    s = np.asarray(sample, dtype=float)
+    t, s = t[np.isfinite(t)], s[np.isfinite(s)]
+    if not t.size or not s.size:
+        return None
+    edges = np.histogram_bin_edges(np.concatenate((t, s)), bins=bins)
+    p = np.histogram(t, bins=edges)[0].astype(float)
+    q = np.histogram(s, bins=edges)[0].astype(float)
+    return p / p.sum(), q / q.sum()
+
+
+def kl_divergence(target, sample, bins='auto'):
+    """KL divergence D(target || sample), in nats, on shared bins; 0 for identical distributions.
+
+    A bin one set fills and the other leaves empty would make the value infinite, so both probability vectors get
+    a floor of 1e-12 and are renormalised. ``nan`` when either set has no value.
+    """
+    pq = shared_bin_probabilities(target, sample, bins)
+    if pq is None:
+        return np.nan
+    p, q = (np.maximum(x, _PROBABILITY_FLOOR) for x in pq)
+    return float(entropy(p / p.sum(), q / q.sum()))
+
+
+def js_distance(target, sample, bins='auto'):
+    """Jensen-Shannon distance (square root of the divergence, base 2) on shared bins.
+
+    0 for identical distributions, 1 for distributions that share no bin. ``nan`` when either set has no value.
+    """
+    pq = shared_bin_probabilities(target, sample, bins)
+    if pq is None:
+        return np.nan
+    return float(jensenshannon(pq[0], pq[1], base=2))
+
+
 class mc2repr():
     """
     Statistical representativeness of 2D sample GS vs a target.
@@ -271,7 +316,10 @@ class mc2repr():
         relationship between them. If correlation is close to 1 then, the
         distributions are very similar.
 
-        TEST 2: kldiv:
+        TEST 2: kldiv: Kullback-Leibler divergence D(target || sample), in
+        nats, of the two property distributions on shared histogram bins (see
+        kl_divergence). 0 for identical distributions; it grows without bound
+        as the sample puts weight where the target has little.
 
         TEST 3: ks: Kolmogorov-Smirnov test: Determines of the two distribution
         samples differ significantly. It uses cumulative distributions of the
@@ -288,9 +336,10 @@ class mc2repr():
             drawn from tyhe sample sample can be rejected, indicating that the
             samples are not representative of the target
 
-        TEST 4: jsdiv: P value will allways be between 0 and 1.
-        @ 0: Distributions are identical. @ 1: Distributions are completely
-        different
+        TEST 4: jsdiv: Jensen-Shannon distance (base 2) of the two property
+        distributions on shared histogram bins (see js_distance). Always
+        between 0 and 1. @ 0: Distributions are identical. @ 1: Distributions
+        are completely different
 
         TEST 5: mannwhitneyu: Mann-Whitney test: Used to determine if two '
         distribution samples are drawn from a population having the same
@@ -301,10 +350,6 @@ class mc2repr():
         TEST 6: kruskalwallis: Kruskal-wallis test. Used to determine if there
         are statistically significant differences between two distributions.
         """
-        if 'kldiv' in self.stest['tests']:
-            from scipy.stats import entropy
-        if 'jsdiv' in self.stest['tests']:
-            from scipy.spatial.distance import jensenshannon
         if 'ks' in self.stest['tests']:
             from scipy.stats import ks_2samp
         if 'mannwhitneyu' in self.stest['tests']:
@@ -325,7 +370,8 @@ class mc2repr():
                             self.performance[sample_name][par][test] = correlation
                         # -------------------------------------
                         if test == 'kldiv':
-                            print('kldiv test not available')
+                            self.performance[sample_name][par][test] = kl_divergence(
+                                self.target.prop[par], sample.prop[par])
                         # -------------------------------------
                         if test == 'ks':
                             ks_D, ks_P = ks_2samp(self.target.prop[par],
@@ -334,14 +380,8 @@ class mc2repr():
                                                                          ks_P)
                         # -------------------------------------
                         if test == 'jsdiv':
-                            # TODO: DEBUG the length mismatch
-                            # SOLn: Make KDE and resample data iteratively
-                            # based on user satisfaction of number of bins in
-                            # histogram and bandwidth in KDE calculation
-                            pass
-                            #js_P = jensenshannon(self.target.prop[par],
-                            #                     sample.prop[par])
-                            #self.performance[sample_name][par][test] = js_P
+                            self.performance[sample_name][par][test] = js_distance(
+                                self.target.prop[par], sample.prop[par])
                         # -------------------------------------
                         if test == 'mannwhitneyu':
                             mwu_D, mwu_P = mannwhitneyu(self.target.prop[par].dropna(),
