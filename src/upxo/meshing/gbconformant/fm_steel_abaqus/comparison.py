@@ -133,7 +133,7 @@ def compare_before_after(hierarchy, points, tetrahedra, tet_grain, identity, set
         raise ValueError('A tetrahedron carries a grain with no resolved identity')
     resolved = lut[grains]
     return {
-        'level': hierarchy.level,
+        'level': hierarchy.level_text,
         'junction_lines': compare_junction_lines(hierarchy, points, tetrahedra, resolved, settings),
         'diameters': feature_diameters(hierarchy, points, tetrahedra, resolved, settings),
         'names': {'before': BEFORE_TITLE, 'after': AFTER_TITLE},

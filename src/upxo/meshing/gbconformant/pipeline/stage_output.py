@@ -169,7 +169,7 @@ def _deck_summary(state: PipelineState, cfg: dict, hierarchy, identity, result: 
         "feature_table": info.get("feature_table"),
         "folder": str(result["directory"]),
         "merged_features": merges,
-        "level": hierarchy.level,
+        "level": hierarchy.level_text,
         "features_with_elements": info["features_with_elements"],
         "features_without_elements": info["features_without_elements"],
         "output_units": info["output_units"],

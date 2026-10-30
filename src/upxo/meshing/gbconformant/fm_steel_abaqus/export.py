@@ -458,7 +458,7 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
             f'** {hierarchy.system} microstructure - element type: {kind.abaqus} '
             f'({"conformal tetrahedra" if kind is TET4 else "voxel hexahedra"})\n'
             f'** Nodes: {len(used):,}  |  {kind.noun.capitalize()}: {len(t):,}  |  Features: {len(present)}'
-            f'  |  Level: {level}\n'
+            f'  |  Level: {hierarchy.level_text}\n'
             f'** Scale: {scale:.6g} {dst_units} per mesh unit '
             f'(structure defined in {src_units}'
             f'{", length_scale=%g applied" % settings.length_scale if settings.length_scale != 1 else ""})\n'
@@ -487,7 +487,7 @@ def write_deck(directory, points, tetrahedra, tet_grain, hierarchy, identity,
         dump('deck_check.json', result)
         deck_check = {'ok': result['ok'], 'failed': result['failed']}
     info = {
-        'level': level, 'system': hierarchy.system, 'element_type': kind.abaqus, 'nodes': int(len(used)),
+        'level': hierarchy.level_text, 'system': hierarchy.system, 'element_type': kind.abaqus, 'nodes': int(len(used)),
         'unused_nodes_dropped': dropped_nodes, kind.noun: int(len(t)), 'elements': int(len(t)),
         'features_with_elements': len(present),
         'features_in_structure': len(hierarchy.features),

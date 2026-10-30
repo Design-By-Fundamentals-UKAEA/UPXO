@@ -86,7 +86,8 @@ def deck_sets(points, elements, assigned, hierarchy, settings, *, mesh_voxel_len
             if pag in sets:
                 named = hierarchy.names.get(pag) if level == 'pag' else None
                 entries.append((named or elset_name(prefixes, 'pag', (pag,)), sets[pag]))
-        files.append(SetFile('03a_elsets_pag.inp', 'Elset', 'PAG elsets', 'levels', entries))
+        files.append(SetFile('03a_elsets_pag.inp', 'Elset', 'Grain elsets' if hierarchy.extra else 'PAG elsets', 'levels',
+                             entries))
         for present, lv, lut, keys, order_of, file, title in (
                 (has_pck, 'pck', pck_lut, pck_keys, hierarchy.pck_order, '03b_elsets_pck.inp', 'Packet elsets'),
                 (has_blk, 'blk', blk_lut, blk_keys, hierarchy.blk_order, '03c_elsets_blk.inp', 'Block elsets')):

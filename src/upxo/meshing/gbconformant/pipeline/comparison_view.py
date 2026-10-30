@@ -330,7 +330,7 @@ def comparison_tables(state: PipelineState, view: Optional[ViewSettings] = None)
     lost = sorted(set(int(x) for x in before.labels) - set(int(x) for x in after.labels))
     sets_b, sets_a = set(before.lines["per_set"]), set(after.lines["per_set"])
     include = bool(state.config.get("COMPARE_INCLUDE_RVE_FACES", False))
-    facts = [["Before", t0], ["After", t1], ["Hierarchy level", hierarchy.level],
+    facts = [["Before", t0], ["After", t1], ["Hierarchy level", hierarchy.level_text],
              [f"Grains in the {t0.lower()}", len(before.labels)], [f"Grains in the {t1.lower()}", len(after.labels)],
              ["Grains only in the first", len(lost) or None],
              ["Junction sets on both sides", len(sets_b & sets_a)],

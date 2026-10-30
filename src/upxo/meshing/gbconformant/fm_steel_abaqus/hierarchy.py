@@ -65,6 +65,11 @@ class Hierarchy:
     groups: dict = field(default_factory=dict)   # {element-set name: labels} for sets that join features
     system: str = 'FM steel'             # what the structure is, for the deck's headings
 
+    @property
+    def level_text(self):
+        """The level as a person reads it: ``grain`` for a structure that has only grains (twinned FCC), else the level code."""
+        return 'grain' if self.extra else self.level
+
     def ordered_features(self):
         """Features in global-ID order, which is the deck's material order."""
         return sorted(self.features.values(), key=lambda f: f.global_id)

@@ -177,6 +177,16 @@ class DeckTests(unittest.TestCase):
             msh = (result['directory'] / 'fm_mesh.msh').read_text()
             self.assertIn('"es_cell_stwin_b_5"', msh)
 
+    def test_a_twinned_structure_has_grains_where_the_fm_steel_one_has_pags(self):
+        with work_dir() as root:
+            result, hierarchy, *_ = self.deck(root)
+            text = (result['directory'] / 'model_master.inp').read_text()
+            self.assertIn('Level: grain', text)
+            self.assertNotIn('Level: pag', text)
+            self.assertEqual(hierarchy.level_text, 'grain')
+            self.assertEqual(result['info']['level'], 'grain')
+            self.assertEqual((result['directory'] / '03a_elsets_pag.inp').read_text().splitlines()[0], '** Grain elsets')
+
 
 if __name__ == '__main__':
     unittest.main()
