@@ -294,10 +294,15 @@ def matched_change_figure(rows, *, quantity='value', units='', kind='scatter', b
     return fig
 
 
-def texture_figure(eulers_before, eulers_after, settings, titles=('Before', 'After'), noun='features'):
-    """Pole figures before and after, and (density modes) the after-minus-before difference."""
-    pf_before = pole_figure(eulers_before, settings)
-    pf_after = pole_figure(eulers_after, settings)
+def texture_figure(eulers_before, eulers_after, settings, titles=('Before', 'After'), noun='features',
+                   weights=(None, None), weighted_by=''):
+    """Pole figures before and after, and (density modes) the after-minus-before difference.
+
+    ``weights`` is ``(before, after)``, one weight per orientation or ``None`` (every orientation counts once);
+    ``weighted_by`` names the weight (for example ``grain volume``) in the titles.
+    """
+    pf_before = pole_figure(eulers_before, settings, weights[0])
+    pf_after = pole_figure(eulers_after, settings, weights[1])
     density_modes = settings.plot_mode in ('density', 'hybrid')
     fig = Figure(figsize=(17 if density_modes else 11.5, 5.6), layout='constrained')
     axes = fig.subplots(1, 3 if density_modes else 2)
@@ -307,7 +312,7 @@ def texture_figure(eulers_before, eulers_after, settings, titles=('Before', 'Aft
     family = settings.pole_family
     counts = (len(np.asarray(eulers_before)), len(np.asarray(eulers_after)))
     for ax, pf, name, n in zip(axes[:2], (pf_before, pf_after), titles, counts):
-        title = f'{name} ({n} {noun})'
+        title = f'{name} ({n} {noun}' + (f', weighted by {weighted_by})' if weighted_by and weights[0] is not None else ')')
         if settings.plot_mode == 'scatter':
             pf.plot_scatter(pole_family=family, ax=ax, projection=settings.projection,
                             hemisphere=settings.hemisphere, title=title, **labels)
@@ -321,7 +326,7 @@ def texture_figure(eulers_before, eulers_after, settings, titles=('Before', 'Aft
                 scatter_hemisphere=settings.hemisphere, **labels)
     diff = None
     if density_modes:
-        diff = density_difference(eulers_before, eulers_after, settings)
+        diff = density_difference(eulers_before, eulers_after, settings, weights)
         ax = axes[2]
         zi = diff['zi_diff']
         peak = np.nanmax(np.abs(zi))

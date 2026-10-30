@@ -65,7 +65,8 @@ PARAMETERS = (
     Parameter('misorientation_grain', 'Grain mean boundary misorientation', 'Orientation', 'angle', 'grains',
               description='Area-weighted mean of the misorientations across all the boundaries of the grain.'),
     Parameter('pole_figures', 'Pole figures', 'Orientation', 'angle', 'grains', views=(POLE,),
-              description='Pole figures of the grains on each side, and their difference.'),
+              description='Pole figures of the grains on each side, and their difference. The density counts every grain once, or '
+                          'weights it by its volume (the grains are counted by setting).'),
     Parameter('euler_phi1', 'Euler angle phi1', 'Dataset', 'angle', 'grains', views=(DISTRIBUTION,),
               description='Bunge-Euler angle phi1 (degrees) the dataset gives every grain.'),
     Parameter('euler_phi', 'Euler angle Phi', 'Dataset', 'angle', 'grains', views=(DISTRIBUTION,),

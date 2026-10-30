@@ -249,12 +249,25 @@ def comparison_figure(state: PipelineState, parameter_key: str, view_name: str =
     if p.key == "pole_figures":
         from upxo.meshing.gbconformant.fm_steel_abaqus import orientation_table
 
+        from upxo.meshing.gbconformant.fm_steel_abaqus.parameters import BY_VOLUME
+
         hierarchy = active_hierarchy(state)
-        _, eb = orientation_table(hierarchy, [int(x) for x in before.labels])
-        _, ea = orientation_table(hierarchy, [int(x) for x in after.labels])
-        figure, diff = texture_figure(eb, ea, texture_settings(cfg), titles=(before.title, after.title), noun="grains")
-        figure.suptitle(f"Pole figures: {before.title} and {after.title}", fontweight="bold")
+        lb, eb = orientation_table(hierarchy, [int(x) for x in before.labels])
+        la, ea = orientation_table(hierarchy, [int(x) for x in after.labels])
+        weights, weighted_by, caveat = (None, None), "", ""
+        if view.grain_weight == BY_VOLUME:
+            if before.has_volume and after.has_volume:
+                weights = tuple(np.array([dict(zip(s.labels.tolist(), s.volume))[int(label)] for label in labels], dtype=float)
+                                for s, labels in ((before, lb), (after, la)))
+                weighted_by = "grain volume"
+            else:
+                caveat = "The grains are counted, not weighted by volume: a representation here has no grain volume."
+        figure, diff = texture_figure(eb, ea, texture_settings(cfg), titles=(before.title, after.title), noun="grains",
+                                      weights=weights, weighted_by=weighted_by)
+        figure.suptitle(f"Pole figures{' (weighted by grain volume)' if weighted_by else ''}: {before.title} and {after.title}",
+                        fontweight="bold")
         note = f"Pole figure difference ({after.title} - {before.title}) IQR: {diff['iqr']:.6g}" if diff is not None else ""
+        note = " ".join(part for part in (note, caveat) if part)
         return Picture("fidelity.pole_figures", "Pole figures", figure, note)
     try:
         sb = read(p, before, normalisation=view.normalisation, grain_weight=view.grain_weight)

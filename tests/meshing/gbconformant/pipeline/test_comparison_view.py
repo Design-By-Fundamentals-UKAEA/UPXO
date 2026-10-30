@@ -136,6 +136,22 @@ class ViewTests(unittest.TestCase):
         picture = V.comparison_figure(self.state, 'packet_diameter', 'matched')
         self.assertTrue(picture.figure.axes)
 
+    def test_pole_figures_can_weight_every_grain_by_its_volume(self):
+        plain = V.comparison_figure(self.state, 'pole_figures', 'pole')
+        self.assertNotIn('weighted', plain.figure.get_suptitle())
+        self.state.config['COMPARE_GRAIN_WEIGHT'] = 'grain volume'
+        weighted = V.comparison_figure(self.state, 'pole_figures', 'pole')
+        self.assertIn('weighted by grain volume', weighted.figure.get_suptitle())
+        titles = [ax.get_title() for ax in weighted.figure.axes if ax.get_title()]
+        self.assertTrue(any('weighted by grain volume' in t for t in titles), titles)
+
+    def test_a_representation_without_volume_says_the_grains_are_counted(self):
+        self.state.config['COMPARE_GRAIN_WEIGHT'] = 'grain volume'
+        V.get_snapshot(self.state, TETS).volume = None            # as for an open surface: no grain volume
+        picture = V.comparison_figure(self.state, 'pole_figures', 'pole')
+        self.assertIn('counted, not weighted', picture.note)
+        self.assertNotIn('weighted by grain volume', picture.figure.get_suptitle())
+
     def test_the_figures_name_what_they_compare(self):
         picture = V.comparison_figure(self.state, 'diameter', 'distribution')
         figure = picture.figure

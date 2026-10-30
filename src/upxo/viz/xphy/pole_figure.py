@@ -386,6 +386,10 @@ class PoleFigure:
     symmetry : str or np.ndarray
         Crystal symmetry to use. Either a string ('cubic', 'hexagonal', 'tetragonal',
         'trigonal', 'orthorhombic', 'triclinic') or a custom array of shape (M, 3, 3).
+    weights : np.ndarray, optional
+        One non-negative weight per orientation (for example the volume of the grain). The MUD density is then
+        the weighted mean of the kernels instead of the plain mean, so a heavy orientation counts for more; the
+        plot of discrete poles is unchanged. ``None`` (default) weights every orientation equally.
 
     Attributes
     ----------
@@ -431,7 +435,8 @@ class PoleFigure:
         orientations: np.ndarray,
         convention: str = 'quaternion',  # 'quaternion' | 'euler_deg' | 'euler_rad' | 'matrix'
         gids: Optional[np.ndarray] = None,
-        symmetry: Union[str, np.ndarray] = 'cubic'
+        symmetry: Union[str, np.ndarray] = 'cubic',
+        weights: Optional[np.ndarray] = None,
     ):
         """
         Initialize the PoleFigure object.
@@ -452,6 +457,8 @@ class PoleFigure:
         symmetry : str or np.ndarray
             Crystal symmetry to use. Either a string ('cubic', 'hexagonal', 'tetragonal', 
             'trigonal', 'orthorhombic', 'triclinic') or a custom array of shape (M, 3, 3).
+        weights : np.ndarray, optional
+            One non-negative weight per orientation; the density becomes the weighted mean of the kernels.
         """
         self.gids = np.asarray(gids) if gids is not None else None
         
@@ -489,6 +496,16 @@ class PoleFigure:
             self.quats = orientations
         else:
             self.quats = matrix_to_quat(self.R_stack)
+
+        self.weights = None
+        if weights is not None:
+            w = np.asarray(weights, dtype=np.float64).ravel()
+            if w.shape != (len(self.R_stack),):
+                raise ValueError(f'weights needs one value per orientation: {len(self.R_stack)} orientations, '
+                                 f'{w.size} weights.')
+            if not np.all(np.isfinite(w)) or np.any(w < 0) or not w.sum() > 0:
+                raise ValueError('weights must be finite and non-negative, and not all zero.')
+            self.weights = w
 
 
     def _standardize_orientations(self, data: np.ndarray, convention: str) -> np.ndarray:
@@ -859,9 +876,12 @@ class PoleFigure:
         the boolean circle mask (True = inside).
         """
         # Project all stored orientations, mapped to the upper hemisphere
-        # (antipodal symmetry).
+        # (antipodal symmetry). The poles of one orientation are consecutive, so a weight per orientation is
+        # repeated once per pole.
         sample_dirs = np.einsum('nij,kj->nki', self.R_stack, poles)
         sample_dirs = sample_dirs.reshape(-1, 3)
+        pole_weights = (np.ones(len(sample_dirs)) if self.weights is None
+                        else np.repeat(self.weights, len(poles)))
         neg_z = sample_dirs[:, 2] < 0
         dirs = sample_dirs.copy()
         dirs[neg_z] *= -1.0
@@ -918,18 +938,21 @@ class PoleFigure:
                         from numba import njit, prange
 
                         @njit(parallel=True, fastmath=True)
-                        def numba_vmf_kernel(grid, poles, k):
+                        def numba_vmf_kernel(grid, poles, weight, k):
                             N_g = grid.shape[0]
                             N_p = poles.shape[0]
                             out = np.zeros(N_g, dtype=np.float64)
                             denom = 1.0 - np.exp(-2.0 * k)
+                            weight_sum = 0.0
+                            for j in range(N_p):
+                                weight_sum += weight[j]
                             for i in prange(N_g):
                                 val_sum = 0.0
                                 for j in range(N_p):
                                     dot = grid[i, 0]*poles[j, 0] + grid[i, 1]*poles[j, 1] + grid[i, 2]*poles[j, 2]
                                     numerator = np.exp(k * (dot - 1.0)) + np.exp(-k * (dot + 1.0))
-                                    val_sum += k * numerator / denom
-                                out[i] = val_sum / N_p
+                                    val_sum += weight[j] * k * numerator / denom
+                                out[i] = val_sum / weight_sum
                             return out
 
                         _NUMBA_VMF_KERNEL = numba_vmf_kernel
@@ -938,7 +961,7 @@ class PoleFigure:
 
                 if _NUMBA_VMF_KERNEL:
                     try:
-                        mud_valid = _NUMBA_VMF_KERNEL(grid_vectors, dirs, kappa)
+                        mud_valid = _NUMBA_VMF_KERNEL(grid_vectors, dirs, pole_weights, kappa)
                         numba_success = True
                     except Exception:
                         pass
@@ -955,13 +978,14 @@ class PoleFigure:
                         D_chunk = np.dot(grid_chunk, dirs.T)
                         numerator = np.exp(kappa * (D_chunk - 1.0)) + np.exp(-kappa * (D_chunk + 1.0))
                         denominator = 1.0 - np.exp(-2.0 * kappa)
-                        mud_valid[start_idx:end_idx] = np.mean(kappa * numerator / denominator, axis=1)
+                        mud_valid[start_idx:end_idx] = np.average(kappa * numerator / denominator, axis=1,
+                                                                  weights=pole_weights)
                 else:
                     # Standard vectorized calculation
                     D = np.dot(grid_vectors, dirs.T)
                     numerator = np.exp(kappa * (D - 1.0)) + np.exp(-kappa * (D + 1.0))
                     denominator = 1.0 - np.exp(-2.0 * kappa)
-                    mud_valid = np.mean(kappa * numerator / denominator, axis=1)
+                    mud_valid = np.average(kappa * numerator / denominator, axis=1, weights=pole_weights)
 
         # Reconstruct full grid
         zi_mud = np.full_like(Xi, np.nan)

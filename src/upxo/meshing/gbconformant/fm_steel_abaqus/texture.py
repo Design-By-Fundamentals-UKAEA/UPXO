@@ -65,13 +65,28 @@ def _replicate(eulers, settings):
     return eulers
 
 
-def pole_figure(eulers, settings):
-    """:class:`PoleFigure` of ``eulers`` with the sample symmetry replicated."""
+def _replicate_weights(weights, settings):
+    """The weights of the replicas :func:`_replicate` makes: the replicas are the whole set once per operator."""
+    group = compute_sample_symmetry_group(
+        settings.apply_sample_symmetry, settings.use_rd, settings.use_td, settings.use_nd)
+    w = np.asarray(weights, dtype=float)
+    return np.tile(w, len(group)) if len(group) > 1 and len(w) else w
+
+
+def pole_figure(eulers, settings, weights=None):
+    """:class:`PoleFigure` of ``eulers`` with the sample symmetry replicated.
+
+    ``weights`` (one per orientation, for example the grain volumes) weight the density; every replica keeps
+    the weight of its orientation.
+    """
     settings.validate()
     if not len(eulers):
         raise ValueError('No orientations to plot.')
+    if weights is not None and len(weights) != len(eulers):
+        raise ValueError(f'One weight per orientation is needed: {len(eulers)} orientations, {len(weights)} weights.')
     return PoleFigure(_replicate(np.asarray(eulers, dtype=float), settings),
-                      convention='euler_deg', symmetry=settings.crystal_symmetry)
+                      convention='euler_deg', symmetry=settings.crystal_symmetry,
+                      weights=None if weights is None else _replicate_weights(weights, settings))
 
 
 def resolved_grid_points(settings):
@@ -81,14 +96,15 @@ def resolved_grid_points(settings):
     return int(settings.grid_points)
 
 
-def density_difference(eulers_before, eulers_after, settings):
+def density_difference(eulers_before, eulers_after, settings, weights=(None, None)):
     """After-minus-before MUD density difference on a shared grid.
 
+    ``weights`` is ``(before, after)``: one weight per orientation or ``None`` for each side.
     Returns ``Xi``, ``Yi``, ``zi_diff`` and ``iqr`` (interquartile range of the
     difference field; a single-number summary, not a verdict).
     """
-    before = pole_figure(eulers_before, settings)
-    after = pole_figure(eulers_after, settings)
+    before = pole_figure(eulers_before, settings, weights[0])
+    after = pole_figure(eulers_after, settings, weights[1])
     return after.compute_density_difference(
         before, pole_family=settings.pole_family, grid_points=resolved_grid_points(settings),
         half_width_deg=settings.half_width_deg, unit_normalize=settings.unit_normalize)

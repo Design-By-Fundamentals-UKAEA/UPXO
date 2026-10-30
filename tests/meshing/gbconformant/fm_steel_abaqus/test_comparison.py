@@ -212,6 +212,30 @@ class TextureTests(unittest.TestCase):
         self.assertAlmostEqual(float(np.nanmax(np.abs(norm['zi_diff']))), 0.0, places=6)
         self.assertLessEqual(float(np.nanmax(np.abs(raw['zi_diff']))), 1.0)
 
+    def test_weights_follow_the_orientations_through_the_sample_symmetry(self):
+        from upxo.meshing.gbconformant.fm_steel_abaqus.texture import pole_figure
+        settings = TextureSettings(half_width_deg=10)
+        weights = np.arange(1.0, len(self.before) + 1.0)
+        heavy = pole_figure(self.before, settings, weights)
+        group = 4                                       # rolling, transverse and normal directions all on: 4 replicas
+        self.assertEqual(len(heavy.weights), len(self.before) * group)
+        np.testing.assert_array_equal(heavy.weights, np.tile(weights, group))
+        self.assertIsNone(pole_figure(self.before, settings).weights)
+        with self.assertRaisesRegex(ValueError, 'One weight per orientation'):
+            pole_figure(self.before, settings, weights[:-1])
+
+    def test_a_volume_weighted_difference_leans_toward_the_heavy_grains(self):
+        settings = TextureSettings(half_width_deg=10, unit_normalize=False)
+        after = self.before[:5]
+        flat = density_difference(self.before, after, settings)
+        heavy_tail = np.ones(len(self.before))
+        heavy_tail[5:] = 50.0                           # the grains the "after" lost are the big ones
+        weighted = density_difference(self.before, after, settings, weights=(heavy_tail, None))
+        self.assertFalse(np.allclose(flat['zi_diff'], weighted['zi_diff'], equal_nan=True))
+        same = density_difference(self.before, after, settings,
+                                  weights=(np.full(len(self.before), 3.0), np.full(len(after), 9.0)))
+        np.testing.assert_allclose(same['zi_diff'], flat['zi_diff'], rtol=1e-10, equal_nan=True)
+
     def test_pole_families_symmetries_and_validation(self):
         for family in ('100', '110', '111', [1, 2, 3]):
             diff = density_difference(self.before, self.before[:20],
