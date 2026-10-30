@@ -83,25 +83,63 @@ def _kruskal_pvalue(ref, cand, score_function='exp'):
     return float(p)
 
 
-def _js_sim(ref, cand, score_function='exp', bins=40):
-    from scipy.spatial.distance import jensenshannon
+_PROBABILITY_FLOOR = 1e-12
+
+
+def _shared_histograms(ref, cand, bins=40):
+    """Probabilities of ``ref`` and ``cand`` on ``bins`` equal bins over their pooled range.
+
+    ``None`` when the pooled values are all equal (the two are identical as distributions) or when either side has
+    no value in the bins.
+    """
+    ref = np.asarray(ref, dtype=float)
+    cand = np.asarray(cand, dtype=float)
+    ref, cand = ref[np.isfinite(ref)], cand[np.isfinite(cand)]
+    if not ref.size or not cand.size:
+        return None
     combined = np.concatenate([ref, cand])
     vmin, vmax = combined.min(), combined.max()
     if vmin == vmax:
-        return 1.0
+        return None
     edges = np.linspace(vmin, vmax, bins + 1)
-    h_ref, _ = np.histogram(ref, bins=edges)
-    h_cand, _ = np.histogram(cand, bins=edges)
-    h_ref = h_ref.astype(float)
-    h_cand = h_cand.astype(float)
-    if h_ref.sum() == 0 or h_cand.sum() == 0:
-        return float('nan')
-    h_ref /= h_ref.sum()
-    h_cand /= h_cand.sum()
-    d = float(jensenshannon(h_ref, h_cand, base=2))
-    if not np.isfinite(d):
-        d = 1.0
-    return float(1.0 - d)
+    h_ref = np.histogram(ref, bins=edges)[0].astype(float)
+    h_cand = np.histogram(cand, bins=edges)[0].astype(float)
+    return h_ref / h_ref.sum(), h_cand / h_cand.sum()
+
+
+def distribution_divergences(ref, cand, bins=40):
+    """``(kl, js)`` of the distribution of ``cand`` from that of ``ref`` on shared histogram bins.
+
+    ``kl`` is the Kullback-Leibler divergence D(ref || cand) in nats (both probability vectors get a floor of
+    1e-12 and are renormalised, so an empty bin does not make it infinite); ``js`` is the Jensen-Shannon distance in
+    base 2, from 0 (identical) to 1. Identical pooled values give ``(0.0, 0.0)``; a side with no finite value gives
+    ``(nan, nan)``.
+    """
+    from scipy.spatial.distance import jensenshannon
+    from scipy.stats import entropy
+    ref_a = np.asarray(ref, dtype=float)
+    cand_a = np.asarray(cand, dtype=float)
+    if not np.isfinite(ref_a).any() or not np.isfinite(cand_a).any():
+        return float('nan'), float('nan')
+    pq = _shared_histograms(ref_a, cand_a, bins)
+    if pq is None:
+        return 0.0, 0.0
+    p, q = pq
+    js = float(jensenshannon(p, q, base=2))
+    if not np.isfinite(js):
+        js = 1.0
+    pf, qf = np.maximum(p, _PROBABILITY_FLOOR), np.maximum(q, _PROBABILITY_FLOOR)
+    return float(entropy(pf / pf.sum(), qf / qf.sum())), js
+
+
+def _js_sim(ref, cand, score_function='exp', bins=40):
+    kl, js = distribution_divergences(ref, cand, bins)
+    return float('nan') if np.isnan(js) else float(1.0 - js)
+
+
+def _kl_sim(ref, cand, score_function='exp', bins=40):
+    kl, js = distribution_divergences(ref, cand, bins)
+    return float('nan') if np.isnan(kl) else _T._squash_distance(kl, score_function)
 
 
 # {key: (display_label, compute_fn(ref, cand, score_function='exp') -> float)}
@@ -116,6 +154,7 @@ METRIC_REGISTRY = {
     'mannwhitney_pvalue': ('Mann-Whitney U P-Value', _mannwhitney_pvalue),
     'kruskal_pvalue': ('Kruskal-Wallis P-Value', _kruskal_pvalue),
     'js_sim': ('Jensen-Shannon Similarity', _js_sim),
+    'kl_sim': ('Kullback-Leibler Similarity', _kl_sim),
 }
 
 

@@ -22,7 +22,11 @@ class RepresentativenessValidator3D:
       misorientation angle distributions.
 
     A 3D structure is accepted when at least ``p_percentage`` percent of
-    slices pass on every tested axis.
+    slices pass on every tested axis. Each slice also records the
+    Kullback-Leibler divergence (``kl``, nats) and the Jensen-Shannon
+    distance (``js``, 0 to 1) of its distribution from the EBSD one, on
+    shared histogram bins. They are reported per axis (``mean_kl``,
+    ``mean_js``) and do not take part in the pass or reject decision.
     """
 
     __slots__ = (
@@ -78,6 +82,7 @@ class RepresentativenessValidator3D:
         ``get_grain_size_distribution_from_slice`` per slice.
         """
         from scipy.stats import wasserstein_distance
+        from upxo.pxtal.twinned_simple_3d.representativeness_metrics import distribution_divergences
         from upxo.gsdataops.grid_ops import section_from_3d
         from upxo.charops.mchar import get_grain_size_distribution_from_slice
 
@@ -109,11 +114,15 @@ class RepresentativenessValidator3D:
                 if len(sgc_areas) > 0:
                     sgc_norm = sgc_areas / np.mean(sgc_areas)
                     w = float(wasserstein_distance(ebsd_norm, sgc_norm))
+                    kl, js = distribution_divergences(ebsd_norm, sgc_norm)
                 else:
                     w = np.inf
+                    kl, js = np.nan, np.nan
                 results.append({
                     'slice_idx': int(slice_idx),
                     'wasserstein': w,
+                    'kl': kl,
+                    'js': js,
                     'n_grains': int(len(sgc_areas)),
                     'passes': w < self.wasserstein_threshold,
                 })
@@ -134,6 +143,7 @@ class RepresentativenessValidator3D:
         ``compute_mdf_from_quats`` per slice.
         """
         from scipy.stats import wasserstein_distance
+        from upxo.pxtal.twinned_simple_3d.representativeness_metrics import distribution_divergences
         from upxo.gsdataops.grid_ops import extract_2d_slice_pair
         from upxo.gsdataops.gid_ops import find_neighs2d
         from upxo.xtalphy.crystal_orientation import compute_mdf_from_quats
@@ -163,26 +173,37 @@ class RepresentativenessValidator3D:
                     lgi_3d, quat_3d, axis, int(slice_idx))
                 if lgi_2d.max() <= 0:
                     results.append({'slice_idx': int(slice_idx),
-                                    'wasserstein': np.inf, 'passes': False})
+                                    'wasserstein': np.inf, 'kl': np.nan, 'js': np.nan, 'passes': False})
                     continue
                 try:
                     neigh_raw = find_neighs2d(lgi_2d.astype(np.int32), conn=4)
                     neigh = {int(g): [int(n) for n in ns] for g, ns in neigh_raw.items()}
                     slice_mdf = compute_mdf_from_quats(
                         lgi_2d, quat_2d, neigh, n_bins=65, angle_range=(0.0, 65.0))
-                    w = float(wasserstein_distance(
-                        ebsd_miso_deg, slice_mdf['miso_deg'])) \
-                        if slice_mdf['miso_deg'].size > 0 else np.inf
+                    if slice_mdf['miso_deg'].size > 0:
+                        w = float(wasserstein_distance(ebsd_miso_deg, slice_mdf['miso_deg']))
+                        kl, js = distribution_divergences(ebsd_miso_deg, slice_mdf['miso_deg'])
+                    else:
+                        w, kl, js = np.inf, np.nan, np.nan
                 except Exception:
-                    w = np.inf
+                    w, kl, js = np.inf, np.nan, np.nan
                 results.append({
                     'slice_idx': int(slice_idx),
                     'wasserstein': w,
+                    'kl': kl,
+                    'js': js,
                     'passes': w < self.wasserstein_threshold,
                 })
             self.slice_results[axis_name] = results
 
         self.aggregate()
+
+    @staticmethod
+    def _mean_finite(results, key) -> float:
+        """Mean of the finite values of ``key`` over the slices; ``nan`` when no slice has one."""
+        values = np.array([r.get(key, np.nan) for r in results], dtype=float)
+        values = values[np.isfinite(values)]
+        return float(values.mean()) if values.size else float('nan')
 
     def aggregate(self):
         """Aggregate slice results into per-axis acceptance."""
@@ -198,6 +219,8 @@ class RepresentativenessValidator3D:
                 'n_total': n_total,
                 'pct_pass': pct,
                 'accepted': pct >= per_axis_threshold[axis_name],
+                'mean_kl': self._mean_finite(results, 'kl'),
+                'mean_js': self._mean_finite(results, 'js'),
             }
         self.overall_accepted = all(
             info['accepted'] for info in self.axis_acceptance.values()
@@ -214,7 +237,8 @@ class RepresentativenessValidator3D:
             lines.append(
                 f'{axis_name}-axis: {info["n_pass"]}/{info["n_total"]} '
                 f'({info["pct_pass"]:.1f}%) [{status}, threshold '
-                f'{per_axis_threshold[axis_name]:.0f}%]')
+                f'{per_axis_threshold[axis_name]:.0f}%]  '
+                f'mean KL {info["mean_kl"]:.3f}, mean JS {info["mean_js"]:.3f}')
         overall = 'YES' if self.overall_accepted else 'NO'
         lines.append(f'\nOverall 3D acceptance: {overall}')
         if self.p_percentage_x == self.p_percentage_y == self.p_percentage_z:
