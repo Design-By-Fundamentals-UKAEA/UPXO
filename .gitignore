@@ -161,3 +161,6 @@ src/upxo/Important links.md
 # Discontinued, unused meshing code; kept locally, not part of UPXO
 /src/upxo/meshing/confMesh3d/
 /src/upxo/meshing/pxtalmesh_01.py
+
+# Local validation module for the MTEX migration; not part of UPXO
+/src/upxo/val_mtex_migration/
