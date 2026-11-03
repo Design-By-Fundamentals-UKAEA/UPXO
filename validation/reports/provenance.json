@@ -1,0 +1,27 @@
+{
+ "provenance": {
+  "generator": "validation/generate_report.py",
+  "date": "2026-11-03",
+  "mtex": "1.0.0",
+  "numpy": "2.2.6",
+  "python": "3.13.9",
+  "upxo_commit": "470b05cacb0c7bd8e64ba8a1272104816240f4b1",
+  "upxo_branch": "dev"
+ },
+ "ks_pair_table": {
+  "distinct_values_match_mtex": true,
+  "max_pair_diff_vs_mtex_deg": 1.0658141036401503e-13,
+  "total_pairs": 276
+ },
+ "twin_sigma_chain": {
+  "two_sigma3_reachable_values": [
+   0.0,
+   38.94
+  ],
+  "max_diff_vs_mtex_deg": 4.263256414560601e-14
+ },
+ "pole_figure_comparison": {
+  "worst_twin_pole_gap_deg": 0.0,
+  "worst_ks_pole_gap_deg": 2.699869328381916e-06
+ }
+}
