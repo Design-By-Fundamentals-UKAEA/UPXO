@@ -25,11 +25,11 @@ setup(
     url="https://github.com/Design-By-Fundamentals-UKAEA/UPXO",
     python_requires=">=3.13",
     install_requires=[
-        "numpy>=2.2.6",
+        "numpy>=2.2.6,<2.6",
         "scipy>=1.16.2",
         "matplotlib>=3.10.6",
         "pandas>=2.3.3",
-        "numba>=0.62.1",
+        "numba>=0.67.0",
         "networkx>=3.5",
         "pyvista[jupyter]>=0.46.3",
         "scikit-image>=0.25.2",

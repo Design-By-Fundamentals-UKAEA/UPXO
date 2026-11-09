@@ -4,6 +4,20 @@ All notable changes to UPXO are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`upxo._writer_data.synthetic_ctf`**: `write_synthetic_ctf` and `make_synthetic_grain_structure` build a synthetic `.ctf` file from a small `mcgs_v2` grain structure with a random cubic orientation per grain. No real or restricted EBSD data is involved. `.github/scripts/install_check.py`'s `ebsd_checks` uses it to load a file and run `detect_grains` through `EBSDReader`, instead of only importing the module.
+
+### Changed
+
+- **Declared numpy and numba version bounds** (`pyproject.toml`, `setup.py`, `requirements.txt`): numpy is now `>=2.2.6,<2.6` (an explicit upper bound, matching the one numba itself already enforced) and numba is `>=0.67.0` (was `>=0.62.1`). The old numba floor required `numpy<2.4` on its own, so a clean install could never reach the numpy versions the fixes below are needed for.
+
+### Fixed
+
+- **`EBSDReader.load` and `write_subsampled_ctf` failed to read some real CTF files under numpy 2.4 and later** (`interfaces.defdap.ebsd_reader`): a CTF column that should hold an integer (`BC` observed on a real file) but is written as a float string (for example `"0.0"`) made `np.loadtxt` raise `ValueError` from numpy 2.4 onward; earlier numpy versions tolerated it with a `DeprecationWarning`. `EBSDReader.load` now hands DefDAP a normalised temporary copy of such a file, leaving the source untouched; `write_subsampled_ctf` normalises the same columns when it writes a new cache.
+- **`deckcheck._ids` and `_read_table` had the same defect** (`gbconformant.fm_steel_abaqus.deckcheck`): reading a deck's node, element, set and surface lists back parsed the file text directly into an integer dtype, which fails the same way under numpy 2.4 and later if a value is ever written with a decimal point. Both now parse as float and round or cast to the target integer type.
+- **`compare_ebsd_vs_sgs` passed `base` positionally to `assemble_ebsd_sgs_comparison_data`** (`twinned_simple_3d.steps.steps_distribution_viewer`), which no longer accepts it (removed in commit a065827): every later positional argument shifted by one, raising `TypeError: ... got multiple values for argument 'n_slices_per_axis'`. `base` is still accepted for backward compatibility with existing callers, but is no longer forwarded.
+
 ## [1.5.0] — 2026-11-04
 
 ### Added

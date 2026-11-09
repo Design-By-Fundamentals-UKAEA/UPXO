@@ -125,7 +125,23 @@ def ebsd_checks():
         from upxo.interfaces.defdap.ebsd_reader import EBSDReader  # noqa: F401
         from upxo.pxtal.twinned_simple_3d import orientation_3d  # noqa: F401
         return f'defdap {md.version("defdap")}'
-    return check('DefDAP and EBSDReader import', reader)
+
+    def load_and_detect():
+        import tempfile
+        from pathlib import Path
+        from upxo.interfaces.defdap.ebsd_reader import EBSDReader
+        from upxo._writer_data.synthetic_ctf import write_synthetic_ctf
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_synthetic_ctf(Path(tmp) / 'synthetic.ctf', shape=(10, 15),
+                                       mcsteps=4, rng_seed=0)
+            rdr = EBSDReader.load(str(path))
+            rdr.detect_grains(min_grain_size=1, misori_tol=5)
+        n_grains = len(set(rdr.lfi_ebsd.ravel().tolist()) - {0})
+        return f'{n_grains} grains on a synthetic {rdr.shape} map'
+
+    return all([check('DefDAP and EBSDReader import', reader),
+                check('EBSDReader load+detect_grains on a synthetic .ctf', load_and_detect)])
 
 
 def viz_checks():
