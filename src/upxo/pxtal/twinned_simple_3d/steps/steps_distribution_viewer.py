@@ -29,6 +29,10 @@ def compare_ebsd_vs_sgs(cleaner, tg, base, rg, parent_info, mdf, twin_thickness,
     upxo.viz.vizDistr.plot_grouped_distributions for a side-by-side
     overlay, or just inspect directly (e.g. np.mean(arr)).
 
+    ``base`` is accepted for backward compatibility with existing callers
+    but is not used: ``assemble_ebsd_sgs_comparison_data`` no longer takes
+    it.
+
     Returns
     -------
     dict : {prop_name: {'ebsd': ndarray, 'sgs': ndarray}}
@@ -36,8 +40,13 @@ def compare_ebsd_vs_sgs(cleaner, tg, base, rg, parent_info, mdf, twin_thickness,
     import numpy as np
     from upxo.pxtal.twinned_simple_3d.feature_props_3d import assemble_ebsd_sgs_comparison_data
 
+    # assemble_ebsd_sgs_comparison_data does not take base (removed by commit a065827,
+    # 2026-10-21); this caller kept its own base parameter for backward compatibility with
+    # existing callers, but must not forward it -- doing so shifted every later positional
+    # argument by one and duplicated n_slices_per_axis (TypeError: got multiple values for
+    # argument 'n_slices_per_axis').
     ebsd_ref, sgc_ref = assemble_ebsd_sgs_comparison_data(
-        cleaner, tg, base, rg, parent_info, mdf, twin_thickness,
+        cleaner, tg, rg, parent_info, mdf, twin_thickness,
         n_slices_per_axis=n_per_axis, axes=list(axes))
 
     cmp_source = {
