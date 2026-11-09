@@ -35,6 +35,7 @@ def test_write_synthetic_ctf_is_a_valid_ctf_header(tmp_path):
 
 
 def test_write_synthetic_ctf_round_trips_through_ebsd_reader(tmp_path):
+    pytest.importorskip('defdap')
     shape = (10, 15)
     path = write_synthetic_ctf(tmp_path / "synth.ctf", shape=shape, mcsteps=5, rng_seed=2)
 
@@ -46,6 +47,7 @@ def test_write_synthetic_ctf_round_trips_through_ebsd_reader(tmp_path):
 
 
 def test_write_synthetic_ctf_detect_grains_finds_more_than_one_grain(tmp_path):
+    pytest.importorskip('defdap')
     path = write_synthetic_ctf(tmp_path / "synth.ctf", shape=(12, 16), mcsteps=6, rng_seed=3)
 
     rdr = EBSDReader.load(str(path))
