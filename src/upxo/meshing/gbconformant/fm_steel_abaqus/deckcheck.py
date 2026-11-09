@@ -28,8 +28,14 @@ _BLOCK = 200_000
 
 
 def _ids(lines):
+    """Parsed as float and rounded to int64, not read directly as int64: numpy raises ValueError
+    (not just a DeprecationWarning) from 2.4 onward for an unmatched/float-formatted value (e.g.
+    "1.0") in an integer-dtype np.fromstring parse -- same failure mode as _read_table above and
+    the CTF BC-column bug in upxo.interfaces.defdap.ebsd_reader."""
     text = ','.join(line.replace(' ', '').strip(',') for line in lines if line.strip())
-    return np.fromstring(text, dtype=np.int64, sep=',') if text else np.zeros(0, dtype=np.int64)
+    if not text:
+        return np.zeros(0, dtype=np.int64)
+    return np.round(np.fromstring(text, dtype=np.float64, sep=',')).astype(np.int64)
 
 
 def read_sets(path, keyword):
@@ -89,7 +95,14 @@ def read_surfaces(path):
 
 
 def _read_table(path, columns, dtype=float):
-    """The numbers under the keyword line of a node or element file, read a block of lines at a time."""
+    """The numbers under the keyword line of a node or element file, read a block of lines at a time.
+
+    Always parsed as float and cast to *dtype* afterwards, rather than handing an integer dtype
+    straight to np.loadtxt: numpy raises ValueError (not just a DeprecationWarning) from 2.4 onward
+    if a value happens to be written with a decimal point (e.g. "1.0") -- the same failure mode as
+    the CTF BC-column bug in upxo.interfaces.defdap.ebsd_reader. Our own exporter always writes
+    clean integers, but this keeps deck-checking robust to any writer that doesn't.
+    """
     parts = []
     with Path(path).open(encoding='ascii') as handle:
         handle.readline()
@@ -99,8 +112,9 @@ def _read_table(path, columns, dtype=float):
                 break
             rows = [line for line in lines if line.strip() and not line.startswith('*')]
             if rows:
-                parts.append(np.loadtxt(rows, delimiter=',', ndmin=2, dtype=dtype))
-    return np.concatenate(parts) if parts else np.zeros((0, columns), dtype=dtype)
+                parts.append(np.loadtxt(rows, delimiter=',', ndmin=2, dtype=float))
+    out = np.concatenate(parts) if parts else np.zeros((0, columns), dtype=float)
+    return out.astype(dtype) if dtype is not float else out
 
 
 def _check(name, ok, detail=''):

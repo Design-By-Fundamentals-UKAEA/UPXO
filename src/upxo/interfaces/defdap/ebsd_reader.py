@@ -52,8 +52,10 @@ rdr.detect_grains(min_grain_size=10, misori_tol=10)
 rdr.detect_grains(min_grain_size=25, misori_tol=5)  # re-tune, no reload
 """
 
+import contextlib
 import os
 import pathlib
+import tempfile
 import numpy as np
 from upxo._sup import progress
 
@@ -72,6 +74,78 @@ _EXT_TO_DATATYPE = {
     '.ctf': 'OxfordText',
     '.crc': 'OxfordBinary',
 }
+
+# Columns a CTF data row holds as integers. Some writers emit one of these as a float
+# string (observed on real files: BC as "0.0") even though the column is integer-typed;
+# np.loadtxt silently tolerated that with a DeprecationWarning through numpy 2.2.x, and
+# raises ValueError from numpy 2.4 onward. Only .ctf (OxfordText) is affected -- .crc
+# (OxfordBinary) is parsed from fixed-width binary records, not text columns.
+_CTF_INTEGER_COLUMNS = ('Phase', 'Bands', 'Error', 'BC', 'BS')
+
+
+def _ctf_integer_column_indices(col_header_line: str) -> list:
+    """Index, in a tab-separated CTF data row, of each column in _CTF_INTEGER_COLUMNS
+    present in the given column-header line (e.g. "Phase\\tX\\tY\\t...\\tBC\\tBS")."""
+    names = col_header_line.strip('\n').split('\t')
+    return [names.index(c) for c in _CTF_INTEGER_COLUMNS if c in names]
+
+
+def _normalize_ctf_integer_row(line: str, indices: list) -> str:
+    """Rewrite the given integer-typed columns of one tab-separated CTF data row as clean
+    integer text (round-tripped through float, so "0" and "0.0" both become "0"), leaving
+    every other column and the line ending untouched. A value that is not float-parseable
+    is left as-is, so a genuinely malformed row still reaches DefDAP's own parser exactly
+    as it would have without this step, rather than failing here instead."""
+    if not indices:
+        return line
+    newline = '\n' if line.endswith('\n') else ''
+    body = line[:len(line) - len(newline)] if newline else line
+    parts = body.split('\t')
+    for i in indices:
+        if i < len(parts) and parts[i]:
+            try:
+                parts[i] = str(int(round(float(parts[i]))))
+            except ValueError:
+                pass
+    return '\t'.join(parts) + newline
+
+
+@contextlib.contextmanager
+def _ctf_for_defdap(file_path: pathlib.Path, data_type: str):
+    """Yield the path DefDAP should actually read for *file_path* / *data_type*.
+
+    For OxfordText (.ctf), writes a normalised temporary copy (see
+    _normalize_ctf_integer_row) in the system temp directory and yields that instead,
+    removing it on exit; the source file is never modified. Every other data_type is
+    passed through unchanged, with no file read or written.
+    """
+    if data_type != 'OxfordText':
+        yield file_path
+        return
+
+    with file_path.open('r', encoding='latin-1') as fh:
+        lines = fh.readlines()
+
+    header_end = next(
+        (i for i, raw in enumerate(lines)
+         if raw.strip().split() and raw.strip().split()[0].lower() == 'phase'),
+        None)
+    indices = _ctf_integer_column_indices(lines[header_end]) if header_end is not None else []
+    if not indices:
+        # No recognisable column header, or none of the known integer columns present:
+        # nothing for this step to do: let DefDAP's own loader handle the file as-is.
+        yield file_path
+        return
+
+    fd, tmp_name = tempfile.mkstemp(suffix='.ctf', prefix='upxo_ctf_normalized_')
+    try:
+        with os.fdopen(fd, 'w', encoding='latin-1') as tmp:
+            tmp.writelines(lines[:header_end + 1])
+            tmp.writelines(_normalize_ctf_integer_row(raw, indices) for raw in lines[header_end + 1:])
+        yield pathlib.Path(tmp_name)
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(tmp_name)
 
 
 class EBSDReader:
@@ -160,24 +234,27 @@ class EBSDReader:
         if data_type is None:
             data_type = _infer_data_type(file_path)
 
-        # DefDAP's OxfordTextLoader appends the extension (.ctf/.crc) itself,
-        # so we must pass the path WITHOUT the extension (stem only).
-        ebsd_map = _defdap_ebsd.Map(str(file_path.with_suffix('')), dataType=data_type)
+        # DefDAP's OxfordTextLoader appends the extension (.ctf/.crc) itself, so we must
+        # pass the path WITHOUT the extension (stem only). For OxfordText, _ctf_for_defdap
+        # hands DefDAP a normalised temporary copy instead of file_path itself when needed
+        # (see its docstring); file_path on disk is never modified either way.
+        with _ctf_for_defdap(file_path, data_type) as load_path:
+            ebsd_map = _defdap_ebsd.Map(str(load_path.with_suffix('')), dataType=data_type)
 
-        # buildQuatArray() must be called before findBoundaries() — DefDAP
-        # does not build it automatically on load (0.93.x behaviour).
-        ebsd_map.buildQuatArray()
+            # buildQuatArray() must be called before findBoundaries() — DefDAP
+            # does not build it automatically on load (0.93.x behaviour).
+            ebsd_map.buildQuatArray()
 
-        obj = cls()
-        obj.file_path = str(file_path)
-        obj.step_size = float(ebsd_map.stepSize)   # stepSize in 0.93.x
-        obj.shape = tuple(ebsd_map.shape)           # (ny, nx)
+            obj = cls()
+            obj.file_path = str(file_path)
+            obj.step_size = float(ebsd_map.stepSize)   # stepSize in 0.93.x
+            obj.shape = tuple(ebsd_map.shape)           # (ny, nx)
 
-        obj.euler_ebsd = _extract_euler(ebsd_map)
-        obj.quat_ebsd = _extract_quat(ebsd_map)
-        obj.lfi_ebsd = None
-        obj.prop = None
-        obj._defdap_map = ebsd_map
+            obj.euler_ebsd = _extract_euler(ebsd_map)
+            obj.quat_ebsd = _extract_quat(ebsd_map)
+            obj.lfi_ebsd = None
+            obj.prop = None
+            obj._defdap_map = ebsd_map
 
         return obj
 
@@ -1247,10 +1324,14 @@ def write_subsampled_ctf(
     ]
 
     # ── 4. Write new CTF file ──────────────────────────────────────────
+    # Normalise integer-typed columns (see _ctf_for_defdap) so a freshly written cache
+    # never carries the float-string values (e.g. "0.0" in BC) that numpy >=2.4 rejects
+    # when DefDAP loads it back in.
+    int_indices = _ctf_integer_column_indices(col_header)
     with dst_path.open('w', encoding='latin-1') as fh:
         fh.writelines(_patch_header(header_lines))
         fh.write(col_header)
-        fh.writelines(kept)
+        fh.writelines(_normalize_ctf_integer_row(raw, int_indices) for raw in kept)
 
     return dst_path
 

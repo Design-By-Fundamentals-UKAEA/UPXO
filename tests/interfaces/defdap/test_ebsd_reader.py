@@ -13,12 +13,19 @@ Run from repo root:
 """
 
 import math
+import warnings
 
 import numpy as np
 import pytest
 from scipy import ndimage
 
-from upxo.interfaces.defdap.ebsd_reader import EBSDReader, write_subsampled_ctf
+from upxo.interfaces.defdap.ebsd_reader import (
+    EBSDReader,
+    write_subsampled_ctf,
+    _ctf_for_defdap,
+    _ctf_integer_column_indices,
+    _normalize_ctf_integer_row,
+)
 
 
 def _bare_reader(lfi=None, quat=None):
@@ -328,3 +335,129 @@ def test_rechar_lfi_keeps_filled_euler_consistent_with_the_filled_quaternion():
 
     assert math.degrees(rdr.euler_ebsd[0, 3, 0]) == pytest.approx(22.0, abs=1e-4)
     assert abs(rdr.quat_ebsd[0, 3] @ _quat_z(22.0)) == pytest.approx(1.0, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# CTF integer-column normalisation (BC/Phase/Bands/Error/BS written as float
+# strings, e.g. "0.0"). numpy's np.loadtxt tolerated this into an integer
+# dtype through 2.2.x with a DeprecationWarning, and raises ValueError from
+# numpy 2.4 onward -- real CTF files have been observed writing BC as "0.0".
+# Pure stdlib text parsing; no DefDAP or numpy-version dependence needed to
+# exercise these.
+# ---------------------------------------------------------------------------
+
+_FAKE_CTF_HEADER_FLOAT_BC = _FAKE_CTF_HEADER
+
+
+def _write_fake_ctf_float_bc(path, n_rows=8):
+    """Like _write_fake_ctf, but BC is written as a float string ("0.0"),
+    reproducing the real-file defect that trips numpy's integer-dtype
+    np.loadtxt parsing from numpy 2.4 onward."""
+    lines = [_FAKE_CTF_HEADER_FLOAT_BC]
+    for i in range(n_rows):
+        lines.append(f"1\t{i % 4}\t{i // 4}\t5\t0\t10.0\t20.0\t30.0\t1.0\t0.0\t50\n")
+    path.write_text("".join(lines), encoding="latin-1")
+
+
+def test_ctf_integer_column_indices_finds_bc_and_friends():
+    col_header = "Phase\tX\tY\tBands\tError\tEuler1\tEuler2\tEuler3\tMAD\tBC\tBS\n"
+    indices = _ctf_integer_column_indices(col_header)
+    names = col_header.strip('\n').split('\t')
+    assert [names[i] for i in indices] == ["Phase", "Bands", "Error", "BC", "BS"]
+
+
+def test_normalize_ctf_integer_row_rewrites_float_string_bc():
+    indices = _ctf_integer_column_indices(
+        "Phase\tX\tY\tBands\tError\tEuler1\tEuler2\tEuler3\tMAD\tBC\tBS\n")
+    row = "1\t0\t0\t5\t0\t10.0\t20.0\t30.0\t1.0\t0.0\t50\n"
+
+    out = _normalize_ctf_integer_row(row, indices)
+
+    parts = out.rstrip("\n").split("\t")
+    assert parts[9] == "0"          # BC: "0.0" -> "0"
+    assert parts[5] == "10.0"       # a non-integer column (Euler1) untouched
+    assert out.endswith("\n")
+
+
+def test_normalize_ctf_integer_row_noop_without_indices():
+    row = "1\t0\t0\t5\t0\t10.0\t20.0\t30.0\t1.0\t0.0\t50\n"
+    assert _normalize_ctf_integer_row(row, []) == row
+
+
+def test_normalize_ctf_integer_row_leaves_unparseable_value_as_is():
+    indices = _ctf_integer_column_indices("Phase\tBC\n")
+    row = "1\tNaN\n"
+    out = _normalize_ctf_integer_row(row, indices)
+    assert out == row
+
+
+def test_write_subsampled_ctf_normalizes_float_string_bc(tmp_path):
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf_float_bc(ctf)
+    dst = tmp_path / "scan_s2.ctf"
+
+    write_subsampled_ctf(ctf, dst, stride_x=2, stride_y=2)
+
+    text = dst.read_text(encoding="latin-1")
+    data_lines = text.splitlines()[len(_FAKE_CTF_HEADER_FLOAT_BC.splitlines()):]
+    assert data_lines, "expected at least one sub-sampled data row"
+    for line in data_lines:
+        bc = line.split("\t")[9]
+        assert bc == "0", f"BC column not normalised: {bc!r}"
+
+
+def test_ctf_for_defdap_normalizes_and_cleans_up(tmp_path):
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf_float_bc(ctf)
+
+    with _ctf_for_defdap(ctf, 'OxfordText') as load_path:
+        assert load_path != ctf        # a distinct, normalised temp copy was made
+        assert load_path.exists()
+        text = load_path.read_text(encoding="latin-1")
+        for line in text.splitlines()[len(_FAKE_CTF_HEADER_FLOAT_BC.splitlines()):]:
+            bc = line.split("\t")[9]
+            assert bc == "0"
+        # the source file itself is never touched
+        assert "0.0\t50" in ctf.read_text(encoding="latin-1")
+
+    assert not load_path.exists()      # removed on context exit
+
+
+def test_ctf_for_defdap_passthrough_for_non_oxfordtext(tmp_path):
+    crc = tmp_path / "scan.crc"
+    crc.write_bytes(b"not actually parsed by this helper")
+
+    with _ctf_for_defdap(crc, 'OxfordBinary') as load_path:
+        assert load_path == crc        # unchanged, no temp file involved
+
+
+def test_ctf_for_defdap_passthrough_when_no_column_header_found(tmp_path):
+    # No line starting with the "Phase" token at all -- _ctf_for_defdap can't
+    # locate the column layout, so it must leave the file for DefDAP's own
+    # loader to handle (and fail on, if it's genuinely malformed) rather than
+    # raising or silently producing an empty normalised copy.
+    ctf = tmp_path / "scan.ctf"
+    ctf.write_text("Channel Text File\nnot a recognised header\n1\t0\t0\t10.0\n",
+                    encoding="latin-1")
+
+    with _ctf_for_defdap(ctf, 'OxfordText') as load_path:
+        assert load_path == ctf
+
+
+def test_ebsd_reader_load_actually_loads_a_float_formatted_bc_file(tmp_path):
+    """End-to-end check of the real defect (not just the helpers that fix it): without
+    _ctf_for_defdap wired into EBSDReader.load, this raises ValueError on numpy>=2.4
+    ('could not convert string '0.0' to uint8', the exact error from the source report).
+    Promoted to an error here so a numpy version that still only warns can't mask a
+    regression in the wiring between load() and _ctf_for_defdap.
+    """
+    pytest.importorskip('defdap')
+    ctf = tmp_path / "scan.ctf"
+    _write_fake_ctf_float_bc(ctf, n_rows=8)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        rdr = EBSDReader.load(str(ctf))
+
+    assert rdr.shape == (2, 4)                 # n_rows=8 over the header's XCells=4, YCells=2
+    assert ctf.read_text(encoding="latin-1").splitlines()[-1].split("\t")[9] == "0.0"
